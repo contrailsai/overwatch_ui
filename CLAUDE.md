@@ -1,7 +1,10 @@
+# CLAUDE.md
 
-# Overwatch
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-Overwatch is a threat detection and case management platform built with Next.js 16. The application enables content moderators to review potentially harmful social media posts, classify threats, assign risk scores, and manage takedown workflows.
+## Project Overview
+
+**Overwatch** is a threat detection and case management platform built with Next.js 16. The application enables content moderators to review potentially harmful social media posts, classify threats, assign risk scores, and manage takedown workflows.
 
 ## Development Commands
 
