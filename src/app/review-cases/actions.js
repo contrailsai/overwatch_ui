@@ -31,21 +31,37 @@ export async function checkReviewerPermission() {
 export async function getUnreviewedPosts(page = 1, limit = 20, filters = {}) {
   try {
     const client = await clientPromise
-    const db = client.db(process.env.MONGO_DB_NAME) // Assuming DB name, using default from connection string if implied
+    const db = client.db(process.env.MONGO_DB_NAME)
     const collection = db.collection('Posts')
 
     const skip = (page - 1) * limit
 
     // Build query with filters
-    const query = {
-      $and: [
-        {
-          $or: [
-            { processed: { $exists: false } },
-            { processed: false }
-          ]
-        }
-      ]
+    const query = { $and: [] }
+
+    // If aiAnalyzed or poiDetected is selected, we show all matching results regardless of processed status
+    // Otherwise, we only show unreviewed posts
+    if (filters.aiAnalyzed || filters.poiDetected) {
+      if (filters.aiAnalyzed) {
+        query.$and.push({
+          "analysis_results.risk_score": { $exists: true }
+        })
+      }
+    } else {
+      query.$and.push({
+        $or: [
+          { processed: { $exists: false } },
+          { processed: false },
+          { processed: null }
+        ]
+      })
+    }
+
+    // POI Detected Filter
+    if (filters.poiDetected) {
+      query.$and.push({
+        "analysis_results.poi_check.poi_name_found": true
+      })
     }
 
     // Platform filter - handle both explicit platform field and default to instagram
@@ -62,113 +78,112 @@ export async function getUnreviewedPosts(page = 1, limit = 20, filters = {}) {
       }
     }
 
-    // Date filter - handle taken_at (Instagram), timestamp (Facebook/X)
-    // Note: X uses string timestamps, so we need different handling
-    if (filters.startDate || filters.endDate) {
-      const startUnix = filters.startDate ? new Date(filters.startDate).getTime() / 1000 : null
-      const endUnix = filters.endDate ? new Date(filters.endDate).getTime() / 1000 : null
-      const startDate = filters.startDate ? new Date(filters.startDate) : null
-      const endDate = filters.endDate ? new Date(filters.endDate) : null
-
-      const dateConditions = []
-
-      // For numeric timestamps (Instagram, Facebook)
-      const numericQuery = {}
-      if (startUnix) numericQuery.$gte = startUnix
-      if (endUnix) numericQuery.$lte = endUnix
-
-      if (Object.keys(numericQuery).length > 0) {
-        dateConditions.push({ taken_at: numericQuery })
-        dateConditions.push({ timestamp: numericQuery })
+    // Sourcing Date Filter (metadata.sourcing_date)
+    // Stored as BSON Date objects in MongoDB
+    if (filters.sourcingDateStart || filters.sourcingDateEnd) {
+      const sourcingQuery = {}
+      if (filters.sourcingDateStart) {
+        const start = new Date(`${filters.sourcingDateStart}T00:00:00.000Z`)
+        if (!isNaN(start)) sourcingQuery.$gte = start
       }
-
-      // For string timestamps (X)
-      const stringQuery = {}
-      if (startDate) stringQuery.$gte = startDate.toISOString()
-      if (endDate) stringQuery.$lte = endDate.toISOString()
-
-      if (Object.keys(stringQuery).length > 0) {
-        dateConditions.push({ timestamp: stringQuery })
+      if (filters.sourcingDateEnd) {
+        const end = new Date(`${filters.sourcingDateEnd}T23:59:59.999Z`)
+        if (!isNaN(end)) sourcingQuery.$lte = end
       }
-
-      if (dateConditions.length > 0) {
-        query.$and.push({ $or: dateConditions })
+      
+      if (Object.keys(sourcingQuery).length > 0) {
+        query.$and.push({ 'metadata.sourcing_date': sourcingQuery })
       }
     }
 
-    const posts = await collection.find(query)
-      .sort({ created_at: -1 })
+    // DB Ingest Date Filter (metadata.created_at)
+    // Stored as BSON Date objects in MongoDB
+    if (filters.dbDateStart || filters.dbDateEnd) {
+      const dbDateQuery = {}
+      if (filters.dbDateStart) {
+        const start = new Date(`${filters.dbDateStart}T00:00:00.000Z`)
+        if (!isNaN(start)) dbDateQuery.$gte = start
+      }
+      if (filters.dbDateEnd) {
+        const end = new Date(`${filters.dbDateEnd}T23:59:59.999Z`)
+        if (!isNaN(end)) dbDateQuery.$lte = end
+      }
+
+      if (Object.keys(dbDateQuery).length > 0) {
+        query.$and.push({ 'metadata.created_at': dbDateQuery })
+      }
+    }
+
+    // Ensure we don't have an empty $and
+    const finalQuery = query.$and.length > 0 ? query : {}
+
+    const posts = await collection.find(finalQuery)
+      .sort({ 'metadata.created_at': -1 })
       .skip(skip)
       .limit(limit)
       .toArray()
 
-    // Serialize and Sign URLs - normalize data structure for Instagram, Facebook, and X
+    // Serialize and Sign URLs - use new unified schema
     const processedPosts = await Promise.all(posts.map(async (post) => {
-      let s3UrlToSign = post.s3_url;
-
-      // Check media_urls if root s3_url is missing
-      if (!s3UrlToSign && post.media_urls && post.media_urls.length > 0) {
-        // For X videos, use thumbnail_s3_url if available
-        s3UrlToSign = post.media_urls[0].thumbnail_s3_url || post.media_urls[0].s3_url;
+      // Find S3 URL to sign from post_content.media_urls
+      let s3UrlToSign = null;
+      if (post.post_content?.media_urls && post.post_content.media_urls.length > 0) {
+        const firstMedia = post.post_content.media_urls[0];
+        // Prefer thumbnail for videos, otherwise use s3_url
+        s3UrlToSign = firstMedia.thumbnail_url || firstMedia.s3_url;
       }
 
       const signedUrl = s3UrlToSign ? await getSignedImageUrl(s3UrlToSign) : null;
 
-      // Normalize timestamp - handle Unix timestamp (number) or date string
-      let normalizedTimestamp;
-      if (typeof post.taken_at === 'number') {
-        normalizedTimestamp = post.taken_at;
-      } else if (typeof post.timestamp === 'number') {
-        normalizedTimestamp = post.timestamp;
-      } else if (typeof post.timestamp === 'string') {
-        // X uses date string format like "Wed Jan 28 06:45:11 +0000 2026"
-        normalizedTimestamp = Math.floor(new Date(post.timestamp).getTime() / 1000);
-      } else {
-        normalizedTimestamp = null;
-      }
-
-      // Normalize data structure to handle Instagram, Facebook, and X formats
+      // Map to frontend structure
       const normalized = {
         ...post,
         _id: post._id.toString(),
-        created_at: post.created_at ? new Date(post.created_at).toISOString() : null,
-        sourcing_date: post.sourcing_date ? new Date(post.sourcing_date).toISOString() : null,
+        created_at: post.metadata?.created_at ? new Date(post.metadata.created_at).toISOString() : null,
+        sourcing_date: post.metadata?.sourcing_date ? new Date(post.metadata.sourcing_date).toISOString() : null,
         signedImageUrl: signedUrl,
 
-        // Normalize caption/content
-        caption: post.caption || post.content || '',
-
-        // Normalize user/author (handle Instagram, Facebook, and X formats)
-        user: post.user || {
-          username: post.author?.username || post.author?.name || (post.author?.id ? `user_${post.author.id}` : 'Unknown'),
-          full_name: post.author?.name || post.author?.username || '',
-          profile_pic_url: post.author?.profile_pic_url || post.author?.profile_pic || '',
-          is_verified: post.user?.is_verified || post.author?.verified || false
+        // Content
+        caption: post.post_content?.caption || '',
+        
+        // Profile
+        user: {
+          username: post.profile?.username || 'Unknown',
+          full_name: post.profile?.display_name || '',
+          profile_pic_url: post.profile?.profile_pic_url || '', // Note: DB field is currently profile_url or profile_pic_url, need to check specific sample if strictly one. Samples show 'profile_url' in facebook/instagram but 'profile_pic' in x. Let's try to grab what's there.
+          is_verified: post.profile?.is_verified || false
         },
+        // Fix for profile pic url variation in samples if needed, but strict mapping:
+        // Instagram sample: profile_pic_url
+        // Facebook sample: profile_url
+        // X sample: profile_pic (null in sample)
+        // Let's robustly grab it below:
 
-        // Normalize timestamp
-        taken_at: normalizedTimestamp,
+        // Timestamp
+        taken_at: post.engagement?.posted_at ? Math.floor(new Date(post.engagement.posted_at).getTime() / 1000) : null,
 
-        // Normalize stats (handle all platforms)
+        // Stats
         stats: {
-          like_count: post.stats?.like_count || post.stats?.likes || 0,
-          comment_count: post.stats?.comment_count || post.stats?.comments || post.stats?.replies || 0,
-          view_count: post.stats?.view_count || (post.stats?.views ? parseInt(post.stats.views) : null),
-          share_count: post.stats?.shares || post.stats?.retweets || 0,
-          // X-specific stats
-          retweet_count: post.stats?.retweets || 0,
-          quote_count: post.stats?.quotes || 0,
-          reply_count: post.stats?.replies || 0
+          like_count: post.engagement?.likes || 0,
+          comment_count: post.engagement?.comments || 0,
+          view_count: post.engagement?.views || 0,
+          share_count: post.engagement?.shares || 0,
+          retweet_count: post.engagement?.retweets || 0,
+          quote_count: post.engagement?.quotes || 0,
+          reply_count: post.engagement?.replies || 0
         },
 
-        // Ensure platform is set
+        // Platform
         platform: post.platform || 'instagram'
       };
+      
+      // Robust profile pic handling
+      normalized.user.profile_pic_url = post.profile?.profile_pic_url || post.profile?.profile_url || post.profile?.profile_pic || '';
 
       return normalized;
     }));
 
-    const totalCount = await collection.countDocuments(query)
+    const totalCount = await collection.countDocuments(finalQuery)
 
     return { posts: processedPosts, totalCount, page, totalPages: Math.ceil(totalCount / limit) }
   } catch (e) {
@@ -177,85 +192,125 @@ export async function getUnreviewedPosts(page = 1, limit = 20, filters = {}) {
   }
 }
 
+import { updateDailyMetrics, manageTakedownCase } from '@/utils/supabase/metrics'
+import { sendSlackNotification } from '@/utils/slack'
+
+// ... existing imports
+
 export async function submitCaseReview(prevState, formData) {
-  const supabase = await createClient()
   const mongoId = formData.get('mongo_id')
 
-  const rawData = {
-    post_id: formData.get('post_id'),
-    platform: formData.get('platform'),
+  if (!mongoId) {
+    return { success: false, error: 'Missing Post ID' }
+  }
+
+  const review_details = {
     threat_type: formData.get('threat_type'),
-    threat_score: parseInt(formData.get('threat_score')),
-    sourcing_date: formData.get('sourcing_date'), // Ensure this is ISO string
+    threat_score: parseInt(formData.get('threat_score') || '0'),
+    reviewed_at: new Date().toISOString()
+  }
+
+  const takedown_info = {
     is_in_takedown: formData.get('is_in_takedown') === 'on',
     takedown_status: formData.get('takedown_status'),
-    caption: formData.get('caption'),
-    image_key: formData.get('image_key'),
-    profile_username: formData.get('profile_username'),
-    posting_time: formData.get('posting_time'), // Ensure this is ISO string
+    client_reference_id: null
   }
 
-  // Check if case already exists (update) or create new
-  const { data: existingCase } = await supabase
-    .from('cases_metadata')
-    .select('id')
-    .eq('post_id', rawData.post_id)
-    .maybeSingle()
+  try {
+    const client = await clientPromise
+    const db = client.db(process.env.MONGO_DB_NAME)
+    const collection = db.collection('Posts')
 
-  let supabaseError
-  if (existingCase) {
-    // Update existing case
-    const { error } = await supabase
-      .from('cases_metadata')
-      .update(rawData)
-      .eq('id', existingCase.id)
-    supabaseError = error
-  } else {
-    // Insert new case
-    const { error } = await supabase
-      .from('cases_metadata')
-      .insert(rawData)
-    supabaseError = error
-  }
-
-  if (supabaseError) {
-    console.error('Supabase Insert/Update Error:', supabaseError)
-    return { success: false, error: supabaseError.message }
-  }
-
-  // Mark post as processed in MongoDB
-  if (mongoId) {
-    try {
-      const client = await clientPromise
-      const db = client.db(process.env.MONGO_DB_NAME)
-      const collection = db.collection('Posts')
-
-      await collection.updateOne(
-        { _id: new ObjectId(mongoId) },
-        { $set: { processed: true, processed_at: new Date() } }
-      )
-    } catch (mongoError) {
-      console.error('MongoDB Update Error:', mongoError)
-      // Don't fail the whole operation if MongoDB update fails
+    // 1. Fetch existing post to get previous state
+    const existingPost = await collection.findOne({ _id: new ObjectId(mongoId) })
+    if (!existingPost) {
+      return { success: false, error: 'Post not found' }
     }
-  }
+    
+    // Check if it was previously reviewed today to handle metrics updates correctly
+    // If processed=true and review_details exist, we treat it as an update
+    const previousReviewData = existingPost.processed && existingPost.review_details ? {
+        threat_score: existingPost.review_details.threat_score,
+        threat_type: existingPost.review_details.threat_type,
+        is_in_takedown: existingPost.takedown_info?.is_in_takedown,
+        platform: existingPost.platform
+    } : null
 
-  return { success: true }
+    // 2. Update MongoDB
+    const result = await collection.updateOne(
+      { _id: new ObjectId(mongoId) },
+      {
+        $set: {
+          review_details,
+          takedown_info,
+          processed: true,
+          processed_at: new Date()
+        }
+      }
+    )
+
+    // 3. Update Supabase Metrics
+    const currentReviewData = {
+        threat_score: review_details.threat_score,
+        threat_type: review_details.threat_type,
+        is_in_takedown: takedown_info.is_in_takedown,
+        platform: existingPost.platform
+    }
+    
+    // Fire and forget metrics update to not block UI
+    updateDailyMetrics(currentReviewData, previousReviewData).catch(err => 
+        console.error('Background metrics update failed:', err)
+    )
+
+    // 4. Handle Takedown (Supabase & Slack)
+    if (takedown_info.is_in_takedown) {
+        // If it wasn't already in takedown, send notification
+        const isNewTakedown = !previousReviewData?.is_in_takedown
+
+        // Update/Insert Takedown Case
+        manageTakedownCase({
+            mongo_post_id: mongoId,
+            post_platform_id: existingPost.post_id || existingPost.code,
+            platform: existingPost.platform || 'instagram',
+            is_in_takedown: true,
+            risk_score: review_details.threat_score,
+            threat_type: review_details.threat_type
+        }).catch(err => console.error('Takedown management failed:', err))
+
+        // Send Slack Notification only for new takedowns
+        if (isNewTakedown) {
+            sendSlackNotification().catch(err => 
+                console.error('Slack notification failed:', err)
+            )
+        }
+    }
+
+    return { success: true }
+  } catch (error) {
+    console.error('MongoDB Update Error:', error)
+    return { success: false, error: error.message }
+  }
 }
 
 export async function getCaseMetadata(postId) {
-  const supabase = await createClient()
+  try {
+    const client = await clientPromise
+    const db = client.db(process.env.MONGO_DB_NAME)
+    const collection = db.collection('Posts')
 
-  const { data, error } = await supabase
-    .from('cases_metadata')
-    .select('*')
-    .eq('post_id', postId)
-    .maybeSingle()
+    const post = await collection.findOne({ post_id: postId })
 
-  if (error) {
-    console.error('Error fetching case metadata:', error)
+    if (!post || (!post.review_details && !post.takedown_info)) {
+      return null
+    }
+
+    return {
+      review_details: post.review_details,
+      takedown_info: post.takedown_info,
+      analysis_results: post.analysis_results
+    }
+  } catch (e) {
+    console.error('Error fetching case metadata:', e)
     return null
   }
-
-  return data
 }

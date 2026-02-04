@@ -1,0 +1,110 @@
+{
+    "_id": {
+        "$oid": "697873b1f8a29e29dbdd88db"
+    },
+    "code": "DQ7E-YsEa3-",
+    "caption": "Institutional Trading Secrets | Why Retail Traders Are Always One Step Behind\n\nhttps://youtu.be/1WVGOhK1_a0\n\nBig banks are already positioning for the next market move — but most retail traders have no idea what’s coming.\n\nIn this video, I’ll take you through a full institutional analysis of what banks are thinking right now.\n\nNo indicators. No retail myths. Just pure institutional logic from the same playbook used by professional traders on real desks.",
+    "id": "3763623792900943358",
+    "media_type": 1,
+    "media_urls": [
+        {
+            "original_media_type": 1,
+            "s3_url": "https://cxo-demo.s3.ap-south-1.amazonaws.com/instagram_data/alexandertradeandinvestment/DQ7E-YsEa3-/0.jpg",
+            "is_video_cover": false
+        }
+    ],
+    "product_type": "feed",
+    "result_origin": {
+        "type": "keyword-search",
+        "keyword": "Institutional trading secrets"
+    },
+    "s3_stored": true,
+    "stats": {
+        "like_count": 2,
+        "comment_count": 1,
+        "view_count": null,
+        "play_count": null
+    },
+    "taken_at": 1762878940,
+    "user": {
+        "id": "62411443655",
+        "username": "alexandertradeandinvestment",
+        "full_name": "David Alexander",
+        "profile_pic_url": "https://scontent-maa3-3.cdninstagram.com/v/t51.2885-19/472494715_1630879520864265_7888548237894392521_n.jpg?stp=dst-jpg_s150x150_tt6&efg=eyJ2ZW5jb2RlX3RhZyI6InByb2ZpbGVfcGljLmRqYW5nby4xMDgwLmMyIn0&_nc_ht=scontent-maa3-3.cdninstagram.com&_nc_cat=109&_nc_oc=Q6cZ2QEUDpZERFJaIAm44p5DinRQvdvFHvHwfewIr59TIc0TKbAQZI7fTIB_5iVp5QGRU6I&_nc_ohc=8Yh0hIhyDsEQ7kNvwHZFyBM&_nc_gid=0Owq4jr9VgIgqq3ytoevuQ&edm=AFlAz-oBAAAA&ccb=7-5&oh=00_AfqRog6GTEkFYnOEIA6bojn1amh4-SKbC_S-R1lZEoWj9g&oe=697E6222&_nc_sid=76c0fc",
+        "is_verified": false
+    },
+    "analysis_results": {},
+    "engagement": {
+        "likes": 2,
+        "comments": 1,
+        "shares": 0,
+        "retweets": 0,
+        "quotes": 0,
+        "replies": 0,
+        "views": null,
+        "posted_at": {
+            "$date": "2025-11-11T16:35:40.000Z"
+        }
+    },
+    "metadata": {
+        "created_at": {
+            "$date": "2026-02-02T17:34:11.511Z"
+        },
+        "updated_at": {
+            "$date": "2026-02-02T17:34:11.511Z"
+        },
+        "sourcing_date": {
+            "$date": "2025-11-11T16:35:40.000Z"
+        },
+        "update_history": [
+            {
+                "updated_at": {
+                    "$date": "2026-02-02T17:34:11.511Z"
+                },
+                "updated_by": "migration_script_v1",
+                "changes_summary": "Initial schema migration to v1"
+            }
+        ],
+        "schema_version": 1
+    },
+    "original_url": "https://www.instagram.com/p/DQ7E-YsEa3-/",
+    "platform": "instagram",
+    "post_content": {
+        "caption": "Institutional Trading Secrets | Why Retail Traders Are Always One Step Behind\n\nhttps://youtu.be/1WVGOhK1_a0\n\nBig banks are already positioning for the next market move — but most retail traders have no idea what’s coming.\n\nIn this video, I’ll take you through a full institutional analysis of what banks are thinking right now.\n\nNo indicators. No retail myths. Just pure institutional logic from the same playbook used by professional traders on real desks.",
+        "media_urls": [
+            {
+                "type": "image",
+                "s3_url": "https://cxo-demo.s3.ap-south-1.amazonaws.com/instagram_data/alexandertradeandinvestment/DQ7E-YsEa3-/0.jpg",
+                "thumbnail_url": null,
+                "original_url": null
+            }
+        ],
+        "post_type": "feed",
+        "language": null
+    },
+    "post_id": "DQ7E-YsEa3-",
+    "processed": false,
+    "processed_at": null,
+    "profile": {
+        "platform_user_id": "62411443655",
+        "username": "alexandertradeandinvestment",
+        "display_name": "David Alexander",
+        "profile_url": "https://instagram.com/alexandertradeandinvestment",
+        "is_verified": false
+    },
+    "review_details": null,
+    "supabase_refs": {
+        "case_id": null,
+        "alert_ids": [],
+        "chat_thread_ids": []
+    },
+    "takedown_info": {
+        "is_in_takedown": false,
+        "takedown_status": "None",
+        "client_reference_id": null,
+        "platform_case_id": null,
+        "initiated_at": null,
+        "completed_at": null,
+        "notes": null
+    }
+}

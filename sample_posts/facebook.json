@@ -1,0 +1,144 @@
+{
+    "_id": "698111233c24564a2cb284bc",
+    "code": "712780165109246",
+    "analysis_results": {
+        "risk_score": 40,
+        "category": "Medium Risk",
+        "categorization_reason": "Flags: misinformation. The content is a celebratory and informative post about the naming traditions of the Ambani family, featuring Sanskrit names with cultural significance. It contains no explicit, harmful, or misleading material, nor does it promote NSFW, hate speech, or scams. The tone is positive and family-oriented.",
+        "poi_check": {
+            "face_present": false,
+            "poi_name_found": true,
+            "poi_names": [
+                "Mukesh Ambani"
+            ],
+            "face_bbox": [],
+            "confidence": 0
+        },
+        "truth_check": {
+            "is_credible": false,
+            "explanation": "No publicly verified or credible sources confirm the names (Prithvi Ambani, Veda Ambani, Adiya Piramal) as grandchildren of Nita Ambani or their parents (Akash, Shloka, Isha, Anand). The Ambani family has not officially announced these names or details as of 2026.",
+            "sources": []
+        },
+        "aigc_check": {
+            "is_aigc": false,
+            "score": 0,
+            "provider": "contrails.ai"
+        },
+        "nsfw_check": {
+            "is_safe": true,
+            "reasoning": "The content is a celebratory and informative post about the naming traditions of the Ambani family, featuring Sanskrit names with cultural significance. It contains no explicit, harmful, or misleading material, nor does it promote NSFW, hate speech, or scams. The tone is positive and family-oriented.",
+            "category": "safe",
+            "risk_level": "Low"
+        },
+        "hate_speech_check": {
+            "is_safe": true,
+            "reasoning": "The content is a celebratory and informative post about the naming traditions of the Ambani family, featuring Sanskrit names with cultural significance. It contains no explicit, harmful, or misleading material, nor does it promote NSFW, hate speech, or scams. The tone is positive and family-oriented.",
+            "category": "safe",
+            "risk_level": "Low"
+        },
+        "analyzed_at": "2026-02-03T08:25:09.659Z"
+    },
+    "author": {
+        "name": "Desi Dharma Daily",
+        "url": "https://www.facebook.com/profile.php?id=100091318057706"
+    },
+    "content": "👶✨ Nita Ambani’s grandchildren have names as beautiful as their legacy! From Sanskrit roots to divine meanings, each name in the Ambani family carries a special significance. Let’s take a look:\n\n🌍 Prithvi Ambani – Son of Akash and Shloka. “Prithvi” means Earth—symbolizing stability, humility, and strength. 📚 Veda Ambani – Their newborn daughter. “Veda” means knowledge and wisdom, drawn from ancient scriptures. 💎 Adiya Piramal – Daughter of Isha and Anand. “Adiya” means a treasure gifted by God—pure and precious. 👶 Krishna Piramal – Isha and Anand’s son, named after the beloved deity, symbolizing love and mischief.\n\nThese names reflect tradition, elegance, and deep cultural roots—just like the Ambani legacy itself. 🌟\n\n#AmbaniFamily #VedaAmbani #PrithviAmbani #AdiyaPiramal #CelebrityKids #BeautifulNames #SanskritNames #NitaAmbani",
+    "engagement": {
+        "likes": 854,
+        "comments": 23,
+        "shares": 5,
+        "retweets": 0,
+        "quotes": 0,
+        "replies": 0,
+        "views": null,
+        "posted_at": null
+    },
+    "id": "712780165109246",
+    "media_urls": [
+        {
+            "original_url": "https://scontent.fblr2-3.fna.fbcdn.net/v/t39.30808-6/533176582_712780041775925_133543550563203394_n.jpg?stp=dst-jpg_s1080x2048_tt6&_nc_cat=103&ccb=1-7&_nc_sid=127cfc&_nc_ohc=DxuDXw8wgvcQ7kNvwGKa1Qt&_nc_oc=AdnEKpPNyqXfnRKx4fai3FBGXUc9VlRQWx7I-4vId3GXHZcnoPlyN6SdFh33PkW6rpY&_nc_zt=23&_nc_ht=scontent.fblr2-3.fna&_nc_gid=9AOqrIUadf5cY2nUQnX30g&oh=00_Aft5l0DtuNUPllGFTPx09p-eQ16nT5ET74n2qoCvXAyO8g&oe=6986C990",
+            "s3_url": "https://cxo-demo.s3.ap-south-1.amazonaws.com/facebook_data/712780165109246/0.jpg"
+        }
+    ],
+    "metadata": {
+        "created_at": "2026-02-02T21:03:29.562Z",
+        "updated_at": "2026-02-02T21:03:29.562Z",
+        "sourcing_date": "2026-02-02T21:03:29.562Z",
+        "update_history": [
+            {
+                "updated_at": "2026-02-02T21:03:29.562Z",
+                "updated_by": "migration_script_v1",
+                "changes_summary": "Initial schema migration to v1"
+            }
+        ],
+        "schema_version": 1
+    },
+    "original_url": "https://www.facebook.com/permalink.php?story_fbid=pfbid02hz1gZ5woDpLaQ5uE5rqFC8vcLxrmC7XN96Gd9MpQtBUQeoQXDGzmgZKkPbBwJnP4l&id=100091318057706",
+    "platform": "facebook",
+    "post_content": {
+        "caption": "👶✨ Nita Ambani’s grandchildren have names as beautiful as their legacy! From Sanskrit roots to divine meanings, each name in the Ambani family carries a special significance. Let’s take a look:\n\n🌍 Prithvi Ambani – Son of Akash and Shloka. “Prithvi” means Earth—symbolizing stability, humility, and strength. 📚 Veda Ambani – Their newborn daughter. “Veda” means knowledge and wisdom, drawn from ancient scriptures. 💎 Adiya Piramal – Daughter of Isha and Anand. “Adiya” means a treasure gifted by God—pure and precious. 👶 Krishna Piramal – Isha and Anand’s son, named after the beloved deity, symbolizing love and mischief.\n\nThese names reflect tradition, elegance, and deep cultural roots—just like the Ambani legacy itself. 🌟\n\n#AmbaniFamily #VedaAmbani #PrithviAmbani #AdiyaPiramal #CelebrityKids #BeautifulNames #SanskritNames #NitaAmbani",
+        "media_urls": [
+            {
+                "type": "image",
+                "s3_url": "https://cxo-demo.s3.ap-south-1.amazonaws.com/facebook_data/712780165109246/0.jpg",
+                "thumbnail_url": null,
+                "original_url": "https://scontent.fblr2-3.fna.fbcdn.net/v/t39.30808-6/533176582_712780041775925_133543550563203394_n.jpg?stp=dst-jpg_s1080x2048_tt6&_nc_cat=103&ccb=1-7&_nc_sid=127cfc&_nc_ohc=DxuDXw8wgvcQ7kNvwGKa1Qt&_nc_oc=AdnEKpPNyqXfnRKx4fai3FBGXUc9VlRQWx7I-4vId3GXHZcnoPlyN6SdFh33PkW6rpY&_nc_zt=23&_nc_ht=scontent.fblr2-3.fna&_nc_gid=9AOqrIUadf5cY2nUQnX30g&oh=00_Aft5l0DtuNUPllGFTPx09p-eQ16nT5ET74n2qoCvXAyO8g&oe=6986C990"
+            }
+        ],
+        "post_type": "post",
+        "language": null
+    },
+    "post_id": "712780165109246",
+    "processed": true,
+    "processed_at": "2026-02-03T10:35:30.781Z",
+    "profile": {
+        "platform_user_id": null,
+        "username": "Desi Dharma Daily",
+        "display_name": "Desi Dharma Daily",
+        "profile_url": "https://www.facebook.com/profile.php?id=100091318057706",
+        "is_verified": false
+    },
+    "result_origin": {
+        "type": "facebook_search",
+        "keyword": "#PrithviAmbani"
+    },
+    "review_details": {
+        "threat_type": "fake_news",
+        "threat_score": 40,
+        "reviewed_at": "2026-02-03T10:35:30.742Z"
+    },
+    "s3_stored": true,
+    "stats": {
+        "like_count": 854,
+        "comment_count": 23,
+        "view_count": 0,
+        "share_count": 5,
+        "retweet_count": 0,
+        "quote_count": 0,
+        "reply_count": 0
+    },
+    "supabase_refs": {
+        "case_id": null,
+        "alert_ids": [],
+        "chat_thread_ids": []
+    },
+    "takedown_info": {
+        "is_in_takedown": true,
+        "takedown_status": "reviewer-checked",
+        "client_reference_id": null
+    },
+    "timestamp": null,
+    "type": "post",
+    "url": "https://www.facebook.com/permalink.php?story_fbid=pfbid02hz1gZ5woDpLaQ5uE5rqFC8vcLxrmC7XN96Gd9MpQtBUQeoQXDGzmgZKkPbBwJnP4l&id=100091318057706",
+    "created_at": "2026-02-02T21:03:29.562Z",
+    "sourcing_date": "2026-02-02T21:03:29.562Z",
+    "signedImageUrl": "https://cxo-demo.s3.ap-south-1.amazonaws.com/facebook_data/712780165109246/0.jpg?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=AKIA6ODU4O3VBDPTBBP6%2F20260203%2Fap-south-1%2Fs3%2Faws4_request&X-Amz-Date=20260203T122844Z&X-Amz-Expires=3600&X-Amz-Signature=25187154fb182e2c6090a5710a6e3562f476b16f8ccc017fccb93c405f88ddf9&X-Amz-SignedHeaders=host&x-amz-checksum-mode=ENABLED&x-id=GetObject",
+    "caption": "👶✨ Nita Ambani’s grandchildren have names as beautiful as their legacy! From Sanskrit roots to divine meanings, each name in the Ambani family carries a special significance. Let’s take a look:\n\n🌍 Prithvi Ambani – Son of Akash and Shloka. “Prithvi” means Earth—symbolizing stability, humility, and strength. 📚 Veda Ambani – Their newborn daughter. “Veda” means knowledge and wisdom, drawn from ancient scriptures. 💎 Adiya Piramal – Daughter of Isha and Anand. “Adiya” means a treasure gifted by God—pure and precious. 👶 Krishna Piramal – Isha and Anand’s son, named after the beloved deity, symbolizing love and mischief.\n\nThese names reflect tradition, elegance, and deep cultural roots—just like the Ambani legacy itself. 🌟\n\n#AmbaniFamily #VedaAmbani #PrithviAmbani #AdiyaPiramal #CelebrityKids #BeautifulNames #SanskritNames #NitaAmbani",
+    "user": {
+        "username": "Desi Dharma Daily",
+        "full_name": "Desi Dharma Daily",
+        "profile_pic_url": "https://www.facebook.com/profile.php?id=100091318057706",
+        "is_verified": false
+    },
+    "taken_at": null
+}

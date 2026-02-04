@@ -1,4 +1,4 @@
-import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3"
+import { S3Client, GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3"
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner"
 
 const s3Client = new S3Client({
@@ -8,6 +8,39 @@ const s3Client = new S3Client({
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
   },
 })
+
+export async function uploadFileToS3(buffer, key, contentType) {
+  const command = new PutObjectCommand({
+    Bucket: process.env.AWS_BUCKET_NAME,
+    Key: key,
+    Body: buffer,
+    ContentType: contentType,
+  })
+
+  try {
+    await s3Client.send(command)
+    return key
+  } catch (error) {
+    console.error("Error uploading to S3:", error)
+    throw error
+  }
+}
+
+export async function getSignedDownloadUrl(key, originalName) {
+  try {
+    const command = new GetObjectCommand({
+      Bucket: process.env.AWS_BUCKET_NAME,
+      Key: key,
+      ResponseContentDisposition: `attachment; filename="${originalName}"`,
+    })
+
+    const signedUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 })
+    return signedUrl
+  } catch (error) {
+    console.error("Error generating signed download URL:", error)
+    return null
+  }
+}
 
 export async function getSignedImageUrl(s3Url) {
   if (!s3Url) return null
