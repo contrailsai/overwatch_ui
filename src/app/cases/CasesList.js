@@ -1,33 +1,40 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { getPosts } from './actions'
+import { getPosts, approveTakedown, getPriorityTakedowns } from './actions'
 import { CaseDetailPanel } from './CaseDetailPanel'
-import { Filter, ChevronDown, Search, ArrowUpDown, Loader2, AlertTriangle, Heart, MessageCircle } from 'lucide-react'
+import {
+  Filter, ChevronDown, Search, ArrowUpDown, Loader2,
+  AlertTriangle, ShieldAlert, CheckCircle, ExternalLink,
+  Info, Eye, LayoutGrid, List, Facebook, Instagram, Twitter
+} from 'lucide-react'
+
+import getPostLink from '@/components/GetPostLink'
 
 export function CasesList() {
   const [posts, setPosts] = useState([])
-  const [initialLoading, setInitialLoading] = useState(true) // For first load / filter change
-  const [loadingMore, setLoadingMore] = useState(false) // For infinite scroll
+  const [priorityPosts, setPriorityPosts] = useState([])
+  const [initialLoading, setInitialLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [page, setPage] = useState(1)
   const [hasMore, setHasMore] = useState(true)
   const [totalCount, setTotalCount] = useState(0)
-  
+
   // Filters State
   const [filters, setFilters] = useState({
     platform: 'all',
     status: 'all',
     threat_type: 'all'
   })
-  
+
   // Sort State
   const [sort, setSort] = useState({
-    field: 'created_at',
+    field: 'threat_score',
     direction: 'desc'
   })
 
   const [selectedPost, setSelectedPost] = useState(null)
-  
+
   const observer = useRef()
   const lastPostRef = useRef(null)
 
@@ -35,16 +42,21 @@ export function CasesList() {
   useEffect(() => {
     const loadInitialData = async () => {
       setInitialLoading(true)
-      // Reset state for new query
       setPage(1)
       setHasMore(true)
-      setPosts([]) 
+      setPosts([])
 
       try {
-        const result = await getPosts(1, 20, filters, sort)
-        setPosts(result.posts)
-        setTotalCount(result.totalCount)
-        setHasMore(1 < result.totalPages)
+        const [postsResult, priorityResult] = await Promise.all([
+          getPosts(1, 20, filters, sort),
+          getPriorityTakedowns()
+        ])
+
+        setPosts(postsResult.posts)
+        setTotalCount(postsResult.totalCount)
+        setHasMore(1 < postsResult.totalPages)
+        setPriorityPosts(priorityResult)
+
       } catch (error) {
         console.error('Failed to fetch posts:', error)
       } finally {
@@ -63,9 +75,15 @@ export function CasesList() {
     try {
       const nextPage = page + 1
       const result = await getPosts(nextPage, 20, filters, sort)
-      
+
       if (result.posts.length > 0) {
-        setPosts(prev => [...prev, ...result.posts])
+        setPosts(prev => {
+          // Filter out any that might be in priority to avoid absolute duplicates (though rare if pagination flows naturally)
+          // But priority posts are "pinned" to top visually. 
+          // Ideally we dedupe by ID if we merged, but here we keep lists separate and merge in render
+          // Just appending normally here.
+          return [...prev, ...result.posts]
+        })
         setPage(nextPage)
         setHasMore(nextPage < result.totalPages)
       } else {
@@ -78,27 +96,19 @@ export function CasesList() {
     }
   }, [page, loadingMore, hasMore, initialLoading, filters, sort])
 
-  // Intersection Observer Callback for the last element
+  // Intersection Observer
   const lastPostElementRef = useCallback(node => {
     if (initialLoading || loadingMore) return
-    
     if (observer.current) observer.current.disconnect()
-    
     observer.current = new IntersectionObserver(entries => {
       if (entries[0].isIntersecting && hasMore) {
         loadMore()
       }
-    }, {
-        threshold: 0.1, // Trigger when just slightly visible
-        rootMargin: '100px', // Trigger a bit before reaching the bottom
-    })
-    
+    }, { threshold: 0.1, rootMargin: '100px' })
     if (node) observer.current.observe(node)
   }, [initialLoading, loadingMore, hasMore, loadMore])
 
-  const handleFilterChange = (key, value) => {
-    setFilters(prev => ({ ...prev, [key]: value }))
-  }
+  const handleFilterChange = (key, value) => setFilters(prev => ({ ...prev, [key]: value }))
 
   const handleSortChange = (field) => {
     setSort(prev => ({
@@ -107,192 +117,196 @@ export function CasesList() {
     }))
   }
 
-  const getThreatColor = (score) => {
-    if (!score && score !== 0) return 'text-gray-500 bg-gray-100 border-gray-200' // Pending
-    if (score >= 80) return 'text-red-600 bg-red-50 border-red-100'
-    if (score >= 50) return 'text-orange-600 bg-orange-50 border-orange-100'
-    return 'text-green-600 bg-green-50 border-green-100'
+  const handleApproveTakedown = async (e, post) => {
+    e.stopPropagation();
+    if (!confirm(`Are you sure you want to approve the takedown for this case? This will trigger an alert.`)) return;
+
+    try {
+      const result = await approveTakedown(post._id);
+      if (result.success) {
+        setPriorityPosts(prev => prev.filter(p => p._id !== post._id));
+        setPosts(prev => prev.map(p => {
+          if (p._id === post._id) {
+            return { ...p, takedown_info: { ...p.takedown_info, takedown_status: 'requested' } };
+          }
+          return p;
+        }));
+      } else {
+        alert("Failed: " + result.error);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  // Helper for duplicate removal if an item is in both lists
+  const mergedPosts = [
+    ...priorityPosts.map(p => ({ ...p, isPriority: true })),
+    ...posts.filter(p => !priorityPosts.some(pr => pr._id === p._id))
+  ];
+
+  const getRiskLabel = (score) => {
+    if (score >= 80) return { label: 'Critical', color: 'text-red-700 bg-red-50 border-red-200' };
+    if (score >= 60) return { label: 'High', color: 'text-orange-700 bg-orange-50 border-orange-200' };
+    if (score >= 40) return { label: 'Medium', color: 'text-yellow-700 bg-yellow-50 border-yellow-200' };
+    return { label: 'Low', color: 'text-green-700 bg-green-50 border-green-200' };
   }
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Filters Bar */}
-      <div className="bg-white border-b border-gray-200 px-6 py-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-3 overflow-x-auto pb-2 sm:pb-0">
-            {/* Platform Filter */}
-            <div className="relative inline-block text-left">
-              <select 
-                className="block w-full rounded-md border-gray-300 py-2 pl-3 pr-10 text-base focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm bg-gray-50 border"
-                value={filters.platform}
-                onChange={(e) => handleFilterChange('platform', e.target.value)}
-              >
-                <option value="all">All Platforms</option>
-                <option value="instagram">Instagram</option>
-                <option value="facebook">Facebook</option>
-                <option value="x">X (Twitter)</option>
-              </select>
+    <div className="flex flex-col h-full bg-white">
+      {/* Filters */}
+      <div className="border-b border-gray-100 px-8 py-6 bg-white">
+
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-4 w-full sm:w-auto">
+            <div className="flex items-center gap-2">
+              <Filter className="w-4 h-4 text-gray-400" />
+              <span className="text-sm font-semibold text-gray-900">Filters</span>
             </div>
 
-            {/* Status Filter */}
-            <div className="relative inline-block text-left">
-              <select 
-                className="block w-full rounded-md border-gray-300 py-2 pl-3 pr-10 text-base focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm bg-gray-50 border"
-                value={filters.status}
-                onChange={(e) => handleFilterChange('status', e.target.value)}
-              >
-                <option value="all">All Status</option>
-                <option value="pending">Pending Review</option>
-                <option value="reviewed">Reviewed</option>
-              </select>
-            </div>
-            
-            <div className="h-6 w-px bg-gray-300 mx-2 hidden sm:block"></div>
+            {/* Filters */}
+            <select
+              className="bg-gray-50 border border-gray-200 text-gray-700 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 min-w-[140px]"
+              value={filters.platform}
+              onChange={(e) => handleFilterChange('platform', e.target.value)}
+            >
+              <option value="all">All Platforms</option>
+              <option value="instagram">Instagram</option>
+              <option value="facebook">Facebook</option>
+              <option value="x">X (Twitter)</option>
+            </select>
 
-            <button 
-                onClick={() => handleSortChange('threat_score')}
-                className={`flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors ${sort.field === 'threat_score' ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-100'}`}
+            <select
+              className="bg-gray-50 border border-gray-200 text-gray-700 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 min-w-[140px]"
+              value={filters.threat_type}
+              onChange={(e) => handleFilterChange('threat_type', e.target.value)}
             >
-                <ArrowUpDown className="w-4 h-4 mr-2" />
-                Risk Score
-            </button>
-             <button 
-                onClick={() => handleSortChange('created_at')}
-                className={`flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors ${sort.field === 'created_at' ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-100'}`}
-            >
-                <ArrowUpDown className="w-4 h-4 mr-2" />
-                Date
-            </button>
+              <option value="all">All Threat Types</option>
+              <option value="impersonation">Impersonation</option>
+              <option value="deepfake_video">Deepfake Video</option>
+              <option value="scam_ad">Scam Ad</option>
+              <option value="hate_speech">Hate Speech</option>
+            </select>
+
           </div>
 
-          <div className="text-sm text-gray-500">
-            Showing {posts.length} of {totalCount} results
+          <div className="text-sm text-gray-400 font-medium">
+            Showing {mergedPosts.length} cases
           </div>
         </div>
       </div>
 
-      {/* Main List Area */}
-      <div className="flex-1 overflow-y-auto bg-gray-50 p-6">
-        <div className="bg-white rounded-lg shadow border border-gray-200 overflow-hidden min-h-[500px] flex flex-col">
-          <table className="min-w-full divide-y divide-gray-200 flex-1">
-            <thead className="bg-gray-50 sticky top-0 z-10">
+      {/* Main Table */}
+      <div className="flex-1 overflow-y-auto p-8 bg-gray-50/50">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+          <table className="min-w-full divide-y divide-gray-100">
+            <thead className="bg-gray-50">
               <tr>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Content</th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stats</th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Risk Assessment</th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                <th scope="col" className="px-6 py-4 text-left text-sm font-bold text-gray-500 uppercase -wider">Priority</th>
+                <th scope="col" className="px-6 py-4 text-left text-sm font-bold text-gray-500 uppercase -wider">Platform</th>
+                <th scope="col" className="px-6 py-4 text-left text-sm font-bold text-gray-500 uppercase -wider">Threat Type</th>
+                <th scope="col" className="px-6 py-4 text-left text-sm font-bold text-gray-500 uppercase -wider">Content</th>
+                <th scope="col" className="px-6 py-4 text-left text-sm font-bold text-gray-500 uppercase -wider">Source</th>
+                <th scope="col" className="px-6 py-4 text-right text-sm font-bold text-gray-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {posts.map((post, index) => {
-                const isLastPost = index === posts.length - 1;
+            <tbody className="bg-white divide-y divide-gray-50">
+              {mergedPosts.map((post, index) => {
+                const isLastPost = index === mergedPosts.length - 1;
+                const riskScore = post.review_details?.threat_score || post.analysis_results?.risk_score || 0;
+                const risk = getRiskLabel(riskScore);
+                const threatType = post.review_details?.threat_type?.replace(/_/g, ' ') || post.analysis_results?.category || 'Unknown';
+                const status = post.takedown_info?.takedown_status || 'new';
+
                 return (
-                  <tr 
-                      key={post._id} 
-                      ref={isLastPost ? lastPostElementRef : null}
-                      onClick={() => setSelectedPost(post)}
-                      className="hover:bg-blue-50 cursor-pointer transition-colors group"
+                  <tr
+                    key={index}
+                    ref={isLastPost ? lastPostElementRef : null}
+                    onClick={() => setSelectedPost(post)}
+                    className="hover:bg-blue-50/30 cursor-pointer transition-colors group"
                   >
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <div className="h-10 w-10 flex-shrink-0 bg-gray-100 rounded overflow-hidden border border-gray-200 flex items-center justify-center">
-                          {post.signedImageUrl ? (
-                              <img className="h-10 w-10 object-cover" src={post.signedImageUrl} alt="" />
-                          ) : (
-                              <AlertTriangle className="w-4 h-4 text-gray-400" />
-                          )}
-                        </div>
-                        <div className="ml-4">
-                          <div className="text-sm text-gray-900 truncate max-w-[200px]">{post.caption || 'No caption'}</div>
-                          <div className={`text-xs inline-flex items-center px-1.5 py-0.5 rounded capitalize mt-1
-                              ${post.platform === 'facebook' ? 'bg-blue-100 text-blue-800' : 
-                                post.platform === 'x' ? 'bg-gray-900 text-white' : 
-                                'bg-pink-100 text-pink-800'}`}>
-                              {post.platform}
-                          </div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">{post.user.username}</div>
-                      {post.user.is_verified && <span className="text-xs text-blue-500">Verified</span>}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      <div className="flex flex-col space-y-1">
-                          <div className="flex items-center space-x-1.5">
-                              <Heart className="w-3 h-3 text-gray-400" />
-                              <span>{post.stats.like_count.toLocaleString()}</span>
-                          </div>
-                          <div className="flex items-center space-x-1.5">
-                              <MessageCircle className="w-3 h-3 text-gray-400" />
-                              <span>{post.stats.comment_count.toLocaleString()}</span>
-                          </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {post.review_details ? (
-                          <div className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border ${getThreatColor(post.review_details.threat_score)}`}>
-                              {post.review_details.threat_score}/100
-                          </div>
-                      ) : (
-                          <span className="text-xs text-gray-400 italic">Pending Review</span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${post.processed ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
-                        {post.processed ? 'Reviewed' : 'Pending'}
+                    {/* Priority */}
+                    <td className="px-6 py-5 whitespace-nowrap">
+                      <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold border ${risk.color}`}>
+                        <AlertTriangle className="w-3 h-3 mr-1.5" />
+                        {risk.label}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {post.created_at ? new Date(post.created_at).toLocaleDateString() : 'N/A'}
+
+                    {/* Platform */}
+                    <td className="px-6 py-5 whitespace-nowrap">
+                      <div className="flex items-center text-gray-700 font-medium">
+                        {post.platform === 'instagram' && <Instagram className=" size-6 stroke-pink-500 mr-2" />}
+                        {post.platform === 'facebook' && <Facebook className=" size-6 stroke-blue-500 mr-2" />}
+                        {post.platform === 'x' && <Twitter className=" size-6 stroke-black mr-2" />}
+                        <span className="capitalize">{post.platform}</span>
+                      </div>
+                    </td>
+
+                    {/* Threat Type */}
+                    <td className="px-6 py-5 whitespace-nowrap">
+                      <span className="text-gray-900 font-semibold capitalize">{threatType}</span>
+                    </td>
+
+                    {/* Content */}
+                    <td className="px-6 py-5 max-w-md overflow-hidden">
+                      <div className="flex flex-col">
+                        {/* Using Username or a generic title if caption is weird */}
+                        <span className="font-bold text-gray-900 text-sm mb-1 line-clamp-1">
+                          {post.user?.username ? `@${post.user.username}` : 'Unknown User'}
+                          {post.review_details?.threat_type ? `: ${post.review_details.threat_type.replace(/_/g, ' ')}` : ''}
+                        </span>
+                        <span className="text-sm text-gray-500 line-clamp-2 leading-relaxed">
+                          {post.caption || 'No specific text content.'}
+                        </span>
+                      </div>
+                    </td>
+
+                    {/* Source */}
+                    <td className="px-6 py-5 whitespace-nowrap">
+                      <a
+                        href={post.original_url ? post.original_url : getPostLink(post)}
+                        target="_blank"
+                        rel="noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="inline-flex items-center text-blue-600 hover:text-blue-800 font-semibold text-sm transition-colors hover:border-blue-500 border-b-2 border-transparent"
+                      >
+                        View <ExternalLink className="w-3.5 h-3.5 ml-1" />
+                      </a>
+                    </td>
+
+                    {/* Actions */}
+                    <td className="px-6 py-5 whitespace-nowrap text-right">
+                      <button className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-2 px-4 rounded-lg shadow-sm transition-colors inline-flex items-center">
+                        Go Deep
+                      </button>
                     </td>
                   </tr>
                 )
               })}
             </tbody>
           </table>
-          
-          {initialLoading && (
-             <div className="flex-1 flex flex-col items-center justify-center py-20 bg-white">
-                 <Loader2 className="w-10 h-10 animate-spin text-blue-500 mb-4" />
-                 <p className="text-sm text-gray-500">Loading cases...</p>
-             </div>
-          )}
-          
-          {posts.length === 0 && !initialLoading && (
-             <div className="flex-1 flex flex-col items-center justify-center py-20 bg-white text-gray-500">
-                 <Search className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                 <p>No posts found matching your filters.</p>
-             </div>
+
+          {mergedPosts.length === 0 && !initialLoading && (
+            <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+              <Search className="w-12 h-12 mb-4 opacity-20" />
+              <p className="text-lg font-medium">No cases found</p>
+              <p className="text-sm">Try adjusting your filters</p>
+            </div>
           )}
 
-          {/* Infinite Scroll Loader / End Message */}
-          <div className="py-4 border-t border-gray-100 bg-gray-50">
-             {loadingMore ? (
-                <div className="flex justify-center items-center">
-                   <Loader2 className="h-5 w-5 animate-spin text-blue-600 mr-2" />
-                   <span className="text-sm text-gray-600 font-medium">Loading more posts...</span>
-                </div>
-             ) : !hasMore && posts.length > 0 ? (
-                <div className="text-center text-sm text-gray-400">
-                   End of results
-                </div>
-             ) : (
-               // Placeholder to maintain height and prevent jitter if needed, 
-               // but usually empty is fine if logic is correct.
-               // We keep it minimal to avoid whitespace if not loading.
-               <div className="h-5"></div> 
-             )}
-          </div>
+          {loadingMore && (
+            <div className="py-8 flex justify-center">
+              <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
+            </div>
+          )}
         </div>
       </div>
 
-      <CaseDetailPanel 
-        post={selectedPost} 
-        isOpen={!!selectedPost} 
-        onClose={() => setSelectedPost(null)} 
+      <CaseDetailPanel
+        post={selectedPost}
+        isOpen={!!selectedPost}
+        onClose={() => setSelectedPost(null)}
       />
     </div>
   )

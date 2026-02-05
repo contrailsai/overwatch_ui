@@ -1,21 +1,24 @@
 'use client'
 
 import { useState, useActionState, useEffect, useRef, useCallback } from 'react'
-import { submitCaseReview, getUnreviewedPosts, getCaseMetadata } from './actions'
+import { submitCaseReview, getPosts, getCaseMetadata } from './actions'
 import {
   Loader2, X, CheckCircle, AlertTriangle, ExternalLink,
-  ThumbsUp, MessageCircle, Eye, ChevronLeft, ChevronRight, Filter, Share2, Repeat, Quote, Calendar, Database, Sparkles, Brain, Search, ShieldAlert, Bot
+  ThumbsUp, MessageCircle, Eye, ChevronLeft, ChevronRight, Filter, Share2,
+  Search, ShieldAlert, Bot, Sparkles, Brain, Calendar, Database, Plus
 } from 'lucide-react'
 import ProfilePic from '@/components/ProfilePic'
 
-// shadcn/ui components
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Textarea } from "@/components/ui/textarea"
+import { Switch } from "@/components/ui/switch"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { cn } from "@/lib/utils"
 
 const initialState = {
@@ -23,33 +26,31 @@ const initialState = {
   error: null,
 }
 
-// ... (existing helper functions and components)
-// ...
-
 export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, currentPage: initialCurrentPage }) {
-  // ... (same as before)
   const [selectedPost, setSelectedPost] = useState(null)
   const [posts, setPosts] = useState(initialPosts)
   const [page, setPage] = useState(initialCurrentPage)
   const [loading, setLoading] = useState(false)
   const [hasMore, setHasMore] = useState(initialCurrentPage < initialTotalPages)
 
-        // Expanded filter state
-        const [filters, setFilters] = useState({ 
-          platform: 'all', 
-          sourcingDateStart: '', 
-          sourcingDateEnd: '',
-          dbDateStart: '',
-          dbDateEnd: '',
-          aiAnalyzed: true,
-          poiDetected: false
-        })    
-      const observer = useRef()
-      const postRefs = useRef({})
+  // Filters State
+  const [filters, setFilters] = useState({
+    platform: 'all',
+    sourcingDateStart: '',
+    sourcingDateEnd: '',
+    dbDateStart: '',
+    dbDateEnd: '',
+    aiAnalyzed: true,
+    poiDetected: false
+  })
+
+  const observer = useRef()
+  const postRefs = useRef({})
+
   const loadMorePosts = useCallback(async () => {
     setLoading(true)
     const nextPage = page + 1
-    const response = await getUnreviewedPosts(nextPage, 20, filters)
+    const response = await getPosts(nextPage, 20, filters)
 
     if (response.posts.length > 0) {
       setPosts(prev => [...prev, ...response.posts])
@@ -76,7 +77,7 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
   const applyFilters = useCallback(async () => {
     setLoading(true)
     setSelectedPost(null)
-    const response = await getUnreviewedPosts(1, 20, filters)
+    const response = await getPosts(1, 20, filters)
     setPosts(response.posts)
     setPage(1)
     setHasMore(1 < response.totalPages)
@@ -84,25 +85,24 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
   }, [filters])
 
   const clearFilters = () => {
-      setFilters({ 
-        platform: 'all', 
-        sourcingDateStart: '', 
-        sourcingDateEnd: '',
-        dbDateStart: '',
-        dbDateEnd: '',
-        aiAnalyzed: true,
-        poiDetected: false
-      })
-    }
+    setFilters({
+      platform: 'all',
+      sourcingDateStart: '',
+      sourcingDateEnd: '',
+      dbDateStart: '',
+      dbDateEnd: '',
+      aiAnalyzed: true,
+      poiDetected: false
+    })
+  }
 
   // Apply filters when they change
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     applyFilters()
   }, [applyFilters])
 
   // Navigation logic
-  const navigatePost = (direction) => {
+  const navigatePost = useCallback((direction) => {
     if (!selectedPost) return
     const currentIndex = posts.findIndex(p => p._id === selectedPost._id)
     const nextIndex = direction === 'next' ? currentIndex + 1 : currentIndex - 1
@@ -119,7 +119,7 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
         }
       }, 100)
     }
-  }
+  }, [selectedPost, posts])
 
   // Keyboard navigation
   useEffect(() => {
@@ -141,21 +141,11 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [selectedPost, posts, navigatePost])
 
-  // Scroll selected post into view when first selected
-  useEffect(() => {
-    if (selectedPost) {
-      const postElement = postRefs.current[selectedPost._id]
-      if (postElement) {
-        postElement.scrollIntoView({ behavior: 'smooth', block: 'center' })
-      }
-    }
-  }, [selectedPost, selectedPost?._id])
-
   return (
     <div className="flex h-full relative">
       {/* Main Content - Table */}
       <div className="flex-1 overflow-y-auto p-6 transition-all duration-300">
-        {/* Filters */}
+        {/* Filters Bar */}
         <div className="bg-white rounded-lg shadow border border-gray-100 p-4 mb-4">
           <div className="flex flex-col space-y-4">
             <div className="flex items-center gap-2 border-b border-gray-100 pb-2">
@@ -173,7 +163,7 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
             </div>
 
             <div className="flex flex-wrap items-end gap-6">
-              {/* Platform */}
+              {/* Platform Filter */}
               <div className="space-y-1">
                 <label className="text-xs font-bold text-gray-500 uppercase block">Platform</label>
                 <select
@@ -188,38 +178,39 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
                 </select>
               </div>
 
-                              {/* AI Filter */}
-                              <div className="flex items-center gap-6 self-center pt-4">
-                                <div className="flex items-center gap-2">
-                                  <input
-                                    type="checkbox"
-                                    id="aiAnalyzed"
-                                    checked={filters.aiAnalyzed}
-                                    onChange={(e) => setFilters({ ...filters, aiAnalyzed: e.target.checked })}
-                                    className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
-                                  />
-                                  <label htmlFor="aiAnalyzed" className="text-xs font-bold text-gray-600 uppercase flex items-center gap-1 cursor-pointer">
-                                    <Sparkles className="w-3 h-3 text-indigo-500" />
-                                    AI Analyzed Only
-                                  </label>
-                                </div>
-                                
-                                <div className="flex items-center gap-2">
-                                  <input
-                                    type="checkbox"
-                                    id="poiDetected"
-                                    checked={filters.poiDetected}
-                                    onChange={(e) => setFilters({ ...filters, poiDetected: e.target.checked })}
-                                    className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
-                                  />
-                                  <label htmlFor="poiDetected" className="text-xs font-bold text-gray-600 uppercase flex items-center gap-1 cursor-pointer">
-                                    <Search className="w-3 h-3 text-indigo-500" />
-                                    POI Detected
-                                  </label>
-                                </div>
-                              </div>
-                
-                              {/* Sourcing Date Range */}              <div className="space-y-1">
+              {/* AI Filter */}
+              <div className="flex items-center gap-6 self-center pt-4">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="aiAnalyzed"
+                    checked={filters.aiAnalyzed}
+                    onChange={(e) => setFilters({ ...filters, aiAnalyzed: e.target.checked })}
+                    className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                  />
+                  <label htmlFor="aiAnalyzed" className="text-xs font-bold text-gray-600 uppercase flex items-center gap-1 cursor-pointer">
+                    <Sparkles className="w-3 h-3 text-indigo-500" />
+                    AI Analyzed Only
+                  </label>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="poiDetected"
+                    checked={filters.poiDetected}
+                    onChange={(e) => setFilters({ ...filters, poiDetected: e.target.checked })}
+                    className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                  />
+                  <label htmlFor="poiDetected" className="text-xs font-bold text-gray-600 uppercase flex items-center gap-1 cursor-pointer">
+                    <Search className="w-3 h-3 text-indigo-500" />
+                    POI Detected
+                  </label>
+                </div>
+              </div>
+
+              {/* Sourcing Date Range */}
+              <div className="space-y-1">
                 <div className="flex items-center gap-1 mb-1">
                   <Calendar className="w-3 h-3 text-gray-400" />
                   <label className="text-xs font-bold text-gray-500 uppercase block">Sourcing Date</label>
@@ -230,7 +221,6 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
                     value={filters.sourcingDateStart}
                     onChange={(e) => setFilters({ ...filters, sourcingDateStart: e.target.value })}
                     className="px-3 py-2 text-sm border-gray-200 focus:ring-blue-500 focus:border-blue-500 rounded-lg border bg-gray-50"
-                    placeholder="Start"
                   />
                   <span className="text-gray-400">-</span>
                   <input
@@ -238,7 +228,6 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
                     value={filters.sourcingDateEnd}
                     onChange={(e) => setFilters({ ...filters, sourcingDateEnd: e.target.value })}
                     className="px-3 py-2 text-sm border-gray-200 focus:ring-blue-500 focus:border-blue-500 rounded-lg border bg-gray-50"
-                    placeholder="End"
                   />
                 </div>
               </div>
@@ -255,7 +244,6 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
                     value={filters.dbDateStart}
                     onChange={(e) => setFilters({ ...filters, dbDateStart: e.target.value })}
                     className="px-3 py-2 text-sm border-gray-200 focus:ring-blue-500 focus:border-blue-500 rounded-lg border bg-gray-50"
-                    placeholder="Start"
                   />
                   <span className="text-gray-400">-</span>
                   <input
@@ -263,7 +251,6 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
                     value={filters.dbDateEnd}
                     onChange={(e) => setFilters({ ...filters, dbDateEnd: e.target.value })}
                     className="px-3 py-2 text-sm border-gray-200 focus:ring-blue-500 focus:border-blue-500 rounded-lg border bg-gray-50"
-                    placeholder="End"
                   />
                 </div>
               </div>
@@ -276,22 +263,15 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
           </div>
         </div>
 
+        {/* Post List Table */}
         <div className="bg-white rounded-lg shadow border border-gray-100 overflow-hidden">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Platform
-                </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Profile
-                </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Sourcing Date
-                </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Action
-                </th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Platform</th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Profile</th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sourcing Date</th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
@@ -324,9 +304,7 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
                       {post.sourcing_date ? new Date(post.sourcing_date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <button
-                        className={`text-sm ${isSelected ? 'text-blue-700' : 'text-blue-600 hover:text-blue-900'}`}
-                      >
+                      <button className={`text-sm ${isSelected ? 'text-blue-700' : 'text-blue-600 hover:text-blue-900'}`}>
                         {isSelected ? 'Reviewing...' : 'Review'}
                       </button>
                     </td>
@@ -383,19 +361,68 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
 
 function ReviewForm({ post, onClose, onNavigate, hasPrev, hasNext }) {
   const [state, formAction, isPending] = useActionState(submitCaseReview, initialState)
-  const [existingMetadata, setExistingMetadata] = useState(null)
-  const [loadingMetadata, setLoadingMetadata] = useState(true)
 
-  // Fetch existing metadata when post changes
-  useEffect(() => {
-    async function fetchMetadata() {
-      setLoadingMetadata(true)
-      const metadata = await getCaseMetadata(post.post_id || post.code)
-      setExistingMetadata(metadata)
-      setLoadingMetadata(false)
+  // 1. Derive Initial Values
+  const review = post.review_details || {}
+  const analysis = post.analysis_results || {}
+  const existingFlags = review.flags || {}
+  const analysisPoi = analysis.poi_check || {}
+  const hasReview = review && Object.keys(review).length > 0
+
+  // POI Logic
+  const savedFace = hasReview ? (existingFlags.face_present === true) : (analysisPoi.face_present === true)
+  const savedName = hasReview ? (existingFlags.name_present === true) : (analysisPoi.poi_name_found === true)
+  const savedPoiNames = (hasReview && review.poi_names) ? review.poi_names : (analysisPoi.poi_names || [])
+
+  // Threat Scores
+  const savedScore = review.threat_score ?? analysis.risk_score ?? 0
+
+  // Threat Types
+  let savedTypes = review.threat_types || []
+
+  // If NOT reviewed, derive threat types from analysis logic
+  if (!hasReview && savedTypes.length === 0 && analysis) {
+    const aiCategory = (analysis.category || '').toLowerCase()
+    const aiReasoning = (analysis.categorization_reason || '').toLowerCase()
+
+    // A. Text Heuristics from category/reasoning
+    if (analysis.threat_category) savedTypes.push(analysis.threat_category)
+    if (aiCategory.includes('scam') || aiReasoning.includes('scam')) savedTypes.push('scam')
+    if (aiCategory.includes('hate') || aiReasoning.includes('hate')) savedTypes.push('hate_speech')
+    if (aiCategory.includes('fake') || aiCategory.includes('misinformation') || aiReasoning.includes('misinformation') || aiReasoning.includes('fake')) savedTypes.push('fake_news')
+    if (aiCategory.includes('nsfw') || aiReasoning.includes('nsfw')) savedTypes.push('nsfw')
+    if (aiCategory.includes('aigc') || aiReasoning.includes('aigc') || aiReasoning.includes('ai generated')) savedTypes.push('aigc')
+
+    // B. Structure Check Objects
+    if (analysis.aigc_check?.is_aigc) savedTypes.push('aigc')
+    if (analysis.nsfw_check?.is_safe === false) savedTypes.push('nsfw')
+    if (analysis.hate_speech_check?.is_safe === false) savedTypes.push('hate_speech')
+    if (analysis.truth_check?.is_credible === false) savedTypes.push('fake_news')
+
+    // C. Fallback
+    savedTypes = [...new Set(savedTypes)]
+    if (savedTypes.length === 0) {
+      if (savedScore > 50) savedTypes.push('other')
+      else savedTypes.push('safe')
     }
-    fetchMetadata()
-  }, [post.post_id, post.code])
+  }
+
+  // Takedown
+  const savedTakedown = post.takedown_info?.is_in_takedown || false
+
+  // 2. Initialize State
+  const [facePresent, setFacePresent] = useState(savedFace)
+  const [namePresent, setNamePresent] = useState(savedName)
+  const [poiNames, setPoiNames] = useState(savedPoiNames)
+  const [newPoiInput, setNewPoiInput] = useState('')
+  const [threatScore, setThreatScore] = useState(savedScore)
+  const [threatTypes, setThreatTypes] = useState(savedTypes)
+  const [isTakedown, setIsTakedown] = useState(savedTakedown)
+
+  // Derived Accessors
+  const poiPresent = facePresent || namePresent
+  const defaultReasoning = review.reasoning || analysis.categorization_reason || '';
+  const defaultComments = review.reviewer_comments || '';
 
   const getPostLink = () => {
     const id = post.post_id || post.code
@@ -405,62 +432,38 @@ function ReviewForm({ post, onClose, onNavigate, hasPrev, hasNext }) {
     return null
   }
 
-  // Pre-fill values logic
-  const defaultThreatScore = existingMetadata?.review_details?.threat_score
-    ?? post.analysis_results?.risk_score
-    ?? 0;
+  const handleAddPoi = () => {
+    if (newPoiInput.trim()) {
+      if (!(poiNames.map(name => name.toLowerCase())).includes(newPoiInput.trim().toLowerCase())) {
+        setPoiNames([...poiNames, newPoiInput.trim()])
+      }
+      setNewPoiInput('')
+    }
+  }
 
-  // Determine threat type based on AI specific boolean checks
-  const getAiThreatType = (results) => {
-    if (!results) return 'safe';
+  const handleRemovePoi = (index) => {
+    setPoiNames(poiNames.filter((_, i) => i !== index))
+  }
 
-    // Priority 1: High confidence checks
-    if (results.truth_check?.is_credible === false) return 'fake_news';
-    if (results.hate_speech_check?.is_safe === false) return 'hate_speech';
-    if (results.nsfw_check?.is_safe === false) return 'nsfw';
-
-    // Priority 2: Category text matching (fallback)
-    const cat = (results.category || '').toLowerCase();
-    if (cat.includes('scam') || cat.includes('fraud')) return 'scam';
-    if (cat.includes('hate')) return 'hate_speech';
-    if (cat.includes('violence') || cat.includes('gore')) return 'violence';
-    if (cat.includes('fake') || cat.includes('misinformation')) return 'fake_news';
-    if (cat.includes('nsfw') || cat.includes('sexual')) return 'nsfw';
-
-    return 'safe'; // Default to safe if checks pass
-  };
-
-  const defaultThreatType = existingMetadata?.review_details?.threat_type
-    ?? getAiThreatType(post.analysis_results);
-
+  const toggleThreatType = (type) => {
+    setThreatTypes(prev => prev.includes(type) ? prev.filter(t => t !== type) : [...prev, type])
+  }
 
   return (
     <div className="h-full flex flex-col bg-background">
       <div className="px-6 py-4 border-b flex items-center justify-between bg-background sticky top-0 z-10">
         <div className="flex items-center space-x-4">
-          <h2 className="text-lg font-bold">Review Case</h2>
-          {existingMetadata && (
+          <h2 className="text-lg font-bold text-slate-900">Review Case</h2>
+          {hasReview && (
             <Badge variant="outline" className="bg-green-50 text-green-800 border-green-200">
               Previously Reviewed
             </Badge>
           )}
           <div className="flex items-center gap-1">
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => onNavigate('prev')}
-              disabled={!hasPrev}
-              className="h-8 w-8"
-            >
+            <Button variant="outline" size="icon" onClick={() => onNavigate('prev')} disabled={!hasPrev} className="h-8 w-8">
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => onNavigate('next')}
-              disabled={!hasNext}
-              className="h-8 w-8"
-            >
+            <Button variant="outline" size="icon" onClick={() => onNavigate('next')} disabled={!hasNext} className="h-8 w-8">
               <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
@@ -473,228 +476,99 @@ function ReviewForm({ post, onClose, onNavigate, hasPrev, hasNext }) {
       <div className="flex-1 overflow-hidden grid grid-cols-1 md:grid-cols-2">
         {/* Left Column: Post Details */}
         <div className="h-full border-r overflow-y-auto">
-            <div className="p-8 space-y-6">
-
-          {/* User Info */}
-          <div className="flex items-center space-x-4 bg-muted/40 p-4 rounded-xl border">
-            <ProfilePic user={post.user?.username} size={56} />
-            <div className="flex-1">
-              <p className="text-base font-bold leading-none">{post.user?.username || 'Unknown'}</p>
-              <p className="text-sm text-muted-foreground mt-1">{post.user?.full_name}</p>
-              <div className="flex items-center mt-2 space-x-2 flex-wrap gap-1">
-                <Badge variant="secondary" className="uppercase text-[10px]">
-                  {post.platform || 'Instagram'}
-                </Badge>
-                {post.user?.is_verified && <Badge variant="outline" className="text-[10px] bg-green-50 text-green-800 border-green-200">Verified</Badge>}
-                <Badge variant="outline" className="text-[10px]">{post.post_id || post.code}</Badge>
+          <div className="p-8 space-y-6">
+            {/* User Info */}
+            <div className="flex items-center space-x-4 bg-muted/40 p-4 rounded-xl border">
+              <ProfilePic user={post.user?.username} size={56} />
+              <div className="flex-1">
+                <p className="text-base font-bold leading-none text-slate-900">{post.user?.username || 'Unknown'}</p>
+                <p className="text-sm text-muted-foreground mt-1">{post.user?.full_name}</p>
+                <div className="flex items-center mt-2 space-x-2 flex-wrap gap-1">
+                  <Badge variant="secondary" className="uppercase text-[10px]">{post.platform || 'Instagram'}</Badge>
+                  {post.user?.is_verified && <Badge variant="outline" className="text-[10px] bg-green-50 text-green-800 border-green-200">Verified</Badge>}
+                  <Badge variant="outline" className="text-[10px]">{post.post_id || post.code}</Badge>
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* Post Image/Video */}
-          <div className="rounded-xl overflow-hidden border bg-muted/20 flex items-center justify-center min-h-[300px]">
-            {post.signedImageUrl ? (
-              <img src={post.signedImageUrl} alt="Post content" className="max-w-full max-h-[500px] object-contain" />
-            ) : (
-              <div className="text-muted-foreground text-sm flex flex-col items-center">
-                <AlertTriangle className="h-8 w-8 mb-2 opacity-20" />
-                No Image Available
-              </div>
-            )}
-          </div>
+            {/* Post Image */}
+            <div className="rounded-xl overflow-hidden border bg-muted/20 flex items-center justify-center min-h-[300px]">
+              {post.signedImageUrl ? (
+                <img src={post.signedImageUrl} alt="Post content" className="max-w-full max-h-[500px] object-contain" />
+              ) : (
+                <div className="text-muted-foreground text-sm flex flex-col items-center">
+                  <AlertTriangle className="h-8 w-8 mb-2 opacity-20" />
+                  No Image Available
+                </div>
+              )}
+            </div>
 
-          {/* Stats */}
-          <div className="grid grid-cols-4 gap-3">
-            <div className="bg-muted/40 p-3 rounded-lg text-center border">
-              <ThumbsUp className="h-4 w-4 mx-auto mb-1 text-muted-foreground" />
-              <p className="text-sm font-bold">{post.stats?.like_count || 0}</p>
-              <p className="text-[10px] text-muted-foreground uppercase font-bold">Likes</p>
-            </div>
-            <div className="bg-muted/40 p-3 rounded-lg text-center border">
-              <MessageCircle className="h-4 w-4 mx-auto mb-1 text-muted-foreground" />
-              <p className="text-sm font-bold">{post.stats?.comment_count || 0}</p>
-              <p className="text-[10px] text-muted-foreground uppercase font-bold">Comments</p>
-            </div>
-            
-            {post.stats?.view_count !== null && post.stats?.view_count > 0 && (
+            {/* Stats */}
+            <div className="grid grid-cols-4 gap-3">
               <div className="bg-muted/40 p-3 rounded-lg text-center border">
-                <Eye className="h-4 w-4 mx-auto mb-1 text-muted-foreground" />
-                <p className="text-sm font-bold">{post.stats.view_count.toLocaleString()}</p>
-                <p className="text-[10px] text-muted-foreground uppercase font-bold">Views</p>
+                <ThumbsUp className="h-4 w-4 mx-auto mb-1 text-muted-foreground" />
+                <p className="text-sm font-bold text-slate-900">{post.stats?.like_count || 0}</p>
+                <p className="text-[10px] text-muted-foreground uppercase font-bold">Likes</p>
               </div>
-            )}
-             {post.platform === 'facebook' && post.stats?.share_count > 0 && (
               <div className="bg-muted/40 p-3 rounded-lg text-center border">
-                <Share2 className="h-4 w-4 mx-auto mb-1 text-muted-foreground" />
-                <p className="text-sm font-bold">{post.stats.share_count}</p>
-                <p className="text-[10px] text-muted-foreground uppercase font-bold">Shares</p>
+                <MessageCircle className="h-4 w-4 mx-auto mb-1 text-muted-foreground" />
+                <p className="text-sm font-bold text-slate-900">{post.stats?.comment_count || 0}</p>
+                <p className="text-[10px] text-muted-foreground uppercase font-bold">Comments</p>
               </div>
-            )}
-          </div>
-
-          {/* Caption */}
-          <div>
-            <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-3">Post Caption</h3>
-            <div className="text-sm text-foreground whitespace-pre-wrap leading-relaxed bg-muted/30 p-4 rounded-xl border">
-              {post.caption || 'No caption provided.'}
+              {post.stats?.view_count !== null && post.stats?.view_count > 0 && (
+                <div className="bg-muted/40 p-3 rounded-lg text-center border">
+                  <Eye className="h-4 w-4 mx-auto mb-1 text-muted-foreground" />
+                  <p className="text-sm font-bold text-slate-900">{post.stats.view_count.toLocaleString()}</p>
+                  <p className="text-[10px] text-muted-foreground uppercase font-bold">Views</p>
+                </div>
+              )}
+              {post.platform === 'facebook' && post.stats?.share_count > 0 && (
+                <div className="bg-muted/40 p-3 rounded-lg text-center border">
+                  <Share2 className="h-4 w-4 mx-auto mb-1 text-muted-foreground" />
+                  <p className="text-sm font-bold text-slate-900">{post.stats.share_count}</p>
+                  <p className="text-[10px] text-muted-foreground uppercase font-bold">Shares</p>
+                </div>
+              )}
             </div>
-          </div>
 
-          {/* Extra Details Section */}
-          <Card>
-             <CardHeader className="py-3">
+            {/* Caption */}
+            <div>
+              <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-3">Post Caption</h3>
+              <div className="text-sm text-slate-900 whitespace-pre-wrap leading-relaxed bg-muted/30 p-4 rounded-xl border">
+                {post.caption || 'No caption provided.'}
+              </div>
+            </div>
+
+            {/* Metadata */}
+            <Card>
+              <CardHeader className="py-3">
                 <CardTitle className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Metadata</CardTitle>
-             </CardHeader>
-             <CardContent className="grid grid-cols-2 gap-4 text-xs">
-                 <div>
-                    <span className="text-muted-foreground block mb-1">Source Date</span>
-                    <span className="font-medium">{post.sourcing_date ? new Date(post.sourcing_date).toLocaleDateString() : 'N/A'}</span>
-                 </div>
-                 <div>
-                    <span className="text-muted-foreground block mb-1">Ingest Date</span>
-                    <span className="font-medium">{post.created_at ? new Date(post.created_at).toLocaleDateString() : 'N/A'}</span>
-                 </div>
-                 <div className="col-span-2">
-                    <a href={getPostLink()} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline font-bold inline-flex items-center">
-                        Open Original Post <ExternalLink className="w-3 h-3 ml-1" />
-                    </a>
-                 </div>
-             </CardContent>
-          </Card>
+              </CardHeader>
+              <CardContent className="grid grid-cols-2 gap-4 text-xs">
+                <div>
+                  <span className="text-muted-foreground block mb-1">Source Date</span>
+                  <span className="font-medium text-slate-900">{post.sourcing_date ? new Date(post.sourcing_date).toLocaleDateString() : 'N/A'}</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground block mb-1">Ingest Date</span>
+                  <span className="font-medium text-slate-900">{post.created_at ? new Date(post.created_at).toLocaleDateString() : 'N/A'}</span>
+                </div>
+                <div className="col-span-2">
+                  <a href={getPostLink()} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline font-bold inline-flex items-center">
+                    Open Original Post <ExternalLink className="w-3 h-3 ml-1" />
+                  </a>
+                </div>
+              </CardContent>
+            </Card>
           </div>
         </div>
 
         {/* Right Column: Form */}
         <div className="h-full bg-muted/10 overflow-y-auto">
-            <div className="p-8">
-          <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-6">Takedown Assessment</h3>
+          <div className="p-8">
+            <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-6">Review & Analysis Form</h3>
 
-          {/* AI ANALYSIS SECTION */}
-          {post.analysis_results && Object.keys(post.analysis_results).length > 0 && (
-            <Card className="mb-8 border-indigo-100 shadow-sm bg-gradient-to-br from-indigo-50/50 to-background">
-              <CardHeader className="py-3 border-b border-indigo-100 bg-indigo-50/30">
-                <CardTitle className="flex items-center text-xs font-bold text-indigo-900 uppercase tracking-wide">
-                    <Sparkles className="w-4 h-4 text-indigo-600 mr-2" />
-                    AI Analysis Report
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-4 space-y-4">
-                {/* Top Row: Score & Category */}
-                <div className="flex items-start justify-between">
-                  <div>
-                    <div className="text-[10px] font-bold text-muted-foreground uppercase mb-1">Risk Level</div>
-                    <Badge variant="outline" className={`
-                        ${(post.analysis_results.risk_score || 0) > 80 ? 'bg-red-50 text-red-700 border-red-100' :
-                        (post.analysis_results.risk_score || 0) > 50 ? 'bg-orange-50 text-orange-700 border-orange-100' :
-                          'bg-green-50 text-green-700 border-green-100'}
-                    `}>
-                        {post.analysis_results.category || 'Unknown'}
-                    </Badge>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-[10px] font-bold text-muted-foreground uppercase mb-1">AI Score</div>
-                    <div className="text-2xl font-bold leading-none">
-                      {post.analysis_results.risk_score || 0}
-                      <span className="text-sm text-muted-foreground font-normal">/100</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Reason */}
-                {post.analysis_results.categorization_reason && (
-                  <div className="bg-background/80 p-3 rounded-lg border border-indigo-100/50">
-                    <div className="text-[10px] font-bold text-muted-foreground uppercase mb-1 flex items-center">
-                      <Brain className="w-3 h-3 mr-1" /> Reasoning
-                    </div>
-                    <p className="text-sm text-foreground/80 leading-snug">
-                      {post.analysis_results.categorization_reason}
-                    </p>
-                  </div>
-                )}
-
-                {/* Checks Grid - CONDITIONAL RENDERING */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  
-                  {/* 1. POI Check - Only if exists */}
-                  {post.analysis_results.poi_check && (
-                      <div className={`p-2 rounded-lg border ${post.analysis_results.poi_check?.poi_name_found ? 'bg-red-50 border-red-100' : 'bg-green-50 border-green-100'}`}>
-                        <div className="text-[10px] font-bold text-muted-foreground uppercase mb-1 flex items-center">
-                          <Search className="w-3 h-3 mr-1" /> POI Detected
-                        </div>
-                        <div className="text-sm font-medium">
-                          {post.analysis_results.poi_check?.poi_name_found ? (
-                            <span className="text-red-700">Yes: {post.analysis_results.poi_check.poi_names?.join(', ')}</span>
-                          ) : <span className="text-green-700">None</span>}
-                        </div>
-                      </div>
-                  )}
-
-                  {/* 2. Credibility Check - Only if exists */}
-                  {post.analysis_results.truth_check && (
-                      <div className={`p-2 rounded-lg border ${post.analysis_results.truth_check?.is_credible === false ? 'bg-red-50 border-red-100' : 'bg-green-50 border-green-100'}`}>
-                        <div className="text-[10px] font-bold text-muted-foreground uppercase mb-1 flex items-center">
-                          <ShieldAlert className="w-3 h-3 mr-1" /> Credibility
-                        </div>
-                        <div className="text-sm">
-                          <span className={`font-bold ${post.analysis_results.truth_check?.is_credible === false ? 'text-red-700' : 'text-green-700'}`}>
-                            {post.analysis_results.truth_check?.is_credible === false ? 'Misinformation' : 'Credible'}
-                          </span>
-                        </div>
-                      </div>
-                  )}
-
-                  {/* 3. Hate Speech Check - Only if exists */}
-                  {post.analysis_results.hate_speech_check && (
-                      <div className={`p-2 rounded-lg border ${post.analysis_results.hate_speech_check?.is_safe === false ? 'bg-red-50 border-red-100' : 'bg-green-50 border-green-100'}`}>
-                        <div className="text-[10px] font-bold text-muted-foreground uppercase mb-1 flex items-center">
-                          <AlertTriangle className="w-3 h-3 mr-1" /> Hate Speech
-                        </div>
-                        <div className="text-sm font-medium">
-                          {post.analysis_results.hate_speech_check?.is_safe === false ? (
-                            <span className="text-red-700">Detected</span>
-                          ) : <span className="text-green-700">Safe</span>}
-                        </div>
-                      </div>
-                  )}
-
-                  {/* 4. NSFW Check - Only if exists */}
-                  {post.analysis_results.nsfw_check && (
-                      <div className={`p-2 rounded-lg border ${post.analysis_results.nsfw_check?.is_safe === false ? 'bg-red-50 border-red-100' : 'bg-green-50 border-green-100'}`}>
-                        <div className="text-[10px] font-bold text-muted-foreground uppercase mb-1 flex items-center">
-                          <Eye className="w-3 h-3 mr-1" /> NSFW
-                        </div>
-                        <div className="text-sm font-medium">
-                          {post.analysis_results.nsfw_check?.is_safe === false ? (
-                            <span className="text-red-700">Detected</span>
-                          ) : <span className="text-green-700">Safe</span>}
-                        </div>
-                      </div>
-                  )}
-
-                  {/* 5. AIGC Check - Only if exists */}
-                  {post.analysis_results.aigc_check && (
-                      <div className={`p-2 rounded-lg border col-span-1 sm:col-span-2 ${post.analysis_results.aigc_check?.is_aigc ? 'bg-purple-50 border-purple-100' : 'bg-gray-50 border-gray-100'}`}>
-                        <div className="text-[10px] font-bold text-muted-foreground uppercase mb-1 flex items-center">
-                          <Bot className="w-3 h-3 mr-1" /> AI Generated Content
-                        </div>
-                        <div className="text-sm font-medium">
-                          {post.analysis_results.aigc_check?.is_aigc ? (
-                            <span className="text-purple-700">Likely AI Generated ({Math.round((post.analysis_results.aigc_check.score || 0) * 100)}%)</span>
-                          ) : 'Human Generated'}
-                        </div>
-                      </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {loadingMetadata ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
-            </div>
-          ) : (
-            <form action={formAction} className="space-y-6">
+            <form action={formAction} className="space-y-8 pb-20">
               {/* Hidden Fields */}
               <input type="hidden" name="mongo_id" value={post._id || ''} />
               <input type="hidden" name="post_id" value={post.post_id || post.code || ''} />
@@ -705,114 +579,266 @@ function ReviewForm({ post, onClose, onNavigate, hasPrev, hasNext }) {
               <input type="hidden" name="sourcing_date" value={post.sourcing_date || new Date().toISOString()} />
               <input type="hidden" name="posting_time" value={post.taken_at ? new Date(post.taken_at * 1000).toISOString() : new Date().toISOString()} />
 
-              <div className="space-y-2">
-                <Label>Threat Type</Label>
-                <Select name="threat_type" defaultValue={defaultThreatType}>
-                    <SelectTrigger>
-                        <SelectValue placeholder="Select threat type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="safe">Safe</SelectItem>
-                      <SelectItem value="scam">Scam / Fraud</SelectItem>
-                      <SelectItem value="hate_speech">Hate Speech</SelectItem>
-                      <SelectItem value="violence">Violence / Gore</SelectItem>
-                      <SelectItem value="fake_news">Fake News / Disinformation</SelectItem>
-                      <SelectItem value="nsfw">NSFW</SelectItem>
-                      <SelectItem value="other">Other</SelectItem>
-                    </SelectContent>
-                </Select>
+              <input type="hidden" name="poi_names" value={poiNames.join(',')} />
+
+              {/* Flags expected by backend actions.js (must use 'on' for true) */}
+              <input type="hidden" name="poi_present" value={poiPresent.toString()} />
+              <input type="hidden" name="poi_confirmed" value={poiPresent ? 'on' : 'off'} />
+
+              <input type="hidden" name="is_hate_speech" value={threatTypes.includes('hate_speech') ? 'on' : 'off'} />
+              <input type="hidden" name="is_nsfw" value={threatTypes.includes('nsfw') ? 'on' : 'off'} />
+              <input type="hidden" name="is_fake_news" value={threatTypes.includes('fake_news') ? 'on' : 'off'} />
+              <input type="hidden" name="is_aigc" value={threatTypes.includes('aigc') ? 'on' : 'off'} />
+
+              <input type="hidden" name="face_present" value={facePresent.toString()} />
+              <input type="hidden" name="name_present" value={namePresent.toString()} />
+              <input type="hidden" name="threat_score" value={threatScore} />
+              <input type="hidden" name="takedown_status" value={post.takedown_info?.takedown_status || 'None'} />
+
+              {/* Section 1: POI */}
+              <div className="space-y-4">
+                <Label className="text-base font-bold text-indigo-900 uppercase tracking-wide">Section 1: POI Verification</Label>
+                <div className="bg-white p-6 rounded-xl border-2 border-slate-100 shadow-sm space-y-6">
+
+                  {/* Main POI Toggle (Read Only Display) */}
+                  <div className="flex items-center justify-between bg-slate-50 p-4 rounded-lg border border-slate-200">
+                    <div className="space-y-0.5">
+                      <Label className="text-base font-bold text-slate-900">Is POI present/relevant?</Label>
+                      <p className="text-xs text-muted-foreground">Derived from Face and Name detections below.</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className={`text-sm font-bold ${poiPresent ? 'text-indigo-600' : 'text-slate-400'}`}>{poiPresent ? 'YES' : 'NO'}</span>
+                      <Switch disabled checked={poiPresent} />
+                    </div>
+                  </div>
+
+                  {/* Sub Toggles */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="flex items-center justify-between p-4 bg-white border-2 border-slate-100 rounded-xl hover:border-indigo-100 transition-colors">
+                      <Label className="text-sm font-bold text-slate-700">Face Detected</Label>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase">{facePresent ? 'Yes' : 'No'}</span>
+                        <Switch checked={facePresent} onCheckedChange={setFacePresent} />
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between p-4 bg-white border-2 border-slate-100 rounded-xl hover:border-indigo-100 transition-colors">
+                      <Label className="text-sm font-bold text-slate-700">Name Detected</Label>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase">{namePresent ? 'Yes' : 'No'}</span>
+                        <Switch checked={namePresent} onCheckedChange={setNamePresent} />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* POI Tag Manager */}
+                  <div className="space-y-3 pt-2">
+                    <Label className="text-sm font-bold text-slate-700">Identified Persons</Label>
+                    <div className="flex flex-wrap gap-2 p-3 bg-slate-50 rounded-lg min-h-[50px] border border-dashed border-slate-300">
+                      {poiNames.map((name, index) => (
+                        <Badge key={index} variant="secondary" className="pl-3 pr-1 py-1.5 flex items-center bg-white text-indigo-700 border-2 border-indigo-100">
+                          <span className="font-bold">{name}</span>
+                          <button type="button" onClick={() => handleRemovePoi(index)} className="ml-2 hover:bg-red-50 hover:text-red-600 rounded-full p-0.5 transition-colors">
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </Badge>
+                      ))}
+                      {poiNames.length === 0 && <span className="text-xs text-slate-400 italic my-auto">No subjects tagged yet.</span>}
+                    </div>
+                    <div className="flex gap-2">
+                      <Input
+                        placeholder="Type name and press Add..."
+                        variant="secondary"
+                        value={newPoiInput}
+                        onChange={(e) => setNewPoiInput(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddPoi())}
+                        className="h-10 text-sm border-2 text-slate-100 focus:border-indigo-500"
+                      />
+                      <Button type="button" onClick={handleAddPoi} className="h-10 px-4 bg-indigo-600 hover:bg-indigo-700">
+                        <Plus className="h-4 w-4 mr-2" /> Add
+                      </Button>
+                    </div>
+                  </div>
+                </div>
               </div>
 
-              <div className="space-y-3">
-                <div className="flex justify-between items-center">
-                  <Label>Risk Score</Label>
-                  <Badge variant="outline" className="font-mono text-base">
-                     <span id="score-display">{defaultThreatScore}</span>
-                  </Badge>
-                </div>
-                <div className="bg-muted/40 p-4 rounded-xl border">
-                    {/* Fallback to standard range input as shadcn Slider needs installation/setup */}
-                  <input
-                    type="range"
-                    name="threat_score_range"
-                    min="0"
-                    max="100"
-                    defaultValue={defaultThreatScore}
-                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
-                    onInput={(e) => {
-                      document.getElementById('score-val').value = e.target.value;
-                      document.getElementById('score-display').innerText = e.target.value;
-                    }}
-                  />
-                  <input
-                    id="score-val"
-                    type="hidden"
-                    name="threat_score"
-                    defaultValue={defaultThreatScore}
-                  />
-                </div>
-              </div>
+              {/* Section 2: Threat Analysis */}
+              <div className="space-y-4">
+                <Label className="text-base font-bold text-indigo-900 uppercase tracking-wide">Section 2: Threat Analysis</Label>
+                <div className="bg-white p-6 rounded-xl border-2 border-slate-100 shadow-sm space-y-6">
+                  <div className="grid grid-cols-2 gap-4">
+                    {[
+                      { id: 'scam', label: 'Scam / Fraud' },
+                      { id: 'hate_speech', label: 'Hate Speech' },
+                      { id: 'nsfw', label: 'NSFW' },
+                      { id: 'aigc', label: 'AI Generated' },
+                      { id: 'fake_news', label: 'Fake News' },
+                      { id: 'humor', label: 'Humor / Satire' }
+                    ].map((item) => (
+                      <div
+                        key={item.id}
+                        onClick={() => toggleThreatType(item.id)}
+                        className={cn(
+                          "flex items-center space-x-3 p-4 rounded-xl border-2 transition-all cursor-pointer",
+                          threatTypes.includes(item.id)
+                            ? "border-indigo-600 bg-indigo-50/50"
+                            : "border-slate-100 bg-white hover:border-slate-200"
+                        )}
+                      >
+                        <Checkbox
+                          id={`type-${item.id}`}
+                          name="threat_types"
+                          value={item.id}
+                          checked={threatTypes.includes(item.id)}
+                          onCheckedChange={() => { }} // Controlled by parent div
+                        />
+                        <Label className="text-sm font-bold text-slate-700 cursor-pointer flex-1">
+                          {item.label}
+                        </Label>
+                      </div>
+                    ))}
+                  </div>
 
-              <div className="bg-indigo-50/50 p-5 rounded-xl border border-indigo-100">
-                <div className="flex items-start gap-3">
-                  <div className="flex items-center h-5 mt-0.5">
-                    <input
-                      id="takedown"
-                      name="is_in_takedown"
-                      type="checkbox"
-                      defaultChecked={existingMetadata?.takedown_info?.is_in_takedown || false}
-                      className="w-5 h-5 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                  <div className="space-y-2">
+                    <Label htmlFor="reasoning" className="text-sm font-bold text-slate-700">Analysis & Reasoning</Label>
+                    <Textarea
+                      id="reasoning"
+                      name="reasoning"
+                      defaultValue={defaultReasoning}
+                      placeholder="Describe the findings and analysis..."
+                      className="min-h-[120px] bg-white border-2 border-slate-100 focus:border-indigo-500 text-slate-900"
                     />
                   </div>
-                  <div>
-                    <Label htmlFor="takedown" className="text-indigo-900 font-bold cursor-pointer">Initiate Takedown Process</Label>
-                    <p className="text-indigo-700/80 text-xs mt-1">Marking this will add the case to the active takedown queue for legal action.</p>
+                </div>
+              </div>
+
+              {/* Section 3: Verdict */}
+              <div className="space-y-4">
+                <Label className="text-base font-bold text-indigo-900 uppercase tracking-wide">Section 3: Final Verdict</Label>
+                <div className="bg-white p-6 rounded-xl border-2 border-slate-100 shadow-sm space-y-8">
+
+                  {/* Risk Score */}
+                  <div className="space-y-5">
+                    <div className="flex justify-between items-end">
+                      <div className="space-y-1">
+                        <Label className="text-sm font-bold text-slate-700">Calculated Risk Score</Label>
+                        <p className="text-xs text-muted-foreground">Adjust based on visual & contextual evidence.</p>
+                      </div>
+                      <div className={cn(
+                        "text-3xl font-black px-5 py-2 rounded-2xl border-4 shadow-sm font-mono",
+                        threatScore > 75 ? "bg-red-50 text-red-600 border-red-200" :
+                          threatScore > 40 ? "bg-orange-50 text-orange-600 border-orange-200" :
+                            "bg-green-50 text-green-600 border-green-200"
+                      )}>
+                        {threatScore}
+                      </div>
+                    </div>
+
+                    <div className="relative pt-2">
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        value={threatScore}
+                        onChange={(e) => setThreatScore(parseInt(e.target.value))}
+                        className="w-full h-3 rounded-lg appearance-none cursor-pointer bg-slate-200 accent-indigo-600"
+                        style={{
+                          background: `linear-gradient(to right, #86efac 0%, #fde047 50%, #f87171 100%)`
+                        }}
+                      />
+                      <div className="flex justify-between text-[10px] font-black uppercase tracking-widest text-slate-400 mt-2 px-1">
+                        <span>Safe</span>
+                        <span>Moderate Risk</span>
+                        <span>Critical Threat</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Reviewer Note */}
+                  <div className="space-y-2">
+                    <Label htmlFor="reviewer_comments" className="text-sm font-bold text-slate-700">Reviewer Note (Visible to Client)</Label>
+                    <Textarea
+                      id="reviewer_comments"
+                      name="reviewer_comments"
+                      defaultValue={defaultComments}
+                      placeholder="Add internal notes or context for the client..."
+                      className="min-h-[100px] bg-white border-2 border-slate-100 focus:border-indigo-500 text-slate-900"
+                    />
+                  </div>
+
+                  <Separator className="bg-slate-100" />
+
+                  {/* Takedown Suggestion */}
+                  <div
+                    onClick={() => setIsTakedown(!isTakedown)}
+                    className={cn(
+                      "flex items-start space-x-4 p-5 rounded-2xl border-2 transition-all cursor-pointer",
+                      isTakedown
+                        ? "bg-red-50 border-red-200 ring-4 ring-red-50"
+                        : "bg-slate-50 border-slate-100 hover:border-slate-200"
+                    )}
+                  >
+                    <Checkbox
+                      id="takedown"
+                      name="is_in_takedown"
+                      checked={isTakedown}
+                      onCheckedChange={setIsTakedown}
+                      className={isTakedown ? "border-red-600 bg-red-600" : "border-slate-400"}
+                    />
+                    <div className="grid gap-1.5 leading-none">
+                      <Label htmlFor="takedown" className={cn(
+                        "text-base font-black cursor-pointer",
+                        isTakedown ? "text-red-900" : "text-slate-900"
+                      )}>
+                        Suggest Takedown
+                      </Label>
+                      <p className={cn(
+                        "text-sm",
+                        isTakedown ? "text-red-700 font-medium" : "text-slate-500"
+                      )}>
+                        This flags the content for immediate legal removal workflow.
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label>Initial Status</Label>
-                <Select name="takedown_status" defaultValue={existingMetadata?.takedown_info?.takedown_status || 'None'}>
-                    <SelectTrigger>
-                        <SelectValue placeholder="Select status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="None">None</SelectItem>
-                      <SelectItem value="raised">Raised (Reviewer Checked)</SelectItem>
-                      <SelectItem value="under_review">Under Review</SelectItem>
-                      <SelectItem value="accepted">Accepted</SelectItem>
-                      <SelectItem value="rejected">Rejected</SelectItem>
-                      <SelectItem value="suspended">Suspended</SelectItem>
-                    </SelectContent>
-                </Select>
-              </div>
+              {/* Action Button Area */}
+              <div className="sticky bottom-0 bg-background/95 backdrop-blur-md pb-6 px-6 border-t-2 border-slate-100 mt-auto flex flex-col gap-4">
 
-              <div className="space-y-3">
-                {state?.error && (
-                  <div className="text-red-700 bg-red-50 p-3 rounded-lg text-sm flex items-center border border-red-100 font-medium">
-                    <AlertTriangle className="h-4 w-4 mr-2 shrink-0" /> {state.error}
-                  </div>
-                )}
+                {/* Server Response Feedback */}
+                <div className="space-y-3">
+                  {state?.error && (
+                    <div className="text-red-700 bg-red-50 p-4 rounded-xl text-sm font-bold flex items-center border-2 border-red-100">
+                      <AlertTriangle className="h-5 w-5 mr-3 shrink-0" /> {state.error}
+                    </div>
+                  )}
+                  {state?.success && (
+                    <div className="text-green-700 bg-green-50 p-4 mt-4 rounded-xl text-sm font-bold flex items-center border-2 border-green-100 animate-in fade-in zoom-in">
+                      <CheckCircle className="h-5 w-5 mr-3 shrink-0" /> Review Submitted Successfully
+                    </div>
+                  )}
+                </div>
 
-                {state?.success && (
-                  <div className="text-green-700 bg-green-50 p-3 rounded-lg text-sm flex items-center border border-green-100 font-medium animate-in fade-in zoom-in duration-300">
-                    <CheckCircle className="h-4 w-4 mr-2 shrink-0" /> Review Submitted Successfully
-                  </div>
-                )}
-              </div>
+                <div className="flex gap-4">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={onClose}
+                    className="h-14 px-8 text-base font-bold border-2"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={isPending}
+                    className="flex-1 h-14 text-lg font-black shadow-lg bg-indigo-600 hover:bg-indigo-700 hover:shadow-indigo-200 transition-all active:scale-[0.98] cursor-pointer"
+                  >
+                    {isPending ? <Loader2 className="animate-spin h-6 w-6" /> : hasReview ? 'UPDATE REVIEW' : 'COMPLETE REVIEW'}
+                  </Button>
+                </div>
 
-              <div className="pt-4">
-                <Button
-                  type="submit"
-                  disabled={isPending}
-                  className="w-full h-12 text-base font-bold shadow-md bg-indigo-600 hover:bg-indigo-700"
-                >
-                  {isPending ? <Loader2 className="animate-spin h-5 w-5" /> : existingMetadata ? 'Update Review' : 'Complete Review'}
-                </Button>
               </div>
             </form>
-          )}
           </div>
         </div>
       </div>

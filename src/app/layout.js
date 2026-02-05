@@ -5,6 +5,7 @@ const outfit = Outfit({
   subsets: ["latin"],
   variable: "--font-outfit",
   display: "swap",
+  weight: ["300", "400", "500", "600", "700"],
 });
 
 export const metadata = {
@@ -14,8 +15,8 @@ export const metadata = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en" className={`${outfit.variable}`}>
-      <body className={`${outfit.variable} antialiased bg-white text-slate-900`}>
+    <html lang="en">
+      <body className={`${outfit.className} antialiased bg-white text-slate-900`}>
         {children}
       </body>
     </html>

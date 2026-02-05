@@ -7,25 +7,26 @@ import { getSignedImageUrl } from '@/utils/aws/s3'
 export async function getDashboardData() {
   const supabase = await createClient()
 
-  // Fetch all cases from Supabase
-  const { data: cases, error } = await supabase
-    .from('cases_metadata')
+  // 1. Fetch Aggregated Metrics from daily_metrics
+  const { data: dailyMetrics, error: metricsError } = await supabase
+    .from('daily_metrics')
     .select('*')
-    .order('created_at', { ascending: false })
+    .order('date', { ascending: true })
 
-  if (error) {
-    console.error('Error fetching dashboard data:', error)
-    return {
-      metrics: { totalPosts: 0, totalThreats: 0, activeTakedowns: 0, completedTakedowns: 0 },
-      threatsByType: [],
-      platformTrends: [],
-      contentDistribution: [],
-      threatsByPlatform: [],
-      recentCases: []
-    }
+  if (metricsError) {
+    console.error('Error fetching daily metrics:', metricsError)
   }
 
-  // Fetch total posts count from MongoDB
+  // 2. Fetch Takedown Cases for Status Counts
+  const { data: takedownCases, error: takedownsError } = await supabase
+    .from('takedown_cases')
+    .select('status')
+
+  if (takedownsError) {
+    console.error('Error fetching takedown cases:', takedownsError)
+  }
+
+  // 3. Fetch Total Posts from MongoDB (existing logic)
   let totalPosts = 0
   let recentPosts = []
   try {
@@ -66,74 +67,116 @@ export async function getDashboardData() {
     console.error('MongoDB Error:', e)
   }
 
-  // Calculate Metrics
-  const totalThreats = cases.length
-  const activeTakedowns = cases.filter(c =>
-    c.is_in_takedown && c.takedown_status !== 'completed'
+  // --- Aggregation Logic ---
+
+  const metricsData = dailyMetrics || []
+  const takedownsData = takedownCases || []
+
+  // Calculate Totals using daily_metrics
+  // Total Reviewed = sum(total_reviewed)
+  // Total Threats = sum(all reviewed) - sum(safe)
+  const totalReviewed = metricsData.reduce((acc, curr) => acc + (curr.total_reviewed || 0), 0)
+  const totalSafe = metricsData.reduce((acc, curr) => acc + (curr.threat_safe_count || 0), 0)
+  const totalThreats = totalReviewed - totalSafe
+
+  // Calculate Takedown Statuses using takedown_cases
+  const activeTakedowns = takedownsData.filter(c =>
+    ['initiated', 'processing'].includes(c.status)
   ).length
-  const completedTakedowns = cases.filter(c =>
-    c.is_in_takedown && c.takedown_status === 'completed'
+  const completedTakedowns = takedownsData.filter(c =>
+    ['resolved', 'rejected'].includes(c.status) // treating rejected as completed/closed
   ).length
 
-  // Threat Distribution by Type
-  const threatCounts = cases.reduce((acc, curr) => {
-    const type = curr.threat_type || 'Unknown'
-    acc[type] = (acc[type] || 0) + 1
+  // Metric Object
+  const metrics = {
+    totalPosts, // From MongoDB
+    totalThreats,
+    activeTakedowns,
+    completedTakedowns
+  }
+
+  // Threats By Type (sum from daily_metrics)
+  const threatTypesStart = {
+    scam: 0,
+    hate_speech: 0,
+    violence: 0,
+    fake_news: 0,
+    nsfw: 0,
+    other: 0
+  }
+
+  const threatCounts = metricsData.reduce((acc, curr) => {
+    acc.scam += (curr.threat_scam_count || 0)
+    acc.hate_speech += (curr.threat_hate_speech_count || 0)
+    acc.violence += (curr.threat_violence_count || 0)
+    acc.fake_news += (curr.threat_fake_news_count || 0)
+    acc.nsfw += (curr.threat_nsfw_count || 0)
+    acc.other += (curr.threat_other_count || 0)
     return acc
-  }, {})
+  }, threatTypesStart)
 
   const threatsByType = Object.entries(threatCounts).map(([name, value]) => ({
-    name,
+    name: name.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()), // proper case
     value
   }))
 
-  // Platform Trends (threats over time by platform)
-  const platformData = cases.reduce((acc, curr) => {
-    const platform = curr.platform || 'instagram'
-    const date = new Date(curr.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  // Platform Trends (group by date)
+  const trendsMap = {}
 
-    if (!acc[date]) {
-      acc[date] = { date, instagram: 0, facebook: 0, x: 0 }
+  metricsData.forEach(row => {
+    const dateStr = new Date(row.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    if (!trendsMap[dateStr]) {
+      trendsMap[dateStr] = { date: dateStr, instagram: 0, facebook: 0, x: 0 }
     }
-    acc[date][platform] = (acc[date][platform] || 0) + 1
-    return acc
-  }, {})
+    const threatsCount = (row.total_reviewed || 0) - (row.threat_safe_count || 0)
+    const platform = (row.platform || 'other').toLowerCase()
 
-  const platformTrends = Object.values(platformData).slice(-14) // Last 14 days
+    if (trendsMap[dateStr][platform] !== undefined) {
+      trendsMap[dateStr][platform] += threatsCount
+    }
+  })
 
-  // Content Distribution (total content : threats : takedowns)
-  const totalContent = totalPosts
-  const threats = totalThreats
-  const takedowns = cases.filter(c => c.is_in_takedown).length
+  const platformTrends = Object.values(trendsMap)
 
+  // Content Distribution
   const contentDistribution = [
-    { name: 'Total Content', value: totalContent, fill: '#3b82f6' },
-    { name: 'Threats', value: threats, fill: '#f59e0b' },
-    { name: 'Takedowns', value: takedowns, fill: '#ef4444' }
+    { name: 'Total Content', value: totalPosts, fill: '#3b82f6' },
+    { name: 'Threats', value: totalThreats, fill: '#f59e0b' },
+    { name: 'Takedowns', value: takedownsData.length, fill: '#ef4444' }
   ]
 
   // Threats by Category and Platform
-  const categoryPlatformData = cases.reduce((acc, curr) => {
-    const category = curr.threat_type || 'other'
-    const platform = curr.platform || 'instagram'
+  const threatCategories = ['scam', 'hate_speech', 'violence', 'fake_news', 'nsfw', 'other']
+  const threatsByPlatformMap = {} // Key: category
 
-    const key = category
-    if (!acc[key]) {
-      acc[key] = { category, instagram: 0, facebook: 0, x: 0 }
+  threatCategories.forEach(cat => {
+    threatsByPlatformMap[cat] = {
+      category: cat.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()),
+      instagram: 0,
+      facebook: 0,
+      x: 0
     }
-    acc[key][platform] = (acc[key][platform] || 0) + 1
-    return acc
-  }, {})
+  })
 
-  const threatsByPlatform = Object.values(categoryPlatformData)
+  metricsData.forEach(row => {
+    const platform = (row.platform || 'other').toLowerCase()
+
+    threatCategories.forEach(cat => {
+      const colName = `threat_${cat}_count`
+      const val = row[colName] || 0
+
+      if (threatsByPlatformMap[cat]) {
+        if (threatsByPlatformMap[cat][platform] !== undefined) {
+          threatsByPlatformMap[cat][platform] += val
+        }
+      }
+    })
+  })
+
+  const threatsByPlatform = Object.values(threatsByPlatformMap)
 
   return {
-    metrics: {
-      totalPosts,
-      totalThreats,
-      activeTakedowns,
-      completedTakedowns
-    },
+    metrics,
     threatsByType,
     platformTrends,
     contentDistribution,
@@ -158,7 +201,7 @@ export async function getCases() {
   // Process cases with signed URLs
   const processedCases = await Promise.all(cases.map(async (c) => {
     const signedUrl = c.image_key ? await getSignedImageUrl(c.image_key) : null
-    
+
     return {
       ...c,
       signedImageUrl: signedUrl

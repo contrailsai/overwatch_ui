@@ -28,7 +28,7 @@ export async function checkReviewerPermission() {
   return clientDetails.permission === 'reviewer'
 }
 
-export async function getUnreviewedPosts(page = 1, limit = 20, filters = {}) {
+export async function getPosts(page = 1, limit = 20, filters = {}) {
   try {
     const client = await clientPromise
     const db = client.db(process.env.MONGO_DB_NAME)
@@ -90,7 +90,7 @@ export async function getUnreviewedPosts(page = 1, limit = 20, filters = {}) {
         const end = new Date(`${filters.sourcingDateEnd}T23:59:59.999Z`)
         if (!isNaN(end)) sourcingQuery.$lte = end
       }
-      
+
       if (Object.keys(sourcingQuery).length > 0) {
         query.$and.push({ 'metadata.sourcing_date': sourcingQuery })
       }
@@ -145,7 +145,7 @@ export async function getUnreviewedPosts(page = 1, limit = 20, filters = {}) {
 
         // Content
         caption: post.post_content?.caption || '',
-        
+
         // Profile
         user: {
           username: post.profile?.username || 'Unknown',
@@ -173,10 +173,15 @@ export async function getUnreviewedPosts(page = 1, limit = 20, filters = {}) {
           reply_count: post.engagement?.replies || 0
         },
 
+        // AI ANALYSIS
+        analysis_results: post.analysis_results || {},
+        review_details: post.review_details || {},
+        takedown_info: post.takedown_info || {},
+
         // Platform
         platform: post.platform || 'instagram'
       };
-      
+
       // Robust profile pic handling
       normalized.user.profile_pic_url = post.profile?.profile_pic_url || post.profile?.profile_url || post.profile?.profile_pic || '';
 
@@ -193,7 +198,6 @@ export async function getUnreviewedPosts(page = 1, limit = 20, filters = {}) {
 }
 
 import { updateDailyMetrics, manageTakedownCase } from '@/utils/supabase/metrics'
-import { sendSlackNotification } from '@/utils/slack'
 
 // ... existing imports
 
@@ -204,15 +208,63 @@ export async function submitCaseReview(prevState, formData) {
     return { success: false, error: 'Missing Post ID' }
   }
 
+  // Handle Threat Types (Multi-select)
+  // formData.getAll returns an array of all values for inputs with name="threat_types"
+  let threat_types = formData.getAll('threat_types');
+  if (threat_types.length === 0) {
+    // Fallback: try to see if it came as a single string (backward compatibility or different frontend logic)
+    const raw = formData.get('threat_types');
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) threat_types = parsed;
+        else threat_types = [raw];
+      } catch (e) {
+        threat_types = [raw];
+      }
+    } else {
+      threat_types = ['safe'];
+    }
+  }
+
   const review_details = {
-    threat_type: formData.get('threat_type'),
     threat_score: parseInt(formData.get('threat_score') || '0'),
+    threat_types: threat_types,
+    primary_threat_type: threat_types.length > 0 ? threat_types[0] : 'safe',
+
+    // Flags
+    flags: {
+      poi_confirmed: formData.get('poi_confirmed') === 'on',
+      is_hate_speech: formData.get('is_hate_speech') === 'on',
+      is_nsfw: formData.get('is_nsfw') === 'on',
+      is_fake_news: formData.get('is_fake_news') === 'on',
+      is_aigc: formData.get('is_aigc') === 'on'
+    },
+
+    // Text & Lists
+    poi_names: formData.get('poi_names') ? formData.get('poi_names').split(',').map(s => s.trim()).filter(Boolean) : [],
+    reasoning: formData.get('reasoning'),
+    reviewer_comments: formData.get('reviewer_comments'),
+
     reviewed_at: new Date().toISOString()
   }
 
+  // Determine Takedown Status
+  // If "is_in_takedown" is checked, default to 'raised' (Reviewer Checked)
+  // This signals the Client to approve/start it.
+  const isTakedown = formData.get('is_in_takedown') === 'on';
+  const currentStatus = formData.get('takedown_status');
+
+  let finalTakedownStatus = currentStatus;
+
+  // If marking for takedown and status is effectively 'None' or empty, set to 'raised'
+  if (isTakedown && (!currentStatus || currentStatus === 'None')) {
+    finalTakedownStatus = 'raised';
+  }
+
   const takedown_info = {
-    is_in_takedown: formData.get('is_in_takedown') === 'on',
-    takedown_status: formData.get('takedown_status'),
+    is_in_takedown: isTakedown,
+    takedown_status: finalTakedownStatus,
     client_reference_id: null
   }
 
@@ -226,14 +278,14 @@ export async function submitCaseReview(prevState, formData) {
     if (!existingPost) {
       return { success: false, error: 'Post not found' }
     }
-    
+
     // Check if it was previously reviewed today to handle metrics updates correctly
     // If processed=true and review_details exist, we treat it as an update
     const previousReviewData = existingPost.processed && existingPost.review_details ? {
-        threat_score: existingPost.review_details.threat_score,
-        threat_type: existingPost.review_details.threat_type,
-        is_in_takedown: existingPost.takedown_info?.is_in_takedown,
-        platform: existingPost.platform
+      threat_score: existingPost.review_details.threat_score,
+      threat_type: existingPost.review_details.primary_threat_type || existingPost.review_details.threat_type, // Handle backward compat
+      is_in_takedown: existingPost.takedown_info?.is_in_takedown,
+      platform: existingPost.platform
     } : null
 
     // 2. Update MongoDB
@@ -251,39 +303,21 @@ export async function submitCaseReview(prevState, formData) {
 
     // 3. Update Supabase Metrics
     const currentReviewData = {
-        threat_score: review_details.threat_score,
-        threat_type: review_details.threat_type,
-        is_in_takedown: takedown_info.is_in_takedown,
-        platform: existingPost.platform
+      threat_score: review_details.threat_score,
+      threat_type: review_details.primary_threat_type,
+      is_in_takedown: takedown_info.is_in_takedown,
+      platform: existingPost.platform
     }
-    
+
     // Fire and forget metrics update to not block UI
-    updateDailyMetrics(currentReviewData, previousReviewData).catch(err => 
-        console.error('Background metrics update failed:', err)
+    updateDailyMetrics(currentReviewData, previousReviewData).catch(err =>
+      console.error('Background metrics update failed:', err)
     )
 
-    // 4. Handle Takedown (Supabase & Slack)
-    if (takedown_info.is_in_takedown) {
-        // If it wasn't already in takedown, send notification
-        const isNewTakedown = !previousReviewData?.is_in_takedown
-
-        // Update/Insert Takedown Case
-        manageTakedownCase({
-            mongo_post_id: mongoId,
-            post_platform_id: existingPost.post_id || existingPost.code,
-            platform: existingPost.platform || 'instagram',
-            is_in_takedown: true,
-            risk_score: review_details.threat_score,
-            threat_type: review_details.threat_type
-        }).catch(err => console.error('Takedown management failed:', err))
-
-        // Send Slack Notification only for new takedowns
-        if (isNewTakedown) {
-            sendSlackNotification().catch(err => 
-                console.error('Slack notification failed:', err)
-            )
-        }
-    }
+    // 4. Update Takedown Case (Supabase)
+    // MOVED: We now only trigger the actual takedown process (and Supabase tracking)
+    // when the CLIENT approves the request in the cases dashboard.
+    // So we assume the reviewer just "raises" it here.
 
     return { success: true }
   } catch (error) {

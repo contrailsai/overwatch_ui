@@ -1,4 +1,4 @@
-import { checkReviewerPermission, getUnreviewedPosts } from './actions'
+import { checkReviewerPermission, getPosts } from './actions'
 import { Sidebar } from '@/components/Sidebar'
 import { ReviewInterface } from './ReviewInterface'
 
@@ -23,7 +23,7 @@ export default async function ReviewCasesPage({ searchParams }) {
   // Fetch Data
   const resolvedSearchParams = await searchParams // Next.js 15+ await searchParams
   const page = parseInt(resolvedSearchParams?.page || '1')
-  const { posts, totalPages, totalCount } = await getUnreviewedPosts(page)
+  const { posts, totalPages, totalCount } = await getPosts(page)
 
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden">
