@@ -5,28 +5,8 @@ import clientPromise from '@/utils/mongodb/client'
 import { redirect } from 'next/navigation'
 import { ObjectId } from 'mongodb'
 import { getSignedImageUrl } from '@/utils/aws/s3'
-
-export async function checkReviewerPermission() {
-  const supabase = await createClient()
-
-  const { data: { user } } = await supabase.auth.getUser()
-
-  if (!user) {
-    redirect('/login')
-  }
-
-  const { data: clientDetails, error } = await supabase
-    .from('client_details')
-    .select('permission')
-    .eq('id', user.id)
-    .maybeSingle()
-
-  if (error || !clientDetails) {
-    return false
-  }
-
-  return clientDetails.permission === 'reviewer'
-}
+import { updateDailyMetrics, manageTakedownCase } from '@/utils/supabase/metrics'
+import { sendEmail } from '@/utils/email'
 
 export async function getPosts(page = 1, limit = 20, filters = {}) {
   try {
@@ -191,11 +171,63 @@ export async function getPosts(page = 1, limit = 20, filters = {}) {
   }
 }
 
-import { updateDailyMetrics, manageTakedownCase } from '@/utils/supabase/metrics'
 
-// ... existing imports
+async function sendNotification(notification_config, type) {
+  try {
+    if (type === "takedown_request") {
+      if (!notification_config) {
+        return { success: false, error: 'No notification configuration provided' }
+      }
+      const active_method = notification_config.active_method
+
+      if (active_method === "email") {
+        if (!notification_config.methods?.email?.receiving_email) {
+          return { success: false, error: 'No receiving email configured' }
+        }
+
+        const send_email_to = notification_config.methods.email.receiving_email
+
+        const html = `
+          <p>Hi</p>
+          <p>We have found an High Risk Post and would like to request a takedown.</p>
+          <p> 
+            Please review the post and take necessary actions on the url 
+            <a href="https://overwatch.contrails.ai/cases/" target="_blank">Click here to go to dashboard</a>
+          </p>
+          <p>Best regards,</p>
+          <p>Overwatch</p>
+          <br/>
+          <br/>
+          <span> This is an automated email, please do not reply to this email.</span>
+          `
+        const { success, messageId, error } = await sendEmail({
+          to: send_email_to,
+          subject: 'New Takedown Request',
+          html,
+        })
+
+        if (error) {
+          console.error('Email Error:', error)
+          return { success: false, error: 'Failed to send email' }
+        }
+
+        return { success: true, messageId }
+      }
+
+      return { success: false, error: `Method ${active_method} not supported` }
+    }
+
+    return { success: false, error: `Notification type ${type} not supported` }
+  } catch (error) {
+    console.error('Send Notification Error:', error)
+    return { success: false, error: error.message }
+  }
+}
 
 export async function submitCaseReview(prevState, formData) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
   const mongoId = formData.get('mongo_id')
 
   if (!mongoId) {
@@ -250,12 +282,21 @@ export async function submitCaseReview(prevState, formData) {
   // If "is_in_takedown" is checked, default to 'raised' (Reviewer Checked)
   // This signals the Client to approve/start it.
   // const isTakedown = formData.get('is_in_takedown') === 'on';
-  const request_takedown = formData.get('takedown_status');
+  const takedown_status = formData.get('takedown_status');
   const suggest_takedown = ["on", "yes", "true"].includes(formData.get('suggest_takedown')?.toLowerCase());
+  const already_in_takedown = ['raised', 'under_review', 'accepted', 'rejected', 'suspended', 'resolution'].includes(takedown_status);
 
-  if (takedown_status !== "raised") {
+  let takedown_info = {}
+  if (!already_in_takedown) {
+    // if its not in takedown stage then update it to be None or Requested for a takedown
     takedown_info = {
       takedown_status: suggest_takedown ? "requested" : "None"
+    }
+  }
+  else {
+    // if its already raised before and has an ongoing takedown stage dont update it
+    takedown_info = {
+      takedown_status: takedown_status
     }
   }
 
@@ -296,6 +337,7 @@ export async function submitCaseReview(prevState, formData) {
     const currentReviewData = {
       threat_score: review_details.threat_score,
       threat_types: review_details.threat_types,
+      is_aigc: review_details.flags.is_aigc,
       // takedown metrics are now handled in cases/actions.js
       platform: existingPost.platform
     }
@@ -305,11 +347,49 @@ export async function submitCaseReview(prevState, formData) {
       console.error('Background metrics update failed:', err)
     )
 
-    // 4. Update Takedown Case (Supabase)
-    // MOVED: We now only trigger the actual takedown process (and Supabase tracking)
-    // when the CLIENT approves the request in the cases dashboard.
-    // So we assume the reviewer just "raises" it here.
-    // SEND A NOTIFICATION TO THE CLIENT ON HIS/HER SUPPORTED FORMAT
+    // SEND A NOTIFICATION TO THE CLIENT ON THEIR SUPPORTED FORMAT
+    if (suggest_takedown && !already_in_takedown) {
+      // FIND THE PROJECT THE REVIEWER IS LINKED TO
+      const { data: client_details } = await supabase
+        .from('client_details')
+        .select('*')
+        .eq('id', user.id)
+        .single()
+
+
+      if (!client_details) {
+        console.error('Could not find client details for reviewer:', user.id)
+        return {
+          success: true, // Still return success for the review itself
+          updatedFields: {
+            review_details,
+            takedown_info,
+            processed: true,
+            processed_at: new Date().toISOString()
+          }
+        }
+      }
+
+      // GET THE CLIENT'S NOTIFICATION CONFIG CONNECTED TO THIS PROJECT
+      const { data: notification_data } = await supabase
+        .from('client_details')
+        .select('notification_config')
+        .eq('project_name', client_details.project_name)
+        .eq('permission', 'client')
+        .single()
+
+      const notification_config = notification_data?.notification_config
+
+      // SEND NOTIFICATION TO CLIENT
+      const { success, error } = await sendNotification(notification_config, "takedown_request")
+      if (!success) {
+        console.error('Failed to send notification:', error)
+      }
+      else {
+        console.log('Notification sent successfully')
+      }
+
+    }
 
     return {
       success: true,

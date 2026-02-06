@@ -1,19 +1,4 @@
 
-1. move all the data updates and things to mongodb 
-    data should be 
-    1. post normal details
-    2. analysis details 
-    3. takedown references and basics 
-    4. Tags for searching by topics
-    5. reviewed details and the reviewer id
-    6. ~~~~~~
-
-2. make sure all the data in supabase is only for: 
-    1. takedowns statuses and details 
-    2. user accounts
-    3. chats on cases + takedowns
-    4. alerts notifications details 
-    5. metrics on things (number to be updated post every analysis )
 
 6. look into data sourcing again [ jio-blackrock details ] [ aigc nsfw ]
 
@@ -49,10 +34,6 @@
     11. update counts in supabase 
 
 8. correct things up in UI :)
-
-9. takedowns page 
-
-10. add things to the client pages. 
 
 11. buttons and chat setups for client to talk on topics. 
 

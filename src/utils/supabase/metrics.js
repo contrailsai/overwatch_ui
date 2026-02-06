@@ -58,11 +58,12 @@ export async function updateDailyMetrics(reviewData, previousReviewData = null) 
   // Add new values
   updates.total_reviewed++
   updates[getRiskBucket(reviewData.threat_score)]++
-  
-  const currentTypes = Array.isArray(reviewData.threat_types) 
-    ? reviewData.threat_types 
+  updates[getThreatColumn(reviewData.is_aigc && 'aigc')]++
+
+  const currentTypes = Array.isArray(reviewData.threat_types)
+    ? reviewData.threat_types
     : [reviewData.threat_type || 'safe']
-    
+
   currentTypes.forEach(type => {
     updates[getThreatColumn(type)]++
   })
@@ -71,9 +72,9 @@ export async function updateDailyMetrics(reviewData, previousReviewData = null) 
   if (previousReviewData) {
     updates.total_reviewed-- // Net change 0 for total if updating
     updates[getRiskBucket(previousReviewData.threat_score)]--
-    
-    const prevTypes = Array.isArray(previousReviewData.threat_types) 
-      ? previousReviewData.threat_types 
+
+    const prevTypes = Array.isArray(previousReviewData.threat_types)
+      ? previousReviewData.threat_types
       : [previousReviewData.threat_type || 'safe']
 
     prevTypes.forEach(type => {
@@ -102,7 +103,7 @@ export async function updateDailyMetrics(reviewData, previousReviewData = null) 
           risk_medium_count: existing.risk_medium_count + updates.risk_medium_count,
           risk_low_count: existing.risk_low_count + updates.risk_low_count,
           risk_safe_count: (existing.risk_safe_count || 0) + updates.risk_safe_count,
-          
+
           threat_safe_count: existing.threat_safe_count + updates.threat_safe_count,
           threat_scam_count: existing.threat_scam_count + updates.threat_scam_count,
           threat_hate_speech_count: existing.threat_hate_speech_count + updates.threat_hate_speech_count,
@@ -110,7 +111,7 @@ export async function updateDailyMetrics(reviewData, previousReviewData = null) 
           threat_nsfw_count: existing.threat_nsfw_count + updates.threat_nsfw_count,
           threat_aigc_count: (existing.threat_aigc_count || 0) + updates.threat_aigc_count,
           threat_other_count: existing.threat_other_count + updates.threat_other_count,
-          
+
           updated_at: new Date().toISOString()
         })
         .eq('id', existing.id)
@@ -128,7 +129,7 @@ export async function updateDailyMetrics(reviewData, previousReviewData = null) 
           risk_medium_count: Math.max(0, updates.risk_medium_count),
           risk_low_count: Math.max(0, updates.risk_low_count),
           risk_safe_count: Math.max(0, updates.risk_safe_count),
-          
+
           threat_safe_count: Math.max(0, updates.threat_safe_count),
           threat_scam_count: Math.max(0, updates.threat_scam_count),
           threat_hate_speech_count: Math.max(0, updates.threat_hate_speech_count),
@@ -136,7 +137,7 @@ export async function updateDailyMetrics(reviewData, previousReviewData = null) 
           threat_nsfw_count: Math.max(0, updates.threat_nsfw_count),
           threat_aigc_count: Math.max(0, updates.threat_aigc_count),
           threat_other_count: Math.max(0, updates.threat_other_count),
-          
+
           takedowns_initiated: 0 // handled separately
         })
 
@@ -153,7 +154,7 @@ export async function updateDailyMetrics(reviewData, previousReviewData = null) 
 export async function trackTakedownEvent(platform) {
   const supabase = await createClient()
   const date = new Date().toISOString().split('T')[0]
-  
+
   try {
     const { data: existing, error: fetchError } = await supabase
       .from('daily_metrics')
@@ -161,27 +162,27 @@ export async function trackTakedownEvent(platform) {
       .eq('date', date)
       .eq('platform', platform)
       .maybeSingle()
-      
+
     if (fetchError) throw fetchError
-    
+
     if (existing) {
-       await supabase.from('daily_metrics')
-         .update({ 
-           takedowns_initiated: (existing.takedowns_initiated || 0) + 1,
-           updated_at: new Date().toISOString()
-         })
-         .eq('id', existing.id)
+      await supabase.from('daily_metrics')
+        .update({
+          takedowns_initiated: (existing.takedowns_initiated || 0) + 1,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', existing.id)
     } else {
-       await supabase.from('daily_metrics')
-         .insert({
-           date, 
-           platform,
-           takedowns_initiated: 1,
-           // Default others to 0
-           total_reviewed: 0
-         })
+      await supabase.from('daily_metrics')
+        .insert({
+          date,
+          platform,
+          takedowns_initiated: 1,
+          // Default others to 0
+          total_reviewed: 0
+        })
     }
-  } catch(err) {
+  } catch (err) {
     console.error('Failed to track takedown event:', err)
   }
 }

@@ -8,11 +8,13 @@ import {
   ChevronLeft, AlertTriangle, CheckCircle, Clock, Mail, FileText,
   ExternalLink, User, Calendar, Shield, Save, MessageSquare, History,
   Link as LinkIcon, Download, Upload, File, Loader2, Trash2,
-  Eye, Check, XCircle, AlertCircle, ChevronRight, Database, Sparkles, Lock
+  Eye, Check, XCircle, AlertCircle, ChevronRight, Database, Sparkles, Lock,
+  ThumbsUp, MessageCircle, Share2, BarChart2, Flag, BadgeCheck, Quote, Activity, ShieldAlert, Info
 } from 'lucide-react'
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import TipTapLink from '@tiptap/extension-link'
+import ProfilePic from '@/components/ProfilePic'
 
 // shadcn/ui components
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
@@ -52,6 +54,45 @@ function StageProgress({ status, onUpdate, updating, readOnly }) {
     if (currentIndex === 2) onUpdate('under_review')
   }
 
+  // Read-Only / Client View - Clean Timeline
+  if (readOnly) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between w-full px-2">
+          {steps.map((step, idx) => {
+            const isActive = idx === currentIndex
+            const isCompleted = idx < currentIndex
+            const Icon = step.icon
+
+            return (
+              <div key={step.id} className="flex flex-col items-center gap-3 relative z-10">
+                <div className={cn(
+                  "w-12 h-12 rounded-full flex items-center justify-center border-2 transition-colors duration-300 bg-white",
+                  isActive || isCompleted ? "border-blue-600 text-blue-600" : "border-gray-200 text-gray-300"
+                )}>
+                  <Icon className="w-5 h-5" />
+                </div>
+                <span className={cn(
+                  "text-xs font-bold uppercase tracking-wider",
+                  isActive || isCompleted ? "text-blue-900" : "text-gray-400"
+                )}>{step.label}</span>
+              </div>
+            )
+          })}
+          {/* Simple background line */}
+          <div className="absolute left-6 right-6 top-[3.5rem] h-0.5 bg-gray-100 -z-0 hidden md:block" />
+        </div>
+
+        <div className="bg-slate-50 rounded-lg p-4 border text-center">
+          <p className="text-sm text-slate-600 font-medium">
+            Current Status: <span className="text-blue-700 font-bold uppercase">{status?.replace('_', ' ')}</span>
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  // Reviewer Interactive View
   return (
     <div className="space-y-8">
       {/* Visual Stepper */}
@@ -59,7 +100,7 @@ function StageProgress({ status, onUpdate, updating, readOnly }) {
         {/* Connecting Line */}
         <div className="absolute left-0 top-1/2 transform -translate-y-1/2 w-full h-1 bg-gray-100 -z-10 rounded-full" />
         <div
-          className="absolute left-0 top-1/2 transform -translate-y-1/2 h-1 bg-indigo-600 -z-10 rounded-full transition-all duration-500"
+          className="absolute left-0 top-1/2 transform -translate-y-1/2 h-1 bg-blue-600 -z-10 rounded-full transition-all duration-500"
           style={{ width: `${(currentIndex / (steps.length - 1)) * 100}%` }}
         />
 
@@ -73,8 +114,8 @@ function StageProgress({ status, onUpdate, updating, readOnly }) {
               <div
                 className={cn(
                   "w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all duration-300 z-10",
-                  isActive ? "bg-indigo-600 border-indigo-600 text-white shadow-lg scale-110" :
-                    isCompleted ? "bg-indigo-100 border-indigo-600 text-indigo-600" :
+                  isActive ? "bg-blue-600 border-blue-600 text-white shadow-lg scale-110" :
+                    isCompleted ? "bg-blue-100 border-blue-600 text-blue-600" :
                       "bg-white border-gray-200 text-gray-300"
                 )}
               >
@@ -82,7 +123,7 @@ function StageProgress({ status, onUpdate, updating, readOnly }) {
               </div>
               <span className={cn(
                 "text-xs font-bold uppercase tracking-wider transition-colors duration-300",
-                isActive ? "text-indigo-600" :
+                isActive ? "text-blue-600" :
                   isCompleted ? "text-gray-900" : "text-gray-300"
               )}>
                 {step.label}
@@ -93,24 +134,18 @@ function StageProgress({ status, onUpdate, updating, readOnly }) {
       </div>
 
       {/* Action Area */}
-      {readOnly ? (
-         <div className="bg-gray-50/50 rounded-xl border border-gray-100 p-6 flex items-center justify-center text-muted-foreground text-sm gap-2">
-            <Lock className="w-4 h-4" />
-            <span>Workflow management is restricted to reviewers.</span>
-         </div>
-      ) : (
       <div className="bg-gray-50/50 rounded-xl border border-gray-100 p-6 flex flex-col items-center justify-center space-y-4">
 
         {/* Stage 1: Raised -> Under Review */}
         {currentIndex === 0 && (
           <div className="text-center space-y-4">
-            <div className="bg-indigo-50 text-indigo-700 px-4 py-2 rounded-lg text-sm font-medium">
+            <div className="bg-blue-50 text-blue-700 px-4 py-2 rounded-lg text-sm font-medium">
               Case has been raised and is ready for review.
             </div>
             <Button
               onClick={handleNext}
               disabled={updating}
-              className="bg-indigo-600 hover:bg-indigo-700 w-full md:w-auto"
+              className="bg-blue-600 hover:bg-blue-700 w-full md:w-auto"
             >
               Start Review Process <ChevronRight className="w-4 h-4 ml-2" />
             </Button>
@@ -194,7 +229,6 @@ function StageProgress({ status, onUpdate, updating, readOnly }) {
           </div>
         )}
       </div>
-      )}
     </div>
   )
 }
@@ -213,7 +247,7 @@ function Tiptap({ content, onChange, editable = true }) {
       TipTapLink.configure({
         openOnClick: false,
         HTMLAttributes: {
-          class: 'text-indigo-600 underline cursor-pointer',
+          class: 'text-blue-600 underline cursor-pointer',
         },
       }),
     ],
@@ -229,10 +263,10 @@ function Tiptap({ content, onChange, editable = true }) {
       },
     },
   })
-  
+
   // Update editable state if prop changes
   useEffect(() => {
-      if(editor) editor.setEditable(editable)
+    if (editor) editor.setEditable(editable)
   }, [editor, editable])
 
   if (!mounted || !editor) return (
@@ -294,6 +328,44 @@ function Tiptap({ content, onChange, editable = true }) {
   )
 }
 
+function SignalCard({ active, title, icon: Icon, color, extra }) {
+  if (!active) {
+    return (
+      <div className="p-4 rounded-xl border border-slate-100 bg-slate-50/50 flex flex-col justify-between h-24 opacity-60">
+        <Icon className="w-5 h-5 text-slate-300" />
+        <span className="text-xs font-bold text-slate-400 uppercase">{title}</span>
+      </div>
+    )
+  }
+
+  const colorStyles = {
+    purple: "bg-purple-50 border-purple-100 text-purple-700",
+    rose: "bg-rose-50 border-rose-100 text-rose-700",
+    orange: "bg-orange-50 border-orange-100 text-orange-700",
+    blue: "bg-blue-50 border-blue-100 text-blue-700"
+  }[color] || "bg-slate-100 text-slate-700";
+
+  const iconColors = {
+    purple: "text-purple-600",
+    rose: "text-rose-600",
+    orange: "text-orange-600",
+    blue: "text-blue-600"
+  }[color] || "text-slate-600";
+
+  return (
+    <div className={cn("p-4 rounded-xl border flex flex-col justify-between h-24 transition-all hover:shadow-md", colorStyles)}>
+      <div className="flex justify-between items-start">
+        <Icon className={cn("w-5 h-5", iconColors)} />
+        <div className="h-2 w-2 rounded-full bg-current animate-pulse" />
+      </div>
+      <div>
+        <span className="text-xs font-extrabold uppercase tracking-wide block">{title}</span>
+        {extra && <span className="text-[10px] opacity-80 font-medium truncate block mt-0.5">{extra}</span>}
+      </div>
+    </div>
+  )
+}
+
 export default function TakedownCasePage() {
   const params = useParams()
   const [data, setData] = useState(null)
@@ -301,6 +373,7 @@ export default function TakedownCasePage() {
   const [updating, setUpdating] = useState(false)
   const [newNote, setNewNote] = useState('')
   const [isReviewer, setIsReviewer] = useState(false)
+  const [imgError, setImgError] = useState(false)
 
   // Documents State
   const [documents, setDocuments] = useState([])
@@ -337,7 +410,7 @@ export default function TakedownCasePage() {
 
   const handleUpload = async (e) => {
     if (!isReviewer) return
-    
+
     const file = e.target.files?.[0]
     if (!file) return
 
@@ -411,8 +484,8 @@ export default function TakedownCasePage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <Loader2 className="w-12 h-12 animate-spin text-indigo-600" />
+      <div className="flex items-center justify-center h-full w-full">
+        <Loader2 className="w-12 h-12 animate-spin text-blue-600" />
       </div>
     )
   }
@@ -427,6 +500,9 @@ export default function TakedownCasePage() {
   }
 
   const { takedown, post, history } = data
+  const review = post?.review_details || {}
+  const analysis = post?.analysis_results || {}
+  console.log(post)
 
   const getStatusColorClass = (s) => {
     switch (s) {
@@ -438,8 +514,24 @@ export default function TakedownCasePage() {
     }
   }
 
+  // --- Data Resolution for UI ---
+  const riskScore = review.threat_score ?? analysis.risk_score ?? 0;
+  let category = review.primary_threat_type || review.threat_type || analysis.category || 'Unknown';
+  if (Array.isArray(review.threat_types) && review.threat_types.length > 0) {
+    category = review.threat_types.join(', ').replace(/_/g, ' ');
+  }
+  const reasoning = review.reasoning || analysis.categorization_reason || 'No detailed reasoning provided.';
+  const reviewerNote = review.reviewer_comments || null;
+  const poiNames = review.poi_names || analysis.poi_check?.poi_names || [];
+
+  const isPoiPresent = review.flags?.poi_confirmed ?? (analysis.poi_check?.poi_name_found || analysis.poi_check?.face_present) ?? false;
+  const isNsfw = review.flags?.is_nsfw ?? (analysis.nsfw_check?.is_safe === false) ?? false;
+  const isHateSpeech = review.flags?.is_hate_speech ?? (analysis.hate_speech_check?.is_safe === false) ?? false;
+  const isFakeNews = review.flags?.is_fake_news ?? (analysis.truth_check?.is_credible === false) ?? false;
+  const isAigc = review.flags?.is_aigc ?? analysis.aigc_check?.is_aigc ?? false;
+
   return (
-    <div className="flex flex-col h-full bg-muted/10">
+    <div className="flex flex-col h-full bg-muted/10 w-full">
       {/* Header */}
       <header className="bg-background border-b py-4 px-6 flex items-center justify-between shrink-0 sticky top-0 z-10">
         <div className="flex items-center gap-4">
@@ -448,15 +540,12 @@ export default function TakedownCasePage() {
               <ChevronLeft className="w-5 h-5" />
             </Link>
           </Button>
-          <div>
-            <div className="flex items-center gap-3">
+          <div className='flex flex-col gap-3'>
+            <div className="flex items-center gap-5">
               <h1 className="text-xl font-bold tracking-tight">Case #{takedown.post_platform_id.substring(0, 12)}...</h1>
               <Badge variant="outline" className="uppercase text-xs font-bold">
                 {takedown.platform}
               </Badge>
-              {!isReviewer && (
-                  <Badge variant="destructive" className="ml-2">View Only</Badge>
-              )}
             </div>
             <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
               <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> Started {new Date(takedown.created_at).toLocaleDateString()}</span>
@@ -469,30 +558,22 @@ export default function TakedownCasePage() {
         </div>
 
         <div className="flex gap-2">
-            <Button variant="outline" size="sm" asChild className="text-indigo-600 bg-indigo-50 border-indigo-100 hover:bg-indigo-100 hover:text-indigo-700">
-            <a
-                href={post?.original_url}
-                target="_blank"
-                rel="noopener noreferrer"
-            >
-                View Content <ExternalLink className="w-4 h-4 ml-2" />
-            </a>
-            </Button>
+          {/* Primary action if needed */}
         </div>
       </header>
 
       {/* Main Content Grid */}
-      <div className="flex-1 overflow-hidden grid grid-cols-1 lg:grid-cols-12">
+      <div className="flex-1 overflow-hidden grid grid-cols-1 lg:grid-cols-12 w-full ">
 
         {/* LEFT: Case Management (Scrollable) */}
-        <div className="lg:col-span-8 h-full overflow-y-auto">
-          <div className="p-6 space-y-6 pb-32">
+        <div className="lg:col-span-8 h-full overflow-y-auto w-full">
+          <div className="px-6 pt-3 space-y-6 pb-32">
 
             {/* Status Card */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Shield className="w-5 h-5 text-indigo-600" />
+                  <Shield className="w-5 h-5 text-blue-600" />
                   Case Status Management
                 </CardTitle>
               </CardHeader>
@@ -508,30 +589,44 @@ export default function TakedownCasePage() {
 
                 <div className="space-y-2">
                   <Label htmlFor="email-select">Platform Email Status</Label>
-                  <div className="flex gap-4">
-                    <Select value={emailStatus} onValueChange={setEmailStatus} disabled={!isReviewer}>
-                      <SelectTrigger id="email-select" className="w-full">
-                        <SelectValue placeholder="Select email status" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="pending">Pending</SelectItem>
-                        <SelectItem value="sent">Email Sent</SelectItem>
-                        <SelectItem value="replied">Platform Replied</SelectItem>
-                        <SelectItem value="failed">Delivery Failed</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      onClick={handleEmailStatusUpdate}
-                      disabled={updating || !isReviewer}
-                    >
-                      Update Email
-                    </Button>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Track the status of the automated or manual email correspondence with the platform.
-                  </p>
+                  {isReviewer ? (
+                    <div className="flex gap-4">
+                      <Select value={emailStatus} onValueChange={setEmailStatus} disabled={!isReviewer}>
+                        <SelectTrigger id="email-select" className="w-full">
+                          <SelectValue placeholder="Select email status" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="pending">Pending</SelectItem>
+                          <SelectItem value="sent">Email Sent</SelectItem>
+                          <SelectItem value="replied">Platform Replied</SelectItem>
+                          <SelectItem value="failed">Delivery Failed</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={handleEmailStatusUpdate}
+                        disabled={updating || !isReviewer}
+                      >
+                        Update Email
+                      </Button>
+                    </div>
+                  ) : (
+                    // Read Only View for Clients
+                    <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border">
+                      <Mail className="w-4 h-4 text-gray-500" />
+                      <span className="text-sm font-medium text-gray-700 capitalize">
+                        {emailStatus === 'pending' ? 'Pending Correspondence' :
+                          emailStatus === 'sent' ? 'Email Sent to Platform' :
+                            emailStatus === 'replied' ? 'Platform Replied' : 'Delivery Failed'}
+                      </span>
+                    </div>
+                  )}
+                  {isReviewer && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Track the status of the automated or manual email correspondence with the platform.
+                    </p>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -540,145 +635,160 @@ export default function TakedownCasePage() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Database className="w-5 h-5 text-indigo-600" />
-                  Case Data & Analysis
+                  <Info className="w-5 h-5 text-blue-600" />
+                  Case Information
                 </CardTitle>
-                <CardDescription>Comprehensive data collected for this post.</CardDescription>
+                <CardDescription>Comprehensive information about the case.</CardDescription>
               </CardHeader>
               <CardContent>
-                <Accordion type="single" collapsible className="w-full" defaultValue="ai-analysis">
+                <Accordion type="single" collapsible className="w-full" defaultValue="content">
 
-                  {/* AI Analysis Section */}
-                  <AccordionItem value="ai-analysis">
-                    <AccordionTrigger className="text-sm font-bold uppercase tracking-wide text-gray-700">
-                      <span className="flex items-center gap-2"><Sparkles className="w-4 h-4 text-indigo-500" /> AI Analysis</span>
-                    </AccordionTrigger>
-                    <AccordionContent>
-                      {post?.analysis_results ? (
-                        <div className="space-y-4 pt-2">
-                          <div className="flex items-center justify-between bg-indigo-50 p-3 rounded-lg border border-indigo-100">
-                            <div>
-                              <span className="text-xs font-bold text-indigo-700 uppercase block">Risk Score</span>
-                              <span className="text-2xl font-black text-indigo-900">{post.analysis_results.risk_score}/100</span>
-                            </div>
-                            <Badge className={cn(
-                              "text-sm px-3 py-1",
-                              post.analysis_results.risk_score > 80 ? "bg-red-100 text-red-800 hover:bg-red-100" : "bg-orange-100 text-orange-800 hover:bg-orange-100"
-                            )}>
-                              {post.analysis_results.category || "Unknown Risk"}
-                            </Badge>
-                          </div>
-
-                          <div className="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg border">
-                            <span className="font-bold block text-gray-900 mb-1 text-xs uppercase">Analysis Reasoning</span>
-                            {post.analysis_results.categorization_reason}
-                          </div>
-
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            {post.analysis_results.poi_check && (
-                              <div className="border p-3 rounded-lg">
-                                <div className="text-xs font-bold text-gray-500 uppercase mb-1">POI Check</div>
-                                <div className="flex items-center gap-2">
-                                  {post.analysis_results.poi_check.poi_name_found ?
-                                    <CheckCircle className="w-4 h-4 text-red-500" /> :
-                                    <CheckCircle className="w-4 h-4 text-green-500" />
-                                  }
-                                  <span className="text-sm font-medium">
-                                    {post.analysis_results.poi_check.poi_name_found ? "POI Found" : "No POI"}
-                                  </span>
-                                </div>
-                              </div>
-                            )}
-                            {post.analysis_results.truth_check && (
-                              <div className="border p-3 rounded-lg">
-                                <div className="text-xs font-bold text-gray-500 uppercase mb-1">Credibility</div>
-                                <div className="flex items-center gap-2">
-                                  {post.analysis_results.truth_check.is_credible === false ?
-                                    <AlertTriangle className="w-4 h-4 text-red-500" /> :
-                                    <CheckCircle className="w-4 h-4 text-green-500" />
-                                  }
-                                  <span className="text-sm font-medium">
-                                    {post.analysis_results.truth_check.is_credible === false ? "Misinformation" : "Credible"}
-                                  </span>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="text-center py-4 text-gray-500 italic">No AI Analysis data available.</div>
-                      )}
-                    </AccordionContent>
-                  </AccordionItem>
-
-                  {/* Post Content Section */}
+                  {/* Combined Post Content & Engagement (NEW DESIGN) */}
                   <AccordionItem value="content">
                     <AccordionTrigger className="text-sm font-bold uppercase tracking-wide text-gray-700">
-                      <span className="flex items-center gap-2"><FileText className="w-4 h-4 text-gray-500" /> Post Content</span>
+                      <span className="flex items-center gap-2"><FileText className="w-4 h-4 text-gray-500" /> Review Details</span>
                     </AccordionTrigger>
                     <AccordionContent>
-                      <div className="space-y-4 pt-2">
-                        <div className="text-sm leading-relaxed whitespace-pre-wrap bg-gray-50 p-3 rounded-lg border">
-                          {post?.caption || post?.post_content?.caption || "No caption available."}
+
+                      <div className="flex-1 overflow-y-auto p-6 space-y-8">
+
+                        {/* Threat Score Card */}
+                        <div>
+                          <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Risk Assessment</h4>
+                          <div className={cn(
+                            "rounded-3xl p-6 border text-white relative overflow-hidden shadow-lg",
+                            riskScore > 75 ? "bg-gradient-to-br from-red-500 to-red-600 border-red-400" :
+                              riskScore > 40 ? "bg-gradient-to-br from-orange-400 to-orange-500 border-orange-300" :
+                                "bg-gradient-to-br from-emerald-400 to-emerald-500 border-emerald-300"
+                          )}>
+                            <div className="absolute top-0 right-0 p-32 bg-white/10 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none" />
+
+                            <div className="relative z-10 flex justify-between items-end">
+                              <div>
+                                <p className="text-white/80 font-medium text-sm mb-1">Threat Score</p>
+                                <div className="text-6xl font-black tracking-tighter flex items-baseline gap-2">
+                                  {riskScore}
+                                  <span className="text-xl font-medium opacity-60">/100</span>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/20 backdrop-blur-md text-xs font-bold uppercase mb-2">
+                                  <Activity className="w-3 h-3" /> Analysis
+                                </div>
+                                <p className="font-bold text-lg leading-tight max-w-[120px]">{category}</p>
+                              </div>
+                            </div>
+                          </div>
                         </div>
 
-                        {post?.media_urls?.length > 0 && (
-                          <div>
-                            <span className="text-xs font-bold text-gray-500 uppercase block mb-2">Media Assets</span>
-                            <div className="grid grid-cols-2 gap-2">
-                              {post.media_urls.map((media, i) => (
-                                <a key={i} href={media.original_url} target="_blank" className="block text-xs text-blue-600 truncate hover:underline border p-2 rounded">
-                                  Media Link {i + 1}
-                                </a>
-                              ))}
-                            </div>
+                        {/* Detection Grid */}
+                        <div>
+                          <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Detection Signals</h4>
+                          <div className="grid grid-cols-2 gap-3">
+                            <SignalCard
+                              active={isAigc}
+                              title="AI Generated"
+                              icon={Activity}
+                              color="purple"
+                            />
+                            <SignalCard
+                              active={isHateSpeech}
+                              title="Hate Speech"
+                              icon={AlertTriangle}
+                              color="rose"
+                            />
+                            <SignalCard
+                              active={isFakeNews}
+                              title="Misinformation"
+                              icon={ShieldAlert}
+                              color="orange"
+                            />
+                            <SignalCard
+                              active={isPoiPresent}
+                              title="POI Detected"
+                              icon={User}
+                              color="blue"
+                              extra={poiNames.length > 0 ? poiNames[0] : null}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Reasoning */}
+                        <div className="space-y-4">
+                          <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                            <Eye className="w-3.5 h-3.5" /> AI Reasoning
+                          </h4>
+                          <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100 text-slate-600 leading-relaxed text-sm font-medium">
+                            {reasoning}
+                          </div>
+                        </div>
+
+                        {/* Reviewer Note */}
+                        {reviewerNote && (
+                          <div className="bg-amber-50 border-l-4 border-amber-300 p-5 rounded-r-xl">
+                            <h4 className="text-xs font-bold text-amber-700 uppercase tracking-widest mb-2 flex items-center">
+                              <User className="w-3.5 h-3.5 mr-1.5" /> Analyst Note
+                            </h4>
+                            <p className="text-amber-800 font-medium text-sm">
+                              {reviewerNote}
+                            </p>
                           </div>
                         )}
+
                       </div>
                     </AccordionContent>
                   </AccordionItem>
 
-                  {/* Profile & Engagement Section */}
-                  <AccordionItem value="profile-stats">
+                  <AccordionItem value="history">
                     <AccordionTrigger className="text-sm font-bold uppercase tracking-wide text-gray-700">
-                      <span className="flex items-center gap-2"><User className="w-4 h-4 text-gray-500" /> Author & Engagement</span>
+                      <span className="flex items-center gap-2"><History className="w-4 h-4 text-gray-500" /> Case History</span>
                     </AccordionTrigger>
                     <AccordionContent>
-                      <div className="grid grid-cols-2 gap-4 pt-2">
-                        <div className="space-y-1">
-                          <span className="text-xs font-bold text-gray-500 uppercase">Author</span>
-                          <div className="flex items-center gap-2">
-                            <Avatar className="h-6 w-6">
-                              <AvatarImage src={post?.user?.profile_pic_url} />
-                              <AvatarFallback>U</AvatarFallback>
-                            </Avatar>
-                            <span className="text-sm font-medium">{post?.user?.username}</span>
-                          </div>
-                          {post?.user?.full_name && <p className="text-xs text-gray-500">{post.user.full_name}</p>}
-                        </div>
-                        <div className="space-y-1">
-                          <span className="text-xs font-bold text-gray-500 uppercase">Platform ID</span>
-                          <p className="text-xs font-mono bg-gray-100 px-2 py-1 rounded inline-block">{post?.post_id || post?.code}</p>
-                        </div>
+                      {/* History Timeline */}
+                      <div>
+                        {/* <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-4 flex items-center gap-2 mt-8 border-t pt-8">
+                          <History className="w-3 h-3" /> Case History
+                        </h3> */}
 
-                        <div className="col-span-2 border-t pt-3 mt-1">
-                          <span className="text-xs font-bold text-gray-500 uppercase block mb-2">Engagement Metrics</span>
-                          <div className="grid grid-cols-4 gap-2 text-center">
-                            <div className="bg-gray-50 p-2 rounded">
-                              <span className="block text-lg font-bold text-gray-900">{post?.stats?.like_count || 0}</span>
-                              <span className="text-[10px] text-gray-500 uppercase">Likes</span>
+                        <div className="space-y-6 relative ml-2 before:absolute before:left-[11px] before:top-2 before:bottom-0 before:w-px before:bg-border">
+                          {history.map((event, idx) => (
+                            <div key={event.id} className="relative pl-8">
+                              <div className={cn(
+                                "absolute left-0 top-1 w-6 h-6 rounded-full border-2 border-background flex items-center justify-center text-[10px] shadow-sm z-10",
+                                event.action === 'update' ? 'bg-blue-100 text-blue-600' :
+                                  event.action === 'note_added' ? 'bg-yellow-100 text-yellow-600' :
+                                    'bg-gray-100 text-gray-500'
+                              )}>
+                                {event.action === 'update' ? <CheckCircle className="w-3 h-3" /> :
+                                  event.action === 'note_added' ? <MessageSquare className="w-3 h-3" /> :
+                                    <Clock className="w-3 h-3" />}
+                              </div>
+
+                              <div className="space-y-1">
+                                <p className="text-xs text-muted-foreground">
+                                  {new Date(event.created_at).toLocaleString()}
+                                </p>
+                                <p className="text-sm font-medium text-foreground capitalize">
+                                  {event.action.replace('_', ' ')}
+                                </p>
+                                <p className="text-xs text-muted-foreground leading-relaxed bg-muted/40 p-2 rounded border border-transparent">
+                                  {event.details}
+                                </p>
+                              </div>
                             </div>
-                            <div className="bg-gray-50 p-2 rounded">
-                              <span className="block text-lg font-bold text-gray-900">{post?.stats?.comment_count || 0}</span>
-                              <span className="text-[10px] text-gray-500 uppercase">Comments</span>
+                          ))}
+
+                          {/* Initial Event */}
+                          <div className="relative pl-8">
+                            <div className="absolute left-0 top-1 w-6 h-6 rounded-full bg-green-100 text-green-600 border-2 border-background flex items-center justify-center shadow-sm z-10">
+                              <CheckCircle className="w-3 h-3" />
                             </div>
-                            <div className="bg-gray-50 p-2 rounded">
-                              <span className="block text-lg font-bold text-gray-900">{post?.stats?.share_count || 0}</span>
-                              <span className="text-[10px] text-gray-500 uppercase">Shares</span>
-                            </div>
-                            <div className="bg-gray-50 p-2 rounded">
-                              <span className="block text-lg font-bold text-gray-900">{post?.stats?.view_count || '-'}</span>
-                              <span className="text-[10px] text-gray-500 uppercase">Views</span>
+                            <div className="space-y-1">
+                              <p className="text-xs text-muted-foreground">
+                                {new Date(takedown.created_at).toLocaleString()}
+                              </p>
+                              <p className="text-sm font-medium text-foreground">Case Created</p>
+                              <p className="text-xs text-muted-foreground">Takedown initiated.</p>
                             </div>
                           </div>
                         </div>
@@ -686,19 +796,21 @@ export default function TakedownCasePage() {
                     </AccordionContent>
                   </AccordionItem>
 
-                  {/* Raw JSON Section */}
-                  <AccordionItem value="raw-json">
-                    <AccordionTrigger className="text-sm font-bold uppercase tracking-wide text-gray-700">
-                      <span className="flex items-center gap-2"><File className="w-4 h-4 text-gray-500" /> Raw Data</span>
-                    </AccordionTrigger>
-                    <AccordionContent>
-                      <div className="bg-gray-950 text-gray-50 p-4 rounded-lg overflow-x-auto">
-                        <pre className="text-xs font-mono">
-                          {JSON.stringify(post, null, 2)}
-                        </pre>
-                      </div>
-                    </AccordionContent>
-                  </AccordionItem>
+                  {/* Raw JSON Section - REVIEWER ONLY */}
+                  {isReviewer && (
+                    <AccordionItem value="raw-json">
+                      <AccordionTrigger className="text-sm font-bold uppercase tracking-wide text-gray-700">
+                        <span className="flex items-center gap-2"><File className="w-4 h-4 text-gray-500" /> Raw Data (Internal)</span>
+                      </AccordionTrigger>
+                      <AccordionContent>
+                        <div className="bg-gray-950 text-gray-50 p-4 rounded-lg overflow-x-auto">
+                          <pre className="text-xs font-mono">
+                            {JSON.stringify(post, null, 2)}
+                          </pre>
+                        </div>
+                      </AccordionContent>
+                    </AccordionItem>
+                  )}
 
                 </Accordion>
               </CardContent>
@@ -718,26 +830,29 @@ export default function TakedownCasePage() {
                   {takedown.notes ? takedown.notes : <span className="text-muted-foreground italic">No notes added yet.</span>}
                 </div>
 
-                <Separator />
-
-                {/* Add Note */}
-                <div className="space-y-2">
-                  <Label className="text-xs uppercase text-muted-foreground font-bold">Add New Note</Label>
-                  <Tiptap
-                    content={newNote}
-                    onChange={setNewNote}
-                    editable={isReviewer}
-                  />
-                  <div className="flex justify-end">
-                    <Button
-                      onClick={handleAddNote}
-                      disabled={updating || !newNote || !isReviewer}
-                      variant="secondary"
-                    >
-                      Add Note <MessageSquare className="w-4 h-4 ml-2" />
-                    </Button>
-                  </div>
-                </div>
+                {isReviewer && (
+                  <>
+                    <Separator />
+                    {/* Add Note - Reviewer Only */}
+                    <div className="space-y-2">
+                      <Label className="text-xs uppercase text-muted-foreground font-bold">Add New Note</Label>
+                      <Tiptap
+                        content={newNote}
+                        onChange={setNewNote}
+                        editable={true}
+                      />
+                      <div className="flex justify-end">
+                        <Button
+                          onClick={handleAddNote}
+                          disabled={updating || !newNote}
+                          variant="secondary"
+                        >
+                          Add Note <MessageSquare className="w-4 h-4 ml-2" />
+                        </Button>
+                      </div>
+                    </div>
+                  </>
+                )}
               </CardContent>
             </Card>
 
@@ -745,52 +860,48 @@ export default function TakedownCasePage() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <File className="w-5 h-5 text-indigo-600" />
+                  <File className="w-5 h-5 text-blue-600" />
                   Evidence Documents
                 </CardTitle>
                 <CardDescription>Upload reports, screenshots, or correspondence.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                {/* Upload Area */}
-                {isReviewer ? (
-                <div
-                  className="border-2 border-dashed border-indigo-100 bg-indigo-50/30 rounded-lg p-6 text-center hover:bg-indigo-50 transition-colors cursor-pointer group"
-                  onClick={() => !uploading && fileInputRef.current?.click()}
-                >
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    onChange={handleUpload}
-                    className="hidden"
-                  />
-                  <div className="flex flex-col items-center gap-2 text-indigo-900/60 group-hover:text-indigo-900">
-                    {uploading ? (
-                      <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
-                    ) : (
-                      <Upload className="w-8 h-8 mb-1 text-indigo-400 group-hover:text-indigo-600 transition-colors" />
-                    )}
-                    <p className="text-sm font-medium">
-                      {uploading ? 'Uploading...' : 'Click to upload evidence'}
-                    </p>
-                    <p className="text-xs">PDF, PNG, JPG supported</p>
-                  </div>
-                </div>
-                ) : (
-                    <div className="border border-dashed border-gray-200 rounded-lg p-4 text-center text-sm text-muted-foreground bg-gray-50">
-                        Uploads restricted to reviewers.
+                {/* Upload Area - Reviewer Only */}
+                {isReviewer && (
+                  <div
+                    className="border-2 border-dashed border-blue-100 bg-blue-50/30 rounded-lg p-6 text-center hover:bg-blue-50 transition-colors cursor-pointer group"
+                    onClick={() => !uploading && fileInputRef.current?.click()}
+                  >
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      onChange={handleUpload}
+                      className="hidden"
+                    />
+                    <div className="flex flex-col items-center gap-2 text-blue-900/60 group-hover:text-blue-900">
+                      {uploading ? (
+                        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+                      ) : (
+                        <Upload className="w-8 h-8 mb-1 text-blue-400 group-hover:text-blue-600 transition-colors" />
+                      )}
+                      <p className="text-sm font-medium">
+                        {uploading ? 'Uploading...' : 'Click to upload evidence'}
+                      </p>
+                      <p className="text-xs">PDF, PNG, JPG supported</p>
                     </div>
+                  </div>
                 )}
 
                 {/* Document List */}
-                {documents.length > 0 && (
+                {documents.length > 0 ? (
                   <div className="space-y-2">
                     <Label className="text-xs uppercase text-muted-foreground font-bold">Uploaded Files</Label>
                     <div className="space-y-2">
                       {documents.map((doc) => (
-                        <div key={doc.id} className="flex items-center justify-between p-3 bg-white border rounded-lg shadow-sm hover:border-indigo-200 transition-colors">
+                        <div key={doc.id} className="flex items-center justify-between p-3 bg-white border rounded-lg shadow-sm hover:border-blue-200 transition-colors">
                           <div className="flex items-center gap-3 overflow-hidden">
-                            <div className="w-8 h-8 rounded bg-indigo-50 flex items-center justify-center shrink-0">
-                              <FileText className="w-4 h-4 text-indigo-600" />
+                            <div className="w-8 h-8 rounded bg-blue-50 flex items-center justify-center shrink-0">
+                              <FileText className="w-4 h-4 text-blue-600" />
                             </div>
                             <div className="min-w-0">
                               <p className="text-sm font-medium text-foreground truncate">{doc.file_name}</p>
@@ -803,7 +914,7 @@ export default function TakedownCasePage() {
                             variant="ghost"
                             size="sm"
                             onClick={() => handleDownload(doc)}
-                            className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50"
+                            className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
                           >
                             <Download className="w-4 h-4" />
                           </Button>
@@ -811,6 +922,12 @@ export default function TakedownCasePage() {
                       ))}
                     </div>
                   </div>
+                ) : (
+                  !isReviewer && (
+                    <div className="text-center py-6 text-muted-foreground text-sm border rounded-lg bg-gray-50 border-dashed">
+                      No documents have been uploaded for this case yet.
+                    </div>
+                  )
                 )}
               </CardContent>
             </Card>
@@ -818,94 +935,114 @@ export default function TakedownCasePage() {
           </div>
         </div>
 
-        {/* RIGHT: Timeline & Post Context */}
-        <div className="lg:col-span-4 bg-background border-l h-full overflow-auto flex flex-col">
-          <div className="flex-1 overflow-y-auto p-6">
+        {/* RIGHT: Target Content & Intelligence  */}
+        <div className="lg:col-span-4 bg-white border-l h-full overflow-auto flex flex-col shadow-xl z-20">
+          <div className="space-y-6 pt-3 px-4 pb-10">
 
-            {/* Post Context Mini Card */}
-            <div className="mb-8">
-              <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-4">Target Content</h3>
-              <Card className="overflow-scroll">
-                <CardContent className="p-4 space-y-4">
-                  <div className="flex items-center gap-3">
-                    <Avatar>
-                      <AvatarImage src={post?.user?.profile_pic_url} />
-                      <AvatarFallback><User className="w-4 h-4" /></AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-bold truncate">{post?.user?.username || 'Unknown User'}</p>
-                      <p className="text-xs text-muted-foreground font-mono truncate">{takedown.post_platform_id}</p>
-                    </div>
-                  </div>
-
-                  {post?.signedImageUrl && (
-                    <div className="aspect-square rounded-md bg-muted overflow-hidden relative group">
-                      <img src={post.signedImageUrl} className="w-full object-contain transition-transform" alt="Evidence" />
-                    </div>
-                  )}
-
-                  <p className="text-xs text-muted-foreground line-clamp-4 leading-relaxed">
-                    {post?.content || "No caption available."}
-                  </p>
-
-                  <Separator />
-
-                  <div className="flex items-center justify-between">
-                    <Badge variant="outline" className="border-red-200 bg-red-50 text-red-700 hover:bg-red-50 hover:text-red-800 gap-1 pl-1 pr-2">
-                      <AlertTriangle className="w-3 h-3" /> Risk: {takedown.risk_score}
-                    </Badge>
-                    <span className="text-xs text-muted-foreground capitalize font-medium">{takedown.threat_type?.replace('_', ' ')}</span>
-                  </div>
-                </CardContent>
-              </Card>
+            {/* 1. Author & Link Header */}
+            <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm flex items-center gap-5">
+              <div className="relative shrink-0">
+                {(post?.user?.profile_pic_url && !imgError) ? (
+                  <img
+                    src={post.user.profile_pic_url}
+                    onError={() => setImgError(true)}
+                    alt=""
+                    className="w-16 h-16 rounded-full object-cover border-4 border-slate-50"
+                  />
+                ) : (
+                  <ProfilePic user={post?.user?.username || 'Unknown'} size={64} />
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-xl font-bold text-slate-900 truncate flex items-center gap-2">
+                  {post?.user?.username || 'Unknown User'}
+                  {post?.user?.is_verified && <BadgeCheck className="w-5 h-5 text-blue-500 fill-blue-50" />}
+                </h3>
+                <p className="text-slate-500 font-medium truncate">{post?.user?.full_name}</p>
+              </div>
+              <Button variant="outline" size="sm" asChild className="text-slate-700 bg-slate-100 border-slate-200 hover:bg-slate-200">
+                <a
+                  href={post?.original_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                  <span className="hidden sm:inline">View Source</span>
+                </a>
+              </Button>
             </div>
 
-            {/* History Timeline */}
-            <div>
-              <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-4 flex items-center gap-2">
-                <History className="w-3 h-3" /> Case History
-              </h3>
+            {/* 2. Media Display */}
+            <div className="bg-slate-900 rounded-2xl overflow-hidden shadow-lg border border-slate-800 relative group flex items-center justify-center min-h-[400px]">
+              {post?.signedImageUrl ? (
+                <img
+                  src={post.signedImageUrl}
+                  alt="Evidence"
+                  className="w-full h-auto max-h-[600px] object-contain"
+                />
+              ) : (
+                <div className="text-center p-12">
+                  <Quote className="w-16 h-16 text-slate-700 mx-auto mb-4" />
+                  <p className="text-slate-500 font-medium text-lg">Text-Only Content</p>
+                </div>
+              )}
+            </div>
 
-              <div className="space-y-6 relative ml-2 before:absolute before:left-[11px] before:top-2 before:bottom-0 before:w-px before:bg-border">
-                {history.map((event, idx) => (
-                  <div key={event.id} className="relative pl-8">
-                    <div className={cn(
-                      "absolute left-0 top-1 w-6 h-6 rounded-full border-2 border-background flex items-center justify-center text-[10px] shadow-sm z-10",
-                      event.action === 'update' ? 'bg-blue-100 text-blue-600' :
-                        event.action === 'note_added' ? 'bg-yellow-100 text-yellow-600' :
-                          'bg-gray-100 text-gray-500'
-                    )}>
-                      {event.action === 'update' ? <CheckCircle className="w-3 h-3" /> :
-                        event.action === 'note_added' ? <MessageSquare className="w-3 h-3" /> :
-                          <Clock className="w-3 h-3" />}
+            {/* 3. Caption & Metrics */}
+            <div className="grid grid-cols-1 gap-6">
+              <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                <h4 className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">
+                  <MessageCircle className="w-3 h-3" /> Post Caption
+                </h4>
+                <div className="text-slate-800 leading-relaxed whitespace-pre-wrap font-medium text-base">
+                  {post?.content || <span className="italic text-slate-400">No caption content available.</span>}
+                </div>
+              </div>
+
+              {/* Metrics Grid */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="flex flex-col items-center p-4 bg-white border border-slate-200 rounded-xl shadow-sm">
+                  <ThumbsUp className="w-5 h-5 text-slate-400 mb-1.5" />
+                  <span className="text-xl font-bold text-slate-900">{post?.stats?.like_count?.toLocaleString()}</span>
+                  <span className="text-[10px] text-slate-500 uppercase font-bold">Likes</span>
+                </div>
+                <div className="flex flex-col items-center p-4 bg-white border border-slate-200 rounded-xl shadow-sm">
+                  <MessageCircle className="w-5 h-5 text-slate-400 mb-1.5" />
+                  <span className="text-xl font-bold text-slate-900">{post?.stats?.comment_count?.toLocaleString()}</span>
+                  <span className="text-[10px] text-slate-500 uppercase font-bold">Comments</span>
+                </div>
+                <div className="flex flex-col items-center p-4 bg-white border border-slate-200 rounded-xl shadow-sm">
+                  <Share2 className="w-5 h-5 text-slate-400 mb-1.5" />
+                  <span className="text-xl font-bold text-slate-900">{post?.stats?.share_count?.toLocaleString()}</span>
+                  <span className="text-[10px] text-slate-500 uppercase font-bold">Shares</span>
+                </div>
+                <div className="flex flex-col items-center p-4 bg-white border border-slate-200 rounded-xl shadow-sm">
+                  <BarChart2 className="w-5 h-5 text-slate-400 mb-1.5" />
+                  <span className="text-xl font-bold text-slate-900">{post?.stats?.view_count?.toLocaleString()}</span>
+                  <span className="text-[10px] text-slate-500 uppercase font-bold">Views</span>
+                </div>
+              </div>
+
+              {/* Dates */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 shadow-sm flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-slate-50 text-slate-500 rounded-lg">
+                      <Calendar className="w-5 h-5" />
                     </div>
-
-                    <div className="space-y-1">
-                      <p className="text-xs text-muted-foreground">
-                        {new Date(event.created_at).toLocaleString()}
-                      </p>
-                      <p className="text-sm font-medium text-foreground capitalize">
-                        {event.action.replace('_', ' ')}
-                      </p>
-                      <p className="text-xs text-muted-foreground leading-relaxed bg-muted/40 p-2 rounded border border-transparent">
-                        {event.details}
-                      </p>
+                    <span className="text-xs font-bold text-slate-400 uppercase">Sourcing Date</span>
+                  </div>
+                  <span className="font-bold text-slate-900 text-sm">{post?.metadata?.sourcing_date ? new Date(post.metadata.sourcing_date).toLocaleDateString() : 'N/A'}</span>
+                </div>
+                <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 shadow-sm flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-slate-50 text-slate-500 rounded-lg">
+                      <Activity className="w-5 h-5" />
                     </div>
+                    <span className="text-xs font-bold text-slate-400 uppercase">Extraction Date</span>
                   </div>
-                ))}
-
-                {/* Initial Event */}
-                <div className="relative pl-8">
-                  <div className="absolute left-0 top-1 w-6 h-6 rounded-full bg-green-100 text-green-600 border-2 border-background flex items-center justify-center shadow-sm z-10">
-                    <CheckCircle className="w-3 h-3" />
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-xs text-muted-foreground">
-                      {new Date(takedown.created_at).toLocaleString()}
-                    </p>
-                    <p className="text-sm font-medium text-foreground">Case Created</p>
-                    <p className="text-xs text-muted-foreground">Takedown initiated.</p>
-                  </div>
+                  <span className="font-bold text-slate-900 text-sm">{post?.metadata?.created_at ? new Date(post.metadata.created_at).toLocaleDateString() : 'N/A'}</span>
                 </div>
               </div>
             </div>

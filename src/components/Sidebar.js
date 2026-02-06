@@ -3,17 +3,25 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Home, List, ShieldAlert, Settings, LogOut, LayoutDashboard, ShieldCheck } from 'lucide-react'
-
-const navigation = [
-  { name: 'Dashboard', href: '/', icon: LayoutDashboard },
-  { name: 'Review Cases', href: '/review-cases', icon: ShieldCheck },
-  { name: 'Cases List', href: '/cases', icon: List },
-  { name: 'Takedowns', href: '/takedowns', icon: ShieldAlert },
-  { name: 'Settings', href: '/settings', icon: Settings },
-]
+import { useEffect, useState } from 'react'
+import { isReviewer } from '@/utils/permissions'
 
 export function Sidebar() {
   const pathname = usePathname()
+  const [showReviewCases, setShowReviewCases] = useState(false)
+
+  useEffect(() => {
+    // Check reviewer permission on mount
+    isReviewer().then(setShowReviewCases)
+  }, [])
+
+  const navigation = [
+    { name: 'Dashboard', href: '/', icon: LayoutDashboard, show: true },
+    { name: 'Review Cases', href: '/review-cases', icon: ShieldCheck, show: showReviewCases },
+    { name: 'Cases List', href: '/cases', icon: List, show: true },
+    { name: 'Takedowns', href: '/takedowns', icon: ShieldAlert, show: true },
+    { name: 'Configurations', href: '/configurations', icon: Settings, show: true },
+  ].filter(item => item.show)
 
   return (
     <div className="relative w-16 shrink-0">
@@ -24,7 +32,7 @@ export function Sidebar() {
             Overwatch
           </span>
         </div>
-        
+
         <div className="flex-1 overflow-y-auto overflow-x-hidden pt-4">
           <nav className="px-2 space-y-1">
             {navigation.map((item) => {
@@ -33,11 +41,10 @@ export function Sidebar() {
                 <Link
                   key={item.name}
                   href={item.href}
-                  className={`flex items-center px-3 py-3 text-sm font-medium rounded-md transition-all duration-200 group/item ${
-                    isActive
+                  className={`flex items-center px-3 py-3 text-sm font-medium rounded-md transition-all duration-200 group/item ${isActive
                       ? 'bg-blue-50 text-blue-700'
                       : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                  }`}
+                    }`}
                 >
                   <item.icon className={`h-6 w-6 shrink-0 ${isActive ? 'text-blue-700' : 'text-gray-400 group-hover/item:text-blue-600'}`} />
                   <span className="ml-4 opacity-0 group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap">
@@ -51,7 +58,7 @@ export function Sidebar() {
 
         <div className="p-2 border-t border-gray-200 overflow-hidden">
           <form action="/auth/signout" method="post">
-             <button
+            <button
               type="submit"
               className="flex items-center w-full px-3 py-3 text-sm font-medium text-gray-600 rounded-md hover:bg-gray-50 hover:text-gray-900 group/logout"
             >

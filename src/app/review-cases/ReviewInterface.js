@@ -217,10 +217,10 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
                     id="aiAnalyzed"
                     checked={filters.aiAnalyzed}
                     onChange={(e) => setFilters({ ...filters, aiAnalyzed: e.target.checked })}
-                    className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                   />
                   <label htmlFor="aiAnalyzed" className="text-xs font-bold text-gray-600 uppercase flex items-center gap-1 cursor-pointer">
-                    <Sparkles className="w-3 h-3 text-indigo-500" />
+                    <Sparkles className="w-3 h-3 text-blue-500" />
                     AI Analyzed Only
                   </label>
                 </div>
@@ -231,10 +231,10 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
                     id="poiDetected"
                     checked={filters.poiDetected}
                     onChange={(e) => setFilters({ ...filters, poiDetected: e.target.checked })}
-                    className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                   />
                   <label htmlFor="poiDetected" className="text-xs font-bold text-gray-600 uppercase flex items-center gap-1 cursor-pointer">
-                    <Search className="w-3 h-3 text-indigo-500" />
+                    <Search className="w-3 h-3 text-blue-500" />
                     POI Detected
                   </label>
                 </div>
@@ -448,7 +448,7 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
 }
 
 function ReviewForm({ post, onClose, onNavigate, hasPrev, hasNext, setPosts }) {
-  // console.log(post)
+  console.log(post)
   const [state, formAction, isPending] = useActionState(submitCaseReview, initialState)
 
   // Update local state when submission succeeds
@@ -707,7 +707,7 @@ function ReviewForm({ post, onClose, onNavigate, hasPrev, hasNext, setPosts }) {
 
               {/* Section 1: POI */}
               <div className="space-y-4">
-                <Label className="text-base font-bold text-indigo-900 uppercase tracking-wide">Section 1: POI Verification</Label>
+                <Label className="text-base font-bold text-blue-900 uppercase tracking-wide">Section 1: POI Verification</Label>
                 <div className="bg-white p-6 rounded-xl border-2 border-slate-100 shadow-sm space-y-6">
 
                   {/* Main POI Toggle (Read Only Display) */}
@@ -717,21 +717,21 @@ function ReviewForm({ post, onClose, onNavigate, hasPrev, hasNext, setPosts }) {
                       <p className="text-xs text-muted-foreground">Derived from Face and Name detections below.</p>
                     </div>
                     <div className="flex items-center gap-3">
-                      <span className={`text-sm font-bold ${poiPresent ? 'text-indigo-600' : 'text-slate-400'}`}>{poiPresent ? 'YES' : 'NO'}</span>
+                      <span className={`text-sm font-bold ${poiPresent ? 'text-blue-600' : 'text-slate-400'}`}>{poiPresent ? 'YES' : 'NO'}</span>
                       <Switch disabled checked={poiPresent} />
                     </div>
                   </div>
 
                   {/* Sub Toggles */}
                   <div className="grid grid-cols-2 gap-4">
-                    <div className="flex items-center justify-between p-4 bg-white border-2 border-slate-100 rounded-xl hover:border-indigo-100 transition-colors">
+                    <div className="flex items-center justify-between p-4 bg-white border-2 border-slate-100 rounded-xl hover:border-blue-100 transition-colors">
                       <Label className="text-sm font-bold text-slate-700">Face Detected</Label>
                       <div className="flex items-center gap-2">
                         <span className="text-[10px] font-bold text-slate-400 uppercase">{facePresent ? 'Yes' : 'No'}</span>
                         <Switch checked={facePresent} onCheckedChange={setFacePresent} />
                       </div>
                     </div>
-                    <div className="flex items-center justify-between p-4 bg-white border-2 border-slate-100 rounded-xl hover:border-indigo-100 transition-colors">
+                    <div className="flex items-center justify-between p-4 bg-white border-2 border-slate-100 rounded-xl hover:border-blue-100 transition-colors">
                       <Label className="text-sm font-bold text-slate-700">Name Detected</Label>
                       <div className="flex items-center gap-2">
                         <span className="text-[10px] font-bold text-slate-400 uppercase">{namePresent ? 'Yes' : 'No'}</span>
@@ -745,7 +745,7 @@ function ReviewForm({ post, onClose, onNavigate, hasPrev, hasNext, setPosts }) {
                     <Label className="text-sm font-bold text-slate-700">Identified Persons</Label>
                     <div className="flex flex-wrap gap-2 p-3 bg-slate-50 rounded-lg min-h-[50px] border border-dashed border-slate-300">
                       {poiNames.map((name, index) => (
-                        <Badge key={index} variant="secondary" className="pl-3 pr-1 py-1.5 flex items-center bg-white text-indigo-700 border-2 border-indigo-100">
+                        <Badge key={index} variant="secondary" className="pl-3 pr-1 py-1.5 flex items-center bg-white text-blue-700 border-2 border-blue-100">
                           <span className="font-bold">{name}</span>
                           <button type="button" onClick={() => handleRemovePoi(index)} className="ml-2 hover:bg-red-50 hover:text-red-600 rounded-full p-0.5 transition-colors">
                             <X className="h-3.5 w-3.5" />
@@ -761,9 +761,9 @@ function ReviewForm({ post, onClose, onNavigate, hasPrev, hasNext, setPosts }) {
                         value={newPoiInput}
                         onChange={(e) => setNewPoiInput(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddPoi())}
-                        className="h-10 text-sm border-2 text-slate-100 focus:border-indigo-500"
+                        className="h-10 text-sm border-2 text-slate-100 focus:border-blue-500"
                       />
-                      <Button type="button" onClick={handleAddPoi} className="h-10 px-4 bg-indigo-600 hover:bg-indigo-700">
+                      <Button type="button" onClick={handleAddPoi} className="h-10 px-4 bg-blue-600 hover:bg-blue-700">
                         <Plus className="h-4 w-4 mr-2" /> Add
                       </Button>
                     </div>
@@ -773,7 +773,7 @@ function ReviewForm({ post, onClose, onNavigate, hasPrev, hasNext, setPosts }) {
 
               {/* Section 2: Threat Analysis */}
               <div className="space-y-4">
-                <Label className="text-base font-bold text-indigo-900 uppercase tracking-wide">Section 2: Threat Analysis</Label>
+                <Label className="text-base font-bold text-blue-900 uppercase tracking-wide">Section 2: Threat Analysis</Label>
                 <div className="bg-white p-6 rounded-xl border-2 border-slate-100 shadow-sm space-y-6">
                   <div className="grid grid-cols-2 gap-4">
                     {[
@@ -790,7 +790,7 @@ function ReviewForm({ post, onClose, onNavigate, hasPrev, hasNext, setPosts }) {
                         className={cn(
                           "flex items-center space-x-3 p-4 rounded-xl border-2 transition-all cursor-pointer",
                           threatTypes.includes(item.id)
-                            ? "border-indigo-600 bg-indigo-50/50"
+                            ? "border-blue-600 bg-blue-50/50"
                             : "border-slate-100 bg-white hover:border-slate-200"
                         )}
                       >
@@ -815,7 +815,7 @@ function ReviewForm({ post, onClose, onNavigate, hasPrev, hasNext, setPosts }) {
                       name="reasoning"
                       defaultValue={defaultReasoning}
                       placeholder="Describe the findings and analysis..."
-                      className="min-h-[120px] bg-white border-2 border-slate-100 focus:border-indigo-500 text-slate-900"
+                      className="min-h-[120px] bg-white border-2 border-slate-100 focus:border-blue-500 text-slate-900"
                     />
                   </div>
                 </div>
@@ -823,7 +823,7 @@ function ReviewForm({ post, onClose, onNavigate, hasPrev, hasNext, setPosts }) {
 
               {/* Section 3: Verdict */}
               <div className="space-y-4">
-                <Label className="text-base font-bold text-indigo-900 uppercase tracking-wide">Section 3: Final Verdict</Label>
+                <Label className="text-base font-bold text-blue-900 uppercase tracking-wide">Section 3: Final Verdict</Label>
                 <div className="bg-white p-6 rounded-xl border-2 border-slate-100 shadow-sm space-y-8">
 
                   {/* Risk Score */}
@@ -850,7 +850,7 @@ function ReviewForm({ post, onClose, onNavigate, hasPrev, hasNext, setPosts }) {
                         max="100"
                         value={threatScore}
                         onChange={(e) => setThreatScore(parseInt(e.target.value))}
-                        className="w-full h-3 rounded-lg appearance-none cursor-pointer bg-slate-200 accent-indigo-600"
+                        className="w-full h-3 rounded-lg appearance-none cursor-pointer bg-slate-200 accent-blue-600"
                         style={{
                           background: `linear-gradient(to right, #86efac 0%, #fde047 50%, #f87171 100%)`
                         }}
@@ -871,7 +871,7 @@ function ReviewForm({ post, onClose, onNavigate, hasPrev, hasNext, setPosts }) {
                       name="reviewer_comments"
                       defaultValue={defaultComments}
                       placeholder="Add internal notes or context for the client..."
-                      className="min-h-[100px] bg-white border-2 border-slate-100 focus:border-indigo-500 text-slate-900"
+                      className="min-h-[100px] bg-white border-2 border-slate-100 focus:border-blue-500 text-slate-900"
                     />
                   </div>
 
@@ -940,7 +940,7 @@ function ReviewForm({ post, onClose, onNavigate, hasPrev, hasNext, setPosts }) {
                   <Button
                     type="submit"
                     disabled={isPending}
-                    className="flex-1 h-14 text-lg font-black shadow-lg bg-indigo-600 hover:bg-indigo-700 hover:shadow-indigo-200 transition-all active:scale-[0.98] cursor-pointer"
+                    className="flex-1 h-14 text-lg font-black shadow-lg bg-blue-600 hover:bg-blue-700 hover:shadow-blue-200 transition-all active:scale-[0.98] cursor-pointer"
                   >
                     {isPending ? <Loader2 className="animate-spin h-6 w-6" /> : hasReview ? 'UPDATE REVIEW' : 'COMPLETE REVIEW'}
                   </Button>

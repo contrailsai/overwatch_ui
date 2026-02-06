@@ -79,7 +79,8 @@ export async function getTakedowns(filters = {}) {
         'user.username': 1,
         'user.profile_pic_url': 1,
         'profile.username': 1, // Fallback
-        'profile.profile_pic_url': 1 // Fallback
+        'profile.profile_pic_url': 1, // Fallback
+        'profile.profile_url': 1 // Fallback
       })
       .toArray()
       
@@ -273,6 +274,23 @@ export async function getTakedownDetails(id) {
             s3UrlToSign = firstMedia.thumbnail_url || firstMedia.s3_url
         }
         post.signedImageUrl = s3UrlToSign ? await getSignedImageUrl(s3UrlToSign) : null
+
+        // NORMALIZE USER DATA HERE for consistency across UI
+        // Checking post.user, post.profile, etc.
+        post.user = {
+            username: post.user?.username || post.profile?.username || 'Unknown',
+            full_name: post.user?.full_name || post.profile?.display_name || '',
+            profile_pic_url: post.user?.profile_pic_url || post.profile?.profile_pic_url || post.profile?.profile_url || '',
+            is_verified: post.user?.is_verified || post.profile?.is_verified || false
+        }
+
+        // NORMALIZE STATS
+        post.stats = {
+            like_count: post.stats?.like_count || post.engagement?.likes || 0,
+            comment_count: post.stats?.comment_count || post.engagement?.comments || 0,
+            share_count: post.stats?.share_count || post.engagement?.shares || 0,
+            view_count: post.stats?.view_count || post.engagement?.views || '-'
+        }
     }
     
   } catch (e) {

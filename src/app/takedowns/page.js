@@ -3,8 +3,8 @@
 import { useState, useEffect } from 'react'
 import { getTakedowns, checkReviewerPermission } from './actions'
 import Link from 'next/link'
-import { 
-  Filter, Search, ChevronRight, AlertTriangle, CheckCircle, 
+import {
+  Filter, Search, ChevronRight, AlertTriangle, CheckCircle,
   Clock, Mail, ArrowUpRight, ShieldAlert, User, ImageIcon
 } from 'lucide-react'
 import { Badge } from "@/components/ui/badge"
@@ -41,7 +41,7 @@ export default function TakedownsPage() {
   }
 
   return (
-    <div className="flex flex-col h-full bg-gray-50/50">
+    <div className="flex flex-col h-full w-full bg-gray-50/50">
       {/* Header */}
       <header className="bg-white border-b border-gray-200 py-6 px-8">
         <div className="flex justify-between items-center">
@@ -49,15 +49,11 @@ export default function TakedownsPage() {
             <h1 className="text-2xl font-bold text-gray-900">Takedown Requests</h1>
             <p className="text-sm text-gray-500 mt-1">Manage and track active content removal requests</p>
           </div>
-          {isReviewer ? (
-            <button className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center transition-colors shadow-sm">
+          {isReviewer && (
+            <button className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center transition-colors shadow-sm">
               <ShieldAlert className="w-4 h-4 mr-2" />
               New Manual Request
             </button>
-          ) : (
-             <Badge variant="outline" className="bg-gray-100 text-gray-600 border-gray-300">
-               View Only Access
-             </Badge>
           )}
         </div>
       </header>
@@ -68,11 +64,11 @@ export default function TakedownsPage() {
           <Filter className="w-4 h-4" />
           Filters
         </div>
-        
-        <select 
+
+        <select
           value={filters.status}
           onChange={(e) => setFilters(prev => ({ ...prev, status: e.target.value }))}
-          className="bg-gray-50 border border-gray-200 text-gray-700 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block p-2 cursor-pointer hover:bg-gray-100 transition-colors"
+          className="bg-gray-50 border border-gray-200 text-gray-700 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2 cursor-pointer hover:bg-gray-100 transition-colors"
         >
           <option value="all">All Statuses</option>
           <option value="raised">Raised</option>
@@ -82,10 +78,10 @@ export default function TakedownsPage() {
           <option value="suspended">Suspended</option>
         </select>
 
-        <select 
+        <select
           value={filters.platform}
           onChange={(e) => setFilters(prev => ({ ...prev, platform: e.target.value }))}
-          className="bg-gray-50 border border-gray-200 text-gray-700 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block p-2 cursor-pointer hover:bg-gray-100 transition-colors"
+          className="bg-gray-50 border border-gray-200 text-gray-700 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2 cursor-pointer hover:bg-gray-100 transition-colors"
         >
           <option value="all">All Platforms</option>
           <option value="instagram">Instagram</option>
@@ -111,51 +107,51 @@ export default function TakedownsPage() {
         ) : (
           <div className="grid grid-cols-1 gap-4">
             {takedowns.map((item) => (
-              <Link 
-                key={item.id} 
+              <Link
+                key={item.id}
                 href={`/takedowns/case/${item.id}`}
-                className="group block bg-white rounded-xl shadow-sm border border-gray-200 hover:border-indigo-300 hover:shadow-md transition-all duration-200 overflow-hidden"
+                className="group block bg-white rounded-xl shadow-sm border border-gray-200 hover:border-blue-300 hover:shadow-md transition-all duration-200 overflow-hidden"
               >
                 <div className="flex h-full">
-                  
+
                   {/* Thumbnail / Left Accent */}
                   <div className="w-32 bg-gray-100 shrink-0 relative overflow-hidden flex items-center justify-center border-r border-gray-100">
                     {item.enrichment?.thumbnail ? (
-                        <img 
-                          src={item.enrichment.thumbnail} 
-                          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" 
-                          alt="Evidence" 
-                        />
+                      <img
+                        src={item.enrichment.thumbnail}
+                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                        alt="Evidence"
+                      />
                     ) : (
-                        <ImageIcon className="w-8 h-8 text-gray-300" />
+                      <ImageIcon className="w-8 h-8 text-gray-300" />
                     )}
-                    
+
                     {/* Platform Icon Overlay */}
                     <div className="absolute top-2 left-2 bg-white/90 backdrop-blur-sm p-1.5 rounded-md shadow-sm">
-                       {/* You could add platform icons here, for now using text/color */}
-                       <span className="text-[10px] font-bold uppercase tracking-wider text-gray-700">
-                         {item.platform?.slice(0,2)}
-                       </span>
+                      {/* You could add platform icons here, for now using text/color */}
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-gray-700">
+                        {item.platform?.slice(0, 2)}
+                      </span>
                     </div>
                   </div>
 
                   <div className="flex-1 p-5 min-w-0 flex flex-col justify-between">
                     <div>
                       <div className="flex items-start justify-between gap-4 mb-2">
-                         <div className="min-w-0">
-                           <h3 className="text-lg font-bold text-gray-900 truncate leading-tight group-hover:text-indigo-600 transition-colors">
-                              {item.enrichment?.username ? `@${item.enrichment.username}` : `Case #${item.post_platform_id.substring(0, 8)}`}
-                           </h3>
-                           <p className="text-sm text-gray-500 truncate mt-1">
-                             {item.enrichment?.caption || `ID: ${item.post_platform_id}`}
-                           </p>
-                         </div>
-                         <div className={`shrink-0 px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wide border ${getStatusColor(item.status)}`}>
-                            {item.status?.replace('_', ' ')}
-                         </div>
+                        <div className="min-w-0">
+                          <h3 className="text-lg font-bold text-gray-900 truncate leading-tight group-hover:text-blue-600 transition-colors">
+                            {item.enrichment?.username ? `@${item.enrichment.username}` : `Case #${item.post_platform_id.substring(0, 8)}`}
+                          </h3>
+                          <p className="text-sm text-gray-500 truncate mt-1">
+                            {item.enrichment?.caption || `ID: ${item.post_platform_id}`}
+                          </p>
+                        </div>
+                        <div className={`shrink-0 px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wide border ${getStatusColor(item.status)}`}>
+                          {item.status?.replace('_', ' ')}
+                        </div>
                       </div>
                     </div>
-                    
+
                     <div className="flex items-center gap-6 text-sm text-gray-500 mt-3 pt-3 border-t border-gray-50">
                       <span className="flex items-center gap-1.5">
                         <div className={`w-2 h-2 rounded-full ${item.risk_score > 80 ? 'bg-red-500' : 'bg-orange-400'}`} />
@@ -173,10 +169,10 @@ export default function TakedownsPage() {
                       )}
                     </div>
                   </div>
-                  
+
                   {/* Right Action Area */}
-                  <div className="w-12 border-l border-gray-100 flex items-center justify-center bg-gray-50/50 group-hover:bg-indigo-50/50 transition-colors">
-                     <ChevronRight className="w-5 h-5 text-gray-300 group-hover:text-indigo-600" />
+                  <div className="w-12 border-l border-gray-100 flex items-center justify-center bg-gray-50/50 group-hover:bg-blue-50/50 transition-colors">
+                    <ChevronRight className="w-5 h-5 text-gray-300 group-hover:text-blue-600" />
                   </div>
                 </div>
               </Link>
