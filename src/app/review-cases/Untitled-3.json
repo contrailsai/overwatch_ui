@@ -1,0 +1,84 @@
+{
+    "_id": "6981117c3c24564a2cb284c6",
+    "created_at": "2026-02-02T21:04:58.694Z",
+    "platform": "facebook",
+    "processed": true,
+    "caption": "Free Reacharge tricks kannada\n#freerecharge #kannada #reacharge",
+    "signedImageUrl": "https://cxo-demo.s3.ap-south-1.amazonaws.com/facebook_data/1538766563312138/0.jpg?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=AKIA6ODU4O3VBDPTBBP6%2F20260205%2Fap-south-1%2Fs3%2Faws4_request&X-Amz-Date=20260205T121349Z&X-Amz-Expires=3600&X-Amz-Signature=bd3880b4ca8e07d14c688019a2b4ea1067e32ad90cb24627b92176820c438b84&X-Amz-SignedHeaders=host&x-amz-checksum-mode=ENABLED&x-id=GetObject",
+    "user": {
+        "username": "Deepu Smiley",
+        "full_name": "Deepu Smiley",
+        "profile_pic_url": "https://www.facebook.com/sudeepn.hiriyur",
+        "is_verified": false
+    },
+    "review_details": {
+        "threat_score": 90,
+        "threat_types": [
+            "scam",
+            "fake_news"
+        ],
+        "flags": {
+            "poi_confirmed": true,
+            "is_hate_speech": false,
+            "is_nsfw": false,
+            "is_fake_news": true,
+            "is_aigc": false
+        },
+        "poi_names": [
+            "Jio"
+        ],
+        "reasoning": "Flags: scam, misinformation. The content promotes 'Free Recharge tricks,' which is a common tactic used in scams or fraudulent schemes. Such claims typically involve misleading users into providing personal or financial information, clicking malicious links, or engaging in activities that may lead to unauthorized charges or data breaches. The presence of telecom company logos (Airtel, Jio) without official endorsement further suggests an attempt to exploit trust in legitimate brands.",
+        "reviewer_comments": "",
+        "face_present": true,
+        "name_present": false,
+        "reviewed_at": "2026-02-05T10:48:26.728Z"
+    },
+    "takedown_info": {
+        "takedown_status": "raised",
+        "client_approval_date": "2026-02-05T12:13:23.506Z",
+        "supabase_id": "886329aa-3794-46fb-bac1-f42ef9306024"
+    },
+    "analysis_results": {
+        "risk_score": 100,
+        "category": "High Risk",
+        "categorization_reason": "Flags: scam, misinformation. The content promotes 'Free Recharge tricks,' which is a common tactic used in scams or fraudulent schemes. Such claims typically involve misleading users into providing personal or financial information, clicking malicious links, or engaging in activities that may lead to unauthorized charges or data breaches. The presence of telecom company logos (Airtel, Jio) without official endorsement further suggests an attempt to exploit trust in legitimate brands.",
+        "poi_check": {
+            "face_present": false,
+            "poi_name_found": true,
+            "poi_names": [
+                "Mukesh Ambani"
+            ],
+            "face_bbox": [],
+            "confidence": 0
+        },
+        "truth_check": {
+            "is_credible": false,
+            "explanation": "The claim promotes 'free recharge tricks,' which is highly unlikely and typically associated with scams, fraudulent schemes, or misleading content. Legitimate recharge services require payment, and such claims often violate terms of service or may involve illegal activities like phishing or data theft.",
+            "sources": []
+        },
+        "aigc_check": {
+            "is_aigc": false,
+            "score": 0.3905608057975769,
+            "provider": "local_ensemble"
+        },
+        "nsfw_check": {
+            "is_safe": false,
+            "reasoning": "The content promotes 'Free Recharge tricks,' which is a common tactic used in scams or fraudulent schemes. Such claims typically involve misleading users into providing personal or financial information, clicking malicious links, or engaging in activities that may lead to unauthorized charges or data breaches. The presence of telecom company logos (Airtel, Jio) without official endorsement further suggests an attempt to exploit trust in legitimate brands.",
+            "category": "scam",
+            "risk_level": "High"
+        },
+        "hate_speech_check": {
+            "is_safe": false,
+            "reasoning": "The content promotes 'Free Recharge tricks,' which is a common tactic used in scams or fraudulent schemes. Such claims typically involve misleading users into providing personal or financial information, clicking malicious links, or engaging in activities that may lead to unauthorized charges or data breaches. The presence of telecom company logos (Airtel, Jio) without official endorsement further suggests an attempt to exploit trust in legitimate brands.",
+            "category": "scam",
+            "risk_level": "High"
+        },
+        "analyzed_at": "2026-02-03T14:43:54.071Z"
+    },
+    "stats": {
+        "like_count": 162,
+        "comment_count": 6,
+        "share_count": 8
+    },
+    "isPriority": true
+}

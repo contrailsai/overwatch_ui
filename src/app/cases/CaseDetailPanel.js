@@ -4,14 +4,15 @@ import { useState } from 'react'
 import {
     X, User, Heart, MessageCircle, Share2, AlertTriangle,
     Activity, BadgeCheck, Quote, ShieldAlert, CheckCircle,
-    ExternalLink, Calendar, Info, Siren, Eye, Link as LinkIcon
+    ExternalLink, Calendar, Info, Siren, Eye, Link as LinkIcon,
+    ChevronLeft, ChevronRight
 } from 'lucide-react'
 import ProfilePic from '@/components/ProfilePic'
 import { approveTakedown } from './actions'
 import { cn } from '@/lib/utils'
 import { useRouter } from 'next/navigation'
 
-export function CaseDetailPanel({ post, onClose, isOpen }) {
+export function CaseDetailPanel({ post, isOpen, onClose, onNavigate, hasPrev, hasNext }) {
     const [isProcessing, setIsProcessing] = useState(false)
     const [imgError, setImgError] = useState(false)
     const router = useRouter()
@@ -43,8 +44,8 @@ export function CaseDetailPanel({ post, onClose, isOpen }) {
 
     // Takedown logic
     const takedownStatus = post.takedown_info?.takedown_status || 'None';
-    const isRaised = takedownStatus === 'raised';
-    const isRequested = takedownStatus === 'requested';
+    const isRaised = (takedownStatus === 'raised');
+    const isRequested = (takedownStatus === 'requested');
 
     const handleTakedown = async () => {
         if (!confirm("Confirm initiation of takedown process? This will alert the legal team.")) return;
@@ -58,6 +59,8 @@ export function CaseDetailPanel({ post, onClose, isOpen }) {
             } else {
                 alert("Error: " + result.error);
             }
+            // redirect to takedown page
+            router.push("/takedowns/case/" + result.supabase_id)
         } catch (e) {
             alert("Failed to initiate takedown.");
         } finally {
@@ -89,6 +92,24 @@ export function CaseDetailPanel({ post, onClose, isOpen }) {
                     </div>
 
                     <div className="flex items-center gap-3">
+                        {onNavigate && (
+                            <div className="flex items-center gap-1 mr-2 border-r border-slate-200 pr-3">
+                                <button
+                                    onClick={() => onNavigate('prev')}
+                                    disabled={!hasPrev}
+                                    className="p-2 rounded-full hover:bg-slate-100 text-slate-500 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+                                >
+                                    <ChevronLeft className="w-5 h-5" />
+                                </button>
+                                <button
+                                    onClick={() => onNavigate('next')}
+                                    disabled={!hasNext}
+                                    className="p-2 rounded-full hover:bg-slate-100 text-slate-500 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+                                >
+                                    <ChevronRight className="w-5 h-5" />
+                                </button>
+                            </div>
+                        )}
                         {isRequested && (
                             <span className="px-3 py-1 bg-green-100 text-green-700 text-xs font-bold uppercase tracking-wider rounded-full border border-green-200 flex items-center gap-1.5">
                                 <CheckCircle className="w-3.5 h-3.5" /> Takedown Active
@@ -318,35 +339,37 @@ export function CaseDetailPanel({ post, onClose, isOpen }) {
                         {/* Footer Action Area */}
 
                         <div className="p-6 border-t border-slate-100 bg-slate-50/50 mt-auto">
-                            {(isRaised || riskScore > 70) && (
+                            {(isRequested) && (
                                 <div className="flex items-start gap-3 mb-6 p-4 bg-rose-50 rounded-xl border border-rose-100">
                                     <Info className="w-5 h-5 text-rose-600 mt-0.5 shrink-0" />
                                     <p className="text-sm font-medium text-rose-800">
-                                        High Risk Content. Recommended action is immediate takedown due to violations of community safety guidelines.
+                                        Recommended action is immediate takedown due to violations of guidelines.
                                     </p>
                                 </div>
                             )}
 
                             <div className="flex gap-4">
-                                <button onClick={() => {
-                                    router.push(`/takedowns/case/${post._id}`);
-                                }} className="flex-1 py-3.5 bg-white border border-slate-200 text-slate-700 font-bold rounded-xl hover:bg-slate-50 transition-colors shadow-sm text-sm">
-                                    Go to Takedown
-                                </button>
-                                {isRequested ? (
+                                {isRaised &&
+                                    <button onClick={() => {
+                                        router.push(`/takedowns/case/${post.takedown_info.supabase_id}`);
+                                    }} className="flex-1 py-3.5 bg-white border border-slate-200 text-slate-700 font-bold rounded-xl hover:bg-slate-50 transition-colors shadow-sm text-sm">
+                                        Go to Takedown
+                                    </button>
+                                }
+                                {isRaised ?
                                     <button disabled className="flex-1 py-3.5 bg-slate-100 text-slate-400 font-bold rounded-xl border border-slate-200 cursor-not-allowed text-sm flex items-center justify-center gap-2">
                                         <CheckCircle className="w-4 h-4" /> Requested
                                     </button>
-                                ) : (
-                                    <button
-                                        onClick={handleTakedown}
-                                        disabled={isProcessing}
-                                        className="flex-[2] py-3.5 bg-slate-900 text-white font-bold rounded-xl hover:bg-slate-800 transition-all shadow-lg shadow-slate-200 hover:shadow-xl active:scale-95 text-sm flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-wait"
-                                    >
-                                        {isProcessing ? <Activity className="w-4 h-4 animate-spin" /> : <ShieldAlert className="w-4 h-4" />}
-                                        Initiate Takedown
-                                    </button>
-                                )}
+                                    : (
+                                        <button
+                                            onClick={handleTakedown}
+                                            disabled={isProcessing}
+                                            className="flex-[2] py-3.5 bg-slate-900 text-white font-bold rounded-xl hover:bg-slate-800 transition-all shadow-lg shadow-slate-200 hover:shadow-xl active:scale-95 text-sm flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-wait"
+                                        >
+                                            {isProcessing ? <Activity className="w-4 h-4 animate-spin" /> : <ShieldAlert className="w-4 h-4" />}
+                                            Initiate Takedown
+                                        </button>
+                                    )}
                             </div>
                         </div>
 

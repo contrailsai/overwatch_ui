@@ -7,7 +7,32 @@ import { getSignedImageUrl, uploadFileToS3, getSignedDownloadUrl } from '@/utils
 import { revalidatePath } from 'next/cache'
 
 /**
- * Fetch all active takedowns with filters
+ * Check if the current user has reviewer permissions
+ */
+export async function checkReviewerPermission() {
+  const supabase = await createClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!user) {
+    return false
+  }
+
+  const { data: clientDetails, error } = await supabase
+    .from('client_details')
+    .select('permission')
+    .eq('id', user.id)
+    .maybeSingle()
+
+  if (error || !clientDetails) {
+    return false
+  }
+
+  return clientDetails.permission === 'reviewer'
+}
+
+/**
+ * Fetch all active takedowns with filters and enriched MongoDB data
  */
 export async function getTakedowns(filters = {}) {
   const supabase = await createClient()
@@ -25,20 +50,94 @@ export async function getTakedowns(filters = {}) {
     query = query.eq('platform', filters.platform)
   }
 
-  const { data, error } = await query
+  const { data: takedowns, error } = await query
 
   if (error) {
     console.error('Error fetching takedowns:', error)
     return []
   }
 
-  return data
+  if (!takedowns || takedowns.length === 0) return []
+
+  // Enrich with MongoDB Data
+  try {
+    const client = await clientPromise
+    const db = client.db(process.env.MONGO_DB_NAME)
+    
+    // Collect IDs
+    const mongoIds = takedowns
+      .map(t => t.mongo_post_id)
+      .filter(id => id && ObjectId.isValid(id))
+      .map(id => new ObjectId(id))
+      
+    const posts = await db.collection('Posts')
+      .find({ _id: { $in: mongoIds } })
+      .project({ 
+        _id: 1, 
+        'post_content.caption': 1, 
+        'post_content.media_urls': 1,
+        'user.username': 1,
+        'user.profile_pic_url': 1,
+        'profile.username': 1, // Fallback
+        'profile.profile_pic_url': 1 // Fallback
+      })
+      .toArray()
+      
+    // Map posts to a dictionary for O(1) lookup
+    const postsMap = posts.reduce((acc, post) => {
+      acc[post._id.toString()] = post
+      return acc
+    }, {})
+    
+    // Merge data
+    const enrichedTakedowns = await Promise.all(takedowns.map(async (takedown) => {
+      const post = postsMap[takedown.mongo_post_id]
+      
+      let thumbnail = null
+      let caption = ''
+      let username = 'Unknown'
+      
+      if (post) {
+        // Handle Media/Thumbnail
+        if (post.post_content?.media_urls?.length > 0) {
+           const media = post.post_content.media_urls[0]
+           const s3Url = media.thumbnail_url || media.s3_url
+           if (s3Url) {
+             thumbnail = await getSignedImageUrl(s3Url)
+           }
+        }
+        
+        caption = post.post_content?.caption || ''
+        username = post.user?.username || post.profile?.username || 'Unknown'
+      }
+      
+      return {
+        ...takedown,
+        enrichment: {
+          caption: caption.length > 100 ? caption.substring(0, 100) + '...' : caption,
+          thumbnail,
+          username
+        }
+      }
+    }))
+    
+    return enrichedTakedowns
+
+  } catch (mongoError) {
+    console.error('Error enriching takedowns with MongoDB data:', mongoError)
+    // Return Supabase data only if Mongo fails
+    return takedowns.map(t => ({ ...t, enrichment: null }))
+  }
 }
 
 /**
  * Upload a document for a takedown case
  */
 export async function uploadTakedownDocument(takedownId, formData) {
+  // Permission Check
+  const isReviewer = await checkReviewerPermission()
+  if (!isReviewer) return { success: false, error: 'Unauthorized: Reviewer access required' }
+
   const file = formData.get('file')
   if (!file) return { success: false, error: 'No file provided' }
 
@@ -151,7 +250,7 @@ export async function getTakedownDetails(id) {
     const db = client.db(process.env.MONGO_DB_NAME)
     
     // Try by mongo_id first if it's a valid ObjectId
-    if (ObjectId.isValid(takedown.mongo_post_id)) {
+    if (takedown.mongo_post_id && ObjectId.isValid(takedown.mongo_post_id)) {
         post = await db.collection('Posts').findOne({ _id: new ObjectId(takedown.mongo_post_id) })
     }
     
@@ -165,10 +264,9 @@ export async function getTakedownDetails(id) {
         post = JSON.parse(JSON.stringify(post))
         
         // Ensure _id is a string (JSON.stringify handles this but let's be explicit if needed)
-        post._id = post._id.toString()
+        if(post._id) post._id = post._id.toString()
         
         // Handle signed URL here if needed by the UI
-        const { getSignedImageUrl } = require('@/utils/aws/s3')
         let s3UrlToSign = null
         if (post.post_content?.media_urls && post.post_content.media_urls.length > 0) {
             const firstMedia = post.post_content.media_urls[0]
@@ -192,6 +290,10 @@ export async function getTakedownDetails(id) {
  * Update takedown status/details and log history
  */
 export async function updateTakedown(id, updates, message) {
+  // Permission Check
+  const isReviewer = await checkReviewerPermission()
+  if (!isReviewer) return { success: false, error: 'Unauthorized: Reviewer access required' }
+
   const supabase = await createClient()
   const user = (await supabase.auth.getUser()).data.user
 
@@ -216,7 +318,8 @@ export async function updateTakedown(id, updates, message) {
       details: message,
       created_by: user?.id
     })
-
+    
+  revalidatePath(`/takedowns/case/${id}`)
   return { success: true }
 }
 
@@ -224,6 +327,10 @@ export async function updateTakedown(id, updates, message) {
  * Add a note to the takedown
  */
 export async function addTakedownNote(id, noteContent) {
+    // Permission Check
+    const isReviewer = await checkReviewerPermission()
+    if (!isReviewer) return { success: false, error: 'Unauthorized: Reviewer access required' }
+
     const supabase = await createClient()
     const user = (await supabase.auth.getUser()).data.user
     
@@ -257,5 +364,6 @@ export async function addTakedownNote(id, noteContent) {
         created_by: user?.id
     })
     
+    revalidatePath(`/takedowns/case/${id}`)
     return { success: true }
 }

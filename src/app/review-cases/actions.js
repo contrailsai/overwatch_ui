@@ -39,43 +39,37 @@ export async function getPosts(page = 1, limit = 20, filters = {}) {
     // Build query with filters
     const query = { $and: [] }
 
-    // If aiAnalyzed or poiDetected is selected, we show all matching results regardless of processed status
-    // Otherwise, we only show unreviewed posts
-    if (filters.aiAnalyzed || filters.poiDetected) {
-      if (filters.aiAnalyzed) {
-        query.$and.push({
-          "analysis_results.risk_score": { $exists: true }
-        })
-      }
-    } else {
+    // Filter by Review Status
+    if (filters.status === 'pending') {
       query.$and.push({
-        $or: [
-          { processed: { $exists: false } },
-          { processed: false },
-          { processed: null }
-        ]
+        "review_details.threat_score": { $exists: false }
+      })
+    } else if (filters.status === 'reviewed') {
+      query.$and.push({
+        "review_details.threat_score": { $exists: true }
+      })
+    }
+
+    // AI Analyzed Filter
+    if (filters.aiAnalyzed) {
+      query.$and.push({
+        "analysis_results.risk_score": { $exists: true }
       })
     }
 
     // POI Detected Filter
     if (filters.poiDetected) {
       query.$and.push({
-        "analysis_results.poi_check.poi_name_found": true
+        $or: [
+          { "analysis_results.poi_check.poi_name_found": true },
+          { "analysis_results.poi_check.face_present": true }
+        ]
       })
     }
 
     // Platform filter - handle both explicit platform field and default to instagram
     if (filters.platform && filters.platform !== 'all') {
-      if (filters.platform === 'instagram') {
-        query.$and.push({
-          $or: [
-            { platform: 'instagram' },
-            { platform: { $exists: false } }
-          ]
-        })
-      } else {
-        query.$and.push({ platform: filters.platform })
-      }
+      query.$and.push({ platform: filters.platform })
     }
 
     // Sourcing Date Filter (metadata.sourcing_date)
@@ -230,7 +224,6 @@ export async function submitCaseReview(prevState, formData) {
   const review_details = {
     threat_score: parseInt(formData.get('threat_score') || '0'),
     threat_types: threat_types,
-    primary_threat_type: threat_types.length > 0 ? threat_types[0] : 'safe',
 
     // Flags
     flags: {
@@ -246,26 +239,24 @@ export async function submitCaseReview(prevState, formData) {
     reasoning: formData.get('reasoning'),
     reviewer_comments: formData.get('reviewer_comments'),
 
+    // POI
+    face_present: ["on", "yes", "true"].includes(formData.get('face_present')?.toLowerCase()),
+    name_present: ["on", "yes", "true"].includes(formData.get('name_present')?.toLowerCase()),
+
     reviewed_at: new Date().toISOString()
   }
 
   // Determine Takedown Status
   // If "is_in_takedown" is checked, default to 'raised' (Reviewer Checked)
   // This signals the Client to approve/start it.
-  const isTakedown = formData.get('is_in_takedown') === 'on';
-  const currentStatus = formData.get('takedown_status');
+  // const isTakedown = formData.get('is_in_takedown') === 'on';
+  const request_takedown = formData.get('takedown_status');
+  const suggest_takedown = ["on", "yes", "true"].includes(formData.get('suggest_takedown')?.toLowerCase());
 
-  let finalTakedownStatus = currentStatus;
-
-  // If marking for takedown and status is effectively 'None' or empty, set to 'raised'
-  if (isTakedown && (!currentStatus || currentStatus === 'None')) {
-    finalTakedownStatus = 'raised';
-  }
-
-  const takedown_info = {
-    is_in_takedown: isTakedown,
-    takedown_status: finalTakedownStatus,
-    client_reference_id: null
+  if (takedown_status !== "raised") {
+    takedown_info = {
+      takedown_status: suggest_takedown ? "requested" : "None"
+    }
   }
 
   try {
@@ -283,8 +274,8 @@ export async function submitCaseReview(prevState, formData) {
     // If processed=true and review_details exist, we treat it as an update
     const previousReviewData = existingPost.processed && existingPost.review_details ? {
       threat_score: existingPost.review_details.threat_score,
-      threat_type: existingPost.review_details.primary_threat_type || existingPost.review_details.threat_type, // Handle backward compat
-      is_in_takedown: existingPost.takedown_info?.is_in_takedown,
+      threat_types: existingPost.review_details.threat_types || [existingPost.review_details.primary_threat_type || existingPost.review_details.threat_type], // Handle backward compat
+      // is_in_takedown: existingPost.takedown_info?.is_in_takedown, // This metrics should only be updated when the client approves the takedown request
       platform: existingPost.platform
     } : null
 
@@ -304,8 +295,8 @@ export async function submitCaseReview(prevState, formData) {
     // 3. Update Supabase Metrics
     const currentReviewData = {
       threat_score: review_details.threat_score,
-      threat_type: review_details.primary_threat_type,
-      is_in_takedown: takedown_info.is_in_takedown,
+      threat_types: review_details.threat_types,
+      // takedown metrics are now handled in cases/actions.js
       platform: existingPost.platform
     }
 
@@ -318,8 +309,17 @@ export async function submitCaseReview(prevState, formData) {
     // MOVED: We now only trigger the actual takedown process (and Supabase tracking)
     // when the CLIENT approves the request in the cases dashboard.
     // So we assume the reviewer just "raises" it here.
+    // SEND A NOTIFICATION TO THE CLIENT ON HIS/HER SUPPORTED FORMAT
 
-    return { success: true }
+    return {
+      success: true,
+      updatedFields: {
+        review_details,
+        takedown_info,
+        processed: true,
+        processed_at: new Date().toISOString()
+      }
+    }
   } catch (error) {
     console.error('MongoDB Update Error:', error)
     return { success: false, error: error.message }

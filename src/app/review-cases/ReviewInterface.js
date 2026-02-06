@@ -5,7 +5,8 @@ import { submitCaseReview, getPosts, getCaseMetadata } from './actions'
 import {
   Loader2, X, CheckCircle, AlertTriangle, ExternalLink,
   ThumbsUp, MessageCircle, Eye, ChevronLeft, ChevronRight, Filter, Share2,
-  Search, ShieldAlert, Bot, Sparkles, Brain, Calendar, Database, Plus
+  Search, ShieldAlert, Bot, Sparkles, Brain, Calendar, Database, Plus,
+  Instagram, Facebook, Twitter, Heart, Activity, BadgeCheck, Quote, User
 } from 'lucide-react'
 import ProfilePic from '@/components/ProfilePic'
 
@@ -36,12 +37,13 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
   // Filters State
   const [filters, setFilters] = useState({
     platform: 'all',
+    status: 'pending',
     sourcingDateStart: '',
     sourcingDateEnd: '',
     dbDateStart: '',
     dbDateEnd: '',
     aiAnalyzed: true,
-    poiDetected: false
+    poiDetected: true
   })
 
   const observer = useRef()
@@ -87,6 +89,7 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
   const clearFilters = () => {
     setFilters({
       platform: 'all',
+      status: 'pending',
       sourcingDateStart: '',
       sourcingDateEnd: '',
       dbDateStart: '',
@@ -141,6 +144,21 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [selectedPost, posts, navigatePost])
 
+  const getRiskLabel = (score) => {
+    if (score >= 80) return { label: 'Critical', color: 'text-red-700 bg-red-50 border-red-200' };
+    if (score >= 60) return { label: 'High', color: 'text-orange-700 bg-orange-50 border-orange-200' };
+    if (score >= 40) return { label: 'Medium', color: 'text-yellow-700 bg-yellow-50 border-yellow-200' };
+    return { label: 'Low', color: 'text-green-700 bg-green-50 border-green-200' };
+  }
+
+  const getPostLink = (post) => {
+    const id = post.post_id || post.code
+    if (post.platform === 'instagram') return `https://www.instagram.com/p/${id}/`
+    if (post.platform === 'facebook') return `https://www.facebook.com/${id}`
+    if (post.platform === 'x') return `https://twitter.com/${post.user?.username}/status/${id}`
+    return '#'
+  }
+
   return (
     <div className="flex h-full relative">
       {/* Main Content - Table */}
@@ -163,6 +181,19 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
             </div>
 
             <div className="flex flex-wrap items-end gap-6">
+              {/* Status Filter */}
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-gray-500 uppercase block">Status</label>
+                <select
+                  value={filters.status}
+                  onChange={(e) => setFilters({ ...filters, status: e.target.value })}
+                  className="px-3 py-2 text-sm border-gray-200 focus:ring-blue-500 focus:border-blue-500 rounded-lg border bg-gray-50 min-w-[140px]"
+                >
+                  <option value="pending">Pending</option>
+                  <option value="reviewed">Reviewed</option>
+                  <option value="all">All</option>
+                </select>
+              </div>
               {/* Platform Filter */}
               <div className="space-y-1">
                 <label className="text-xs font-bold text-gray-500 uppercase block">Platform</label>
@@ -265,19 +296,26 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
 
         {/* Post List Table */}
         <div className="bg-white rounded-lg shadow border border-gray-100 overflow-hidden">
-          <table className="min-w-full divide-y divide-gray-200">
+          <table className="min-w-full divide-y divide-gray-100">
             <thead className="bg-gray-50">
               <tr>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Platform</th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Profile</th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sourcing Date</th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
+                <th scope="col" className="px-6 py-4 text-left text-sm font-bold text-gray-500 uppercase tracking-wider">Priority</th>
+                <th scope="col" className="px-6 py-4 text-left text-sm font-bold text-gray-500 uppercase tracking-wider">Content</th>
+                <th scope="col" className="px-6 py-4 text-left text-sm font-bold text-gray-500 uppercase tracking-wider">Platform</th>
+                <th scope="col" className="px-6 py-4 text-left text-sm font-bold text-gray-500 uppercase tracking-wider">Threat Type</th>
+                <th scope="col" className="px-6 py-4 text-left text-sm font-bold text-gray-500 uppercase tracking-wider">Source</th>
+                <th scope="col" className="px-6 py-4 text-right text-sm font-bold text-gray-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="bg-white divide-y divide-gray-50">
               {posts.map((post, index) => {
                 const isSelected = selectedPost?._id === post._id
                 const isLast = posts.length === index + 1
+
+                const riskScore = post.review_details?.threat_score || post.analysis_results?.risk_score || 0;
+                const risk = getRiskLabel(riskScore);
+                const threatType = post.review_details?.threat_types?.join(', ').replace(/_/g, ' ') || post.review_details?.threat_type?.replace(/_/g, ' ') || post.analysis_results?.category || 'Unknown';
+
                 return (
                   <tr
                     key={index}
@@ -285,26 +323,75 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
                       postRefs.current[post._id] = el
                       if (isLast) lastPostElementRef(el)
                     }}
-                    className={`transition-colors cursor-pointer ${isSelected ? 'bg-blue-100 ring-2 ring-inset ring-blue-400' : 'hover:bg-gray-50'}`}
+                    className={`transition-colors cursor-pointer group ${isSelected ? 'bg-blue-100 ring-2 ring-inset ring-blue-400' : 'hover:bg-blue-50/30'}`}
                     onClick={() => setSelectedPost(post)}
                   >
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">
-                      <span className={`px-2 py-1 rounded-full text-xs font-bold uppercase ${post.platform === 'facebook' ? 'bg-blue-100 text-blue-800' :
-                        post.platform === 'x' ? 'bg-gray-900 text-white' :
-                          'bg-pink-100 text-pink-800'
-                        }`}>
-                        {post.platform || 'Instagram'}
+                    {/* Priority */}
+                    <td className="px-6 py-5 whitespace-nowrap">
+                      <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold border ${risk.color}`}>
+                        <AlertTriangle className="w-3 h-3 mr-1.5" />
+                        {risk.label}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 flex items-center">
-                      <ProfilePic user={post.user?.username} size={28} />
-                      <span className="ml-3 font-medium text-gray-700">{post.user?.username || 'N/A'}</span>
+
+                    {/* Content */}
+                    <td className="px-6 py-5 max-w-md overflow-hidden">
+                      <div className="flex items-center gap-4">
+                        {post.signedImageUrl ? (
+                          <div className="h-12 w-12 rounded-lg overflow-hidden flex-shrink-0 border border-gray-100 shadow-sm bg-gray-50">
+                            <img
+                              src={post.signedImageUrl}
+                              alt="Content"
+                              className="h-full w-full object-cover"
+                            />
+                          </div>
+                        ) : (
+                          <div className="h-12 w-12 rounded-lg bg-gray-50 flex items-center justify-center flex-shrink-0 border border-gray-100">
+                            <Quote className="h-5 w-5 text-gray-300" />
+                          </div>
+                        )}
+                        <div className="flex flex-col min-w-0">
+                          <span className="font-bold text-gray-900 text-sm mb-0.5 truncate">
+                            {post.user?.username ? `@${post.user.username}` : 'Unknown User'}
+                          </span>
+                          <span className="text-xs text-gray-500 line-clamp-2 leading-snug">
+                            {post.caption || 'No specific text content.'}
+                          </span>
+                        </div>
+                      </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {post.sourcing_date ? new Date(post.sourcing_date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A'}
+
+                    {/* Platform */}
+                    <td className="px-6 py-5 whitespace-nowrap">
+                      <div className="flex items-center text-gray-700 font-medium">
+                        {post.platform === 'instagram' && <Instagram className=" size-6 stroke-pink-500 mr-2" />}
+                        {post.platform === 'facebook' && <Facebook className=" size-6 stroke-blue-500 mr-2" />}
+                        {post.platform === 'x' && <Twitter className=" size-6 stroke-black mr-2" />}
+                        <span className="capitalize">{post.platform || 'Instagram'}</span>
+                      </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <button className={`text-sm ${isSelected ? 'text-blue-700' : 'text-blue-600 hover:text-blue-900'}`}>
+
+                    {/* Threat Type */}
+                    <td className="px-6 py-5 whitespace-nowrap">
+                      <span className="text-gray-900 font-semibold capitalize">{threatType}</span>
+                    </td>
+
+                    {/* Source */}
+                    <td className="px-6 py-5 whitespace-nowrap">
+                      <a
+                        href={post.original_url || getPostLink(post)}
+                        target="_blank"
+                        rel="noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="inline-flex items-center text-blue-600 hover:text-blue-800 font-semibold text-sm transition-colors hover:border-blue-500 border-b-2 border-transparent"
+                      >
+                        View <ExternalLink className="w-3.5 h-3.5 ml-1" />
+                      </a>
+                    </td>
+
+                    {/* Actions */}
+                    <td className="px-6 py-5 whitespace-nowrap text-right">
+                      <button className={`text-xs font-bold py-2 px-4 rounded-lg shadow-sm transition-colors inline-flex items-center ${isSelected ? 'bg-blue-700 text-white' : 'bg-blue-600 hover:bg-blue-700 text-white'}`}>
                         {isSelected ? 'Reviewing...' : 'Review'}
                       </button>
                     </td>
@@ -352,6 +439,7 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
             onNavigate={navigatePost}
             hasPrev={posts.findIndex(p => p._id === selectedPost._id) > 0}
             hasNext={posts.findIndex(p => p._id === selectedPost._id) < posts.length - 1}
+            setPosts={setPosts}
           />
         )}
       </div>
@@ -359,8 +447,20 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
   )
 }
 
-function ReviewForm({ post, onClose, onNavigate, hasPrev, hasNext }) {
+function ReviewForm({ post, onClose, onNavigate, hasPrev, hasNext, setPosts }) {
+  // console.log(post)
   const [state, formAction, isPending] = useActionState(submitCaseReview, initialState)
+
+  // Update local state when submission succeeds
+  useEffect(() => {
+    if (state?.success && state?.updatedFields && setPosts) {
+      setPosts(prevPosts => prevPosts.map(p =>
+        p._id === post._id
+          ? { ...p, ...state.updatedFields }
+          : p
+      ))
+    }
+  }, [state, post._id, setPosts])
 
   // 1. Derive Initial Values
   const review = post.review_details || {}
@@ -370,8 +470,8 @@ function ReviewForm({ post, onClose, onNavigate, hasPrev, hasNext }) {
   const hasReview = review && Object.keys(review).length > 0
 
   // POI Logic
-  const savedFace = hasReview ? (existingFlags.face_present === true) : (analysisPoi.face_present === true)
-  const savedName = hasReview ? (existingFlags.name_present === true) : (analysisPoi.poi_name_found === true)
+  const savedFace = hasReview ? (review.face_present === true) : (analysisPoi.face_present === true)
+  const savedName = hasReview ? (review.name_present === true) : (analysisPoi.poi_name_found === true)
   const savedPoiNames = (hasReview && review.poi_names) ? review.poi_names : (analysisPoi.poi_names || [])
 
   // Threat Scores
@@ -408,7 +508,7 @@ function ReviewForm({ post, onClose, onNavigate, hasPrev, hasNext }) {
   }
 
   // Takedown
-  const savedTakedown = post.takedown_info?.is_in_takedown || false
+  const savedTakedown = post.takedown_info?.takedown_status === "requested"
 
   // 2. Initialize State
   const [facePresent, setFacePresent] = useState(savedFace)
@@ -417,7 +517,8 @@ function ReviewForm({ post, onClose, onNavigate, hasPrev, hasNext }) {
   const [newPoiInput, setNewPoiInput] = useState('')
   const [threatScore, setThreatScore] = useState(savedScore)
   const [threatTypes, setThreatTypes] = useState(savedTypes)
-  const [isTakedown, setIsTakedown] = useState(savedTakedown)
+  // const [isTakedown, setIsTakedown] = useState(savedTakedown)
+  const [suggestTakedown, setSuggestTakedown] = useState(savedTakedown)
 
   // Derived Accessors
   const poiPresent = facePresent || namePresent
@@ -475,91 +576,100 @@ function ReviewForm({ post, onClose, onNavigate, hasPrev, hasNext }) {
 
       <div className="flex-1 overflow-hidden grid grid-cols-1 md:grid-cols-2">
         {/* Left Column: Post Details */}
-        <div className="h-full border-r overflow-y-auto">
-          <div className="p-8 space-y-6">
-            {/* User Info */}
-            <div className="flex items-center space-x-4 bg-muted/40 p-4 rounded-xl border">
-              <ProfilePic user={post.user?.username} size={56} />
-              <div className="flex-1">
-                <p className="text-base font-bold leading-none text-slate-900">{post.user?.username || 'Unknown'}</p>
-                <p className="text-sm text-muted-foreground mt-1">{post.user?.full_name}</p>
-                <div className="flex items-center mt-2 space-x-2 flex-wrap gap-1">
-                  <Badge variant="secondary" className="uppercase text-[10px]">{post.platform || 'Instagram'}</Badge>
-                  {post.user?.is_verified && <Badge variant="outline" className="text-[10px] bg-green-50 text-green-800 border-green-200">Verified</Badge>}
-                  <Badge variant="outline" className="text-[10px]">{post.post_id || post.code}</Badge>
-                </div>
+        <div className="h-full border-r overflow-y-auto w-full">
+          <div className="flex-1 overflow-y-auto p-6 lg:p-8 space-y-6 scrollbar-hide">
+
+            {/* User Context Card */}
+            <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm flex items-center gap-5">
+              <div className="relative shrink-0">
+                <ProfilePic user={post.user?.username || 'Unknown'} size={64} />
               </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-xl font-bold text-slate-900 truncate flex items-center gap-2">
+                  {post.user?.username || 'Unknown User'}
+                  {post.user?.is_verified && <BadgeCheck className="w-5 h-5 text-blue-500 fill-blue-50" />}
+                </h3>
+                <p className="text-slate-500 font-medium truncate">{post.user?.full_name}</p>
+              </div>
+              <a
+                href={getPostLink()}
+                target="_blank"
+                rel="noreferrer"
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-sm font-bold transition-colors flex items-center gap-2"
+              >
+                <ExternalLink className="w-4 h-4" />
+                <span className="hidden sm:inline">View Source</span>
+              </a>
             </div>
 
-            {/* Post Image */}
-            <div className="rounded-xl overflow-hidden border bg-muted/20 flex items-center justify-center min-h-[300px]">
+            {/* Media Display */}
+            <div className="bg-slate-900 rounded-2xl overflow-hidden shadow-lg border border-slate-800 relative group flex items-center justify-center min-h-[400px]">
               {post.signedImageUrl ? (
-                <img src={post.signedImageUrl} alt="Post content" className="max-w-full max-h-[500px] object-contain" />
+                <img
+                  src={post.signedImageUrl}
+                  alt="Evidence"
+                  className="w-full h-auto max-h-[600px] object-contain"
+                />
               ) : (
-                <div className="text-muted-foreground text-sm flex flex-col items-center">
-                  <AlertTriangle className="h-8 w-8 mb-2 opacity-20" />
-                  No Image Available
+                <div className="text-center p-12">
+                  <Quote className="w-16 h-16 text-slate-700 mx-auto mb-4" />
+                  <p className="text-slate-500 font-medium text-lg">Text-Only Content</p>
                 </div>
               )}
             </div>
 
-            {/* Stats */}
-            <div className="grid grid-cols-4 gap-3">
-              <div className="bg-muted/40 p-3 rounded-lg text-center border">
-                <ThumbsUp className="h-4 w-4 mx-auto mb-1 text-muted-foreground" />
-                <p className="text-sm font-bold text-slate-900">{post.stats?.like_count || 0}</p>
-                <p className="text-[10px] text-muted-foreground uppercase font-bold">Likes</p>
-              </div>
-              <div className="bg-muted/40 p-3 rounded-lg text-center border">
-                <MessageCircle className="h-4 w-4 mx-auto mb-1 text-muted-foreground" />
-                <p className="text-sm font-bold text-slate-900">{post.stats?.comment_count || 0}</p>
-                <p className="text-[10px] text-muted-foreground uppercase font-bold">Comments</p>
-              </div>
-              {post.stats?.view_count !== null && post.stats?.view_count > 0 && (
-                <div className="bg-muted/40 p-3 rounded-lg text-center border">
-                  <Eye className="h-4 w-4 mx-auto mb-1 text-muted-foreground" />
-                  <p className="text-sm font-bold text-slate-900">{post.stats.view_count.toLocaleString()}</p>
-                  <p className="text-[10px] text-muted-foreground uppercase font-bold">Views</p>
+            {/* Caption & Stats */}
+            <div className="grid grid-cols-1 gap-6">
+              <div className="md:col-span-2 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                <h4 className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">
+                  <MessageCircle className="w-3 h-3" /> Post Caption
+                </h4>
+                <div className="text-slate-800 leading-relaxed whitespace-pre-wrap font-medium text-base">
+                  {post.caption || <span className="italic text-slate-400">No caption content available.</span>}
                 </div>
-              )}
-              {post.platform === 'facebook' && post.stats?.share_count > 0 && (
-                <div className="bg-muted/40 p-3 rounded-lg text-center border">
-                  <Share2 className="h-4 w-4 mx-auto mb-1 text-muted-foreground" />
-                  <p className="text-sm font-bold text-slate-900">{post.stats.share_count}</p>
-                  <p className="text-[10px] text-muted-foreground uppercase font-bold">Shares</p>
-                </div>
-              )}
-            </div>
+              </div>
 
-            {/* Caption */}
-            <div>
-              <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-3">Post Caption</h3>
-              <div className="text-sm text-slate-900 whitespace-pre-wrap leading-relaxed bg-muted/30 p-4 rounded-xl border">
-                {post.caption || 'No caption provided.'}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-rose-50 text-rose-500 rounded-lg">
+                      <Heart className="w-5 h-5" />
+                    </div>
+                    <span className="text-xs font-bold text-slate-400 uppercase">Likes</span>
+                  </div>
+                  <span className="font-bold text-slate-900 text-lg">{post.stats?.like_count?.toLocaleString() || 0}</span>
+                </div>
+                <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-blue-50 text-blue-500 rounded-lg">
+                      <MessageCircle className="w-5 h-5" />
+                    </div>
+                    <span className="text-xs font-bold text-slate-400 uppercase">Comments</span>
+                  </div>
+                  <span className="font-bold text-slate-900 text-lg">{post.stats?.comment_count?.toLocaleString() || 0}</span>
+                </div>
+
+                {/* Dates */}
+                <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-slate-50 text-slate-500 rounded-lg">
+                      <Calendar className="w-5 h-5" />
+                    </div>
+                    <span className="text-xs font-bold text-slate-400 uppercase">Sourcing Date</span>
+                  </div>
+                  <span className="font-bold text-slate-900 text-sm">{post.sourcing_date ? new Date(post.sourcing_date).toLocaleDateString() : 'N/A'}</span>
+                </div>
+                <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-slate-50 text-slate-500 rounded-lg">
+                      <Activity className="w-5 h-5" />
+                    </div>
+                    <span className="text-xs font-bold text-slate-400 uppercase">Extraction Date</span>
+                  </div>
+                  <span className="font-bold text-slate-900 text-sm">{post.created_at ? new Date(post.created_at).toLocaleDateString() : 'N/A'}</span>
+                </div>
               </div>
             </div>
-
-            {/* Metadata */}
-            <Card>
-              <CardHeader className="py-3">
-                <CardTitle className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Metadata</CardTitle>
-              </CardHeader>
-              <CardContent className="grid grid-cols-2 gap-4 text-xs">
-                <div>
-                  <span className="text-muted-foreground block mb-1">Source Date</span>
-                  <span className="font-medium text-slate-900">{post.sourcing_date ? new Date(post.sourcing_date).toLocaleDateString() : 'N/A'}</span>
-                </div>
-                <div>
-                  <span className="text-muted-foreground block mb-1">Ingest Date</span>
-                  <span className="font-medium text-slate-900">{post.created_at ? new Date(post.created_at).toLocaleDateString() : 'N/A'}</span>
-                </div>
-                <div className="col-span-2">
-                  <a href={getPostLink()} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline font-bold inline-flex items-center">
-                    Open Original Post <ExternalLink className="w-3 h-3 ml-1" />
-                  </a>
-                </div>
-              </CardContent>
-            </Card>
           </div>
         </div>
 
@@ -769,31 +879,30 @@ function ReviewForm({ post, onClose, onNavigate, hasPrev, hasNext }) {
 
                   {/* Takedown Suggestion */}
                   <div
-                    onClick={() => setIsTakedown(!isTakedown)}
                     className={cn(
                       "flex items-start space-x-4 p-5 rounded-2xl border-2 transition-all cursor-pointer",
-                      isTakedown
+                      suggestTakedown
                         ? "bg-red-50 border-red-200 ring-4 ring-red-50"
                         : "bg-slate-50 border-slate-100 hover:border-slate-200"
                     )}
                   >
                     <Checkbox
                       id="takedown"
-                      name="is_in_takedown"
-                      checked={isTakedown}
-                      onCheckedChange={setIsTakedown}
-                      className={isTakedown ? "border-red-600 bg-red-600" : "border-slate-400"}
+                      name="suggest_takedown"
+                      checked={suggestTakedown}
+                      onCheckedChange={() => setSuggestTakedown(!suggestTakedown)}
+                      className={suggestTakedown ? "border-red-600 bg-red-600" : "border-slate-400"}
                     />
                     <div className="grid gap-1.5 leading-none">
                       <Label htmlFor="takedown" className={cn(
                         "text-base font-black cursor-pointer",
-                        isTakedown ? "text-red-900" : "text-slate-900"
+                        suggestTakedown ? "text-red-900" : "text-slate-900"
                       )}>
                         Suggest Takedown
                       </Label>
                       <p className={cn(
                         "text-sm",
-                        isTakedown ? "text-red-700 font-medium" : "text-slate-500"
+                        suggestTakedown ? "text-red-700 font-medium" : "text-slate-500"
                       )}>
                         This flags the content for immediate legal removal workflow.
                       </p>

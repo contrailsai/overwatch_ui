@@ -23,7 +23,16 @@ export default async function ReviewCasesPage({ searchParams }) {
   // Fetch Data
   const resolvedSearchParams = await searchParams // Next.js 15+ await searchParams
   const page = parseInt(resolvedSearchParams?.page || '1')
-  const { posts, totalPages, totalCount } = await getPosts(page)
+  const { posts, totalPages, totalCount } = await getPosts(page, 20, {
+    platform: 'all',
+    sourcingDateStart: '',
+    sourcingDateEnd: '',
+    dbDateStart: '',
+    dbDateEnd: '',
+    aiAnalyzed: true,
+    poiDetected: true,
+    status: 'pending'
+  })
 
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden">

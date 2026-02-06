@@ -1,14 +1,14 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { getTakedownDetails, updateTakedown, addTakedownNote, uploadTakedownDocument, getTakedownDocuments, getDocumentDownloadUrl } from '../../actions'
+import { getTakedownDetails, updateTakedown, addTakedownNote, uploadTakedownDocument, getTakedownDocuments, getDocumentDownloadUrl, checkReviewerPermission } from '../../actions'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import {
   ChevronLeft, AlertTriangle, CheckCircle, Clock, Mail, FileText,
   ExternalLink, User, Calendar, Shield, Save, MessageSquare, History,
   Link as LinkIcon, Download, Upload, File, Loader2, Trash2,
-  Eye, Check, XCircle, AlertCircle, ChevronRight, Database, Sparkles
+  Eye, Check, XCircle, AlertCircle, ChevronRight, Database, Sparkles, Lock
 } from 'lucide-react'
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
@@ -26,7 +26,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { cn } from "@/lib/utils"
 
 // Helper for Visual Stages
-function StageProgress({ status, onUpdate, updating }) {
+function StageProgress({ status, onUpdate, updating, readOnly }) {
   const steps = [
     { id: 'raised', label: 'Raised', icon: Shield },
     { id: 'under_review', label: 'Under Review', icon: Eye },
@@ -42,10 +42,12 @@ function StageProgress({ status, onUpdate, updating }) {
   const currentIndex = getStepIndex(status)
 
   const handleNext = () => {
+    if (readOnly) return
     if (currentIndex === 0) onUpdate('under_review')
   }
 
   const handleBack = () => {
+    if (readOnly) return
     if (currentIndex === 1) onUpdate('raised')
     if (currentIndex === 2) onUpdate('under_review')
   }
@@ -91,6 +93,12 @@ function StageProgress({ status, onUpdate, updating }) {
       </div>
 
       {/* Action Area */}
+      {readOnly ? (
+         <div className="bg-gray-50/50 rounded-xl border border-gray-100 p-6 flex items-center justify-center text-muted-foreground text-sm gap-2">
+            <Lock className="w-4 h-4" />
+            <span>Workflow management is restricted to reviewers.</span>
+         </div>
+      ) : (
       <div className="bg-gray-50/50 rounded-xl border border-gray-100 p-6 flex flex-col items-center justify-center space-y-4">
 
         {/* Stage 1: Raised -> Under Review */}
@@ -186,6 +194,7 @@ function StageProgress({ status, onUpdate, updating }) {
           </div>
         )}
       </div>
+      )}
     </div>
   )
 }
@@ -216,10 +225,15 @@ function Tiptap({ content, onChange, editable = true }) {
     },
     editorProps: {
       attributes: {
-        class: 'prose prose-sm focus:outline-none min-h-[150px] p-4 max-w-none text-gray-700',
+        class: cn('prose prose-sm focus:outline-none min-h-[150px] p-4 max-w-none text-gray-700', !editable && 'bg-gray-50 text-gray-500 cursor-not-allowed'),
       },
     },
   })
+  
+  // Update editable state if prop changes
+  useEffect(() => {
+      if(editor) editor.setEditable(editable)
+  }, [editor, editable])
 
   if (!mounted || !editor) return (
     <div className="border border-input rounded-md bg-muted/50 min-h-[150px] flex items-center justify-center text-muted-foreground text-sm">
@@ -286,6 +300,7 @@ export default function TakedownCasePage() {
   const [loading, setLoading] = useState(true)
   const [updating, setUpdating] = useState(false)
   const [newNote, setNewNote] = useState('')
+  const [isReviewer, setIsReviewer] = useState(false)
 
   // Documents State
   const [documents, setDocuments] = useState([])
@@ -301,13 +316,15 @@ export default function TakedownCasePage() {
       if (!params.id) return
       setLoading(true)
 
-      const [details, docs] = await Promise.all([
+      const [details, docs, permission] = await Promise.all([
         getTakedownDetails(params.id),
-        getTakedownDocuments(params.id)
+        getTakedownDocuments(params.id),
+        checkReviewerPermission()
       ])
 
       setData(details)
       setDocuments(docs || [])
+      setIsReviewer(permission)
 
       if (details?.takedown) {
         setStatus(details.takedown.status)
@@ -319,6 +336,8 @@ export default function TakedownCasePage() {
   }, [params.id])
 
   const handleUpload = async (e) => {
+    if (!isReviewer) return
+    
     const file = e.target.files?.[0]
     if (!file) return
 
@@ -351,6 +370,7 @@ export default function TakedownCasePage() {
   }
 
   const updateStatusDirectly = async (newStatus) => {
+    if (!isReviewer) return
     setUpdating(true)
     setStatus(newStatus)
 
@@ -367,6 +387,7 @@ export default function TakedownCasePage() {
   }
 
   const handleEmailStatusUpdate = async () => {
+    if (!isReviewer) return
     setUpdating(true)
     await updateTakedown(params.id, {
       status: status,
@@ -379,7 +400,7 @@ export default function TakedownCasePage() {
   }
 
   const handleAddNote = async () => {
-    if (!newNote.trim()) return
+    if (!isReviewer || !newNote.trim()) return
     setUpdating(true)
     await addTakedownNote(params.id, newNote)
     setNewNote('')
@@ -407,16 +428,6 @@ export default function TakedownCasePage() {
 
   const { takedown, post, history } = data
 
-  const getStatusBadgeVariant = (s) => {
-    switch (s) {
-      case 'accepted': return 'success'
-      case 'rejected': return 'destructive'
-      case 'under_review': return 'default'
-      case 'suspended': return 'warning'
-      default: return 'secondary'
-    }
-  }
-
   const getStatusColorClass = (s) => {
     switch (s) {
       case 'accepted': return 'bg-green-100 text-green-800 hover:bg-green-100'
@@ -443,6 +454,9 @@ export default function TakedownCasePage() {
               <Badge variant="outline" className="uppercase text-xs font-bold">
                 {takedown.platform}
               </Badge>
+              {!isReviewer && (
+                  <Badge variant="destructive" className="ml-2">View Only</Badge>
+              )}
             </div>
             <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
               <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> Started {new Date(takedown.created_at).toLocaleDateString()}</span>
@@ -454,15 +468,17 @@ export default function TakedownCasePage() {
           </div>
         </div>
 
-        <Button variant="outline" size="sm" asChild className="text-indigo-600 bg-indigo-50 border-indigo-100 hover:bg-indigo-100 hover:text-indigo-700">
-          <a
-            href={post?.original_url}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            View Content <ExternalLink className="w-4 h-4 ml-2" />
-          </a>
-        </Button>
+        <div className="flex gap-2">
+            <Button variant="outline" size="sm" asChild className="text-indigo-600 bg-indigo-50 border-indigo-100 hover:bg-indigo-100 hover:text-indigo-700">
+            <a
+                href={post?.original_url}
+                target="_blank"
+                rel="noopener noreferrer"
+            >
+                View Content <ExternalLink className="w-4 h-4 ml-2" />
+            </a>
+            </Button>
+        </div>
       </header>
 
       {/* Main Content Grid */}
@@ -485,6 +501,7 @@ export default function TakedownCasePage() {
                   status={status}
                   onUpdate={updateStatusDirectly}
                   updating={updating}
+                  readOnly={!isReviewer}
                 />
 
                 <Separator className="my-6" />
@@ -492,7 +509,7 @@ export default function TakedownCasePage() {
                 <div className="space-y-2">
                   <Label htmlFor="email-select">Platform Email Status</Label>
                   <div className="flex gap-4">
-                    <Select value={emailStatus} onValueChange={setEmailStatus}>
+                    <Select value={emailStatus} onValueChange={setEmailStatus} disabled={!isReviewer}>
                       <SelectTrigger id="email-select" className="w-full">
                         <SelectValue placeholder="Select email status" />
                       </SelectTrigger>
@@ -507,7 +524,7 @@ export default function TakedownCasePage() {
                       size="sm"
                       variant="secondary"
                       onClick={handleEmailStatusUpdate}
-                      disabled={updating}
+                      disabled={updating || !isReviewer}
                     >
                       Update Email
                     </Button>
@@ -709,11 +726,12 @@ export default function TakedownCasePage() {
                   <Tiptap
                     content={newNote}
                     onChange={setNewNote}
+                    editable={isReviewer}
                   />
                   <div className="flex justify-end">
                     <Button
                       onClick={handleAddNote}
-                      disabled={updating || !newNote}
+                      disabled={updating || !newNote || !isReviewer}
                       variant="secondary"
                     >
                       Add Note <MessageSquare className="w-4 h-4 ml-2" />
@@ -734,6 +752,7 @@ export default function TakedownCasePage() {
               </CardHeader>
               <CardContent className="space-y-4">
                 {/* Upload Area */}
+                {isReviewer ? (
                 <div
                   className="border-2 border-dashed border-indigo-100 bg-indigo-50/30 rounded-lg p-6 text-center hover:bg-indigo-50 transition-colors cursor-pointer group"
                   onClick={() => !uploading && fileInputRef.current?.click()}
@@ -756,6 +775,11 @@ export default function TakedownCasePage() {
                     <p className="text-xs">PDF, PNG, JPG supported</p>
                   </div>
                 </div>
+                ) : (
+                    <div className="border border-dashed border-gray-200 rounded-lg p-4 text-center text-sm text-muted-foreground bg-gray-50">
+                        Uploads restricted to reviewers.
+                    </div>
+                )}
 
                 {/* Document List */}
                 {documents.length > 0 && (
