@@ -2,6 +2,11 @@ import { getPosts } from './actions'
 import { ReviewInterface } from './ReviewInterface'
 import { isReviewer } from '@/utils/permissions'
 
+export const metadata = {
+  title: 'overwatch - Review Cases',
+  description: 'Review pending cases and manage threats.',
+}
+
 export default async function ReviewCasesPage({ searchParams }) {
   // Check Permissions
   const hasReviewerPermission = await isReviewer()

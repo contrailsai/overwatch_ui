@@ -10,7 +10,10 @@ const outfit = Outfit({
 });
 
 export const metadata = {
-  title: "Overwatch",
+  title: {
+    template: '%s | Overwatch',
+    default: 'Overwatch',
+  },
   description: "Threat Detection Dashboard",
 };
 

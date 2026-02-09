@@ -49,12 +49,7 @@ export default function TakedownsPage() {
             <h1 className="text-2xl font-bold text-gray-900">Takedown Requests</h1>
             <p className="text-sm text-gray-500 mt-1">Manage and track active content removal requests</p>
           </div>
-          {isReviewer && (
-            <button className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center transition-colors shadow-sm">
-              <ShieldAlert className="w-4 h-4 mr-2" />
-              New Manual Request
-            </button>
-          )}
+
         </div>
       </header>
 

@@ -1,5 +1,10 @@
 import { CasesList } from './CasesList'
 
+export const metadata = {
+  title: 'overwatch - Active Cases',
+  description: 'Detailed investigation and execution of active cases.',
+}
+
 export default function CasesPage() {
   return (
     <main className="flex-1 flex flex-col h-screen overflow-hidden">
