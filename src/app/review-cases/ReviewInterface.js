@@ -22,6 +22,9 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { cn } from "@/lib/utils"
 
+import { DatePickerWithRange } from "@/components/ui/date-range-picker"
+import { format } from "date-fns"
+
 const initialState = {
   success: false,
   error: null,
@@ -38,10 +41,8 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
   const [filters, setFilters] = useState({
     platform: 'all',
     status: 'pending',
-    sourcingDateStart: '',
-    sourcingDateEnd: '',
-    dbDateStart: '',
-    dbDateEnd: '',
+    sourcingDate: undefined, // { from: Date, to: Date }
+    dbDate: undefined,       // { from: Date, to: Date }
     aiAnalyzed: true,
     poiDetected: true
   })
@@ -52,7 +53,27 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
   const loadMorePosts = useCallback(async () => {
     setLoading(true)
     const nextPage = page + 1
-    const response = await getPosts(nextPage, 20, filters)
+    
+    // Transform dates for API
+    // Logic: If only 'from' is selected, range is 'from' -> 'today'
+    // If 'to' is selected, range is 'from' -> 'to'
+    const sourcingEnd = filters.sourcingDate?.to 
+        ? format(filters.sourcingDate.to, 'yyyy-MM-dd') 
+        : (filters.sourcingDate?.from ? format(new Date(), 'yyyy-MM-dd') : '')
+
+    const dbEnd = filters.dbDate?.to 
+        ? format(filters.dbDate.to, 'yyyy-MM-dd') 
+        : (filters.dbDate?.from ? format(new Date(), 'yyyy-MM-dd') : '')
+
+    const apiFilters = {
+      ...filters,
+      sourcingDateStart: filters.sourcingDate?.from ? format(filters.sourcingDate.from, 'yyyy-MM-dd') : '',
+      sourcingDateEnd: sourcingEnd,
+      dbDateStart: filters.dbDate?.from ? format(filters.dbDate.from, 'yyyy-MM-dd') : '',
+      dbDateEnd: dbEnd,
+    }
+
+    const response = await getPosts(nextPage, 20, apiFilters)
 
     if (response.posts.length > 0) {
       setPosts(prev => [...prev, ...response.posts])
@@ -79,7 +100,27 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
   const applyFilters = useCallback(async () => {
     setLoading(true)
     setSelectedPost(null)
-    const response = await getPosts(1, 20, filters)
+    
+    // Transform dates for API
+    // Logic: If only 'from' is selected, range is 'from' -> 'today'
+    // If 'to' is selected, range is 'from' -> 'to'
+    const sourcingEnd = filters.sourcingDate?.to 
+        ? format(filters.sourcingDate.to, 'yyyy-MM-dd') 
+        : (filters.sourcingDate?.from ? format(new Date(), 'yyyy-MM-dd') : '')
+
+    const dbEnd = filters.dbDate?.to 
+        ? format(filters.dbDate.to, 'yyyy-MM-dd') 
+        : (filters.dbDate?.from ? format(new Date(), 'yyyy-MM-dd') : '')
+
+    const apiFilters = {
+      ...filters,
+      sourcingDateStart: filters.sourcingDate?.from ? format(filters.sourcingDate.from, 'yyyy-MM-dd') : '',
+      sourcingDateEnd: sourcingEnd,
+      dbDateStart: filters.dbDate?.from ? format(filters.dbDate.from, 'yyyy-MM-dd') : '',
+      dbDateEnd: dbEnd,
+    }
+
+    const response = await getPosts(1, 20, apiFilters)
     setPosts(response.posts)
     setPage(1)
     setHasMore(1 < response.totalPages)
@@ -90,10 +131,8 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
     setFilters({
       platform: 'all',
       status: 'pending',
-      sourcingDateStart: '',
-      sourcingDateEnd: '',
-      dbDateStart: '',
-      dbDateEnd: '',
+      sourcingDate: undefined,
+      dbDate: undefined,
       aiAnalyzed: true,
       poiDetected: false
     })
@@ -101,7 +140,11 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
 
   // Apply filters when they change
   useEffect(() => {
-    applyFilters()
+    // Debounce filter application to prevent rapid API calls while picking dates
+    const timer = setTimeout(() => {
+        applyFilters()
+    }, 500)
+    return () => clearTimeout(timer)
   }, [applyFilters])
 
   // Navigation logic
@@ -160,135 +203,148 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
   }
 
   return (
-    <div className="flex h-full relative">
+    <div className="flex h-full relative bg-slate-50/50">
       {/* Main Content - Table */}
       <div className="flex-1 overflow-y-auto p-6 transition-all duration-300">
+        
         {/* Filters Bar */}
-        <div className="bg-white rounded-lg shadow border border-gray-100 p-4 mb-4">
-          <div className="flex flex-col space-y-4">
-            <div className="flex items-center gap-2 border-b border-gray-100 pb-2">
-              <Filter className="h-4 w-4 text-gray-500" />
-              <span className="text-sm font-bold text-gray-700 uppercase tracking-wide">Search Filters</span>
-              {Object.entries(filters).some(([key, val]) => (key === 'aiAnalyzed' ? val === true : val !== 'all' && val !== '')) && (
-                <button
-                  onClick={clearFilters}
-                  className="ml-auto text-xs font-medium text-red-600 hover:text-red-800 flex items-center gap-1 bg-red-50 px-2 py-1 rounded"
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 mb-6">
+          <div className="flex flex-col space-y-5">
+            
+            {/* Header & Reset */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="bg-blue-50 p-1.5 rounded-md">
+                    <Filter className="h-4 w-4 text-blue-600" />
+                </div>
+                <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">Filters</h3>
+              </div>
+              
+              {/* Active Filter Counter / Reset */}
+              {(filters.status !== 'pending' || filters.platform !== 'all' || !filters.aiAnalyzed || filters.poiDetected || filters.sourcingDate || filters.dbDate) && (
+                <Button 
+                    variant="ghost" 
+                    size="sm"
+                    onClick={clearFilters}
+                    className="h-8 text-xs font-bold text-red-600 hover:text-red-700 hover:bg-red-50 px-3 transition-colors"
                 >
-                  <X className="h-3 w-3" />
-                  Reset All
-                </button>
+                  <X className="h-3 w-3 mr-1.5" />
+                  Reset Filters
+                </Button>
               )}
             </div>
 
-            <div className="flex flex-wrap items-end gap-6">
-              {/* Status Filter */}
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-gray-500 uppercase block">Status</label>
-                <select
-                  value={filters.status}
-                  onChange={(e) => setFilters({ ...filters, status: e.target.value })}
-                  className="px-3 py-2 text-sm border-gray-200 focus:ring-blue-500 focus:border-blue-500 rounded-lg border bg-gray-50 min-w-[140px]"
-                >
-                  <option value="pending">Pending</option>
-                  <option value="reviewed">Reviewed</option>
-                  <option value="all">All</option>
-                </select>
-              </div>
-              {/* Platform Filter */}
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-gray-500 uppercase block">Platform</label>
-                <select
-                  value={filters.platform}
-                  onChange={(e) => setFilters({ ...filters, platform: e.target.value })}
-                  className="px-3 py-2 text-sm border-gray-200 focus:ring-blue-500 focus:border-blue-500 rounded-lg border bg-gray-50 min-w-[140px]"
-                >
-                  <option value="all">All Platforms</option>
-                  <option value="instagram">Instagram</option>
-                  <option value="facebook">Facebook</option>
-                  <option value="x">X (Twitter)</option>
-                </select>
-              </div>
+            <Separator className="bg-slate-100" />
 
-              {/* AI Filter */}
-              <div className="flex items-center gap-6 self-center pt-4">
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    id="aiAnalyzed"
-                    checked={filters.aiAnalyzed}
-                    onChange={(e) => setFilters({ ...filters, aiAnalyzed: e.target.checked })}
-                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                  />
-                  <label htmlFor="aiAnalyzed" className="text-xs font-bold text-gray-600 uppercase flex items-center gap-1 cursor-pointer">
-                    <Sparkles className="w-3 h-3 text-blue-500" />
-                    AI Analyzed Only
-                  </label>
+            <div className="flex flex-col gap-6">
+              
+              {/* Primary Filters Row */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                 {/* Status Filter */}
+                <div className="space-y-1.5">
+                    <Label className="text-xs font-bold text-slate-500 uppercase">Review Status</Label>
+                    <Select 
+                        value={filters.status} 
+                        onValueChange={(val) => setFilters({ ...filters, status: val })}
+                    >
+                        <SelectTrigger className="w-full bg-white border-slate-200">
+                            <SelectValue placeholder="Select Status" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="pending">Pending Review</SelectItem>
+                            <SelectItem value="reviewed">Reviewed</SelectItem>
+                            <SelectItem value="all">All Items</SelectItem>
+                        </SelectContent>
+                    </Select>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    id="poiDetected"
-                    checked={filters.poiDetected}
-                    onChange={(e) => setFilters({ ...filters, poiDetected: e.target.checked })}
-                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                  />
-                  <label htmlFor="poiDetected" className="text-xs font-bold text-gray-600 uppercase flex items-center gap-1 cursor-pointer">
-                    <Search className="w-3 h-3 text-blue-500" />
-                    POI Detected
-                  </label>
+                {/* Platform Filter */}
+                <div className="space-y-1.5">
+                    <Label className="text-xs font-bold text-slate-500 uppercase">Platform</Label>
+                    <Select 
+                        value={filters.platform} 
+                        onValueChange={(val) => setFilters({ ...filters, platform: val })}
+                    >
+                        <SelectTrigger className="w-full bg-white border-slate-200">
+                            <SelectValue placeholder="All Platforms" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Platforms</SelectItem>
+                            <SelectItem value="instagram">Instagram</SelectItem>
+                            <SelectItem value="facebook">Facebook</SelectItem>
+                            <SelectItem value="x">X (Twitter)</SelectItem>
+                        </SelectContent>
+                    </Select>
                 </div>
-              </div>
 
-              {/* Sourcing Date Range */}
-              <div className="space-y-1">
-                <div className="flex items-center gap-1 mb-1">
-                  <Calendar className="w-3 h-3 text-gray-400" />
-                  <label className="text-xs font-bold text-gray-500 uppercase block">Sourcing Date</label>
+                 {/* Sourcing Date Range */}
+                 <div className="space-y-1.5">
+                    <Label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1.5">
+                        <Calendar className="w-3.5 h-3.5" /> Sourcing Date
+                    </Label>
+                    <DatePickerWithRange 
+                        date={filters.sourcingDate}
+                        setDate={(date) => setFilters({ ...filters, sourcingDate: date })}
+                        placeholder="Select sourcing dates"
+                        className="w-full"
+                    />
                 </div>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="date"
-                    value={filters.sourcingDateStart}
-                    onChange={(e) => setFilters({ ...filters, sourcingDateStart: e.target.value })}
-                    className="px-3 py-2 text-sm border-gray-200 focus:ring-blue-500 focus:border-blue-500 rounded-lg border bg-gray-50"
-                  />
-                  <span className="text-gray-400">-</span>
-                  <input
-                    type="date"
-                    value={filters.sourcingDateEnd}
-                    onChange={(e) => setFilters({ ...filters, sourcingDateEnd: e.target.value })}
-                    className="px-3 py-2 text-sm border-gray-200 focus:ring-blue-500 focus:border-blue-500 rounded-lg border bg-gray-50"
-                  />
+
+                {/* DB Date Range */}
+                <div className="space-y-1.5">
+                    <Label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1.5">
+                        <Database className="w-3.5 h-3.5" /> Ingest Date
+                    </Label>
+                    <DatePickerWithRange 
+                        date={filters.dbDate}
+                        setDate={(date) => setFilters({ ...filters, dbDate: date })}
+                        placeholder="Select ingest dates"
+                        className="w-full"
+                    />
                 </div>
               </div>
 
-              {/* DB Date Range */}
-              <div className="space-y-1">
-                <div className="flex items-center gap-1 mb-1">
-                  <Database className="w-3 h-3 text-gray-400" />
-                  <label className="text-xs font-bold text-gray-500 uppercase block">DB Ingest Date</label>
-                </div>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="date"
-                    value={filters.dbDateStart}
-                    onChange={(e) => setFilters({ ...filters, dbDateStart: e.target.value })}
-                    className="px-3 py-2 text-sm border-gray-200 focus:ring-blue-500 focus:border-blue-500 rounded-lg border bg-gray-50"
-                  />
-                  <span className="text-gray-400">-</span>
-                  <input
-                    type="date"
-                    value={filters.dbDateEnd}
-                    onChange={(e) => setFilters({ ...filters, dbDateEnd: e.target.value })}
-                    className="px-3 py-2 text-sm border-gray-200 focus:ring-blue-500 focus:border-blue-500 rounded-lg border bg-gray-50"
-                  />
-                </div>
-              </div>
+              {/* Secondary Filters (Toggles) */}
+              <div className="flex items-center justify-between pt-2 border-t border-slate-50">
+                  <div className="flex items-center gap-6">
+                    <div className="flex items-center space-x-2">
+                        <Checkbox 
+                            id="aiAnalyzed" 
+                            checked={filters.aiAnalyzed}
+                            onCheckedChange={(checked) => setFilters({ ...filters, aiAnalyzed: checked })}
+                        />
+                        <label
+                            htmlFor="aiAnalyzed"
+                            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex items-center gap-1.5 text-slate-700"
+                        >
+                            <Sparkles className="w-3.5 h-3.5 text-blue-500" />
+                            AI Analyzed Only
+                        </label>
+                    </div>
 
-              <div className="ml-auto text-sm text-gray-500 flex items-center gap-2 self-center h-full pt-4">
-                {loading && <Loader2 className="h-4 w-4 animate-spin text-blue-500" />}
-                <span className="font-medium bg-gray-100 px-3 py-1 rounded-full">{posts.length} posts loaded</span>
+                    <div className="flex items-center space-x-2">
+                        <Checkbox 
+                            id="poiDetected" 
+                            checked={filters.poiDetected}
+                            onCheckedChange={(checked) => setFilters({ ...filters, poiDetected: checked })}
+                        />
+                        <label
+                            htmlFor="poiDetected"
+                            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex items-center gap-1.5 text-slate-700"
+                        >
+                            <Search className="w-3.5 h-3.5 text-blue-500" />
+                            POI Detected
+                        </label>
+                    </div>
+                  </div>
+
+                  {/* Results Count */}
+                  <div className="flex items-center gap-2 text-sm text-slate-500">
+                    {loading && <Loader2 className="h-4 w-4 animate-spin text-blue-600" />}
+                    <span className="font-bold bg-slate-100 text-slate-700 px-3 py-1 rounded-full text-xs border border-slate-200">
+                        {posts.length} results
+                    </span>
+                  </div>
               </div>
             </div>
           </div>
