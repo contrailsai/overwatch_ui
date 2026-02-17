@@ -4,23 +4,35 @@ import { createClient } from '@/utils/supabase/server'
 import clientPromise from '@/utils/mongodb/client'
 import { getSignedImageUrl } from '@/utils/aws/s3'
 
-export async function getDashboardData() {
+export async function getDashboardData(projectName) {
   const supabase = await createClient()
 
   // 1. Fetch daily_metrics with date ordering
-  const { data: dailyMetrics, error: metricsError } = await supabase
+  let query = supabase
     .from('daily_metrics')
     .select('*')
     .order('date', { ascending: true })
+
+  if (projectName) {
+    query = query.eq('project_name', projectName)
+  }
+
+  const { data: dailyMetrics, error: metricsError } = await query
 
   if (metricsError) {
     console.error('Error fetching daily metrics:', metricsError)
   }
 
   // 2. Fetch Takedown Cases with all details
-  const { data: takedownCases, error: takedownsError } = await supabase
+  let takedownQuery = supabase
     .from('takedown_cases')
     .select('*')
+
+  if (projectName) {
+    takedownQuery = takedownQuery.eq('project_name', projectName)
+  }
+
+  const { data: takedownCases, error: takedownsError } = await takedownQuery
 
   if (takedownsError) {
     console.error('Error fetching takedown cases:', takedownsError)
@@ -30,8 +42,23 @@ export async function getDashboardData() {
   let totalPosts = 0
   let recentPosts = []
   try {
+    let dbName = process.env.MONGO_DB_NAME
+    
+    // Fetch project-specific DB name if projectName is provided
+    if (projectName) {
+      const { data: projectData } = await supabase
+        .from('project')
+        .select('mongo_db_map')
+        .eq('project_name', projectName)
+        .single()
+      
+      if (projectData?.mongo_db_map) {
+        dbName = projectData.mongo_db_map
+      }
+    }
+
     const client = await clientPromise
-    const db = client.db(process.env.MONGO_DB_NAME)
+    const db = client.db(dbName)
     const collection = db.collection('Posts')
 
     totalPosts = await collection.countDocuments({})
@@ -205,13 +232,20 @@ export async function getDashboardData() {
   }
 }
 
-export async function getCases() {
+
+export async function getCases(projectName) {
   const supabase = await createClient()
 
-  const { data: cases, error } = await supabase
+  let query = supabase
     .from('cases_metadata')
     .select('*')
     .order('created_at', { ascending: false })
+
+  if (projectName) {
+    query = query.eq('project_name', projectName)
+  }
+
+  const { data: cases, error } = await query
 
   if (error) {
     console.error('Error fetching cases:', error)

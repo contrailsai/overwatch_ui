@@ -1,15 +1,47 @@
 'use server'
 
+import { createClient } from '@/utils/supabase/server'
 import clientPromise from '@/utils/mongodb/client'
 import { getSignedImageUrl } from '@/utils/aws/s3'
 import { sendSlackNotification } from '@/utils/slack'
 import { manageTakedownCase, trackTakedownEvent } from '@/utils/supabase/metrics'
 import { ObjectId } from 'mongodb'
 
+async function getProjectDetails() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!user) return null
+
+  const { data: clientDetails } = await supabase
+    .from('client_details')
+    .select('project_name')
+    .eq('id', user.id)
+    .single()
+
+  if (!clientDetails?.project_name) return null
+
+  const { data: project } = await supabase
+    .from('project')
+    .select('mongo_db_map')
+    .eq('project_name', clientDetails.project_name)
+    .single()
+
+  return {
+    projectName: clientDetails.project_name,
+    dbName: project?.mongo_db_map
+  }
+}
+
 export async function approveTakedown(caseId) {
   try {
+    const projectDetails = await getProjectDetails()
+    if (!projectDetails?.dbName) {
+      return { success: false, error: "Project configuration not found" }
+    }
+
     const client = await clientPromise
-    const db = client.db(process.env.MONGO_DB_NAME)
+    const db = client.db(projectDetails.dbName)
     const collection = db.collection('Posts')
 
     // 1. Fetch current post data for metrics/Supabase
@@ -65,8 +97,13 @@ export async function approveTakedown(caseId) {
 
 export async function getPriorityTakedowns() {
   try {
+    const projectDetails = await getProjectDetails()
+    if (!projectDetails?.dbName) {
+      return []
+    }
+
     const client = await clientPromise
-    const db = client.db(process.env.MONGO_DB_NAME)
+    const db = client.db(projectDetails.dbName)
     const collection = db.collection('Posts')
 
     // Fetch all requested takedowns (priority)
@@ -122,8 +159,12 @@ export async function getPriorityTakedowns() {
 
 export async function getRaisedCount() {
   try {
+    const projectDetails = await getProjectDetails()
+    if (!projectDetails?.dbName) {
+      return 0
+    }
     const client = await clientPromise
-    const db = client.db(process.env.MONGO_DB_NAME)
+    const db = client.db(projectDetails.dbName)
     const collection = db.collection('Posts')
     return await collection.countDocuments({ 'takedown_info.takedown_status': 'raised' })
   } catch (e) {
@@ -134,8 +175,12 @@ export async function getRaisedCount() {
 
 export async function getPosts(page = 1, limit = 20, filters = {}, sort = { field: 'created_at', direction: 'desc' }) {
   try {
+    const projectDetails = await getProjectDetails()
+    if (!projectDetails?.dbName) {
+      return { posts: [], totalCount: 0, page: 1, totalPages: 0 }
+    }
     const client = await clientPromise
-    const db = client.db(process.env.MONGO_DB_NAME)
+    const db = client.db(projectDetails.dbName)
     const collection = db.collection('Posts')
 
     const skip = (page - 1) * limit

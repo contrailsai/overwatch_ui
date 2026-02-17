@@ -3,21 +3,15 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Home, List, ShieldAlert, Settings, LogOut, LayoutDashboard, ShieldCheck } from 'lucide-react'
-import { useEffect, useState } from 'react'
-import { isReviewer } from '@/utils/permissions'
+import { useClient } from '@/context/ClientContext'
 
 export function Sidebar() {
   const pathname = usePathname()
-  const [showReviewCases, setShowReviewCases] = useState(false)
-
-  useEffect(() => {
-    // Check reviewer permission on mount
-    isReviewer().then(setShowReviewCases)
-  }, [])
+  const { user, clientDetails } = useClient()
 
   const navigation = [
     { name: 'Dashboard', href: '/', icon: LayoutDashboard, show: true },
-    { name: 'Review Cases', href: '/review-cases', icon: ShieldCheck, show: showReviewCases },
+    { name: 'Review Cases', href: '/review-cases', icon: ShieldCheck, show: clientDetails?.permission === "reviewer" },
     { name: 'Cases List', href: '/cases', icon: List, show: true },
     { name: 'Takedowns', href: '/takedowns', icon: ShieldAlert, show: true },
     { name: 'Configurations', href: '/configurations', icon: Settings, show: true },
@@ -71,6 +65,11 @@ export function Sidebar() {
         </div>
 
         <div className="p-2 border-t border-gray-200 overflow-hidden">
+          {/* {user && (
+            <div className="px-3 py-2 text-xs text-gray-500 truncate opacity-0 group-hover:opacity-100 transition-opacity duration-300 mb-2">
+              {user.email}
+            </div>
+          )} */}
           <form action="/auth/signout" method="post">
             <button
               type="submit"

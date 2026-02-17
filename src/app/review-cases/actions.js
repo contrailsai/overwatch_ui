@@ -8,10 +8,22 @@ import { getSignedImageUrl } from '@/utils/aws/s3'
 import { updateDailyMetrics, manageTakedownCase } from '@/utils/supabase/metrics'
 import { sendEmail } from '@/utils/email'
 
-export async function getPosts(page = 1, limit = 20, filters = {}) {
+export async function getPosts(project_name, page = 1, limit = 20, filters = {}) {
   try {
+
+    const supabase = await createClient()
+    let { data } = await supabase
+      .from('project')
+      .select('*')
+      .eq('project_name', project_name)
+      .single()
+
+    if (!data?.mongo_db_map) {
+      return { posts: [], totalPages: 0, totalCount: 0 }
+    }
+    console.log(data.mongo_db_map)
     const client = await clientPromise
-    const db = client.db(process.env.MONGO_DB_NAME)
+    const db = client.db(data.mongo_db_map)
     const collection = db.collection('Posts')
 
     const skip = (page - 1) * limit
@@ -228,6 +240,31 @@ export async function submitCaseReview(prevState, formData) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
+  if (!user) {
+    return { success: false, error: 'Authentication required' }
+  }
+
+  // 1. Fetch Client Details & Project Config FIRST
+  const { data: client_details } = await supabase
+    .from('client_details')
+    .select('*')
+    .eq('id', user.id)
+    .single()
+
+  if (!client_details?.project_name) {
+    return { success: false, error: 'User not assigned to a project' }
+  }
+
+  const { data: project } = await supabase
+    .from('project')
+    .select('mongo_db_map')
+    .eq('project_name', client_details.project_name)
+    .single()
+
+  if (!project?.mongo_db_map) {
+    return { success: false, error: 'Project database configuration missing' }
+  }
+
   const mongoId = formData.get('mongo_id')
 
   if (!mongoId) {
@@ -302,7 +339,7 @@ export async function submitCaseReview(prevState, formData) {
 
   try {
     const client = await clientPromise
-    const db = client.db(process.env.MONGO_DB_NAME)
+    const db = client.db(project.mongo_db_map) // Use Correct DB
     const collection = db.collection('Posts')
 
     // 1. Fetch existing post to get previous state
@@ -349,26 +386,7 @@ export async function submitCaseReview(prevState, formData) {
 
     // SEND A NOTIFICATION TO THE CLIENT ON THEIR SUPPORTED FORMAT
     if (suggest_takedown && !already_in_takedown) {
-      // FIND THE PROJECT THE REVIEWER IS LINKED TO
-      const { data: client_details } = await supabase
-        .from('client_details')
-        .select('*')
-        .eq('id', user.id)
-        .single()
-
-
-      if (!client_details) {
-        console.error('Could not find client details for reviewer:', user.id)
-        return {
-          success: true, // Still return success for the review itself
-          updatedFields: {
-            review_details,
-            takedown_info,
-            processed: true,
-            processed_at: new Date().toISOString()
-          }
-        }
-      }
+      // client_details is already fetched at the top
 
       // GET THE CLIENT'S NOTIFICATION CONFIG CONNECTED TO THIS PROJECT
       const { data: notification_data } = await supabase

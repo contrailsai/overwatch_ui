@@ -6,6 +6,32 @@ import { ObjectId } from 'mongodb'
 import { getSignedImageUrl, uploadFileToS3, getSignedDownloadUrl } from '@/utils/aws/s3'
 import { revalidatePath } from 'next/cache'
 
+async function getProjectDetails() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!user) return null
+
+  const { data: clientDetails } = await supabase
+    .from('client_details')
+    .select('project_name')
+    .eq('id', user.id)
+    .single()
+
+  if (!clientDetails?.project_name) return null
+
+  const { data: project } = await supabase
+    .from('project')
+    .select('mongo_db_map')
+    .eq('project_name', clientDetails.project_name)
+    .single()
+
+  return {
+    projectName: clientDetails.project_name,
+    dbName: project?.mongo_db_map
+  }
+}
+
 /**
  * Check if the current user has reviewer permissions
  */
@@ -35,11 +61,15 @@ export async function checkReviewerPermission() {
  * Fetch all active takedowns with filters and enriched MongoDB data
  */
 export async function getTakedowns(filters = {}) {
+  const projectDetails = await getProjectDetails()
+  if (!projectDetails?.projectName) return []
+
   const supabase = await createClient()
   
   let query = supabase
     .from('takedown_cases')
     .select('*')
+    .eq('project_name', projectDetails.projectName)
     .order('last_update_date', { ascending: false })
 
   if (filters.status && filters.status !== 'all') {
@@ -62,7 +92,7 @@ export async function getTakedowns(filters = {}) {
   // Enrich with MongoDB Data
   try {
     const client = await clientPromise
-    const db = client.db(process.env.MONGO_DB_NAME)
+    const db = client.db(projectDetails.dbName)
     
     // Collect IDs
     const mongoIds = takedowns
@@ -226,6 +256,9 @@ export async function getDocumentDownloadUrl(documentId) {
  * Fetch specific takedown details including Mongo post data and history
  */
 export async function getTakedownDetails(id) {
+  const projectDetails = await getProjectDetails()
+  if (!projectDetails?.projectName) return null
+
   const supabase = await createClient()
 
   // 1. Fetch Takedown Case
@@ -233,6 +266,7 @@ export async function getTakedownDetails(id) {
     .from('takedown_cases')
     .select('*')
     .eq('id', id)
+    .eq('project_name', projectDetails.projectName)
     .single()
 
   if (takedownError || !takedown) return null
@@ -248,7 +282,7 @@ export async function getTakedownDetails(id) {
   let post = null
   try {
     const client = await clientPromise
-    const db = client.db(process.env.MONGO_DB_NAME)
+    const db = client.db(projectDetails.dbName)
     
     // Try by mongo_id first if it's a valid ObjectId
     if (takedown.mongo_post_id && ObjectId.isValid(takedown.mongo_post_id)) {
@@ -312,6 +346,9 @@ export async function updateTakedown(id, updates, message) {
   const isReviewer = await checkReviewerPermission()
   if (!isReviewer) return { success: false, error: 'Unauthorized: Reviewer access required' }
 
+  const projectDetails = await getProjectDetails()
+  if (!projectDetails?.projectName) return { success: false, error: 'Unauthorized' }
+
   const supabase = await createClient()
   const user = (await supabase.auth.getUser()).data.user
 
@@ -324,6 +361,7 @@ export async function updateTakedown(id, updates, message) {
       last_update_date: new Date().toISOString()
     })
     .eq('id', id)
+    .eq('project_name', projectDetails.projectName)
 
   if (error) return { success: false, error: error.message }
 
@@ -349,6 +387,9 @@ export async function addTakedownNote(id, noteContent) {
     const isReviewer = await checkReviewerPermission()
     if (!isReviewer) return { success: false, error: 'Unauthorized: Reviewer access required' }
 
+    const projectDetails = await getProjectDetails()
+    if (!projectDetails?.projectName) return { success: false, error: 'Unauthorized' }
+
     const supabase = await createClient()
     const user = (await supabase.auth.getUser()).data.user
     
@@ -359,7 +400,10 @@ export async function addTakedownNote(id, noteContent) {
         .from('takedown_cases')
         .select('notes')
         .eq('id', id)
+        .eq('project_name', projectDetails.projectName)
         .single()
+    
+    if (!current) return { success: false, error: 'Case not found or unauthorized' }
         
     const newNotes = current?.notes ? `${current.notes}\n\n[${new Date().toLocaleDateString()}] ${noteContent}` : `[${new Date().toLocaleDateString()}] ${noteContent}`
     
@@ -371,6 +415,7 @@ export async function addTakedownNote(id, noteContent) {
             last_update_date: new Date().toISOString()
         })
         .eq('id', id)
+        .eq('project_name', projectDetails.projectName)
         
     if (error) return { success: false, error: error.message }
     

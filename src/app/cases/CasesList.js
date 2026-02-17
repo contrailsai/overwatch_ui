@@ -279,7 +279,7 @@ export function CasesList() {
       </div>
 
       {/* Main Table */}
-      <div className="flex-1 overflow-y-auto p-8 bg-gray-50/50">
+      <div className="flex-1 overflow-y-auto pb-32 p-8 bg-gray-50/50">
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
           <table className="min-w-full divide-y divide-gray-100">
             <thead className="bg-gray-50">

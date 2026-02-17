@@ -1,6 +1,7 @@
 'use client'
 
 import { usePathname } from 'next/navigation'
+import { ClientProvider } from '@/context/ClientContext'
 import { Sidebar } from './Sidebar'
 
 /**
@@ -19,8 +20,10 @@ export function AppLayout({ children }) {
 
     return (
         <div className="flex h-screen bg-gray-50 overflow-hidden">
-            <Sidebar />
-            {children}
+            <ClientProvider>
+                <Sidebar />
+                {children}
+            </ClientProvider>
         </div>
     )
 }
