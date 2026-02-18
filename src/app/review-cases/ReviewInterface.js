@@ -555,10 +555,14 @@ function ReviewForm({ post, onClose, onNavigate, hasPrev, hasNext, setPosts }) {
     if (aiCategory.includes('aigc') || aiReasoning.includes('aigc') || aiReasoning.includes('ai generated')) savedTypes.push('aigc')
 
     // B. Structure Check Objects
+    if (!analysis.truth_check?.is_credible) savedTypes.push('fake_news')
     if (analysis.aigc_check?.is_aigc) savedTypes.push('aigc')
-    if (analysis.nsfw_check?.is_safe === false) savedTypes.push('nsfw')
-    if (analysis.hate_speech_check?.is_safe === false) savedTypes.push('hate_speech')
-    if (analysis.truth_check?.is_credible === false) savedTypes.push('fake_news')
+    if (analysis.nsfw_check?.is_safe) savedTypes.push('nsfw')
+    if (analysis.hate_speech_check?.is_safe) savedTypes.push('hate_speech')
+    if (analysis.fraud_check?.is_safe) savedTypes.push('fraud')
+    if (analysis.humor_check?.is_safe) savedTypes.push('humor')
+    if (analysis.truth_check?.is_credible) savedTypes.push('fake_news')
+    if (analysis.asset_misuse_check?.is_safe) savedTypes.push('asset_misuse')
 
     // C. Fallback
     savedTypes = [...new Set(savedTypes)]
@@ -613,6 +617,7 @@ function ReviewForm({ post, onClose, onNavigate, hasPrev, hasNext, setPosts }) {
 
   return (
     <div className="h-full flex flex-col bg-background">
+      {/* TOP */}
       <div className="px-6 py-4 border-b flex items-center justify-between bg-background sticky top-0 z-10">
         <div className="flex items-center space-x-4">
           <h2 className="text-lg font-bold text-slate-900">Review Case</h2>
@@ -756,10 +761,14 @@ function ReviewForm({ post, onClose, onNavigate, hasPrev, hasNext, setPosts }) {
               <input type="hidden" name="poi_present" value={poiPresent.toString()} />
               <input type="hidden" name="poi_confirmed" value={poiPresent ? 'on' : 'off'} />
 
-              <input type="hidden" name="is_hate_speech" value={threatTypes.includes('hate_speech') ? 'on' : 'off'} />
-              <input type="hidden" name="is_nsfw" value={threatTypes.includes('nsfw') ? 'on' : 'off'} />
               <input type="hidden" name="is_fake_news" value={threatTypes.includes('fake_news') ? 'on' : 'off'} />
               <input type="hidden" name="is_aigc" value={threatTypes.includes('aigc') ? 'on' : 'off'} />
+              <input type="hidden" name="is_nsfw" value={threatTypes.includes('nsfw') ? 'on' : 'off'} />
+              <input type="hidden" name="is_hate_speech" value={threatTypes.includes('hate_speech') ? 'on' : 'off'} />
+              <input type="hidden" name="is_fraud" value={threatTypes.includes('fraud') ? 'on' : 'off'} />
+              <input type="hidden" name="is_humor" value={threatTypes.includes('humor') ? 'on' : 'off'} />
+              <input type="hidden" name="is_asset_misuse" value={threatTypes.includes('asset_misuse') ? 'on' : 'off'} />
+
 
               <input type="hidden" name="face_present" value={facePresent.toString()} />
               <input type="hidden" name="name_present" value={namePresent.toString()} />
@@ -838,10 +847,11 @@ function ReviewForm({ post, onClose, onNavigate, hasPrev, hasNext, setPosts }) {
                 <div className="bg-white p-6 rounded-xl border-2 border-slate-100 shadow-sm space-y-6">
                   <div className="grid grid-cols-2 gap-4">
                     {[
-                      { id: 'scam', label: 'Scam / Fraud' },
-                      { id: 'hate_speech', label: 'Hate Speech' },
-                      { id: 'nsfw', label: 'NSFW' },
                       { id: 'aigc', label: 'AI Generated' },
+                      { id: 'nsfw', label: 'NSFW' },
+                      { id: 'hate_speech', label: 'Hate Speech' },
+                      { id: 'fraud', label: 'Fraud' },
+                      { id: 'scam', label: 'Scam / Fraud' },
                       { id: 'fake_news', label: 'Fake News' },
                       { id: 'humor', label: 'Humor / Satire' }
                     ].map((item) => (

@@ -46,5 +46,7 @@ export default async function Home() {
   // 4. Fetch dashboard data for this specific project
   const data = await getDashboardData(clientDetails.project_name)
 
+  // console.log(data)
+
   return <DashboardContent data={data} />
 }

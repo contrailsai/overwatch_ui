@@ -43,7 +43,7 @@ export async function getDashboardData(projectName) {
   let recentPosts = []
   try {
     let dbName = process.env.MONGO_DB_NAME
-    
+
     // Fetch project-specific DB name if projectName is provided
     if (projectName) {
       const { data: projectData } = await supabase
@@ -51,7 +51,7 @@ export async function getDashboardData(projectName) {
         .select('mongo_db_map')
         .eq('project_name', projectName)
         .single()
-      
+
       if (projectData?.mongo_db_map) {
         dbName = projectData.mongo_db_map
       }
@@ -99,14 +99,15 @@ export async function getDashboardData(projectName) {
   const takedownsData = takedownCases || []
 
   // === Summary Metrics ===
-  const totalReviewed = metricsData.reduce((acc, curr) => acc + (curr.total_reviewed || 0), 0)
-  const totalSafe = metricsData.reduce((acc, curr) => acc + (curr.threat_safe_count || 0), 0)
   const totalRiskHigh = metricsData.reduce((acc, curr) => acc + (curr.risk_high_count || 0), 0)
   const totalRiskMedium = metricsData.reduce((acc, curr) => acc + (curr.risk_medium_count || 0), 0)
   const totalRiskLow = metricsData.reduce((acc, curr) => acc + (curr.risk_low_count || 0), 0)
   const totalRiskSafe = metricsData.reduce((acc, curr) => acc + (curr.risk_safe_count || 0), 0)
 
-  const totalThreats = totalReviewed - totalSafe
+  // Calculate totalReviewed and totalThreats by summing risk buckets 
+  // This is more robust than relying on 'total_reviewed' which might be misaligned in DB
+  const totalReviewed = totalRiskHigh + totalRiskMedium + totalRiskLow + totalRiskSafe
+  const totalThreats = totalRiskHigh + totalRiskMedium + totalRiskLow
   const totalTakedownsInitiated = metricsData.reduce((acc, curr) => acc + (curr.takedowns_initiated || 0), 0)
 
   // Takedown Status Counts
@@ -151,8 +152,8 @@ export async function getDashboardData(projectName) {
         takedowns: 0
       }
     }
-    platformMetrics[platform].reviewed += (row.total_reviewed || 0)
-    platformMetrics[platform].threats += ((row.total_reviewed || 0) - (row.threat_safe_count || 0))
+    platformMetrics[platform].reviewed += ((row.risk_high_count || 0) + (row.risk_medium_count || 0) + (row.risk_low_count || 0) + (row.risk_safe_count || 0))
+    platformMetrics[platform].threats += ((row.risk_high_count || 0) + (row.risk_medium_count || 0) + (row.risk_low_count || 0))
     platformMetrics[platform].takedowns += (row.takedowns_initiated || 0)
   })
   const platformDistribution = Object.values(platformMetrics)
@@ -163,8 +164,8 @@ export async function getDashboardData(projectName) {
     return {
       date: dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
       fullDate: row.date,
-      reviewed: row.total_reviewed || 0,
-      threats: (row.total_reviewed || 0) - (row.threat_safe_count || 0),
+      reviewed: (row.risk_high_count || 0) + (row.risk_medium_count || 0) + (row.risk_low_count || 0) + (row.risk_safe_count || 0),
+      threats: (row.risk_high_count || 0) + (row.risk_medium_count || 0) + (row.risk_low_count || 0),
       highRisk: row.risk_high_count || 0,
       mediumRisk: row.risk_medium_count || 0,
       lowRisk: row.risk_low_count || 0,
