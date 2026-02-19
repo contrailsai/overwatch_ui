@@ -1,12 +1,12 @@
 'use client'
 
 import { useState, useActionState, useEffect, useRef, useCallback } from 'react'
-import { submitCaseReview, getPosts, getCaseMetadata } from './actions'
+import { submitCaseReview, getPosts, getCaseMetadata, getAllPostsForExport } from './actions'
 import {
   Loader2, X, CheckCircle, AlertTriangle, ExternalLink,
   ThumbsUp, MessageCircle, Eye, ChevronLeft, ChevronRight, Filter, Share2,
   Search, ShieldAlert, Bot, Sparkles, Brain, Calendar, Database, Plus,
-  Instagram, Facebook, Twitter, Heart, Activity, BadgeCheck, Quote, User
+  Instagram, Facebook, Twitter, Heart, Activity, BadgeCheck, Quote, User, Download
 } from 'lucide-react'
 import ProfilePic from '@/components/ProfilePic'
 
@@ -127,6 +127,94 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
     setLoading(false)
   }, [filters, projectName])
 
+  const handleExportCSV = async () => {
+    setLoading(true)
+    try {
+      const sourcingEnd = filters.sourcingDate?.to
+        ? format(filters.sourcingDate.to, 'yyyy-MM-dd')
+        : (filters.sourcingDate?.from ? format(new Date(), 'yyyy-MM-dd') : '')
+
+      const dbEnd = filters.dbDate?.to
+        ? format(filters.dbDate.to, 'yyyy-MM-dd')
+        : (filters.dbDate?.from ? format(new Date(), 'yyyy-MM-dd') : '')
+
+      const apiFilters = {
+        ...filters,
+        sourcingDateStart: filters.sourcingDate?.from ? format(filters.sourcingDate.from, 'yyyy-MM-dd') : '',
+        sourcingDateEnd: sourcingEnd,
+        dbDateStart: filters.dbDate?.from ? format(filters.dbDate.from, 'yyyy-MM-dd') : '',
+        dbDateEnd: dbEnd,
+      }
+
+      const { posts: allPosts } = await getAllPostsForExport(projectName, apiFilters)
+
+      if (!allPosts || allPosts.length === 0) {
+        alert("No posts found to export.")
+        return
+      }
+
+      // CSV Headers in requested sequence
+      const headers = [
+        "MongoDB ID",
+        "Post ID",
+        "Original URL",
+        "Caption",
+        "Platform",
+        "Author URL",
+        "Author Username",
+        "Author Full Name",
+        "Timestamp",
+        "Likes",
+        "Comments",
+        "Views",
+        "Shares",
+        "Retweets",
+        "Quotes",
+        "Replies"
+      ]
+
+      const csvRows = [
+        headers.join(','),
+        ...allPosts.map(post => {
+          const row = [
+            `"${post._id}"`,
+            `"${post.post_id}"`,
+            `"${post.url}"`,
+            `"${(post.caption || '').replace(/"/g, '""').replace(/\n/g, ' ')}"`,
+            `"${post.platform}"`,
+            `"${post.author_url}"`,
+            `"${post.author_username}"`,
+            `"${post.author_name}"`,
+            `"${post.posted_at}"`,
+            post.likes,
+            post.comments,
+            post.views,
+            post.shares,
+            post.retweets,
+            post.quotes,
+            post.replies
+          ]
+          return row.join(',')
+        })
+      ]
+
+      const csvString = csvRows.join('\n')
+      const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.setAttribute('download', `cases_export_${format(new Date(), 'yyyyMMdd_HHmmss')}.csv`)
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+    } catch (error) {
+      console.error('Export Error:', error)
+      alert('Failed to export CSV. Please try again.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const clearFilters = () => {
     setFilters({
       platform: 'all',
@@ -225,18 +313,31 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
                 <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">Filters</h3>
               </div>
 
-              {/* Active Filter Counter / Reset */}
-              {(filters.status !== 'pending' || filters.platform !== 'all' || !filters.aiAnalyzed || filters.poiDetected || filters.sourcingDate || filters.dbDate) && (
+              <div className="flex items-center gap-3">
                 <Button
-                  variant="ghost"
+                  variant="outline"
                   size="sm"
-                  onClick={clearFilters}
-                  className="h-8 text-xs font-bold text-red-600 hover:text-red-700 hover:bg-red-50 px-3 transition-colors"
+                  onClick={handleExportCSV}
+                  disabled={loading || posts.length === 0}
+                  className="h-8 text-xs font-bold text-blue-600 border-blue-200 hover:bg-blue-50 px-3 transition-colors"
                 >
-                  <X className="h-3 w-3 mr-1.5" />
-                  Reset Filters
+                  <Download className="h-3.5 w-3.5 mr-1.5" />
+                  Download CSV
                 </Button>
-              )}
+
+                {/* Active Filter Counter / Reset */}
+                {(filters.status !== 'pending' || filters.platform !== 'all' || !filters.aiAnalyzed || filters.poiDetected || filters.sourcingDate || filters.dbDate) && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={clearFilters}
+                    className="h-8 text-xs font-bold text-red-600 hover:text-red-700 hover:bg-red-50 px-3 transition-colors"
+                  >
+                    <X className="h-3 w-3 mr-1.5" />
+                    Reset Filters
+                  </Button>
+                )}
+              </div>
             </div>
 
             <Separator className="bg-slate-100" />
@@ -557,12 +658,12 @@ function ReviewForm({ post, onClose, onNavigate, hasPrev, hasNext, setPosts }) {
     // B. Structure Check Objects
     if (!analysis.truth_check?.is_credible) savedTypes.push('fake_news')
     if (analysis.aigc_check?.is_aigc) savedTypes.push('aigc')
-    if (analysis.nsfw_check?.is_safe) savedTypes.push('nsfw')
-    if (analysis.hate_speech_check?.is_safe) savedTypes.push('hate_speech')
-    if (analysis.fraud_check?.is_safe) savedTypes.push('fraud')
-    if (analysis.humor_check?.is_safe) savedTypes.push('humor')
-    if (analysis.truth_check?.is_credible) savedTypes.push('fake_news')
-    if (analysis.asset_misuse_check?.is_safe) savedTypes.push('asset_misuse')
+    if (!analysis.nsfw_check?.is_safe) savedTypes.push('nsfw')
+    if (!analysis.hate_speech_check?.is_safe) savedTypes.push('hate_speech')
+    if (!analysis.fraud_check?.is_safe) savedTypes.push('fraud')
+    if (!analysis.humor_check?.is_safe) savedTypes.push('humor')
+    if (!analysis.truth_check?.is_credible) savedTypes.push('fake_news')
+    if (!analysis.asset_misuse_check?.is_safe) savedTypes.push('asset_misuse')
 
     // C. Fallback
     savedTypes = [...new Set(savedTypes)]
@@ -587,8 +688,30 @@ function ReviewForm({ post, onClose, onNavigate, hasPrev, hasNext, setPosts }) {
 
   // Derived Accessors
   const poiPresent = facePresent || namePresent
-  const defaultReasoning = review.reasoning || analysis.categorization_reason || '';
+  // const defaultReasoning = review?.reasoning + " \n " + analysis?.categorization_reason + " \n " + analysis?.threat_category + " \n " + ;
   const defaultComments = review.reviewer_comments || '';
+
+  const full_analysis_reasonning = `REASONING: ${analysis?.reasoning ? analysis?.reasoning + "| " : ""} ${analysis?.threat_category ? analysis?.threat_category + "| " : ""} ${analysis?.categorization_reason ? analysis?.categorization_reason + "| " : ""}
+
+
+  "nsfw check": ${analysis?.nsfw_check?.reasoning}
+  
+  
+  "hate speech check": ${analysis?.hate_speech_check?.reasoning}
+  
+  
+  "fraud check": ${analysis?.fraud_check?.reasoning}
+  
+  
+  "humor check": ${analysis?.humor_check?.reasoning}
+  
+
+  "truth check": ${analysis?.truth_check?.explanation}
+
+
+  "asset misuse check": ${analysis?.asset_misuse_check?.reasoning}
+  `
+
 
   const getPostLink = () => {
     const id = post.post_id || post.code
@@ -851,9 +974,10 @@ function ReviewForm({ post, onClose, onNavigate, hasPrev, hasNext, setPosts }) {
                       { id: 'nsfw', label: 'NSFW' },
                       { id: 'hate_speech', label: 'Hate Speech' },
                       { id: 'fraud', label: 'Fraud' },
-                      { id: 'scam', label: 'Scam / Fraud' },
+                      // { id: 'scam', label: 'Scam / Fraud' },
                       { id: 'fake_news', label: 'Fake News' },
-                      { id: 'humor', label: 'Humor / Satire' }
+                      { id: 'humor', label: 'Humor / Satire' },
+                      { id: 'asset_misuse', label: 'POI Assets Misuse' }
                     ].map((item) => (
                       <div
                         key={item.id}
@@ -884,9 +1008,9 @@ function ReviewForm({ post, onClose, onNavigate, hasPrev, hasNext, setPosts }) {
                     <Textarea
                       id="reasoning"
                       name="reasoning"
-                      defaultValue={defaultReasoning}
+                      defaultValue={full_analysis_reasonning}
                       placeholder="Describe the findings and analysis..."
-                      className="min-h-[120px] bg-white border-2 border-slate-100 focus:border-blue-500 text-slate-900"
+                      className="min-h-[200px] bg-white border-2 border-slate-100 focus:border-blue-500 text-slate-900"
                     />
                   </div>
                 </div>

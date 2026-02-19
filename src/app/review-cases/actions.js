@@ -183,6 +183,111 @@ export async function getPosts(project_name, page = 1, limit = 20, filters = {})
   }
 }
 
+export async function getAllPostsForExport(project_name, filters = {}) {
+  try {
+    const supabase = await createClient()
+    let { data } = await supabase
+      .from('project')
+      .select('*')
+      .eq('project_name', project_name)
+      .single()
+
+    if (!data?.mongo_db_map) {
+      return { posts: [] }
+    }
+
+    const client = await clientPromise
+    const db = client.db(data.mongo_db_map)
+    const collection = db.collection('Posts')
+
+    // Build query with filters (same logic as getPosts)
+    const query = { $and: [] }
+
+    if (filters.status === 'pending') {
+      query.$and.push({ "review_details.threat_score": { $exists: false } })
+    } else if (filters.status === 'reviewed') {
+      query.$and.push({ "review_details.threat_score": { $exists: true } })
+    }
+
+    if (filters.aiAnalyzed) {
+      query.$and.push({ "analysis_results.risk_score": { $exists: true } })
+    }
+
+    if (filters.poiDetected) {
+      query.$and.push({
+        $or: [
+          { "analysis_results.poi_check.poi_name_found": true },
+          { "analysis_results.poi_check.face_present": true }
+        ]
+      })
+    }
+
+    if (filters.platform && filters.platform !== 'all') {
+      query.$and.push({ platform: filters.platform })
+    }
+
+    if (filters.sourcingDateStart || filters.sourcingDateEnd) {
+      const sourcingQuery = {}
+      if (filters.sourcingDateStart) {
+        const start = new Date(`${filters.sourcingDateStart}T00:00:00.000Z`)
+        if (!isNaN(start)) sourcingQuery.$gte = start
+      }
+      if (filters.sourcingDateEnd) {
+        const end = new Date(`${filters.sourcingDateEnd}T23:59:59.999Z`)
+        if (!isNaN(end)) sourcingQuery.$lte = end
+      }
+      if (Object.keys(sourcingQuery).length > 0) {
+        query.$and.push({ 'metadata.sourcing_date': sourcingQuery })
+      }
+    }
+
+    if (filters.dbDateStart || filters.dbDateEnd) {
+      const dbDateQuery = {}
+      if (filters.dbDateStart) {
+        const start = new Date(`${filters.dbDateStart}T00:00:00.000Z`)
+        if (!isNaN(start)) dbDateQuery.$gte = start
+      }
+      if (filters.dbDateEnd) {
+        const end = new Date(`${filters.dbDateEnd}T23:59:59.999Z`)
+        if (!isNaN(end)) dbDateQuery.$lte = end
+      }
+      if (Object.keys(dbDateQuery).length > 0) {
+        query.$and.push({ 'metadata.created_at': dbDateQuery })
+      }
+    }
+
+    const finalQuery = query.$and.length > 0 ? query : {}
+
+    const posts = await collection.find(finalQuery)
+      .sort({ 'metadata.created_at': -1 })
+      .toArray()
+
+    const processedPosts = posts.map(post => ({
+      _id: post._id.toString(),
+      post_id: post.post_id || post.code || '',
+      url: post.original_url || post.result_origin?.source_url || '',
+      caption: post.post_content?.caption || post.caption || '',
+      platform: post.platform || '',
+      author_url: post.profile?.profile_url || post.author?.url || '',
+      author_username: post.profile?.username || '',
+      author_name: post.profile?.display_name || post.author?.name || '',
+      posted_at: post.engagement?.posted_at ? new Date(post.engagement.posted_at).toISOString() : (post.metadata?.sourcing_date ? new Date(post.metadata.sourcing_date).toISOString() : ''),
+      likes: post.engagement?.likes || 0,
+      comments: post.engagement?.comments || 0,
+      views: post.engagement?.views || 0,
+      shares: post.engagement?.shares || 0,
+      retweets: post.engagement?.retweets || 0,
+      quotes: post.engagement?.quotes || 0,
+      replies: post.engagement?.replies || 0
+    }))
+
+    return { posts: processedPosts }
+  } catch (e) {
+    console.error('MongoDB Export Error:', e)
+    return { posts: [] }
+  }
+}
+
 
 async function sendNotification(notification_config, type) {
   try {

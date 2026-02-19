@@ -1,0 +1,179 @@
+{
+    "_id": "6994539bd954acef4dc2fa46",
+    "code": "BvHEL62AZK9",
+    "analysis_results": {
+        "risk_score": 80,
+        "category": "high_risk",
+        "categorization_reason": "Identified issues: Asset Misuse, Harassment, Humor POIs identified: Narendra Modi.",
+        "poi_check": {
+            "face_present": false,
+            "poi_name_found": true,
+            "poi_names": [
+                "Narendra Modi"
+            ],
+            "face_bbox": [],
+            "confidence": 0.5
+        },
+        "truth_check": {
+            "is_credible": true,
+            "explanation": "Automatic check passed",
+            "sources": []
+        },
+        "aigc_check": {
+            "is_aigc": false,
+            "score": 0,
+            "provider": "local_ensemble"
+        },
+        "nsfw_check": {
+            "is_safe": true,
+            "reasoning": "The OCR text is a Gujarati meme with no explicit, suggestive, or violent content—it appears to be a playful, nonsensical phrase ('गांडी ज्या̃ सुधी...') with no hidden subtext. The hashtags (#prem, #love, #gujaratifood) and user context (celebratory, regional pride) align with harmless social sharing. No NSFW intent or proximity detected.",
+            "category": "NSFW",
+            "risk_level": "None"
+        },
+        "hate_speech_check": {
+            "is_safe": false,
+            "reasoning": "The Gujarati text ('गांडी ज्या̃ सुधी तुं मारी साठे चे ने / या सुधी हुं तने क्यारेय दुःखी नहीं / हवा दांडू..') contains **dehumanizing and mocking undertones**, framing a person or group as inferior ('गांडी'—a derogatory slang term for 'black' or 'dark-skinned') while dismissing their suffering ('दुःखी नहीं'). The hashtags (#gujjugram, #gujjumemes) suggest a **dog-whistle** to a specific in-group, reinforcing exclusionary humor. This aligns with **targeted bullying** and **hateful subtext**, violating harassment norms.",
+            "category": "HARASSMENT (Dehumanization + Dog-Whistle)",
+            "risk_level": "High"
+        },
+        "fraud_check": {
+            "is_safe": true,
+            "reasoning": "The content is a **non-fraudulent Gujarati meme** with no deceptive tactics, financial red-flags, or artificial urgency. The OCR text is a playful, nonsensical phrase (likely a cultural reference or joke), and the hashtags (#gujjugram, #gujjumemes) align with harmless regional humor. No subtext or pivot to scams exists—this is **low-risk, community-driven content** with no fraudulent intent.",
+            "category": "FRAUD (Negative)",
+            "risk_level": "None"
+        },
+        "humor_check": {
+            "is_safe": false,
+            "reasoning": "The Gujarati text ('गांडी ज्या̃ सुधी...') appears to mock a regional stereotype ('Gandhi' as a cultural shorthand for a specific Gujarati identity) while framing it as harmless humor. However, the phrasing ('हवा दांडू..')—a colloquial, potentially derogatory term—pivots into **punching down** by targeting a marginalized group (likely Dalits or lower castes) under the guise of satire. The hashtags (#gujjugram, #gujjumemes) amplify in-group signaling, obscuring malicious intent. **No clear satirical target**—just coded hostility.",
+            "category": "Humor (Malicious Satire)",
+            "risk_level": "High"
+        },
+        "asset_misuse_check": {
+            "is_safe": false,
+            "reasoning": "The meme uses a black-and-white photograph resembling **Narendra Modi** (POI) without explicit permission, paired with Gujarati text that could imply satirical or mocking intent (*'गांडी ज्या̃ सुधी...'*—a play on his name/identity). While not overtly defamatory, the unauthorized use of his likeness for third-party gain (e.g., engagement via hashtags like *#gujjumemes*) violates **asset misuse** norms, especially if tied to commercial or exploitative motives.",
+            "category": "ASSET_MISUSE",
+            "risk_level": "Medium"
+        },
+        "verbs_nouns": {
+            "verbs": [
+                "सुधी",
+                "दुःखी",
+                "हवा दांडू"
+            ],
+            "nouns": [
+                "गांडी",
+                "साठे",
+                "ने",
+                "हुं",
+                "तने",
+                "क्यारेय",
+                "दुःखी",
+                "हवा",
+                "दांडू"
+            ]
+        },
+        "analyzed_at": "2026-02-18T11:10:59.586Z"
+    },
+    "author": {
+        "name": "લપરી છોકરી -- Lapari",
+        "url": "https://instagram.com/lapari_"
+    },
+    "caption": "#prem #love #gujaratifood #gujjurocks #gujju #gujaratiwedding #gujjus #gujarati #gujjugram #gujjumemes #porbandar #jamnagar #rajkot #surat #junagadh #bhavnagar #morbi #malhar #gujjubhai #song #anand #modi #like4like #kisses",
+    "content": "#prem #love #gujaratifood #gujjurocks #gujju #gujaratiwedding #gujjus #gujarati #gujjugram #gujjumemes #porbandar #jamnagar #rajkot #surat #junagadh #bhavnagar #morbi #malhar #gujjubhai #song #anand #modi #like4like #kisses",
+    "created_at": "2026-02-17T11:40:10.914Z",
+    "engagement": {
+        "likes": 113,
+        "comments": 3,
+        "shares": 0,
+        "retweets": 0,
+        "quotes": 0,
+        "replies": 0,
+        "views": null,
+        "posted_at": "2019-03-17T13:03:02.000Z"
+    },
+    "id": "2001586970672861885",
+    "media_urls": [
+        {
+            "original_url": "https://scontent-maa5-1.cdninstagram.com/v/t51.2885-15/53611107_172106063777932_2489098021821779527_n.jpg?stp=dst-jpg_e35_tt6&efg=eyJ2ZW5jb2RlX3RhZyI6IkZFRUQuaW1hZ2VfdXJsZ2VuLjEwODB4MTA4MC5zZHIuZjI4ODUuZGVmYXVsdF9pbWFnZS5jMiJ9&_nc_ht=scontent-maa5-1.cdninstagram.com&_nc_cat=104&_nc_oc=Q6cZ2QGvLuJyvr8oEd04WbGX0iW86Vwc_rGk4jCeDKQYsQL6eS910R-D8DLvdjVooMpdz3k&_nc_ohc=TnVr2TDRoeUQ7kNvwEmNtLH&_nc_gid=H1y02pKo2F5FOIvCVaBrzA&edm=AFlAz-oBAAAA&ccb=7-5&ig_cache_key=MjAwMTU4Njk3MDY3Mjg2MTg4NQ%3D%3D.3-ccb7-5&oh=00_AftkZcufphKKbp2MxAywL9eK9_THz1pAIfaqQO8br7ofgg&oe=699A25C8&_nc_sid=76c0fc",
+            "s3_url": "https://cxo-demo.s3.ap-south-1.amazonaws.com/instagram_data/lapari_/BvHEL62AZK9/0.jpg"
+        }
+    ],
+    "metadata": {
+        "created_at": "2026-02-17T11:40:10.914Z",
+        "updated_at": "2026-02-17T11:40:10.914Z",
+        "sourcing_date": "2019-03-17T13:03:02.000Z",
+        "update_history": [
+            {
+                "updated_at": "2026-02-17T11:40:10.914Z",
+                "updated_by": "migration_script_v1",
+                "changes_summary": "Initial schema migration to v1"
+            }
+        ],
+        "schema_version": 1
+    },
+    "original_url": "https://www.instagram.com/p/BvHEL62AZK9/",
+    "platform": "instagram",
+    "post_content": {
+        "caption": "#prem #love #gujaratifood #gujjurocks #gujju #gujaratiwedding #gujjus #gujarati #gujjugram #gujjumemes #porbandar #jamnagar #rajkot #surat #junagadh #bhavnagar #morbi #malhar #gujjubhai #song #anand #modi #like4like #kisses",
+        "media_urls": [
+            {
+                "type": "image",
+                "s3_url": "https://cxo-demo.s3.ap-south-1.amazonaws.com/instagram_data/lapari_/BvHEL62AZK9/0.jpg",
+                "thumbnail_url": null,
+                "original_url": "https://scontent-maa5-1.cdninstagram.com/v/t51.2885-15/53611107_172106063777932_2489098021821779527_n.jpg?stp=dst-jpg_e35_tt6&efg=eyJ2ZW5jb2RlX3RhZyI6IkZFRUQuaW1hZ2VfdXJsZ2VuLjEwODB4MTA4MC5zZHIuZjI4ODUuZGVmYXVsdF9pbWFnZS5jMiJ9&_nc_ht=scontent-maa5-1.cdninstagram.com&_nc_cat=104&_nc_oc=Q6cZ2QGvLuJyvr8oEd04WbGX0iW86Vwc_rGk4jCeDKQYsQL6eS910R-D8DLvdjVooMpdz3k&_nc_ohc=TnVr2TDRoeUQ7kNvwEmNtLH&_nc_gid=H1y02pKo2F5FOIvCVaBrzA&edm=AFlAz-oBAAAA&ccb=7-5&ig_cache_key=MjAwMTU4Njk3MDY3Mjg2MTg4NQ%3D%3D.3-ccb7-5&oh=00_AftkZcufphKKbp2MxAywL9eK9_THz1pAIfaqQO8br7ofgg&oe=699A25C8&_nc_sid=76c0fc"
+            }
+        ],
+        "post_type": "feed",
+        "language": null
+    },
+    "post_id": "BvHEL62AZK9",
+    "processed": true,
+    "processed_at": "2026-02-18T11:10:59.586Z",
+    "profile": {
+        "platform_user_id": "6723839496",
+        "username": "lapari_",
+        "display_name": "લપરી છોકરી -- Lapari",
+        "profile_url": "https://instagram.com/lapari_",
+        "is_verified": false
+    },
+    "result_origin": {
+        "type": "instagram_passive_listener",
+        "source_url": "https://www.instagram.com/explore/search/keyword/?q=%23modikisses"
+    },
+    "review_details": {},
+    "s3_stored": true,
+    "sourcing_date": "2019-03-17T13:03:02.000Z",
+    "stats": {
+        "like_count": 113,
+        "comment_count": 3,
+        "view_count": 0,
+        "share_count": 0,
+        "retweet_count": 0,
+        "quote_count": 0,
+        "reply_count": 0
+    },
+    "supabase_refs": {
+        "case_id": null,
+        "alert_ids": [],
+        "chat_thread_ids": []
+    },
+    "takedown_info": {
+        "is_in_takedown": false,
+        "takedown_status": "None",
+        "client_reference_id": null,
+        "platform_case_id": null,
+        "initiated_at": null,
+        "completed_at": null,
+        "notes": null
+    },
+    "taken_at": 1552827782,
+    "timestamp": null,
+    "type": "post",
+    "url": "https://www.instagram.com/p/BvHEL62AZK9/",
+    "user": {
+        "username": "lapari_",
+        "full_name": "લપરી છોકરી -- Lapari",
+        "profile_pic_url": "https://instagram.com/lapari_",
+        "is_verified": false
+    }
+}
