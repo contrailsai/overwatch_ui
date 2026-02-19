@@ -12,6 +12,7 @@ import {
 
 import getPostLink from '@/components/GetPostLink'
 import Link from 'next/link'
+import { ReportButton } from '@/components/pdf/ReportButton'
 
 export function CasesList() {
   const [posts, setPosts] = useState([])
@@ -261,6 +262,7 @@ export function CasesList() {
           </div>
 
           <div className="flex items-center gap-6">
+            <ReportButton posts={mergedPosts} />
             {raisedCount > 0 && (
               <Link
                 href="/takedowns"
