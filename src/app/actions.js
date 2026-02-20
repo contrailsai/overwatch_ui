@@ -233,6 +233,27 @@ export async function getDashboardData(projectName) {
   }
 }
 
+export async function getUser() {
+  const supabase = await createClient()
+  const { data: user } = await supabase.auth.getUser()
+
+  // console.log(user)
+  const { data: clientDetails, error } = await supabase
+    .from('client_details')
+    .select('*')
+    .eq('id', user.user.id)
+    .single();
+
+  console.log(clientDetails, error)
+
+  if (error) {
+    console.error('Error fetching client details:', error)
+    return { user, clientDetails: null }
+  }
+
+  return { user, clientDetails }
+}
+
 
 export async function getCases(projectName) {
   const supabase = await createClient()

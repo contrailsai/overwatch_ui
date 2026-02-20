@@ -2,21 +2,29 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, List, ShieldAlert, Settings, LogOut, LayoutDashboard, ShieldCheck, Database, FileText } from 'lucide-react'
+import { List, ShieldAlert, Settings, LogOut, LayoutDashboard, ShieldCheck } from 'lucide-react'
 import { useClient } from '@/context/ClientContext'
 import { cn } from '@/lib/utils'
 
 export function Sidebar() {
   const pathname = usePathname()
-  const { user, clientDetails } = useClient()
+  const { user, clientDetails, isLoading } = useClient()
 
-  const navigation = [
+  // All nav items.
+  const allNavItems = [
     { name: 'Dashboard', href: '/', icon: LayoutDashboard, show: true },
-    { name: 'Review Cases', href: '/review-cases', icon: ShieldCheck, show: clientDetails?.permission === "reviewer" },
+    {
+      name: 'Review Cases',
+      href: '/review-cases',
+      icon: ShieldCheck,
+      show: isLoading || clientDetails?.permission === 'reviewer'
+    },
     { name: 'Cases List', href: '/cases', icon: List, show: true },
     { name: 'Takedowns', href: '/takedowns', icon: ShieldAlert, show: true },
     { name: 'Configurations', href: '/configurations', icon: Settings, show: true },
-  ].filter(item => item.show)
+  ]
+
+  const navigation = allNavItems.filter(item => item.show)
 
   return (
     <div className="flex flex-col w-64 h-full bg-white border-r border-slate-200 shadow-sm shrink-0 z-40">
@@ -32,7 +40,21 @@ export function Sidebar() {
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto px-3 py-6 space-y-1">
         {navigation.map((item) => {
+          const isGatedLoading = item.name === 'Review Cases' && isLoading;
           const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href))
+
+          if (isGatedLoading) {
+            return (
+              <div
+                key={item.name}
+                className="flex items-center px-3 py-2.5 text-sm font-medium rounded-lg text-slate-300 animate-pulse bg-slate-50/50"
+              >
+                <div className="h-5 w-5 rounded bg-slate-200 mr-3" />
+                <div className="h-4 w-24 rounded bg-slate-200" />
+              </div>
+            )
+          }
+
           return (
             <Link
               key={item.name}

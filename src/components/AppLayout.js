@@ -15,7 +15,9 @@ export function AppLayout({ children }) {
     const isAuthPage = pathname.startsWith('/login') || pathname.startsWith('/auth')
 
     if (isAuthPage) {
-        return <ClientProvider>{children}</ClientProvider>
+        return <>
+            {children}
+        </>
     }
 
     return (
