@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { List, ShieldAlert, Settings, LogOut, LayoutDashboard, ShieldCheck } from 'lucide-react'
+import { List, ShieldAlert, Settings, LogOut, LayoutDashboard, ShieldCheck, GitPullRequestCreateArrow } from 'lucide-react'
 import { useClient } from '@/context/ClientContext'
 import { cn } from '@/lib/utils'
 
@@ -22,6 +22,7 @@ export function Sidebar() {
     { name: 'Cases List', href: '/cases', icon: List, show: true },
     { name: 'Takedowns', href: '/takedowns', icon: ShieldAlert, show: true },
     { name: 'Configurations', href: '/configurations', icon: Settings, show: true },
+    { name: 'Request Content', href: '/request-content', icon: GitPullRequestCreateArrow, show: true },
   ]
 
   const navigation = allNavItems.filter(item => item.show)
