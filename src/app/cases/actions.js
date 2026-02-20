@@ -128,6 +128,7 @@ export async function getPriorityTakedowns() {
       const normalized = {
         _id: post._id.toString(),
         created_at: post.metadata?.created_at ? new Date(post.metadata.created_at).toISOString() : null,
+        taken_at: post.post_content?.taken_at || post.taken_at || null,
         platform: post.platform || 'instagram',
         processed: post.processed || false,
         caption: post.post_content?.caption || post.caption || '',
@@ -263,6 +264,7 @@ export async function getPosts(page = 1, limit = 20, filters = {}, sort = { fiel
         // Metadata
         created_at: post.metadata?.created_at ? new Date(post.metadata.created_at).toISOString() : null,
         sourcing_date: post.metadata?.sourcing_date ? new Date(post.metadata.sourcing_date).toISOString() : null,
+        taken_at: post.post_content?.taken_at || post.taken_at || null,
         platform: post.platform || 'instagram',
         processed: post.processed || false,
 

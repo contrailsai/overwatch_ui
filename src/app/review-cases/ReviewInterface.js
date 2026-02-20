@@ -1,12 +1,16 @@
 'use client'
 
-import { useState, useActionState, useEffect, useRef, useCallback } from 'react'
-import { submitCaseReview, getPosts, getCaseMetadata, getAllPostsForExport } from './actions'
+import * as React from "react"
+import { useState, useMemo, useEffect, useCallback, useRef, useActionState } from 'react'
+import { format } from "date-fns"
+import { submitCaseReview, getPosts, getAllPostsForExport } from './actions'
+import { Skeleton } from "@/components/ui/skeleton"
 import {
   Loader2, X, CheckCircle, AlertTriangle, ExternalLink,
-  ThumbsUp, MessageCircle, Eye, ChevronLeft, ChevronRight, Filter, Share2,
-  Search, ShieldAlert, Bot, Sparkles, Brain, Calendar, Database, Plus,
-  Instagram, Facebook, Twitter, Heart, Activity, BadgeCheck, Quote, User, Download
+  Filter, Download, ChevronLeft, ChevronRight,
+  Search, Sparkles, Calendar, Database, Plus,
+  Instagram, Facebook, Twitter, Heart, MessageCircle, AlertCircle, Quote,
+  Image as ImageIcon, ShieldAlert, BadgeCheck, Eye, History
 } from 'lucide-react'
 import ProfilePic from '@/components/ProfilePic'
 
@@ -14,7 +18,6 @@ import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
@@ -22,8 +25,7 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { cn } from "@/lib/utils"
 
-import { DatePickerWithRange } from "@/components/ui/date-range-picker"
-import { format } from "date-fns"
+import { DatePicker } from "@/components/ui/date-picker"
 
 const initialState = {
   success: false,
@@ -41,8 +43,8 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
   const [filters, setFilters] = useState({
     platform: 'all',
     status: 'pending',
-    sourcingDate: undefined, // { from: Date, to: Date }
-    dbDate: undefined,       // { from: Date, to: Date }
+    sourcingDate: undefined,
+    dbDate: undefined,
     aiAnalyzed: true,
     poiDetected: true
   })
@@ -54,23 +56,12 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
     setLoading(true)
     const nextPage = page + 1
 
-    // Transform dates for API
-    // Logic: If only 'from' is selected, range is 'from' -> 'today'
-    // If 'to' is selected, range is 'from' -> 'to'
-    const sourcingEnd = filters.sourcingDate?.to
-      ? format(filters.sourcingDate.to, 'yyyy-MM-dd')
-      : (filters.sourcingDate?.from ? format(new Date(), 'yyyy-MM-dd') : '')
-
-    const dbEnd = filters.dbDate?.to
-      ? format(filters.dbDate.to, 'yyyy-MM-dd')
-      : (filters.dbDate?.from ? format(new Date(), 'yyyy-MM-dd') : '')
-
     const apiFilters = {
       ...filters,
-      sourcingDateStart: filters.sourcingDate?.from ? format(filters.sourcingDate.from, 'yyyy-MM-dd') : '',
-      sourcingDateEnd: sourcingEnd,
-      dbDateStart: filters.dbDate?.from ? format(filters.dbDate.from, 'yyyy-MM-dd') : '',
-      dbDateEnd: dbEnd,
+      sourcingDateStart: filters.sourcingDate ? format(filters.sourcingDate, 'yyyy-MM-dd') : '',
+      sourcingDateEnd: '',
+      dbDateStart: filters.dbDate ? format(filters.dbDate, 'yyyy-MM-dd') : '',
+      dbDateEnd: '',
     }
 
     const response = await getPosts(projectName, nextPage, 20, apiFilters)
@@ -100,24 +91,14 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
   const applyFilters = useCallback(async () => {
     setLoading(true)
     setSelectedPost(null)
-
-    // Transform dates for API
-    // Logic: If only 'from' is selected, range is 'from' -> 'today'
-    // If 'to' is selected, range is 'from' -> 'to'
-    const sourcingEnd = filters.sourcingDate?.to
-      ? format(filters.sourcingDate.to, 'yyyy-MM-dd')
-      : (filters.sourcingDate?.from ? format(new Date(), 'yyyy-MM-dd') : '')
-
-    const dbEnd = filters.dbDate?.to
-      ? format(filters.dbDate.to, 'yyyy-MM-dd')
-      : (filters.dbDate?.from ? format(new Date(), 'yyyy-MM-dd') : '')
+    setPosts([])
 
     const apiFilters = {
       ...filters,
-      sourcingDateStart: filters.sourcingDate?.from ? format(filters.sourcingDate.from, 'yyyy-MM-dd') : '',
-      sourcingDateEnd: sourcingEnd,
-      dbDateStart: filters.dbDate?.from ? format(filters.dbDate.from, 'yyyy-MM-dd') : '',
-      dbDateEnd: dbEnd,
+      sourcingDateStart: filters.sourcingDate ? format(filters.sourcingDate, 'yyyy-MM-dd') : '',
+      sourcingDateEnd: '',
+      dbDateStart: filters.dbDate ? format(filters.dbDate, 'yyyy-MM-dd') : '',
+      dbDateEnd: '',
     }
 
     const response = await getPosts(projectName, 1, 20, apiFilters)
@@ -130,20 +111,12 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
   const handleExportCSV = async () => {
     setLoading(true)
     try {
-      const sourcingEnd = filters.sourcingDate?.to
-        ? format(filters.sourcingDate.to, 'yyyy-MM-dd')
-        : (filters.sourcingDate?.from ? format(new Date(), 'yyyy-MM-dd') : '')
-
-      const dbEnd = filters.dbDate?.to
-        ? format(filters.dbDate.to, 'yyyy-MM-dd')
-        : (filters.dbDate?.from ? format(new Date(), 'yyyy-MM-dd') : '')
-
       const apiFilters = {
         ...filters,
-        sourcingDateStart: filters.sourcingDate?.from ? format(filters.sourcingDate.from, 'yyyy-MM-dd') : '',
-        sourcingDateEnd: sourcingEnd,
-        dbDateStart: filters.dbDate?.from ? format(filters.dbDate.from, 'yyyy-MM-dd') : '',
-        dbDateEnd: dbEnd,
+        sourcingDateStart: filters.sourcingDate ? format(filters.sourcingDate, 'yyyy-MM-dd') : '',
+        sourcingDateEnd: '',
+        dbDateStart: filters.dbDate ? format(filters.dbDate, 'yyyy-MM-dd') : '',
+        dbDateEnd: '',
       }
 
       const { posts: allPosts } = await getAllPostsForExport(projectName, apiFilters)
@@ -153,46 +126,21 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
         return
       }
 
-      // CSV Headers in requested sequence
       const headers = [
-        "MongoDB ID",
-        "Post ID",
-        "Original URL",
-        "Caption",
-        "Platform",
-        "Author URL",
-        "Author Username",
-        "Author Full Name",
-        "Timestamp",
-        "Likes",
-        "Comments",
-        "Views",
-        "Shares",
-        "Retweets",
-        "Quotes",
-        "Replies"
+        "MongoDB ID", "Post ID", "Original URL", "Caption", "Platform",
+        "Author URL", "Author Username", "Author Full Name", "Timestamp",
+        "Likes", "Comments", "Views", "Shares", "Retweets", "Quotes", "Replies"
       ]
 
       const csvRows = [
         headers.join(','),
         ...allPosts.map(post => {
           const row = [
-            `"${post._id}"`,
-            `"${post.post_id}"`,
-            `"${post.url}"`,
+            `"${post._id}"`, `"${post.post_id}"`, `"${post.url}"`,
             `"${(post.caption || '').replace(/"/g, '""').replace(/\n/g, ' ')}"`,
-            `"${post.platform}"`,
-            `"${post.author_url}"`,
-            `"${post.author_username}"`,
-            `"${post.author_name}"`,
-            `"${post.posted_at}"`,
-            post.likes,
-            post.comments,
-            post.views,
-            post.shares,
-            post.retweets,
-            post.quotes,
-            post.replies
+            `"${post.platform}"`, `"${post.author_url}"`, `"${post.author_username}"`,
+            `"${post.author_name}"`, `"${post.posted_at}"`,
+            post.likes, post.comments, post.views, post.shares, post.retweets, post.quotes, post.replies
           ]
           return row.join(',')
         })
@@ -227,20 +175,17 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
   }
 
   const isFirstRender = useRef(true)
-  // Apply filters when they change
   useEffect(() => {
     if (isFirstRender.current) {
       isFirstRender.current = false
       return
     }
-    // Debounce filter application to prevent rapid API calls while picking dates
     const timer = setTimeout(() => {
       applyFilters()
     }, 500)
     return () => clearTimeout(timer)
   }, [applyFilters])
 
-  // Navigation logic
   const navigatePost = useCallback((direction) => {
     if (!selectedPost) return
     const currentIndex = posts.findIndex(p => p._id === selectedPost._id)
@@ -249,8 +194,6 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
     if (nextIndex >= 0 && nextIndex < posts.length) {
       const nextPost = posts[nextIndex]
       setSelectedPost(nextPost)
-
-      // Scroll the post into view, centered
       setTimeout(() => {
         const postElement = postRefs.current[nextPost._id]
         if (postElement) {
@@ -260,10 +203,8 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
     }
   }, [selectedPost, posts])
 
-  // Keyboard navigation
   useEffect(() => {
     const handleKeyDown = (e) => {
-      // Only handle arrow keys if the review panel is open and not typing in an input
       if (!selectedPost) return
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return
 
@@ -273,6 +214,8 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
       } else if (e.key === 'ArrowRight') {
         e.preventDefault()
         navigatePost('next')
+      } else if (e.key === 'Escape') {
+        setSelectedPost(null)
       }
     }
 
@@ -281,10 +224,10 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
   }, [selectedPost, posts, navigatePost])
 
   const getRiskLabel = (score) => {
-    if (score >= 80) return { label: 'Critical', color: 'text-red-700 bg-red-50 border-red-200' };
+    if (score >= 80) return { label: 'Critical', color: 'text-rose-700 bg-rose-50 border-rose-200' };
     if (score >= 60) return { label: 'High', color: 'text-orange-700 bg-orange-50 border-orange-200' };
-    if (score >= 40) return { label: 'Medium', color: 'text-yellow-700 bg-yellow-50 border-yellow-200' };
-    return { label: 'Low', color: 'text-green-700 bg-green-50 border-green-200' };
+    if (score >= 40) return { label: 'Medium', color: 'text-amber-700 bg-amber-50 border-amber-200' };
+    return { label: 'Low', color: 'text-slate-700 bg-slate-100 border-slate-200' };
   }
 
   const getPostLink = (post) => {
@@ -296,19 +239,20 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
   }
 
   return (
-    <div className="flex h-full relative bg-slate-50/50">
-      {/* Main Content - Table */}
-      <div className="flex-1 overflow-y-auto p-6 transition-all duration-300">
+    <div className="flex h-full relative bg-slate-50">
 
-        {/* Filters Bar */}
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 mb-6">
-          <div className="flex flex-col space-y-5">
+      {/* Main Content Area */}
+      <div className="flex-1 overflow-y-auto px-8 py-6 transition-all duration-300">
 
-            {/* Header & Reset */}
+        {/* Filters Card */}
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 mb-8">
+          <div className="space-y-6">
+
+            {/* Header Row */}
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="bg-blue-50 p-1.5 rounded-md">
-                  <Filter className="h-4 w-4 text-blue-600" />
+              <div className="flex items-center gap-2.5">
+                <div className="bg-blue-50 p-2 rounded-lg text-blue-600">
+                  <Filter className="h-4 w-4" />
                 </div>
                 <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">Filters</h3>
               </div>
@@ -319,22 +263,21 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
                   size="sm"
                   onClick={handleExportCSV}
                   disabled={loading || posts.length === 0}
-                  className="h-8 text-xs font-bold text-blue-600 border-blue-200 hover:bg-blue-50 px-3 transition-colors"
+                  className="h-9 text-xs font-bold text-slate-600 hover:text-blue-600 border-slate-200 hover:bg-blue-50 transition-all"
                 >
-                  <Download className="h-3.5 w-3.5 mr-1.5" />
-                  Download CSV
+                  <Download className="h-3.5 w-3.5 mr-2" />
+                  Export CSV
                 </Button>
 
-                {/* Active Filter Counter / Reset */}
                 {(filters.status !== 'pending' || filters.platform !== 'all' || !filters.aiAnalyzed || filters.poiDetected || filters.sourcingDate || filters.dbDate) && (
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={clearFilters}
-                    className="h-8 text-xs font-bold text-red-600 hover:text-red-700 hover:bg-red-50 px-3 transition-colors"
+                    className="h-9 text-xs font-bold text-rose-600 hover:bg-rose-50 hover:text-rose-700 transition-colors"
                   >
-                    <X className="h-3 w-3 mr-1.5" />
-                    Reset Filters
+                    <X className="h-3.5 w-3.5 mr-1.5" />
+                    Reset
                   </Button>
                 )}
               </div>
@@ -342,256 +285,307 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
 
             <Separator className="bg-slate-100" />
 
-            <div className="flex flex-col gap-6">
+            {/* Controls Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
+              <div className="space-y-2">
+                <Label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Status</Label>
+                <Select
+                  value={filters.status}
+                  onValueChange={(val) => setFilters({ ...filters, status: val })}
+                >
+                  <SelectTrigger className="w-full bg-slate-50 border-slate-200 hover:border-slate-300 focus:ring-blue-500/20">
+                    <SelectValue placeholder="Select Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="pending">Pending Review</SelectItem>
+                    <SelectItem value="reviewed">Reviewed</SelectItem>
+                    <SelectItem value="all">All Items</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
 
-              {/* Primary Filters Row */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                {/* Status Filter */}
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-bold text-slate-500 uppercase">Review Status</Label>
-                  <Select
-                    value={filters.status}
-                    onValueChange={(val) => setFilters({ ...filters, status: val })}
-                  >
-                    <SelectTrigger className="w-full bg-white border-slate-200">
-                      <SelectValue placeholder="Select Status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="pending">Pending Review</SelectItem>
-                      <SelectItem value="reviewed">Reviewed</SelectItem>
-                      <SelectItem value="all">All Items</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+              <div className="space-y-2">
+                <Label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Platform</Label>
+                <Select
+                  value={filters.platform}
+                  onValueChange={(val) => setFilters({ ...filters, platform: val })}
+                >
+                  <SelectTrigger className="w-full bg-slate-50 border-slate-200 hover:border-slate-300 focus:ring-blue-500/20">
+                    <SelectValue placeholder="All Platforms" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Platforms</SelectItem>
+                    <SelectItem value="instagram">Instagram</SelectItem>
+                    <SelectItem value="facebook">Facebook</SelectItem>
+                    <SelectItem value="x">X (Twitter)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
 
-                {/* Platform Filter */}
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-bold text-slate-500 uppercase">Platform</Label>
-                  <Select
-                    value={filters.platform}
-                    onValueChange={(val) => setFilters({ ...filters, platform: val })}
-                  >
-                    <SelectTrigger className="w-full bg-white border-slate-200">
-                      <SelectValue placeholder="All Platforms" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Platforms</SelectItem>
-                      <SelectItem value="instagram">Instagram</SelectItem>
-                      <SelectItem value="facebook">Facebook</SelectItem>
-                      <SelectItem value="x">X (Twitter)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+              <div className="space-y-2">
+                <Label className="text-xs font-bold text-slate-500 uppercase tracking-wide flex items-center gap-1.5">
+                  <Calendar className="w-3.5 h-3.5" /> Sourced After
+                </Label>
+                <DatePicker
+                  date={filters.sourcingDate}
+                  setDate={(date) => setFilters({ ...filters, sourcingDate: date })}
+                  placeholder="Select Date"
+                  className="w-full"
+                />
+              </div>
 
-                {/* Sourcing Date Range */}
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1.5">
-                    <Calendar className="w-3.5 h-3.5" /> Sourcing Date
-                  </Label>
-                  <DatePickerWithRange
-                    date={filters.sourcingDate}
-                    setDate={(date) => setFilters({ ...filters, sourcingDate: date })}
-                    placeholder="Select sourcing dates"
-                    className="w-full"
+              <div className="space-y-2">
+                <Label className="text-xs font-bold text-slate-500 uppercase tracking-wide flex items-center gap-1.5">
+                  <Database className="w-3.5 h-3.5" /> Ingested After
+                </Label>
+                <DatePicker
+                  date={filters.dbDate}
+                  setDate={(date) => setFilters({ ...filters, dbDate: date })}
+                  placeholder="Select Date"
+                  className="w-full"
+                />
+              </div>
+            </div>
+
+            {/* Toggles & Count */}
+            <div className="flex items-center justify-between pt-2">
+              <div className="flex items-center gap-6">
+                <div className="flex items-center space-x-2.5 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200/50">
+                  <Checkbox
+                    id="aiAnalyzed"
+                    checked={filters.aiAnalyzed}
+                    onCheckedChange={(checked) => setFilters({ ...filters, aiAnalyzed: checked })}
+                    className="border-slate-300 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
                   />
+                  <label
+                    htmlFor="aiAnalyzed"
+                    className="text-sm font-medium leading-none cursor-pointer text-slate-700 flex items-center gap-2"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-blue-500" />
+                    AI Analyzed Only
+                  </label>
                 </div>
 
-                {/* DB Date Range */}
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1.5">
-                    <Database className="w-3.5 h-3.5" /> Ingest Date
-                  </Label>
-                  <DatePickerWithRange
-                    date={filters.dbDate}
-                    setDate={(date) => setFilters({ ...filters, dbDate: date })}
-                    placeholder="Select ingest dates"
-                    className="w-full"
+                <div className="flex items-center space-x-2.5 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200/50">
+                  <Checkbox
+                    id="poiDetected"
+                    checked={filters.poiDetected}
+                    onCheckedChange={(checked) => setFilters({ ...filters, poiDetected: checked })}
+                    className="border-slate-300 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
                   />
+                  <label
+                    htmlFor="poiDetected"
+                    className="text-sm font-medium leading-none cursor-pointer text-slate-700 flex items-center gap-2"
+                  >
+                    <Search className="w-3.5 h-3.5 text-blue-500" />
+                    POI Detected
+                  </label>
                 </div>
               </div>
 
-              {/* Secondary Filters (Toggles) */}
-              <div className="flex items-center justify-between pt-2 border-t border-slate-50">
-                <div className="flex items-center gap-6">
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="aiAnalyzed"
-                      checked={filters.aiAnalyzed}
-                      onCheckedChange={(checked) => setFilters({ ...filters, aiAnalyzed: checked })}
-                    />
-                    <label
-                      htmlFor="aiAnalyzed"
-                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex items-center gap-1.5 text-slate-700"
-                    >
-                      <Sparkles className="w-3.5 h-3.5 text-blue-500" />
-                      AI Analyzed Only
-                    </label>
+              <div className="flex items-center gap-3">
+                {loading && (
+                  <div className="flex items-center gap-2 text-blue-600 text-xs font-medium animate-pulse">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    Refreshing...
                   </div>
-
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="poiDetected"
-                      checked={filters.poiDetected}
-                      onCheckedChange={(checked) => setFilters({ ...filters, poiDetected: checked })}
-                    />
-                    <label
-                      htmlFor="poiDetected"
-                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex items-center gap-1.5 text-slate-700"
-                    >
-                      <Search className="w-3.5 h-3.5 text-blue-500" />
-                      POI Detected
-                    </label>
-                  </div>
-                </div>
-
-                {/* Results Count */}
-                <div className="flex items-center gap-2 text-sm text-slate-500">
-                  {loading && <Loader2 className="h-4 w-4 animate-spin text-blue-600" />}
-                  <span className="font-bold bg-slate-100 text-slate-700 px-3 py-1 rounded-full text-xs border border-slate-200">
-                    {posts.length} results
-                  </span>
-                </div>
+                )}
+                <Badge variant="secondary" className="px-3 py-1 bg-slate-100 text-slate-600 border-slate-200">
+                  {posts.length} Results Found
+                </Badge>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Post List Table */}
-        <div className="bg-white rounded-lg shadow border border-gray-100 overflow-hidden">
-          <table className="min-w-full divide-y divide-gray-100">
-            <thead className="bg-gray-50">
-              <tr>
-                <th scope="col" className="px-6 py-4 text-left text-sm font-bold text-gray-500 uppercase tracking-wider">Priority</th>
-                <th scope="col" className="px-6 py-4 text-left text-sm font-bold text-gray-500 uppercase tracking-wider">Content</th>
-                <th scope="col" className="px-6 py-4 text-left text-sm font-bold text-gray-500 uppercase tracking-wider">Platform</th>
-                <th scope="col" className="px-6 py-4 text-left text-sm font-bold text-gray-500 uppercase tracking-wider">Threat Type</th>
-                <th scope="col" className="px-6 py-4 text-left text-sm font-bold text-gray-500 uppercase tracking-wider">Source</th>
-                <th scope="col" className="px-6 py-4 text-right text-sm font-bold text-gray-500 uppercase tracking-wider">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-50">
-              {posts.map((post, index) => {
-                const isSelected = selectedPost?._id === post._id
-                const isLast = posts.length === index + 1
-
-                const riskScore = post.review_details?.threat_score || post.analysis_results?.risk_score || 0;
-                const risk = getRiskLabel(riskScore);
-                const threatType = post.review_details?.threat_types?.join(', ').replace(/_/g, ' ') || post.review_details?.threat_type?.replace(/_/g, ' ') || post.analysis_results?.category || 'Unknown';
-
-                return (
-                  <tr
-                    key={index}
-                    ref={(el) => {
-                      postRefs.current[post._id] = el
-                      if (isLast) lastPostElementRef(el)
-                    }}
-                    className={`transition-colors cursor-pointer group ${isSelected ? 'bg-blue-100 ring-2 ring-inset ring-blue-400' : 'hover:bg-blue-50/30'}`}
-                    onClick={() => setSelectedPost(post)}
-                  >
-                    {/* Priority */}
-                    <td className="px-6 py-5 whitespace-nowrap">
-                      <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold border ${risk.color}`}>
-                        <AlertTriangle className="w-3 h-3 mr-1.5" />
-                        {risk.label}
-                      </span>
-                    </td>
-
-                    {/* Content */}
-                    <td className="px-6 py-5 max-w-md overflow-hidden">
-                      <div className="flex items-center gap-4">
-                        {post.signedImageUrl ? (
-                          <div className="h-12 w-12 rounded-lg overflow-hidden flex-shrink-0 border border-gray-100 shadow-sm bg-gray-50">
-                            <img
-                              src={post.signedImageUrl}
-                              alt="Content"
-                              className="h-full w-full object-cover"
-                            />
+        {/* Data Table */}
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-slate-100">
+              <thead className="bg-slate-50/80">
+                <tr>
+                  <th scope="col" className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Risk Level</th>
+                  <th scope="col" className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Content</th>
+                  <th scope="col" className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Platform</th>
+                  <th scope="col" className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Threat Type</th>
+                  <th scope="col" className="px-6 py-4 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-slate-100">
+                {loading && posts.length === 0 ? (
+                  Array.from({ length: 10 }).map((_, index) => (
+                    <tr key={index}>
+                      {/* Risk Level */}
+                      <td className="px-6 py-4 whitespace-nowrap align-top">
+                        <Skeleton className="h-6 w-20 rounded-md" />
+                      </td>
+                      {/* Content */}
+                      <td className="px-6 py-4 max-w-lg align-top">
+                        <div className="flex gap-4">
+                          <Skeleton className="h-16 w-16 rounded-lg shrink-0" />
+                          <div className="flex flex-col gap-2 w-full">
+                            <Skeleton className="h-4 w-32" />
+                            <Skeleton className="h-3 w-full" />
+                            <Skeleton className="h-3 w-2/3" />
                           </div>
-                        ) : (
-                          <div className="h-12 w-12 rounded-lg bg-gray-50 flex items-center justify-center flex-shrink-0 border border-gray-100">
-                            <Quote className="h-5 w-5 text-gray-300" />
-                          </div>
-                        )}
-                        <div className="flex flex-col min-w-0">
-                          <span className="font-bold text-gray-900 text-sm mb-0.5 truncate">
-                            {post.user?.username ? `@${post.user.username}` : 'Unknown User'}
-                          </span>
-                          <span className="text-xs text-gray-500 line-clamp-2 leading-snug">
-                            {post.caption || 'No specific text content.'}
-                          </span>
                         </div>
+                      </td>
+                      {/* Platform */}
+                      <td className="px-6 py-4 whitespace-nowrap align-top">
+                        <Skeleton className="h-6 w-24 rounded-md" />
+                      </td>
+                      {/* Threat Type */}
+                      <td className="px-6 py-4 whitespace-nowrap align-top">
+                        <Skeleton className="h-6 w-28 rounded-md" />
+                      </td>
+                      {/* Actions */}
+                      <td className="px-6 py-4 whitespace-nowrap text-right align-top">
+                        <Skeleton className="h-9 w-24 ml-auto rounded-md" />
+                      </td>
+                    </tr>
+                  ))
+                ) : posts.length === 0 ? (
+                  <tr>
+                    <td colSpan="5" className="px-6 py-12 text-center">
+                      <div className="mx-auto w-12 h-12 rounded-full bg-slate-50 flex items-center justify-center mb-3">
+                        <Search className="w-6 h-6 text-slate-300" />
                       </div>
-                    </td>
-
-                    {/* Platform */}
-                    <td className="px-6 py-5 whitespace-nowrap">
-                      <div className="flex items-center text-gray-700 font-medium">
-                        {post.platform === 'instagram' && <Instagram className=" size-6 stroke-pink-500 mr-2" />}
-                        {post.platform === 'facebook' && <Facebook className=" size-6 stroke-blue-500 mr-2" />}
-                        {post.platform === 'x' && <Twitter className=" size-6 stroke-black mr-2" />}
-                        <span className="capitalize">{post.platform || 'Instagram'}</span>
-                      </div>
-                    </td>
-
-                    {/* Threat Type */}
-                    <td className="px-6 py-5 whitespace-nowrap">
-                      <span className="text-gray-900 font-semibold capitalize">{threatType}</span>
-                    </td>
-
-                    {/* Source */}
-                    <td className="px-6 py-5 whitespace-nowrap">
-                      <a
-                        href={post.original_url || getPostLink(post)}
-                        target="_blank"
-                        rel="noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                        className="inline-flex items-center text-blue-600 hover:text-blue-800 font-semibold text-sm transition-colors hover:border-blue-500 border-b-2 border-transparent"
-                      >
-                        View <ExternalLink className="w-3.5 h-3.5 ml-1" />
-                      </a>
-                    </td>
-
-                    {/* Actions */}
-                    <td className="px-6 py-5 whitespace-nowrap text-right">
-                      <button className={`text-xs font-bold py-2 px-4 rounded-lg shadow-sm transition-colors inline-flex items-center ${isSelected ? 'bg-blue-700 text-white' : 'bg-blue-600 hover:bg-blue-700 text-white'}`}>
-                        {isSelected ? 'Reviewing...' : 'Review'}
-                      </button>
+                      <p className="text-slate-500 font-medium">No posts found matching your filters.</p>
+                      <button onClick={clearFilters} className="text-blue-600 hover:underline text-sm mt-2 font-medium">Clear all filters</button>
                     </td>
                   </tr>
-                )
-              })}
-            </tbody>
-          </table>
+                ) : (
+                  posts.map((post, index) => {
+                    const isSelected = selectedPost?._id === post._id
+                    const isLast = posts.length === index + 1
+                    const riskScore = post.review_details?.threat_score || post.analysis_results?.risk_score || 0;
+                    const risk = getRiskLabel(riskScore);
+                    const threatType = post.review_details?.threat_types?.join(', ').replace(/_/g, ' ') || post.review_details?.threat_type?.replace(/_/g, ' ') || post.analysis_results?.category || 'Unknown';
 
-          {loading && (
-            <div className="py-8 flex justify-center items-center bg-white border-t border-gray-100">
-              <Loader2 className="h-6 w-6 animate-spin text-blue-600 mr-2" />
-              <span className="text-sm text-gray-500 font-medium">Loading more posts...</span>
+                    return (
+                      <tr
+                        key={post._id}
+                        ref={(el) => {
+                          postRefs.current[post._id] = el
+                          if (isLast) lastPostElementRef(el)
+                        }}
+                        className={cn(
+                          "group transition-all cursor-pointer",
+                          isSelected ? "bg-blue-50/60" : "hover:bg-slate-50"
+                        )}
+                        onClick={() => setSelectedPost(post)}
+                      >
+                        {/* Risk Level */}
+                        <td className="px-6 py-4 whitespace-nowrap align-top">
+                          <span className={cn("inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold border", risk.color)}>
+                            <AlertCircle className="w-3.5 h-3.5 mr-1.5" />
+                            {risk.label}
+                          </span>
+                        </td>
+
+                        {/* Content */}
+                        <td className="px-6 py-4 max-w-lg align-top">
+                          <div className="flex gap-4">
+                            <div className="shrink-0 relative">
+                              {post.signedImageUrl ? (
+                                <div className="h-16 w-16 rounded-lg overflow-hidden bg-slate-100 border border-slate-200 shadow-sm">
+                                  <img
+                                    src={post.signedImageUrl}
+                                    alt="Post"
+                                    className="h-full w-full object-cover"
+                                    loading="lazy"
+                                  />
+                                </div>
+                              ) : (
+                                <div className="h-16 w-16 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-center">
+                                  <Quote className="h-6 w-6 text-slate-300" />
+                                </div>
+                              )}
+                              {post.platform === 'instagram' && <div className="absolute -bottom-1 -right-1 bg-white rounded-full p-0.5 shadow-sm"><Instagram className="w-4 h-4 text-pink-500 fill-pink-50" /></div>}
+                              {post.platform === 'facebook' && <div className="absolute -bottom-1 -right-1 bg-white rounded-full p-0.5 shadow-sm"><Facebook className="w-4 h-4 text-blue-600 fill-blue-50" /></div>}
+                              {post.platform === 'x' && <div className="absolute -bottom-1 -right-1 bg-white rounded-full p-0.5 shadow-sm"><Twitter className="w-4 h-4 text-slate-900 fill-slate-50" /></div>}
+                            </div>
+
+                            <div className="flex flex-col gap-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-slate-900 text-sm truncate max-w-[150px]">
+                                  {post.user?.username || 'Unknown User'}
+                                </span>
+                                <span className="text-xs text-slate-400">•</span>
+                                <span className="text-xs text-slate-500">
+                                  {post.taken_at ? format(new Date(post.taken_at * 1000), "dd/MM/yyyy") : 'N/A'}
+                                </span>
+                              </div>
+                              <p className="text-sm text-slate-600 line-clamp-2 leading-relaxed">
+                                {post.caption || <span className="italic text-slate-400">No caption available</span>}
+                              </p>
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* Platform */}
+                        <td className="px-6 py-4 whitespace-nowrap align-top">
+                          <Badge variant="outline" className="capitalize font-semibold text-slate-600 border-slate-300">
+                            {post.platform || 'Unknown'}
+                          </Badge>
+                        </td>
+
+                        {/* Threat Type */}
+                        <td className="px-6 py-4 whitespace-nowrap align-top">
+                          <span className="text-sm font-semibold text-slate-700 capitalize">
+                            {threatType}
+                          </span>
+                        </td>
+
+                        {/* Actions */}
+                        <td className="px-6 py-4 whitespace-nowrap text-right align-top">
+                          <Button
+                            size="sm"
+                            variant={isSelected ? "default" : "secondary"}
+                            className={cn(
+                              "font-bold transition-all shadow-sm",
+                              isSelected ? "bg-blue-600 hover:bg-blue-700" : "bg-white border border-slate-200 hover:bg-slate-50 hover:border-blue-300 text-slate-600"
+                            )}
+                          >
+                            {isSelected ? 'Reviewing...' : 'Review Case'}
+                          </Button>
+                        </td>
+                      </tr>
+                    )
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {loading && posts.length > 0 && (
+            <div className="py-8 flex justify-center items-center bg-slate-50/50 border-t border-slate-100">
+              <Loader2 className="h-5 w-5 animate-spin text-blue-600 mr-2" />
+              <span className="text-sm text-slate-500 font-medium">Loading more cases...</span>
             </div>
           )}
 
           {!hasMore && posts.length > 0 && (
-            <div className="py-8 text-center text-sm text-gray-400 bg-gray-50 border-t border-gray-100">
-              No more posts to review.
+            <div className="py-6 text-center text-xs font-semibold text-slate-400 uppercase tracking-widest bg-slate-50 border-t border-slate-100">
+              End of List
             </div>
           )}
         </div>
       </div>
 
-      {/* Backdrop */}
+      {/* Detail Panel Drawer */}
       {selectedPost && (
         <div
-          className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 transition-opacity"
+          className="fixed inset-0 bg-slate-900/20 backdrop-blur-sm z-40"
           onClick={() => setSelectedPost(null)}
-          aria-hidden="true"
         />
       )}
 
-      {/* Side Panel */}
       <div
-        className={`fixed inset-y-0 right-0 w-[1000px] bg-white shadow-2xl transform transition-transform duration-300 ease-in-out border-l border-gray-200 overflow-y-auto ${selectedPost ? 'translate-x-0' : 'translate-x-full'
-          }`}
-        style={{ top: '0', zIndex: 60 }}
+        className={cn(
+          "fixed inset-y-0 right-0 w-[1100px] bg-white shadow-2xl transform transition-transform duration-300 ease-out border-l border-slate-200 z-50 flex flex-col",
+          selectedPost ? "translate-x-0" : "translate-x-full"
+        )}
       >
         {selectedPost && (
           <ReviewForm
@@ -610,7 +604,6 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
 }
 
 function ReviewForm({ post, onClose, onNavigate, hasPrev, hasNext, setPosts }) {
-  console.log(post)
   const [state, formAction, isPending] = useActionState(submitCaseReview, initialState)
 
   // Update local state when submission succeeds
@@ -624,102 +617,43 @@ function ReviewForm({ post, onClose, onNavigate, hasPrev, hasNext, setPosts }) {
     }
   }, [state, post._id, setPosts])
 
-  // 1. Derive Initial Values
+  // Initial Values
   const review = post.review_details || {}
   const analysis = post.analysis_results || {}
-  const existingFlags = review.flags || {}
   const analysisPoi = analysis.poi_check || {}
   const hasReview = review && Object.keys(review).length > 0
 
-  // POI Logic
   const savedFace = hasReview ? (review.face_present === true) : (analysisPoi.face_present === true)
   const savedName = hasReview ? (review.name_present === true) : (analysisPoi.poi_name_found === true)
   const savedPoiNames = (hasReview && review.poi_names) ? review.poi_names : (analysisPoi.poi_names || [])
-
-  // Threat Scores
   const savedScore = review.threat_score ?? analysis.risk_score ?? 0
 
-  // Threat Types
   let savedTypes = review.threat_types || []
-
-  // If NOT reviewed, derive threat types from analysis logic
   if (!hasReview && savedTypes.length === 0 && analysis) {
     const aiCategory = (analysis.category || '').toLowerCase()
-    const aiReasoning = (analysis.categorization_reason || '').toLowerCase()
-
-    // A. Text Heuristics from category/reasoning
+    // Simple heuristic fallback if empty
     if (analysis.threat_category) savedTypes.push(analysis.threat_category)
-    if (aiCategory.includes('scam') || aiReasoning.includes('scam')) savedTypes.push('scam')
-    if (aiCategory.includes('hate') || aiReasoning.includes('hate')) savedTypes.push('hate_speech')
-    if (aiCategory.includes('fake') || aiCategory.includes('misinformation') || aiReasoning.includes('misinformation') || aiReasoning.includes('fake')) savedTypes.push('fake_news')
-    if (aiCategory.includes('nsfw') || aiReasoning.includes('nsfw')) savedTypes.push('nsfw')
-    if (aiCategory.includes('aigc') || aiReasoning.includes('aigc') || aiReasoning.includes('ai generated')) savedTypes.push('aigc')
-
-    // B. Structure Check Objects
-    if (!analysis.truth_check?.is_credible) savedTypes.push('fake_news')
-    if (analysis.aigc_check?.is_aigc) savedTypes.push('aigc')
-    if (!analysis.nsfw_check?.is_safe) savedTypes.push('nsfw')
-    if (!analysis.hate_speech_check?.is_safe) savedTypes.push('hate_speech')
-    if (!analysis.fraud_check?.is_safe) savedTypes.push('fraud')
-    if (!analysis.humor_check?.is_safe) savedTypes.push('humor')
-    if (!analysis.truth_check?.is_credible) savedTypes.push('fake_news')
-    if (!analysis.asset_misuse_check?.is_safe) savedTypes.push('asset_misuse')
-
-    // C. Fallback
-    savedTypes = [...new Set(savedTypes)]
-    if (savedTypes.length === 0) {
-      if (savedScore > 50) savedTypes.push('other')
-      else savedTypes.push('safe')
-    }
+    if (savedTypes.length === 0 && savedScore > 50) savedTypes.push('other')
   }
 
-  // Takedown
   const savedTakedown = post.takedown_info?.takedown_status === "requested"
 
-  // 2. Initialize State
   const [facePresent, setFacePresent] = useState(savedFace)
   const [namePresent, setNamePresent] = useState(savedName)
   const [poiNames, setPoiNames] = useState(savedPoiNames)
   const [newPoiInput, setNewPoiInput] = useState('')
   const [threatScore, setThreatScore] = useState(savedScore)
   const [threatTypes, setThreatTypes] = useState(savedTypes)
-  // const [isTakedown, setIsTakedown] = useState(savedTakedown)
   const [suggestTakedown, setSuggestTakedown] = useState(savedTakedown)
 
-  // Derived Accessors
   const poiPresent = facePresent || namePresent
-  // const defaultReasoning = review?.reasoning + " \n " + analysis?.categorization_reason + " \n " + analysis?.threat_category + " \n " + ;
   const defaultComments = review.reviewer_comments || '';
 
-  const full_analysis_reasonning = `REASONING: ${analysis?.reasoning ? analysis?.reasoning + "| " : ""} ${analysis?.threat_category ? analysis?.threat_category + "| " : ""} ${analysis?.categorization_reason ? analysis?.categorization_reason + "| " : ""}
-
-
-  "nsfw check": ${analysis?.nsfw_check?.reasoning}
-  
-  
-  "hate speech check": ${analysis?.hate_speech_check?.reasoning}
-  
-  
-  "fraud check": ${analysis?.fraud_check?.reasoning}
-  
-  
-  "humor check": ${analysis?.humor_check?.reasoning}
-  
-
-  "truth check": ${analysis?.truth_check?.explanation}
-
-
-  "asset misuse check": ${analysis?.asset_misuse_check?.reasoning}
-  `
-
-
-  const getPostLink = () => {
-    const id = post.post_id || post.code
-    if (post.platform === 'instagram') return `https://www.instagram.com/p/${id}/`
-    if (post.platform === 'facebook') return `https://www.facebook.com/${id}`
-    if (post.platform === 'x') return `https://twitter.com/${post.user?.username}/status/${id}`
-    return null
-  }
+  const full_analysis_reasonning = `REASONING: ${analysis?.reasoning || ""} ${analysis?.categorization_reason || ""}
+  ${analysis?.threat_category ? "\nCategory: " + analysis.threat_category : ""}
+  ${analysis?.nsfw_check?.reasoning ? "\nNSFW: " + analysis.nsfw_check.reasoning : ""}
+  ${analysis?.hate_speech_check?.reasoning ? "\nHate Speech: " + analysis.hate_speech_check.reasoning : ""}
+  `.trim();
 
   const handleAddPoi = () => {
     if (newPoiInput.trim()) {
@@ -739,411 +673,313 @@ function ReviewForm({ post, onClose, onNavigate, hasPrev, hasNext, setPosts }) {
   }
 
   return (
-    <div className="h-full flex flex-col bg-background">
-      {/* TOP */}
-      <div className="px-6 py-4 border-b flex items-center justify-between bg-background sticky top-0 z-10">
-        <div className="flex items-center space-x-4">
-          <h2 className="text-lg font-bold text-slate-900">Review Case</h2>
+    <div className="h-full flex flex-col bg-white">
+      {/* Panel Header */}
+      <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-white/80 backdrop-blur-md sticky top-0 z-20">
+        <div className="flex items-center gap-4">
+          <h2 className="text-lg font-bold text-slate-900 tracking-tight">Review Case</h2>
           {hasReview && (
-            <Badge variant="outline" className="bg-green-50 text-green-800 border-green-200">
-              Previously Reviewed
+            <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 gap-1.5 pl-2">
+              <CheckCircle className="w-3.5 h-3.5" />
+              Reviewed
             </Badge>
           )}
+          <div className="h-4 w-px bg-slate-200 mx-2" />
           <div className="flex items-center gap-1">
-            <Button variant="outline" size="icon" onClick={() => onNavigate('prev')} disabled={!hasPrev} className="h-8 w-8">
-              <ChevronLeft className="h-4 w-4" />
+            <Button variant="ghost" size="icon" onClick={() => onNavigate('prev')} disabled={!hasPrev} className="h-8 w-8 text-slate-500 hover:text-blue-600">
+              <ChevronLeft className="h-5 w-5" />
             </Button>
-            <Button variant="outline" size="icon" onClick={() => onNavigate('next')} disabled={!hasNext} className="h-8 w-8">
-              <ChevronRight className="h-4 w-4" />
+            <span className="text-xs font-semibold text-slate-400 uppercase tracking-widest px-1">Nav</span>
+            <Button variant="ghost" size="icon" onClick={() => onNavigate('next')} disabled={!hasNext} className="h-8 w-8 text-slate-500 hover:text-blue-600">
+              <ChevronRight className="h-5 w-5" />
             </Button>
           </div>
         </div>
-        <Button variant="ghost" size="icon" onClick={onClose}>
-          <X className="h-5 w-5" />
+        <Button variant="ghost" size="icon" onClick={onClose} className="rounded-full hover:bg-slate-100 text-slate-500">
+          <X className="h-6 w-6" />
         </Button>
       </div>
 
-      <div className="flex-1 overflow-hidden grid grid-cols-1 md:grid-cols-2">
-        {/* Left Column: Post Details */}
-        <div className="h-full border-r overflow-y-auto w-full">
-          <div className="flex-1 overflow-y-auto p-6 lg:p-8 space-y-6 scrollbar-hide">
+      <div className="flex-1 overflow-hidden flex divide-x divide-slate-100">
 
-            {/* User Context Card */}
-            <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm flex items-center gap-5">
-              <div className="relative shrink-0">
-                <ProfilePic user={post.user?.username || 'Unknown'} size={64} />
-              </div>
+        {/* LEFT COLUMN: Evidence & Context */}
+        <div className="flex-1 overflow-y-auto bg-slate-50/50">
+          <div className="p-8 space-y-8">
+
+            {/* User Card */}
+            <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex items-center gap-4">
+              <ProfilePic user={post.user?.username || 'Unknown'} size={48} />
               <div className="flex-1 min-w-0">
-                <h3 className="text-xl font-bold text-slate-900 truncate flex items-center gap-2">
-                  {post.user?.username || 'Unknown User'}
-                  {post.user?.is_verified && <BadgeCheck className="w-5 h-5 text-blue-500 fill-blue-50" />}
-                </h3>
-                <p className="text-slate-500 font-medium truncate">{post.user?.full_name}</p>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-lg font-bold text-slate-900 truncate">{post.user?.username}</h3>
+                  {post.user?.is_verified && <BadgeCheck className="w-5 h-5 text-blue-500" />}
+                </div>
+                <p className="text-sm text-slate-500">{post.user?.full_name}</p>
               </div>
               <a
-                href={getPostLink()}
+                href={post.original_url || '#'}
                 target="_blank"
                 rel="noreferrer"
-                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-sm font-bold transition-colors flex items-center gap-2"
+                className="flex items-center gap-2 text-xs font-bold text-blue-600 bg-blue-50 px-3 py-2 rounded-lg hover:bg-blue-100 transition-colors"
               >
-                <ExternalLink className="w-4 h-4" />
-                <span className="hidden sm:inline">View Source</span>
+                Original Post <ExternalLink className="w-3.5 h-3.5" />
               </a>
             </div>
 
-            {/* Media Display */}
-            <div className="bg-slate-900 rounded-2xl overflow-hidden shadow-lg border border-slate-800 relative group flex items-center justify-center min-h-[400px]">
+            {/* Media Viewer */}
+            <div className="rounded-2xl overflow-hidden bg-slate-900 shadow-lg border border-slate-800 flex items-center justify-center min-h-[400px] relative group">
+              <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-slate-800/50 to-slate-950 pointer-events-none" />
               {post.signedImageUrl ? (
                 <img
                   src={post.signedImageUrl}
                   alt="Evidence"
-                  className="w-full h-auto max-h-[600px] object-contain"
+                  className="max-w-full h-auto max-h-[600px] object-contain relative z-10"
                 />
               ) : (
-                <div className="text-center p-12">
-                  <Quote className="w-16 h-16 text-slate-700 mx-auto mb-4" />
-                  <p className="text-slate-500 font-medium text-lg">Text-Only Content</p>
+                <div className="text-center p-12 relative z-10">
+                  <Quote className="w-12 h-12 text-slate-700 mx-auto mb-3" />
+                  <p className="text-slate-500 font-medium">No media content available</p>
                 </div>
               )}
+              {/* Platform Tag Overlay */}
+              <div className="absolute top-4 right-4 z-20">
+                <Badge className="bg-black/50 backdrop-blur-md border-white/10 text-white hover:bg-black/60 capitalize">
+                  {post.platform}
+                </Badge>
+              </div>
             </div>
 
-            {/* Caption & Stats */}
-            <div className="grid grid-cols-1 gap-6">
-              <div className="md:col-span-2 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-                <h4 className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">
-                  <MessageCircle className="w-3 h-3" /> Post Caption
+            {/* Caption & Metadata */}
+            <div className="space-y-6">
+              <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                  <MessageCircle className="w-3.5 h-3.5" /> Post Caption
                 </h4>
-                <div className="text-slate-800 leading-relaxed whitespace-pre-wrap font-medium text-base">
-                  {post.caption || <span className="italic text-slate-400">No caption content available.</span>}
+                <div className="text-slate-800 leading-relaxed whitespace-pre-wrap font-medium text-base font-sans">
+                  {post.caption || <span className="text-slate-400 italic">No caption provided.</span>}
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-rose-50 text-rose-500 rounded-lg">
-                      <Heart className="w-5 h-5" />
-                    </div>
-                    <span className="text-xs font-bold text-slate-400 uppercase">Likes</span>
-                  </div>
-                  <span className="font-bold text-slate-900 text-lg">{post.stats?.like_count?.toLocaleString() || 0}</span>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-500 uppercase">Likes</span>
+                  <span className="font-bold text-lg text-slate-900">{post.stats?.like_count?.toLocaleString() || 0}</span>
                 </div>
-                <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-blue-50 text-blue-500 rounded-lg">
-                      <MessageCircle className="w-5 h-5" />
-                    </div>
-                    <span className="text-xs font-bold text-slate-400 uppercase">Comments</span>
-                  </div>
-                  <span className="font-bold text-slate-900 text-lg">{post.stats?.comment_count?.toLocaleString() || 0}</span>
+                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-500 uppercase">Comments</span>
+                  <span className="font-bold text-lg text-slate-900">{post.stats?.comment_count?.toLocaleString() || 0}</span>
                 </div>
-
-                {/* Dates */}
-                <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-slate-50 text-slate-500 rounded-lg">
-                      <Calendar className="w-5 h-5" />
-                    </div>
-                    <span className="text-xs font-bold text-slate-400 uppercase">Sourcing Date</span>
+                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between col-span-2">
+                  <div className="flex gap-6">
+                    <span className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2">
+                      <Calendar className="w-3.5 h-3.5" /> Posted: <span className="font-mono text-slate-700">{post.taken_at ? format(new Date(post.taken_at * 1000), "dd/MM/yyyy") : 'N/A'}</span>
+                    </span>
+                    <span className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2">
+                      <History className="w-3.5 h-3.5" /> Sourced: <span className="font-mono text-slate-700">{post.sourcing_date ? format(new Date(post.sourcing_date), "dd/MM/yyyy") : 'N/A'}</span>
+                    </span>
                   </div>
-                  <span className="font-bold text-slate-900 text-sm">{post.sourcing_date ? new Date(post.sourcing_date).toLocaleDateString() : 'N/A'}</span>
-                </div>
-                <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-slate-50 text-slate-500 rounded-lg">
-                      <Activity className="w-5 h-5" />
-                    </div>
-                    <span className="text-xs font-bold text-slate-400 uppercase">Extraction Date</span>
-                  </div>
-                  <span className="font-bold text-slate-900 text-sm">{post.created_at ? new Date(post.created_at).toLocaleDateString() : 'N/A'}</span>
                 </div>
               </div>
             </div>
+
           </div>
         </div>
 
-        {/* Right Column: Form */}
-        <div className="h-full bg-muted/10 overflow-y-auto">
-          <div className="p-8">
-            <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-6">Review & Analysis Form</h3>
+        {/* RIGHT COLUMN: Action Form */}
+        <div className="w-[480px] shrink-0 overflow-y-auto bg-white">
+          <form action={formAction} className="flex flex-col min-h-full">
+            {/* Hidden Inputs */}
+            <input type="hidden" name="mongo_id" value={post._id || ''} />
+            <input type="hidden" name="platform" value={post.platform || 'Instagram'} />
+            <input type="hidden" name="poi_names" value={poiNames.join(',')} />
+            <input type="hidden" name="poi_present" value={poiPresent.toString()} />
+            <input type="hidden" name="poi_confirmed" value={poiPresent ? 'on' : 'off'} />
+            <input type="hidden" name="is_fake_news" value={threatTypes.includes('fake_news') ? 'on' : 'off'} />
+            <input type="hidden" name="is_aigc" value={threatTypes.includes('aigc') ? 'on' : 'off'} />
+            <input type="hidden" name="is_nsfw" value={threatTypes.includes('nsfw') ? 'on' : 'off'} />
+            <input type="hidden" name="is_hate_speech" value={threatTypes.includes('hate_speech') ? 'on' : 'off'} />
+            <input type="hidden" name="is_fraud" value={threatTypes.includes('fraud') ? 'on' : 'off'} />
+            <input type="hidden" name="is_humor" value={threatTypes.includes('humor') ? 'on' : 'off'} />
+            <input type="hidden" name="is_asset_misuse" value={threatTypes.includes('asset_misuse') ? 'on' : 'off'} />
+            <input type="hidden" name="face_present" value={facePresent.toString()} />
+            <input type="hidden" name="name_present" value={namePresent.toString()} />
+            <input type="hidden" name="threat_score" value={threatScore} />
+            <input type="hidden" name="takedown_status" value={post.takedown_info?.takedown_status || 'None'} />
 
-            <form action={formAction} className="space-y-8 pb-20">
-              {/* Hidden Fields */}
-              <input type="hidden" name="mongo_id" value={post._id || ''} />
-              <input type="hidden" name="post_id" value={post.post_id || post.code || ''} />
-              <input type="hidden" name="platform" value={post.platform || 'Instagram'} />
-              <input type="hidden" name="image_key" value={post.signedImageUrl || ''} />
-              <input type="hidden" name="profile_username" value={post.user?.username || 'unknown'} />
-              <input type="hidden" name="caption" value={post.caption || ''} />
-              <input type="hidden" name="sourcing_date" value={post.sourcing_date || new Date().toISOString()} />
-              <input type="hidden" name="posting_time" value={post.taken_at ? new Date(post.taken_at * 1000).toISOString() : new Date().toISOString()} />
+            <div className="p-6 space-y-8 flex-1">
 
-              <input type="hidden" name="poi_names" value={poiNames.join(',')} />
+              {/* 1. POI Section */}
+              <section className="space-y-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-bold">1</span>
+                  <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">POI Identification</h3>
+                </div>
 
-              {/* Flags expected by backend actions.js (must use 'on' for true) */}
-              <input type="hidden" name="poi_present" value={poiPresent.toString()} />
-              <input type="hidden" name="poi_confirmed" value={poiPresent ? 'on' : 'off'} />
-
-              <input type="hidden" name="is_fake_news" value={threatTypes.includes('fake_news') ? 'on' : 'off'} />
-              <input type="hidden" name="is_aigc" value={threatTypes.includes('aigc') ? 'on' : 'off'} />
-              <input type="hidden" name="is_nsfw" value={threatTypes.includes('nsfw') ? 'on' : 'off'} />
-              <input type="hidden" name="is_hate_speech" value={threatTypes.includes('hate_speech') ? 'on' : 'off'} />
-              <input type="hidden" name="is_fraud" value={threatTypes.includes('fraud') ? 'on' : 'off'} />
-              <input type="hidden" name="is_humor" value={threatTypes.includes('humor') ? 'on' : 'off'} />
-              <input type="hidden" name="is_asset_misuse" value={threatTypes.includes('asset_misuse') ? 'on' : 'off'} />
-
-
-              <input type="hidden" name="face_present" value={facePresent.toString()} />
-              <input type="hidden" name="name_present" value={namePresent.toString()} />
-              <input type="hidden" name="threat_score" value={threatScore} />
-              <input type="hidden" name="takedown_status" value={post.takedown_info?.takedown_status || 'None'} />
-
-              {/* Section 1: POI */}
-              <div className="space-y-4">
-                <Label className="text-base font-bold text-blue-900 uppercase tracking-wide">Section 1: POI Verification</Label>
-                <div className="bg-white p-6 rounded-xl border-2 border-slate-100 shadow-sm space-y-6">
-
-                  {/* Main POI Toggle (Read Only Display) */}
-                  <div className="flex items-center justify-between bg-slate-50 p-4 rounded-lg border border-slate-200">
-                    <div className="space-y-0.5">
-                      <Label className="text-base font-bold text-slate-900">Is POI present/relevant?</Label>
-                      <p className="text-xs text-muted-foreground">Derived from Face and Name detections below.</p>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <span className={`text-sm font-bold ${poiPresent ? 'text-blue-600' : 'text-slate-400'}`}>{poiPresent ? 'YES' : 'NO'}</span>
-                      <Switch disabled checked={poiPresent} />
-                    </div>
+                <div className="bg-slate-50 rounded-xl p-5 border border-slate-200 space-y-5">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm font-semibold text-slate-700">Face Detected</Label>
+                    <Switch checked={facePresent} onCheckedChange={setFacePresent} />
+                  </div>
+                  <Separator className="bg-slate-200" />
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm font-semibold text-slate-700">Name Mentioned</Label>
+                    <Switch checked={namePresent} onCheckedChange={setNamePresent} />
                   </div>
 
-                  {/* Sub Toggles */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="flex items-center justify-between p-4 bg-white border-2 border-slate-100 rounded-xl hover:border-blue-100 transition-colors">
-                      <Label className="text-sm font-bold text-slate-700">Face Detected</Label>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase">{facePresent ? 'Yes' : 'No'}</span>
-                        <Switch checked={facePresent} onCheckedChange={setFacePresent} />
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between p-4 bg-white border-2 border-slate-100 rounded-xl hover:border-blue-100 transition-colors">
-                      <Label className="text-sm font-bold text-slate-700">Name Detected</Label>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase">{namePresent ? 'Yes' : 'No'}</span>
-                        <Switch checked={namePresent} onCheckedChange={setNamePresent} />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* POI Tag Manager */}
-                  <div className="space-y-3 pt-2">
-                    <Label className="text-sm font-bold text-slate-700">Identified Persons</Label>
-                    <div className="flex flex-wrap gap-2 p-3 bg-slate-50 rounded-lg min-h-[50px] border border-dashed border-slate-300">
+                  <div className="pt-2 space-y-3">
+                    <Label className="text-xs font-bold text-slate-500 uppercase">Tagged Subjects</Label>
+                    <div className="flex flex-wrap gap-2">
                       {poiNames.map((name, index) => (
-                        <Badge key={index} variant="secondary" className="pl-3 pr-1 py-1.5 flex items-center bg-white text-blue-700 border-2 border-blue-100">
-                          <span className="font-bold">{name}</span>
-                          <button type="button" onClick={() => handleRemovePoi(index)} className="ml-2 hover:bg-red-50 hover:text-red-600 rounded-full p-0.5 transition-colors">
-                            <X className="h-3.5 w-3.5" />
-                          </button>
+                        <Badge key={index} variant="secondary" className="pl-2.5 pr-1 py-1 h-7 bg-white border border-blue-200 text-blue-700 shadow-sm flex items-center gap-1">
+                          {name}
+                          <button type="button" onClick={() => handleRemovePoi(index)} className="hover:bg-red-50 hover:text-red-600 rounded-full p-0.5 transition-colors"><X className="w-3 h-3" /></button>
                         </Badge>
                       ))}
-                      {poiNames.length === 0 && <span className="text-xs text-slate-400 italic my-auto">No subjects tagged yet.</span>}
+                      {poiNames.length === 0 && <span className="text-xs text-slate-400 italic py-1">No tags added</span>}
                     </div>
                     <div className="flex gap-2">
                       <Input
-                        placeholder="Type name and press Add..."
-                        variant="secondary"
                         value={newPoiInput}
                         onChange={(e) => setNewPoiInput(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddPoi())}
-                        className="h-10 text-sm border-2 text-slate-100 focus:border-blue-500"
+                        placeholder="Add name..."
+                        className="h-9 bg-white text-sm"
                       />
-                      <Button type="button" onClick={handleAddPoi} className="h-10 px-4 bg-blue-600 hover:bg-blue-700">
-                        <Plus className="h-4 w-4 mr-2" /> Add
-                      </Button>
+                      <Button type="button" onClick={handleAddPoi} size="sm" className="h-9 px-3 bg-white border border-slate-300 text-slate-700 hover:bg-slate-50"><Plus className="w-4 h-4" /></Button>
                     </div>
                   </div>
                 </div>
-              </div>
+              </section>
 
-              {/* Section 2: Threat Analysis */}
-              <div className="space-y-4">
-                <Label className="text-base font-bold text-blue-900 uppercase tracking-wide">Section 2: Threat Analysis</Label>
-                <div className="bg-white p-6 rounded-xl border-2 border-slate-100 shadow-sm space-y-6">
-                  <div className="grid grid-cols-2 gap-4">
-                    {[
-                      { id: 'aigc', label: 'AI Generated' },
-                      { id: 'nsfw', label: 'NSFW' },
-                      { id: 'hate_speech', label: 'Hate Speech' },
-                      { id: 'fraud', label: 'Fraud' },
-                      // { id: 'scam', label: 'Scam / Fraud' },
-                      { id: 'fake_news', label: 'Fake News' },
-                      { id: 'humor', label: 'Humor / Satire' },
-                      { id: 'asset_misuse', label: 'POI Assets Misuse' }
-                    ].map((item) => (
-                      <div
-                        key={item.id}
-                        onClick={() => toggleThreatType(item.id)}
-                        className={cn(
-                          "flex items-center space-x-3 p-4 rounded-xl border-2 transition-all cursor-pointer",
-                          threatTypes.includes(item.id)
-                            ? "border-blue-600 bg-blue-50/50"
-                            : "border-slate-100 bg-white hover:border-slate-200"
-                        )}
-                      >
-                        <Checkbox
-                          id={`type-${item.id}`}
-                          name="threat_types"
-                          value={item.id}
-                          checked={threatTypes.includes(item.id)}
-                          onCheckedChange={() => { }} // Controlled by parent div
-                        />
-                        <Label className="text-sm font-bold text-slate-700 cursor-pointer flex-1">
-                          {item.label}
-                        </Label>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="reasoning" className="text-sm font-bold text-slate-700">Analysis & Reasoning</Label>
-                    <Textarea
-                      id="reasoning"
-                      name="reasoning"
-                      defaultValue={full_analysis_reasonning}
-                      placeholder="Describe the findings and analysis..."
-                      className="min-h-[200px] bg-white border-2 border-slate-100 focus:border-blue-500 text-slate-900"
-                    />
-                  </div>
+              {/* 2. Threat Analysis */}
+              <section className="space-y-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-bold">2</span>
+                  <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Threat Classification</h3>
                 </div>
-              </div>
 
-              {/* Section 3: Verdict */}
-              <div className="space-y-4">
-                <Label className="text-base font-bold text-blue-900 uppercase tracking-wide">Section 3: Final Verdict</Label>
-                <div className="bg-white p-6 rounded-xl border-2 border-slate-100 shadow-sm space-y-8">
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    { id: 'aigc', label: 'AI Generated' },
+                    { id: 'nsfw', label: 'NSFW Content' },
+                    { id: 'hate_speech', label: 'Hate Speech' },
+                    { id: 'fraud', label: 'Fraud / Scam' },
+                    { id: 'fake_news', label: 'Misinformation' },
+                    { id: 'humor', label: 'Satire' },
+                    { id: 'asset_misuse', label: 'Asset Misuse' }
+                  ].map((item) => (
+                    <div
+                      key={item.id}
+                      onClick={() => toggleThreatType(item.id)}
+                      className={cn(
+                        "flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all hover:shadow-sm",
+                        threatTypes.includes(item.id)
+                          ? "bg-blue-50 border-blue-200 ring-1 ring-blue-200"
+                          : "bg-white border-slate-200 hover:border-blue-200"
+                      )}
+                    >
+                      <Checkbox
+                        checked={threatTypes.includes(item.id)}
+                        onCheckedChange={() => { }}
+                        className="border-slate-300 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
+                      />
+                      <span className={cn("text-xs font-bold uppercase", threatTypes.includes(item.id) ? "text-blue-700" : "text-slate-600")}>{item.label}</span>
+                    </div>
+                  ))}
+                </div>
 
-                  {/* Risk Score */}
-                  <div className="space-y-5">
-                    <div className="flex justify-between items-end">
-                      <div className="space-y-1">
-                        <Label className="text-sm font-bold text-slate-700">Calculated Risk Score</Label>
-                        <p className="text-xs text-muted-foreground">Adjust based on visual & contextual evidence.</p>
-                      </div>
-                      <div className={cn(
-                        "text-3xl font-black px-5 py-2 rounded-2xl border-4 shadow-sm font-mono",
-                        threatScore > 75 ? "bg-red-50 text-red-600 border-red-200" :
-                          threatScore > 40 ? "bg-orange-50 text-orange-600 border-orange-200" :
-                            "bg-green-50 text-green-600 border-green-200"
+                <div className="space-y-2 pt-2">
+                  <Label className="text-xs font-bold text-slate-500 uppercase">Analysis Notes</Label>
+                  <Textarea
+                    name="reasoning"
+                    defaultValue={full_analysis_reasonning}
+                    placeholder="Detailed analysis..."
+                    className="min-h-[120px] bg-slate-50 border-slate-200 text-sm focus:bg-white transition-colors"
+                  />
+                </div>
+              </section>
+
+              {/* 3. Verdict */}
+              <section className="space-y-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-bold">3</span>
+                  <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Verdict & Action</h3>
+                </div>
+
+                <div className="bg-slate-50 rounded-xl p-5 border border-slate-200 space-y-6">
+                  <div className="space-y-4">
+                    <div className="flex justify-between items-center">
+                      <Label className="text-sm font-bold text-slate-700">Risk Score</Label>
+                      <span className={cn(
+                        "text-xl font-black font-mono px-3 py-1 rounded-lg border",
+                        threatScore > 75 ? "bg-rose-100 text-rose-700 border-rose-200" :
+                          threatScore > 40 ? "bg-amber-100 text-amber-700 border-amber-200" :
+                            "bg-emerald-100 text-emerald-700 border-emerald-200"
                       )}>
                         {threatScore}
-                      </div>
+                      </span>
                     </div>
-
-                    <div className="relative pt-2">
-                      <input
-                        type="range"
-                        min="0"
-                        max="100"
-                        value={threatScore}
-                        onChange={(e) => setThreatScore(parseInt(e.target.value))}
-                        className="w-full h-3 rounded-lg appearance-none cursor-pointer bg-slate-200 accent-blue-600"
-                        style={{
-                          background: `linear-gradient(to right, #86efac 0%, #fde047 50%, #f87171 100%)`
-                        }}
-                      />
-                      <div className="flex justify-between text-[10px] font-black uppercase tracking-widest text-slate-400 mt-2 px-1">
-                        <span>Safe</span>
-                        <span>Moderate Risk</span>
-                        <span>Critical Threat</span>
-                      </div>
+                    <input
+                      type="range"
+                      min="0" max="100"
+                      value={threatScore}
+                      onChange={(e) => setThreatScore(parseInt(e.target.value))}
+                      className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-slate-900"
+                      style={{
+                        background: `linear-gradient(to right, #34d399 0%, #fbbf24 50%, #f43f5e 100%)`
+                      }}
+                    />
+                    <div className="flex justify-between text-[10px] uppercase font-bold text-slate-400">
+                      <span>Safe</span>
+                      <span>Critical</span>
                     </div>
                   </div>
 
-                  {/* Reviewer Note */}
                   <div className="space-y-2">
-                    <Label htmlFor="reviewer_comments" className="text-sm font-bold text-slate-700">Reviewer Note (Visible to Client)</Label>
+                    <Label className="text-xs font-bold text-slate-500 uppercase">Client Notes</Label>
                     <Textarea
-                      id="reviewer_comments"
                       name="reviewer_comments"
                       defaultValue={defaultComments}
-                      placeholder="Add internal notes or context for the client..."
-                      className="min-h-[100px] bg-white border-2 border-slate-100 focus:border-blue-500 text-slate-900"
+                      placeholder="Add context for the client..."
+                      className="h-20 bg-white border-slate-200 text-sm focus:border-blue-500"
                     />
                   </div>
 
-                  <Separator className="bg-slate-100" />
-
-                  {/* Takedown Suggestion */}
-                  <div
-                    className={cn(
-                      "flex items-start space-x-4 p-5 rounded-2xl border-2 transition-all cursor-pointer",
-                      suggestTakedown
-                        ? "bg-red-50 border-red-200 ring-4 ring-red-50"
-                        : "bg-slate-50 border-slate-100 hover:border-slate-200"
-                    )}
-                  >
+                  <div className={cn(
+                    "flex items-start gap-3 p-4 rounded-lg border transition-all",
+                    suggestTakedown ? "bg-rose-50 border-rose-200" : "bg-white border-slate-200"
+                  )}>
                     <Checkbox
                       id="takedown"
                       name="suggest_takedown"
                       checked={suggestTakedown}
                       onCheckedChange={() => setSuggestTakedown(!suggestTakedown)}
-                      className={suggestTakedown ? "border-red-600 bg-red-600" : "border-slate-400"}
+                      className="mt-1 data-[state=checked]:bg-rose-600 data-[state=checked]:border-rose-600"
                     />
-                    <div className="grid gap-1.5 leading-none">
-                      <Label htmlFor="takedown" className={cn(
-                        "text-base font-black cursor-pointer",
-                        suggestTakedown ? "text-red-900" : "text-slate-900"
-                      )}>
-                        Suggest Takedown
-                      </Label>
-                      <p className={cn(
-                        "text-sm",
-                        suggestTakedown ? "text-red-700 font-medium" : "text-slate-500"
-                      )}>
-                        This flags the content for immediate legal removal workflow.
-                      </p>
+                    <div>
+                      <Label htmlFor="takedown" className={cn("text-sm font-bold block cursor-pointer", suggestTakedown ? "text-rose-900" : "text-slate-900")}>Request Takedown</Label>
+                      <p className="text-xs text-slate-500 mt-0.5 leading-snug">Flag for immediate legal removal workflow.</p>
                     </div>
                   </div>
                 </div>
-              </div>
+              </section>
 
-              {/* Action Button Area */}
-              <div className="sticky bottom-0 bg-background/95 backdrop-blur-md pb-6 px-6 border-t-2 border-slate-100 mt-auto flex flex-col gap-4">
+            </div>
 
-                {/* Server Response Feedback */}
-                <div className="space-y-3">
-                  {state?.error && (
-                    <div className="text-red-700 bg-red-50 p-4 rounded-xl text-sm font-bold flex items-center border-2 border-red-100">
-                      <AlertTriangle className="h-5 w-5 mr-3 shrink-0" /> {state.error}
-                    </div>
-                  )}
-                  {state?.success && (
-                    <div className="text-green-700 bg-green-50 p-4 mt-4 rounded-xl text-sm font-bold flex items-center border-2 border-green-100 animate-in fade-in zoom-in">
-                      <CheckCircle className="h-5 w-5 mr-3 shrink-0" /> Review Submitted Successfully
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex gap-4">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={onClose}
-                    className="h-14 px-8 text-base font-bold border-2"
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    type="submit"
-                    disabled={isPending}
-                    className="flex-1 h-14 text-lg font-black shadow-lg bg-blue-600 hover:bg-blue-700 hover:shadow-blue-200 transition-all active:scale-[0.98] cursor-pointer"
-                  >
-                    {isPending ? <Loader2 className="animate-spin h-6 w-6" /> : hasReview ? 'UPDATE REVIEW' : 'COMPLETE REVIEW'}
-                  </Button>
-                </div>
-
-              </div>
-            </form>
-          </div>
+            {/* Sticky Footer */}
+            <div className="p-6 bg-white border-t border-slate-100 sticky bottom-0 z-10 flex gap-3">
+              <Button type="button" variant="outline" onClick={onClose} className="flex-1 font-bold border-slate-200 text-slate-600">
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={isPending}
+                className="flex-[2] font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-600/20"
+              >
+                {isPending ? <Loader2 className="animate-spin" /> : (hasReview ? 'Update Verdict' : 'Submit Review')}
+              </Button>
+            </div>
+          </form>
         </div>
       </div>
     </div>

@@ -1,0 +1,49 @@
+[     545ms] [ERROR] ./src/app/review-cases/ReviewInterface.js:28:10
+Ecmascript file had an error
+  26 |
+  27 | import { DatePicker } from "@/components/ui/date-picker"
+> 28 | import { format } from "date-fns"
+     |          ^^^^^^
+  29 |
+  30 | const initialState = {
+  31 |   success: false,
+
+the name `format` is defined multiple times
+
+Import trace:
+  Server Component:
+    ./src/app/review-cases/ReviewInterface.js
+    ./src/app/review-cases/page.js @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_f3530cac._.js:3127
+[     599ms] [ERROR] ./src/app/review-cases/ReviewInterface.js:28:10
+Ecmascript file had an error
+  26 |
+  27 | import { DatePicker } from "@/components/ui/date-picker"
+> 28 | import { format } from "date-fns"
+     |          ^^^^^^
+  29 |
+  30 | const initialState = {
+  31 |   success: false,
+
+the name `format` is defined multiple times
+
+Import trace:
+  Server Component:
+    ./src/app/review-cases/ReviewInterface.js
+    ./src/app/review-cases/page.js @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_f3530cac._.js:3127
+[     622ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:3000/favicon.ico:0
+[     702ms] [ERROR] ./src/app/review-cases/ReviewInterface.js:28:10
+Ecmascript file had an error
+  26 |
+  27 | import { DatePicker } from "@/components/ui/date-picker"
+> 28 | import { format } from "date-fns"
+     |          ^^^^^^
+  29 |
+  30 | const initialState = {
+  31 |   success: false,
+
+the name `format` is defined multiple times
+
+Import trace:
+  Server Component:
+    ./src/app/review-cases/ReviewInterface.js
+    ./src/app/review-cases/page.js @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_f3530cac._.js:3127

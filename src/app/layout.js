@@ -19,8 +19,8 @@ export const metadata = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en">
-      <body className={`${outfit.className} antialiased bg-white text-slate-900`}>
+    <html lang="en" className="h-full">
+      <body className={`${outfit.className} antialiased bg-slate-50 text-slate-900 h-full`}>
         <AppLayout>{children}</AppLayout>
       </body>
     </html>

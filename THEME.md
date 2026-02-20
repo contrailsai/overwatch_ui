@@ -1,39 +1,58 @@
-# Overwatch UI Theme
+# Overwatch UI Theme: "Calm Focus"
 
 ## Design Philosophy
-"Overwatch" embodies a **clean, professional, and vigilant** aesthetic. It combines the reliability of enterprise software with the sleekness of modern SaaS applications. The interface is designed for clarity, speed, and precision—essential for threat detection.
+The "Calm Focus" design system is engineered for high-volume content reviewers who spend hours processing potentially distressing material. The goal is to minimize cognitive load and visual fatigue while maintaining a highly professional, trustworthy aesthetic.
 
-## Core Visual Elements
+**Core Tenets:**
+1.  **Clarity over Decoration:** Every pixel must serve a purpose. Remove visual noise.
+2.  **Calming Palette:** cool neutrals (Slate/Gray) and trustworthy blues. Avoid high-saturation warning colors unless absolutely necessary (threat detection).
+3.  **Soft Precision:** Rounded corners (radius-md to lg), subtle borders, and soft shadows to create a sense of stability and ease.
+4.  **Readable Hierarchy:** Strong typographic contrast using the **Outfit** font family to guide the eye effortlessly.
 
-### 1. Color Palette
-- **Primary:** Deep Blue (`bg-blue-700`, `text-blue-700`) - Represents trust, security, and authority.
-- **Secondary:** Slate/Gray (`bg-slate-900`, `text-slate-500`) - Provides a neutral, high-contrast backdrop for data.
-- **Accents:**
-    - **Alert/Danger:** Red (`text-red-500`) for threats and errors.
-    - **Success:** Green (`text-green-500`) for resolutions and safe states.
-    - **Warning:** Orange/Amber (`text-orange-500`) for pending items.
-- **Backgrounds:**
-    - App Background: `bg-gray-50` (soft, easy on eyes).
-    - Component Background: `bg-white` (clean, distinct).
+## Color System (Tailwind/OKLCH)
 
-### 2. Typography
-- **Font Family:** `Outfit` (Sans-serif).
-- **Headings:** Bold, often uppercase or tracking-widest for "technical" feel (e.g., "OVERWATCH" logo).
-- **Body:** Clean, legible, `text-slate-600` for readability.
+### Primary Brand
+- **Blue-600 (Brand):** Trust, Authority, Action. Used for primary buttons and active states.
+- **Slate-900 (Text):** High contrast but softer than pure black.
+- **Slate-500 (Muted):** Secondary text, instructions.
 
-### 3. Shape & Structure
-- **Borders:** Subtle `border-gray-200`.
-- **Radius:** Moderate rounding (`rounded-md` to `rounded-xl`).
-- **Shadows:** Soft, diffused shadows (`shadow-lg`, `shadow-xl`) to lift active elements.
-- **Spacing:** Generous padding (`p-6`, `p-8`) to prevent clutter.
+### Functional Colors
+- **Background:** `oklch(0.985 0.002 247.858)` (Very light cool gray/white).
+- **Surface (Card):** `oklch(1 0 0)` (Pure White) with subtle borders.
+- **Border:** `oklch(0.92 0.01 255.5)` (Soft cool gray).
 
-### 4. Components (shadcn/ui)
-We utilize `shadcn/ui` for a consistent component library.
-- **Buttons:** Primary (Blue), Ghost (Gray/Transparent for secondary actions).
-- **Cards:** White background, thin border, shadow for depth.
-- **Inputs:** Minimalist borders, focus rings match primary color.
+### Semantic Colors
+- **Threat/Danger:** `oklch(0.65 0.22 28.5)` (Refined Red, not neon).
+- **Safe/Clear:** `oklch(0.65 0.18 150.5)` (Calm Green).
+
+## Typography: Outfit
+- **Headings:** Outfit Medium/Bold. Tight tracking for clear, punchy headers.
+- **Body:** Outfit Regular/Light. Optimized for long-form reading and data scanning.
+- **Data/Code:** Monospace (if needed) or tabular nums for tables.
+
+## Component Styling
+
+### Cards & Surfaces
+- **Style:** Flat, white background, 1px solid border (`border-slate-200`).
+- **Shadow:** Minimal or none by default. Hover states can lift slightly (`shadow-sm`).
+- **Radius:** `rounded-xl` (roughly 12px) for a modern, friendly feel.
+
+### Buttons
+- **Primary:** Solid Brand Blue. Medium radius (`rounded-lg`). Hover: slightly deeper blue.
+- **Secondary:** White with Border. Hover: very light slate background.
+- **Ghost:** Transparent. Hover: light slate background.
+
+### Inputs
+- **Style:** Clean, ample padding (`h-10` or `h-11`).
+- **Focus:** Brand Blue ring, but subtle (`ring-2`, `ring-offset-1`).
 
 ## Layout Patterns
-- **Dashboard:** Sidebar navigation (collapsible/expandable) + Main Content Area.
-- **Data Display:** Tables and Cards for case management.
-- **Login:** Clean, centered focus, minimal distractions.
+- **Sidebar:** Fixed, dark or light (user preference, defaulting to clean light sidebar for "Calm Focus").
+- **Content Area:** Centered or wide, with generous padding (`p-6` or `p-8`).
+- **Data Tables:** Clean rows, plenty of whitespace. No zebra striping unless data is very dense.
+
+## "Calm Focus" Checklist for Developers
+- [ ] Is this element necessary?
+- [ ] Is the spacing consistent?
+- [ ] Is the text legible?
+- [ ] Does the color mean something?

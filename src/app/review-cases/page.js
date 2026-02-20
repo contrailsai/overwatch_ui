@@ -15,10 +15,10 @@ export default async function ReviewCasesPage({ searchParams }) {
 
   if (!hasReviewerPermission) {
     return (
-      <main className="flex-1 flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-4xl font-bold text-gray-900 mb-4">403</h1>
-          <p className="text-lg text-gray-600">Access Denied - Reviewer permission required.</p>
+      <main className="flex-1 flex items-center justify-center bg-slate-50">
+        <div className="text-center p-8 bg-white rounded-2xl border border-slate-200 shadow-sm">
+          <h1 className="text-3xl font-bold text-slate-900 mb-2">Access Denied</h1>
+          <p className="text-slate-500">You do not have the required permissions to access this area.</p>
         </div>
       </main>
     )
@@ -43,15 +43,15 @@ export default async function ReviewCasesPage({ searchParams }) {
   // 3. Handle missing setup
   if (!clientDetails?.project_name) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-8">
-        <div className="bg-amber-50 border border-amber-200 rounded-lg p-8 max-w-md">
-          <h2 className="text-2xl font-bold text-amber-800 mb-4">Account Not Set Up</h2>
-          <p className="text-amber-700 mb-6">
+      <div className="flex flex-col items-center justify-center h-full text-center p-8 bg-slate-50">
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-8 max-w-md shadow-sm">
+          <h2 className="text-xl font-bold text-amber-900 mb-3">Account Not Set Up</h2>
+          <p className="text-amber-800/80 mb-6 text-sm leading-relaxed">
             Your account has been created but not yet assigned to a project.
             Please contact your administrator to complete your setup.
           </p>
-          <div className="text-sm text-amber-600">
-            User ID: <code className="bg-amber-100 px-2 py-1 rounded">{user.id}</code>
+          <div className="text-xs text-amber-700 bg-amber-100/50 px-3 py-2 rounded-lg font-mono">
+            ID: {user.id}
           </div>
         </div>
       </div>
@@ -61,23 +61,26 @@ export default async function ReviewCasesPage({ searchParams }) {
   // Fetch Data
   const resolvedSearchParams = await searchParams // Next.js 15+ await searchParams
   const page = parseInt(resolvedSearchParams?.page || '1')
-  const { posts, totalPages, totalCount } = await getPosts(clientDetails.project_name, page, 20, {
+  
+  // Initial load filters
+  const initialFilters = {
     platform: 'all',
-    sourcingDateStart: '',
-    sourcingDateEnd: '',
-    dbDateStart: '',
-    dbDateEnd: '',
+    status: 'pending',
     aiAnalyzed: true,
-    poiDetected: true,
-    status: 'pending'
-  })
+    poiDetected: true
+  }
+
+  const { posts, totalPages, totalCount } = await getPosts(clientDetails.project_name, page, 20, initialFilters)
 
   return (
-    <main className="flex-1 relative flex flex-col">
-      <header className="bg-white border-b border-gray-200 py-4 px-6">
-        <div className="flex justify-between items-center">
-          <h1 className="text-2xl font-bold text-gray-900">Review Cases</h1>
-          <span className="text-sm text-gray-500">{totalCount} items pending</span>
+    <main className="flex-1 flex flex-col h-full overflow-hidden bg-slate-50">
+      <header className="bg-white border-b border-slate-200 py-5 px-8 shrink-0 flex justify-between items-center z-10">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Review Cases</h1>
+          <p className="text-sm text-slate-500 mt-0.5">Prioritize and verify AI-detected threats</p>
+        </div>
+        <div className="bg-slate-100 px-3 py-1.5 rounded-full border border-slate-200 text-xs font-semibold text-slate-600">
+          {totalCount.toLocaleString()} pending cases
         </div>
       </header>
 

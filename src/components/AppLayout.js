@@ -15,15 +15,17 @@ export function AppLayout({ children }) {
     const isAuthPage = pathname.startsWith('/login') || pathname.startsWith('/auth')
 
     if (isAuthPage) {
-        return <>{children}</>
+        return <ClientProvider>{children}</ClientProvider>
     }
 
     return (
-        <div className="flex h-screen bg-gray-50 overflow-hidden">
-            <ClientProvider>
+        <ClientProvider>
+            <div className="flex h-full bg-slate-50 overflow-hidden">
                 <Sidebar />
-                {children}
-            </ClientProvider>
-        </div>
+                <main className="flex-1 relative overflow-y-auto focus:outline-none">
+                    {children}
+                </main>
+            </div>
+        </ClientProvider>
     )
 }

@@ -3,16 +3,24 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { getPosts, approveTakedown, getPriorityTakedowns, getRaisedCount } from './actions'
 import { CaseDetailPanel } from './CaseDetailPanel'
+import { Skeleton } from "@/components/ui/skeleton"
 import {
   Filter, ChevronDown, Search, ArrowUpDown, Loader2,
   AlertTriangle, ShieldAlert, CheckCircle, ExternalLink,
   Info, Eye, LayoutGrid, List, Facebook, Instagram, Twitter,
-  Activity, User, Siren, FileSignature, ArrowRight, Quote
+  Activity, User, Siren, FileSignature, ArrowRight, Quote, X, Download,
+  ArrowUp, ArrowDown, Calendar
 } from 'lucide-react'
 
 import getPostLink from '@/components/GetPostLink'
 import Link from 'next/link'
 import { ReportButton } from '@/components/pdf/ReportButton'
+import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Separator } from "@/components/ui/separator"
+import { Label } from "@/components/ui/label"
+import { cn } from "@/lib/utils"
 
 export function CasesList() {
   const [posts, setPosts] = useState([])
@@ -84,10 +92,6 @@ export function CasesList() {
 
       if (result.posts.length > 0) {
         setPosts(prev => {
-          // Filter out any that might be in priority to avoid absolute duplicates (though rare if pagination flows naturally)
-          // But priority posts are "pinned" to top visually. 
-          // Ideally we dedupe by ID if we merged, but here we keep lists separate and merge in render
-          // Just appending normally here.
           return [...prev, ...result.posts]
         })
         setPage(nextPage)
@@ -168,6 +172,14 @@ export function CasesList() {
 
   const handleFilterChange = (key, value) => setFilters(prev => ({ ...prev, [key]: value }))
 
+  const clearFilters = () => {
+    setFilters({
+      platform: 'all',
+      status: 'all',
+      threat_type: 'all'
+    })
+  }
+
   const handleSortChange = (field) => {
     setSort(prev => ({
       field,
@@ -175,34 +187,11 @@ export function CasesList() {
     }))
   }
 
-  const handleApproveTakedown = async (e, post) => {
-    e.stopPropagation();
-    if (!confirm(`Are you sure you want to approve the takedown for this case? This will trigger an alert.`)) return;
-
-    try {
-      const result = await approveTakedown(post._id);
-      if (result.success) {
-        setPriorityPosts(prev => prev.filter(p => p._id !== post._id));
-        setRaisedCount(prev => prev + 1);
-        setPosts(prev => prev.map(p => {
-          if (p._id === post._id) {
-            return { ...p, takedown_info: { ...p.takedown_info, takedown_status: 'raised' } };
-          }
-          return p;
-        }));
-      } else {
-        alert("Failed: " + result.error);
-      }
-    } catch (err) {
-      console.error(err);
-    }
-  }
-
   const getRiskLabel = (score) => {
-    if (score >= 80) return { label: 'Critical', color: 'text-red-700 bg-red-50 border-red-200' };
+    if (score >= 80) return { label: 'Critical', color: 'text-rose-700 bg-rose-50 border-rose-200' };
     if (score >= 60) return { label: 'High', color: 'text-orange-700 bg-orange-50 border-orange-200' };
-    if (score >= 40) return { label: 'Medium', color: 'text-yellow-700 bg-yellow-50 border-yellow-200' };
-    return { label: 'Low', color: 'text-green-700 bg-green-50 border-green-200' };
+    if (score >= 40) return { label: 'Medium', color: 'text-amber-700 bg-amber-50 border-amber-200' };
+    return { label: 'Low', color: 'text-slate-700 bg-slate-50 border-slate-200' };
   }
 
   const getStatusConfig = (post) => {
@@ -220,215 +209,355 @@ export function CasesList() {
     if (post.analysis_results && Object.keys(post.analysis_results).length > 0) {
       return { label: 'AI Analysed', icon: Activity, color: 'text-purple-700 bg-purple-50 border-purple-200' };
     }
-    return { label: 'Unprocessed', icon: AlertTriangle, color: 'text-gray-600 bg-gray-50 border-gray-200' };
+    return { label: 'Unprocessed', icon: AlertTriangle, color: 'text-slate-600 bg-slate-50 border-slate-200' };
+  }
+
+  const SortIcon = ({ field }) => {
+    if (sort.field !== field) return <ArrowUpDown className="w-3.5 h-3.5 text-slate-300 ml-1.5" />
+    if (sort.direction === 'asc') return <ArrowUp className="w-3.5 h-3.5 text-blue-600 ml-1.5" />
+    return <ArrowDown className="w-3.5 h-3.5 text-blue-600 ml-1.5" />
   }
 
   return (
-    <div className="flex flex-col h-full bg-white">
-      {/* Filters */}
-      <div className="border-b border-gray-100 px-8 py-6 bg-white">
+    <div className="flex flex-col h-full bg-slate-50">
 
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-4 w-full sm:w-auto">
-            <div className="flex items-center gap-2">
-              <Filter className="w-4 h-4 text-gray-400" />
-              <span className="text-sm font-semibold text-gray-900">Filters</span>
+      {/* Filters & Controls */}
+      <div className="px-8 py-6 shrink-0">
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+          <div className="flex flex-col lg:flex-row items-center justify-between gap-6">
+
+            {/* Left: Filters */}
+            <div className="flex items-center gap-6 w-full lg:w-auto">
+              <div className="flex items-center gap-2.5 shrink-0">
+                <div className="bg-blue-50 p-2 rounded-lg text-blue-600">
+                  <Filter className="w-4 h-4" />
+                </div>
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Filters</span>
+              </div>
+
+              <Separator orientation="vertical" className="h-8 bg-slate-100 hidden sm:block" />
+
+              <div className="flex flex-wrap items-center gap-4">
+                <div className="space-y-1">
+                  <Label className="text-[10px] uppercase font-bold text-slate-400">Platform</Label>
+                  <Select
+                    value={filters.platform}
+                    onValueChange={(val) => handleFilterChange('platform', val)}
+                  >
+                    <SelectTrigger className="w-[140px] bg-white border-slate-200 h-9 text-xs font-semibold">
+                      <SelectValue placeholder="All Platforms" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Platforms</SelectItem>
+                      <SelectItem value="instagram">Instagram</SelectItem>
+                      <SelectItem value="facebook">Facebook</SelectItem>
+                      <SelectItem value="x">X (Twitter)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-[10px] uppercase font-bold text-slate-400">Threat Type</Label>
+                  <Select
+                    value={filters.threat_type}
+                    onValueChange={(val) => handleFilterChange('threat_type', val)}
+                  >
+                    <SelectTrigger className="w-[160px] bg-white border-slate-200 h-9 text-xs font-semibold">
+                      <SelectValue placeholder="All Threats" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Threat Types</SelectItem>
+                      <SelectItem value="impersonation">Impersonation</SelectItem>
+                      <SelectItem value="deepfake_video">Deepfake Video</SelectItem>
+                      <SelectItem value="scam_ad">Scam Ad</SelectItem>
+                      <SelectItem value="hate_speech">Hate Speech</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {(filters.platform !== 'all' || filters.threat_type !== 'all' || filters.status !== 'all') && (
+                  <div className="pt-4">
+                    <Button variant="ghost" size="sm" onClick={clearFilters} className="h-9 px-2 text-rose-600 hover:text-rose-700 hover:bg-rose-50 font-bold text-xs">
+                      <X className="w-3.5 h-3.5 mr-1" /> Clear
+                    </Button>
+                  </div>
+                )}
+              </div>
             </div>
 
-            {/* Filters */}
-            <select
-              className="bg-gray-50 border border-gray-200 text-gray-700 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 min-w-[140px]"
-              value={filters.platform}
-              onChange={(e) => handleFilterChange('platform', e.target.value)}
-            >
-              <option value="all">All Platforms</option>
-              <option value="instagram">Instagram</option>
-              <option value="facebook">Facebook</option>
-              <option value="x">X (Twitter)</option>
-            </select>
+            {/* Right: Actions & Counts */}
+            <div className="flex items-center gap-5 w-full lg:w-auto justify-end">
+              <ReportButton posts={mergedPosts} />
 
-            <select
-              className="bg-gray-50 border border-gray-200 text-gray-700 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 min-w-[140px]"
-              value={filters.threat_type}
-              onChange={(e) => handleFilterChange('threat_type', e.target.value)}
-            >
-              <option value="all">All Threat Types</option>
-              <option value="impersonation">Impersonation</option>
-              <option value="deepfake_video">Deepfake Video</option>
-              <option value="scam_ad">Scam Ad</option>
-              <option value="hate_speech">Hate Speech</option>
-            </select>
+              {raisedCount > 0 && (
+                <Link
+                  href="/takedowns"
+                  className="flex items-center gap-2 px-3 py-1.5 bg-rose-50 border border-rose-100 rounded-lg text-rose-700 hover:bg-rose-100 transition-colors group"
+                >
+                  <Siren className="w-4 h-4" />
+                  <span className="text-xs font-bold">{raisedCount} Raised</span>
+                  <ArrowRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-1" />
+                </Link>
+              )}
 
-          </div>
+              <Separator orientation="vertical" className="h-8 bg-slate-100 hidden sm:block" />
 
-          <div className="flex items-center gap-6">
-            <ReportButton posts={mergedPosts} />
-            {raisedCount > 0 && (
-              <Link
-                href="/takedowns"
-                className="flex items-center gap-2 px-3 py-1.5 bg-rose-50 border border-rose-100 rounded-lg text-rose-700 hover:bg-rose-100 transition-colors group"
-              >
-                <Siren className="w-4 h-4" />
-                <span className="text-sm font-bold">{raisedCount} Raised Cases</span>
-                <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
-              </Link>
-            )}
-            <div className="text-sm text-gray-400 font-medium">
-              Showing {mergedPosts.length} cases
+              <div className="text-xs font-medium text-slate-500 whitespace-nowrap">
+                <span className="font-bold text-slate-900 text-sm">{totalCount}</span> cases found
+              </div>
             </div>
           </div>
         </div>
       </div>
 
       {/* Main Table */}
-      <div className="flex-1 overflow-y-auto pb-32 p-8 bg-gray-50/50">
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-          <table className="min-w-full divide-y divide-gray-100">
-            <thead className="bg-gray-50">
+      <div className="flex-1 overflow-y-auto px-8 pb-8">
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+          <table className="min-w-full divide-y divide-slate-100">
+            <thead className="bg-slate-50/80 sticky top-0 z-10 backdrop-blur-sm">
               <tr>
-                <th scope="col" className="px-6 py-4 text-left text-sm font-bold text-gray-500 uppercase -wider">Priority</th>
-                <th scope="col" className="px-6 py-4 text-left text-sm font-bold text-gray-500 uppercase -wider">Status</th>
-                <th scope="col" className="px-6 py-4 text-left text-sm font-bold text-gray-500 uppercase -wider">Content</th>
-                <th scope="col" className="px-6 py-4 text-left text-sm font-bold text-gray-500 uppercase -wider">Platform</th>
-                <th scope="col" className="px-6 py-4 text-left text-sm font-bold text-gray-500 uppercase -wider">Threat Type</th>
-                <th scope="col" className="px-6 py-4 text-left text-sm font-bold text-gray-500 uppercase -wider">Source</th>
-                <th scope="col" className="px-6 py-4 text-right text-sm font-bold text-gray-500 uppercase tracking-wider">Actions</th>
+                <th
+                  scope="col"
+                  className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100 transition-colors group select-none"
+                  onClick={() => handleSortChange('threat_score')}
+                >
+                  <div className="flex items-center">
+                    Risk Priority
+                    <SortIcon field="threat_score" />
+                  </div>
+                </th>
+                <th scope="col" className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Status</th>
+                <th
+                  scope="col"
+                  className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100 transition-colors group select-none"
+                  onClick={() => handleSortChange('created_at')}
+                >
+                  <div className="flex items-center">
+                    Content & Date
+                    <SortIcon field="created_at" />
+                  </div>
+                </th>
+                <th scope="col" className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Platform</th>
+                <th scope="col" className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Threat Type</th>
+                <th scope="col" className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Source</th>
+                <th scope="col" className="px-6 py-4 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-50">
-              {mergedPosts.map((post, index) => {
-                const isLastPost = index === mergedPosts.length - 1;
-                const riskScore = post.review_details?.threat_score || post.analysis_results?.risk_score || 0;
-                const risk = getRiskLabel(riskScore);
-                const threatTypes = post.review_details?.threat_types  //|| post.analysis_results?.category || 'Unknown';
-                const statusConfig = getStatusConfig(post);
-                const StatusIcon = statusConfig.icon;
-                const isSelected = selectedPost?._id === post._id
 
-                return (
-                  <tr
-                    key={index}
-                    ref={el => {
-                      postRefs.current[post._id] = el
-                      if (isLastPost) lastPostElementRef(el)
-                    }}
-                    onClick={() => setSelectedPost(post)}
-                    className={`transition-colors cursor-pointer group ${isSelected ? 'bg-blue-100 ring-2 ring-inset ring-blue-400 z-10 relative' : 'hover:bg-blue-50/30'}`}
-                  >
+            <tbody className="bg-white divide-y divide-slate-100">
+              {initialLoading ? (
+                Array.from({ length: 8 }).map((_, index) => (
+                  <tr key={index}>
                     {/* Priority */}
-                    <td className="px-6 py-5 whitespace-nowrap">
-                      <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold border ${risk.color}`}>
-                        <AlertTriangle className="w-3 h-3 mr-1.5" />
-                        {risk.label}
-                      </span>
+                    <td className="px-6 py-4 whitespace-nowrap align-top">
+                      <Skeleton className="h-6 w-20" />
                     </td>
-
                     {/* Status */}
-                    <td className="px-6 py-5 whitespace-nowrap">
-                      <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold border ${statusConfig.color}`}>
-                        <StatusIcon className="w-3 h-3 mr-1.5" />
-                        {statusConfig.label}
-                      </span>
+                    <td className="px-6 py-4 whitespace-nowrap align-top">
+                      <Skeleton className="h-6 w-24" />
                     </td>
-
                     {/* Content */}
-                    <td className="px-6 py-5 max-w-md overflow-hidden">
-                      <div className="flex items-center gap-4">
-                        {post.signedImageUrl ? (
-                          <div className="h-12 w-12 rounded-lg overflow-hidden flex-shrink-0 border border-gray-100 shadow-sm bg-gray-50">
-                            <img
-                              src={post.signedImageUrl}
-                              alt="Content"
-                              className="h-full w-full object-cover"
-                            />
-                          </div>
-                        ) : (
-                          <div className="h-12 w-12 rounded-lg bg-gray-50 flex items-center justify-center flex-shrink-0 border border-gray-100">
-                            <Quote className="h-5 w-5 text-gray-300" />
-                          </div>
-                        )}
-                        <div className="flex flex-col min-w-0">
-                          <span className="font-bold text-gray-900 text-sm mb-0.5 truncate">
-                            {post.user?.username ? `@${post.user.username}` : 'Unknown User'}
-                            {post.review_details?.threat_type ? `: ${post.review_details.threat_type.replace(/_/g, ' ')}` : ''}
-                          </span>
-                          <span className="text-xs text-gray-500 line-clamp-2 leading-snug">
-                            {post.caption || 'No specific text content.'}
-                          </span>
+                    <td className="px-6 py-4 max-w-lg align-top">
+                      <div className="flex gap-4">
+                        <Skeleton className="h-16 w-16 rounded-lg shrink-0" />
+                        <div className="flex flex-col gap-2 w-full">
+                          <Skeleton className="h-4 w-32" />
+                          <Skeleton className="h-3 w-full" />
+                          <Skeleton className="h-3 w-2/3" />
                         </div>
                       </div>
                     </td>
-
                     {/* Platform */}
-                    <td className="px-6 py-5 whitespace-nowrap">
-                      <div className="flex items-center text-gray-700 font-medium">
-                        {post.platform === 'instagram' && <Instagram className=" size-6 stroke-pink-500 mr-2" />}
-                        {post.platform === 'facebook' && <Facebook className=" size-6 stroke-blue-500 mr-2" />}
-                        {post.platform === 'x' && <Twitter className=" size-6 stroke-black mr-2" />}
-                        <span className="capitalize">{post.platform}</span>
-                      </div>
+                    <td className="px-6 py-4 whitespace-nowrap align-top">
+                      <Skeleton className="h-6 w-20" />
                     </td>
-
                     {/* Threat Type */}
-                    <td className="px-6 py-5 whitespace-nowrap">
-                      <div className="flex flex-wrap gap-1.5">
-                        {Array.isArray(threatTypes) && threatTypes.map((type, idx) => {
-                          const colorMap = {
-                            scam: 'text-orange-700 bg-orange-50 border-orange-200',
-                            aigc: 'text-purple-700 bg-purple-50 border-purple-200',
-                            fake_news: 'text-red-700 bg-red-50 border-red-200',
-                            hate_speech: 'text-rose-700 bg-rose-50 border-rose-200',
-                            nsfw: 'text-yellow-700 bg-yellow-50 border-yellow-200',
-
-                          };
-                          return (
-                            <span
-                              key={idx}
-                              className={`inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-bold border uppercase tracking-wider ${colorMap[type] || 'text-gray-600 bg-gray-50 border-gray-200'}`}
-                            >
-                              {type.replace(/_/g, ' ')}
-                            </span>
-                          );
-                        })}
+                    <td className="px-6 py-4 whitespace-nowrap align-top">
+                      <div className="flex gap-1">
+                        <Skeleton className="h-5 w-16" />
+                        <Skeleton className="h-5 w-16" />
                       </div>
                     </td>
-
                     {/* Source */}
-                    <td className="px-6 py-5 whitespace-nowrap">
-                      <a
-                        href={post.original_url ? post.original_url : getPostLink(post)}
-                        target="_blank"
-                        rel="noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                        className="inline-flex items-center text-blue-600 hover:text-blue-800 font-semibold text-sm transition-colors hover:border-blue-500 border-b-2 border-transparent"
-                      >
-                        View <ExternalLink className="w-3.5 h-3.5 ml-1" />
-                      </a>
+                    <td className="px-6 py-4 whitespace-nowrap align-top">
+                      <Skeleton className="h-5 w-16" />
                     </td>
-
                     {/* Actions */}
-                    <td className="px-6 py-5 whitespace-nowrap text-right">
-                      <button className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-2 px-4 rounded-lg shadow-sm transition-colors inline-flex items-center">
-                        Go Deep
-                      </button>
+                    <td className="px-6 py-4 whitespace-nowrap text-right align-top">
+                      <Skeleton className="h-8 w-20 ml-auto" />
                     </td>
                   </tr>
-                )
-              })}
+                ))
+              ) : (
+                mergedPosts.map((post, index) => {
+                  // ... (existing map logic)
+
+                  const isLastPost = index === mergedPosts.length - 1;
+                  const riskScore = post.review_details?.threat_score || post.analysis_results?.risk_score || 0;
+                  const risk = getRiskLabel(riskScore);
+                  const threatTypes = post.review_details?.threat_types;
+                  const statusConfig = getStatusConfig(post);
+                  const StatusIcon = statusConfig.icon;
+                  const isSelected = selectedPost?._id === post._id
+
+                  return (
+                    <tr
+                      key={index}
+                      ref={el => {
+                        postRefs.current[post._id] = el
+                        if (isLastPost) lastPostElementRef(el)
+                      }}
+                      onClick={() => setSelectedPost(post)}
+                      className={cn(
+                        "transition-all cursor-pointer group",
+                        isSelected ? "bg-blue-50/60 ring-1 ring-inset ring-blue-200 z-10 relative" : "hover:bg-slate-50"
+                      )}
+                    >
+                      {/* Priority */}
+                      <td className="px-6 py-4 whitespace-nowrap align-top">
+                        <span className={cn("inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold border shadow-sm", risk.color)}>
+                          <AlertTriangle className="w-3.5 h-3.5 mr-1.5" />
+                          {risk.label}
+                        </span>
+                      </td>
+
+                      {/* Status */}
+                      <td className="px-6 py-4 whitespace-nowrap align-top">
+                        <span className={cn("inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold border shadow-sm", statusConfig.color)}>
+                          <StatusIcon className="w-3.5 h-3.5 mr-1.5" />
+                          {statusConfig.label}
+                        </span>
+                      </td>
+
+                      {/* Content */}
+                      <td className="px-6 py-4 max-w-lg overflow-hidden align-top">
+                        <div className="flex gap-4">
+                          <div className="shrink-0 relative">
+                            {post.signedImageUrl ? (
+                              <div className="h-16 w-16 rounded-lg overflow-hidden border border-slate-200 shadow-sm bg-slate-50 group-hover:shadow-md transition-all">
+                                <img
+                                  src={post.signedImageUrl}
+                                  alt="Content"
+                                  className="h-full w-full object-cover"
+                                  loading="lazy"
+                                />
+                              </div>
+                            ) : (
+                              <div className="h-16 w-16 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-center">
+                                <Quote className="h-6 w-6 text-slate-300" />
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex flex-col min-w-0 gap-1">
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-slate-900 text-sm truncate hover:text-blue-600 transition-colors">
+                                {post.user?.username ? `@${post.user.username}` : 'Unknown User'}
+                              </span>
+                              <span className="text-xs text-slate-400">•</span>
+                              <span className="text-xs text-slate-500 font-mono">
+                                {post.taken_at ? new Date(post.taken_at * 1000).toLocaleDateString() : 'N/A'}
+                              </span>
+                            </div>
+                            <span className="text-xs text-slate-600 line-clamp-2 leading-relaxed">
+                              {post.caption || <span className="italic text-slate-400">No caption content.</span>}
+                            </span>
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* Platform */}
+                      <td className="px-6 py-4 whitespace-nowrap align-top">
+                        <Badge variant="outline" className="capitalize font-semibold text-slate-600 border-slate-300 gap-1.5 pl-2 h-7">
+                          {post.platform === 'instagram' && <Instagram className="w-3.5 h-3.5 text-pink-500" />}
+                          {post.platform === 'facebook' && <Facebook className="w-3.5 h-3.5 text-blue-600" />}
+                          {post.platform === 'x' && <Twitter className="w-3.5 h-3.5 text-slate-900" />}
+                          {post.platform}
+                        </Badge>
+                      </td>
+
+                      {/* Threat Type */}
+                      <td className="px-6 py-4 whitespace-nowrap align-top">
+                        <div className="flex flex-wrap gap-1.5 max-w-[200px]">
+                          {Array.isArray(threatTypes) && threatTypes.map((type, idx) => {
+                            const colorMap = {
+                              scam: 'text-orange-700 bg-orange-50 border-orange-200',
+                              aigc: 'text-purple-700 bg-purple-50 border-purple-200',
+                              fake_news: 'text-red-700 bg-red-50 border-red-200',
+                              hate_speech: 'text-rose-700 bg-rose-50 border-rose-200',
+                              nsfw: 'text-amber-700 bg-amber-50 border-amber-200',
+                            };
+                            const style = colorMap[type] || 'text-slate-600 bg-slate-100 border-slate-200';
+                            return (
+                              <span
+                                key={idx}
+                                className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold border uppercase tracking-wider shadow-sm ${style}`}
+                              >
+                                {type.replace(/_/g, ' ')}
+                              </span>
+                            );
+                          })}
+                          {(!threatTypes || threatTypes.length === 0) && <span className="text-xs text-slate-400 italic">None</span>}
+                        </div>
+                      </td>
+
+                      {/* Source */}
+                      <td className="px-6 py-4 whitespace-nowrap align-top">
+                        <a
+                          href={post.original_url ? post.original_url : getPostLink(post)}
+                          target="_blank"
+                          rel="noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="inline-flex items-center text-blue-600 hover:text-blue-800 font-bold text-xs transition-colors hover:underline bg-blue-50 px-2 py-1 rounded-md"
+                        >
+                          Source <ExternalLink className="w-3 h-3 ml-1" />
+                        </a>
+                      </td>
+
+                      {/* Actions */}
+                      <td className="px-6 py-4 whitespace-nowrap text-right align-top">
+                        <Button
+                          size="sm"
+                          variant={isSelected ? "default" : "secondary"}
+                          className={cn(
+                            "h-8 text-xs font-bold transition-all shadow-sm",
+                            isSelected ? "bg-blue-600 hover:bg-blue-700 shadow-blue-200" : "bg-white border border-slate-200 hover:bg-slate-50 text-slate-600"
+                          )}
+                        >
+                          {isSelected ? 'Inspect' : 'Details'}
+                          <ArrowRight className="w-3 h-3 ml-1.5 opacity-50" />
+                        </Button>
+                      </td>
+                    </tr>
+                  )
+                }))}
             </tbody>
           </table>
 
           {mergedPosts.length === 0 && !initialLoading && (
-            <div className="flex flex-col items-center justify-center py-20 text-gray-400">
-              <Search className="w-12 h-12 mb-4 opacity-20" />
-              <p className="text-lg font-medium">No cases found</p>
-              <p className="text-sm">Try adjusting your filters</p>
+            <div className="flex flex-col items-center justify-center py-24 text-slate-400">
+              <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mb-6 border border-slate-100">
+                <Search className="w-8 h-8 opacity-20 text-slate-500" />
+              </div>
+              <h3 className="text-lg font-bold text-slate-700 mb-1">No active cases found</h3>
+              <p className="text-sm text-slate-500 max-w-xs text-center">Try adjusting your filters or search for different criteria.</p>
+              <Button variant="outline" onClick={clearFilters} className="mt-6 border-slate-200">
+                Clear all filters
+              </Button>
             </div>
           )}
 
           {loadingMore && (
-            <div className="py-8 flex justify-center">
-              <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
+            <div className="py-8 flex justify-center bg-slate-50/50 border-t border-slate-100">
+              <div className="flex items-center gap-2 text-blue-600 text-sm font-bold animate-pulse">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Loading more cases...
+              </div>
+            </div>
+          )}
+
+          {!hasMore && mergedPosts.length > 0 && (
+            <div className="py-6 text-center text-[10px] font-bold text-slate-300 uppercase tracking-widest bg-slate-50/30 border-t border-slate-100">
+              End of List
             </div>
           )}
         </div>
