@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils'
 import { useRouter } from 'next/navigation'
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { CaseExportButton } from '@/components/pdf/CaseExportButton'
 
 export function CaseDetailPanel({ post, isOpen, onClose, onNavigate, hasPrev, hasNext }) {
     const [isProcessing, setIsProcessing] = useState(false)
@@ -43,6 +44,9 @@ export function CaseDetailPanel({ post, isOpen, onClose, onNavigate, hasPrev, ha
     const isHateSpeech = review.flags?.is_hate_speech ?? (analysis.hate_speech_check?.is_safe === false) ?? false;
     const isFakeNews = review.flags?.is_fake_news ?? (analysis.truth_check?.is_credible === false) ?? false;
     const isAigc = review.flags?.is_aigc ?? analysis.aigc_check?.is_aigc ?? false;
+    const isFraud = review.flags?.is_fraud ?? (analysis.fraud_check?.is_fraud === true) ?? false;
+    const isAssetMisuse = review.flags?.is_asset_misuse ?? (analysis.asset_misuse_check?.is_asset_misuse === true) ?? false;
+    const isSatire = review.flags?.is_humor ?? (analysis.is_humor?.is_humor === true) ?? false;
 
     // Takedown logic
     const takedownStatus = post.takedown_info?.takedown_status || 'None';
@@ -116,6 +120,7 @@ export function CaseDetailPanel({ post, isOpen, onClose, onNavigate, hasPrev, ha
                                 </Button>
                             </div>
                         )}
+                        <CaseExportButton post={post} />
                         {isRequested && (
                             <Badge className="bg-orange-50 text-orange-700 border-orange-200 gap-1.5 pl-2 animate-pulse">
                                 <Siren className="w-3.5 h-3.5" /> Takedown Requested
@@ -262,6 +267,13 @@ export function CaseDetailPanel({ post, isOpen, onClose, onNavigate, hasPrev, ha
                                 <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Detection Signals</h4>
                                 <div className="grid grid-cols-2 gap-3">
                                     <SignalCard
+                                        active={isPoiPresent}
+                                        title="POI Detected"
+                                        icon={User}
+                                        color="indigo"
+                                        extra={poiNames.length > 0 ? poiNames[0] : null}
+                                    />
+                                    <SignalCard
                                         active={isAigc}
                                         title="AI Generated"
                                         icon={Activity}
@@ -280,24 +292,42 @@ export function CaseDetailPanel({ post, isOpen, onClose, onNavigate, hasPrev, ha
                                         color="orange"
                                     />
                                     <SignalCard
-                                        active={isPoiPresent}
-                                        title="POI Detected"
+                                        active={isNsfw}
+                                        title="NSFW Content"
                                         icon={User}
                                         color="indigo"
-                                        extra={poiNames.length > 0 ? poiNames[0] : null}
                                     />
+                                    <SignalCard
+                                        active={isFraud}
+                                        title="Fraud"
+                                        icon={User}
+                                        color="rose"
+                                    />
+                                    <SignalCard
+                                        active={isAssetMisuse}
+                                        title="Asset Misuse"
+                                        icon={User}
+                                        color="yellow"
+                                    />
+                                    <SignalCard
+                                        active={isSatire}
+                                        title="Satire"
+                                        icon={User}
+                                        color="blue"
+                                    />
+
                                 </div>
                             </div>
 
                             {/* Reasoning */}
-                            <div className="space-y-3">
+                            {/* <div className="space-y-3">
                                 <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
                                     <Eye className="w-3.5 h-3.5" /> AI Reasoning
                                 </h4>
                                 <div className="bg-slate-50 p-5 rounded-xl border border-slate-100 text-slate-600 leading-relaxed text-sm font-medium">
                                     {reasoning}
                                 </div>
-                            </div>
+                            </div> */}
 
                             {/* Reviewer Note */}
                             {reviewerNote && (

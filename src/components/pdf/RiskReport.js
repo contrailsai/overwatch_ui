@@ -291,7 +291,7 @@ const TableHeader = () => (
  */
 const sanitizeText = (text) => {
   if (!text) return '';
-  
+
   // 1. Convert string to an array of code points to handle multi-byte characters (emojis) correctly.
   return Array.from(text).map(char => {
     const codePoint = char.codePointAt(0);
@@ -300,7 +300,7 @@ const sanitizeText = (text) => {
     if ((codePoint >= 32 && codePoint <= 126) || codePoint === 10 || codePoint === 13 || codePoint === 9) {
       return char;
     }
-    
+
     // 3. Keep Emoji Ranges
     // - Misc Symbols & Pictographs: \u{1F300}-\u{1F5FF}
     // - Emoticons: \u{1F600}-\u{1F64F}
@@ -390,8 +390,8 @@ export const RiskReportDocument = ({ posts }) => (
       <Text style={[styles.sectionTitle, { marginBottom: 10 }]}>Case List Analysis</Text>
       <TableHeader />
 
-      {posts.map((post) => (
-        <TableRow key={post._id} post={post} />
+      {posts.map((post, idx) => (
+        <TableRow key={idx} post={post} />
       ))}
 
       <Footer />
