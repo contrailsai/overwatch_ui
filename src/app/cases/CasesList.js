@@ -9,11 +9,17 @@ import {
   AlertTriangle, ShieldAlert, CheckCircle, ExternalLink,
   Info, Eye, LayoutGrid, List, Facebook, Instagram, Twitter,
   Activity, User, Siren, FileSignature, ArrowRight, Quote, X, Download,
-  ArrowUp, ArrowDown, Calendar
+  ArrowUp, ArrowDown, Calendar, ClockFading, ChevronLeft, ChevronRight,
+  ShieldCheck,
+  Smile,
+  TrendingDown,
+  Zap,
+  TriangleAlert
 } from 'lucide-react'
 
 import getPostLink from '@/components/GetPostLink'
 import Link from 'next/link'
+import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { ReportButton } from '@/components/pdf/ReportButton'
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -22,97 +28,90 @@ import { Separator } from "@/components/ui/separator"
 import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
 
-export function CasesList() {
-  const [posts, setPosts] = useState([])
+export function CasesList({ cases, project, initialFilters, initialSort, currentPage, initialCase }) {
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+
   const [priorityPosts, setPriorityPosts] = useState([])
   const [raisedCount, setRaisedCount] = useState(0)
-  const [initialLoading, setInitialLoading] = useState(true)
-  const [loadingMore, setLoadingMore] = useState(false)
-  const [page, setPage] = useState(1)
-  const [hasMore, setHasMore] = useState(true)
-  const [totalCount, setTotalCount] = useState(0)
+  const [isInitialLoading, setIsInitialLoading] = useState(true)
 
-  // Filters State
-  const [filters, setFilters] = useState({
-    platform: 'all',
-    status: 'all',
-    threat_type: 'all'
-  })
+  const posts = cases?.posts || []
+  const totalCount = cases?.totalCount || 0
+  const totalPages = cases?.totalPages || 0
 
-  // Sort State
-  const [sort, setSort] = useState({
-    field: 'threat_score',
-    direction: 'desc'
-  })
-
-  const [selectedPost, setSelectedPost] = useState(null)
-
-  const observer = useRef()
+  const [selectedPost, setSelectedPost] = useState(initialCase || null)
+  const [updatedCases, setUpdatedCases] = useState({})
   const postRefs = useRef({})
 
-  // Fetch initial data or when filters/sort change
+  // Sync Priority and Raised Count
   useEffect(() => {
-    const loadInitialData = async () => {
-      setInitialLoading(true)
-      setPage(1)
-      setHasMore(true)
-      setPosts([])
-
+    const fetchMetadata = async () => {
       try {
-        const [postsResult, priorityResult, countResult] = await Promise.all([
-          getPosts(1, 20, filters, sort),
+        const [priorityResult, countResult] = await Promise.all([
           getPriorityTakedowns(),
           getRaisedCount()
         ])
-
-        setPosts(postsResult.posts)
-        setTotalCount(postsResult.totalCount)
-        setHasMore(1 < postsResult.totalPages)
         setPriorityPosts(priorityResult)
         setRaisedCount(countResult)
-
       } catch (error) {
-        console.error('Failed to fetch posts:', error)
+        console.error('Failed to fetch metadata:', error)
       } finally {
-        setInitialLoading(false)
+        setIsInitialLoading(false)
       }
     }
+    fetchMetadata()
+  }, [])
 
-    loadInitialData()
-  }, [filters, sort])
-
-  // Load more posts function
-  const loadMore = useCallback(async () => {
-    if (loadingMore || !hasMore || initialLoading) return
-
-    setLoadingMore(true)
-    try {
-      const nextPage = page + 1
-      const result = await getPosts(nextPage, 20, filters, sort)
-
-      if (result.posts.length > 0) {
-        setPosts(prev => {
-          return [...prev, ...result.posts]
-        })
-        setPage(nextPage)
-        setHasMore(nextPage < result.totalPages)
+  // Navigation Logic for URL params
+  const updateQueryParams = useCallback((newParams) => {
+    const params = new URLSearchParams(searchParams.toString())
+    Object.entries(newParams).forEach(([key, value]) => {
+      if (value === 'all' || value === null || value === undefined) {
+        params.delete(key)
       } else {
-        setHasMore(false)
+        params.set(key, value)
       }
-    } catch (error) {
-      console.error('Failed to load more posts:', error)
-    } finally {
-      setLoadingMore(false)
+    })
+    // Reset page on filter/sort change unless explicitly setting page
+    if (!newParams.page) {
+      params.delete('page')
     }
-  }, [page, loadingMore, hasMore, initialLoading, filters, sort])
+    router.push(`${pathname}?${params.toString()}`)
+  }, [router, pathname, searchParams])
 
-  // Helper for duplicate removal if an item is in both lists
-  const mergedPosts = useMemo(() => [
-    ...priorityPosts.map(p => ({ ...p, isPriority: true })),
-    ...posts.filter(p => !priorityPosts.some(pr => pr._id === p._id))
-  ], [priorityPosts, posts]);
+  const handleFilterChange = (key, value) => {
+    const paramKey = key === 'client_status' ? 'status' : key
+    updateQueryParams({ [paramKey]: value })
+  }
 
-  // Navigation Logic
+  const handleSortChange = (field) => {
+    const direction = (initialSort.field === field && initialSort.direction === 'desc') ? 'asc' : 'desc'
+    updateQueryParams({ sortField: field, sortDirection: direction })
+  }
+
+  const handlePageChange = (newPage) => {
+    if (newPage < 1 || newPage > totalPages) return
+    updateQueryParams({ page: newPage })
+  }
+
+  const clearFilters = () => {
+    router.push(pathname)
+  }
+
+  // Merged posts for current page view
+  const mergedPosts = useMemo(() => {
+    const currentPosts = cases?.posts || []
+    // Priority posts only show on page 1 by convention or if we want them everywhere
+    // Given the previous logic merged them, let's keep it similar
+    return [
+      ...priorityPosts.map(p => ({ ...p, isPriority: true })),
+      ...currentPosts.filter(p => !priorityPosts.some(pr => pr._id === p._id))
+    ]
+  }, [priorityPosts, cases?.posts])
+
+  // Navigation Logic for CaseDetailPanel
   const navigatePost = useCallback((direction) => {
     if (!selectedPost) return
 
@@ -132,18 +131,13 @@ export function CasesList() {
           el.scrollIntoView({ behavior: 'smooth', block: 'center' })
         }
       }, 0)
-    } else if (direction === 'next' && nextIndex >= mergedPosts.length && hasMore) {
-      loadMore()
     }
-  }, [selectedPost, mergedPosts, hasMore, loadMore])
+  }, [selectedPost, mergedPosts])
 
   // Keyboard navigation
   useEffect(() => {
     const handleKeyDown = (e) => {
-      // Only navigate if a post is selected (panel is open)
       if (!selectedPost) return
-
-      // Ignore inputs
       if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return
 
       if (e.key === 'ArrowLeft') {
@@ -158,63 +152,30 @@ export function CasesList() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [selectedPost, navigatePost])
 
-  // Intersection Observer
-  const lastPostElementRef = useCallback(node => {
-    if (initialLoading || loadingMore) return
-    if (observer.current) observer.current.disconnect()
-    observer.current = new IntersectionObserver(entries => {
-      if (entries[0].isIntersecting && hasMore) {
-        loadMore()
-      }
-    }, { threshold: 0.1, rootMargin: '100px' })
-    if (node) observer.current.observe(node)
-  }, [initialLoading, loadingMore, hasMore, loadMore])
-
-  const handleFilterChange = (key, value) => setFilters(prev => ({ ...prev, [key]: value }))
-
-  const clearFilters = () => {
-    setFilters({
-      platform: 'all',
-      status: 'all',
-      threat_type: 'all'
-    })
-  }
-
-  const handleSortChange = (field) => {
-    setSort(prev => ({
-      field,
-      direction: prev.field === field && prev.direction === 'desc' ? 'asc' : 'desc'
-    }))
-  }
-
   const getRiskLabel = (score) => {
-    if (score >= 80) return { label: 'Critical', color: 'text-rose-700 bg-rose-50 border-rose-200' };
-    if (score >= 60) return { label: 'High', color: 'text-orange-700 bg-orange-50 border-orange-200' };
-    if (score >= 40) return { label: 'Medium', color: 'text-amber-700 bg-amber-50 border-amber-200' };
-    return { label: 'Low', color: 'text-slate-700 bg-slate-50 border-slate-200' };
+    if (score >= 96) return { label: 'High', color: 'text-rose-500 bg-rose-50 border-rose-200' };
+    if (score >= 76) return { label: 'Medium', color: 'text-orange-500 bg-orange-50 border-orange-200' };
+    if (score >= 41) return { label: 'Low', color: 'text-amber-500 bg-amber-50 border-amber-200' };
+    return { label: 'Safe', color: 'text-slate-500 bg-slate-50 border-slate-200' };
   }
 
   const getStatusConfig = (post) => {
-    const takedownStatus = post.takedown_info?.takedown_status;
-
-    if (takedownStatus === 'requested') {
-      return { label: 'Takedown Suggested', icon: FileSignature, color: 'text-orange-800 bg-orange-50 border-orange-200 ring-1 ring-orange-300' };
+    const status = post.client_status || 'To Be Reviewed';
+    if (status === 'To Be Reviewed') {
+      return { label: 'To Be Reviewed', icon: ClockFading, color: 'text-slate-700 bg-slate-50 border-slate-200' };
     }
-    if (takedownStatus === 'raised') {
-      return { label: 'Takedown Raised', icon: Siren, color: 'text-rose-700 bg-rose-50 border-rose-200' };
+    if (status === 'Pass') {
+      return { label: 'Pass', icon: CheckCircle, color: 'text-emerald-700 bg-emerald-50 border-emerald-200' };
     }
-    if (post.review_details && Object.keys(post.review_details).length > 0) {
-      return { label: 'Reviewed', icon: User, color: 'text-blue-700 bg-blue-50 border-blue-200' };
+    if (status === 'Flag for Takedown') {
+      return { label: 'Flag for Takedown', icon: Siren, color: 'text-rose-700 bg-rose-50 border-rose-200' };
     }
-    if (post.analysis_results && Object.keys(post.analysis_results).length > 0) {
-      return { label: 'AI Analysed', icon: Activity, color: 'text-purple-700 bg-purple-50 border-purple-200' };
-    }
-    return { label: 'Unprocessed', icon: AlertTriangle, color: 'text-slate-600 bg-slate-50 border-slate-200' };
+    return { label: status, icon: Info, color: 'text-slate-600 bg-slate-50 border-slate-200' };
   }
 
   const SortIcon = ({ field }) => {
-    if (sort.field !== field) return <ArrowUpDown className="w-3.5 h-3.5 text-slate-300 ml-1.5" />
-    if (sort.direction === 'asc') return <ArrowUp className="w-3.5 h-3.5 text-blue-600 ml-1.5" />
+    if (initialSort.field !== field) return <ArrowUpDown className="w-3.5 h-3.5 text-slate-300 ml-1.5" />
+    if (initialSort.direction === 'asc') return <ArrowUp className="w-3.5 h-3.5 text-blue-600 ml-1.5" />
     return <ArrowDown className="w-3.5 h-3.5 text-blue-600 ml-1.5" />
   }
 
@@ -241,7 +202,7 @@ export function CasesList() {
                 <div className="space-y-1">
                   <Label className="text-[10px] uppercase font-bold text-slate-400">Platform</Label>
                   <Select
-                    value={filters.platform}
+                    value={initialFilters.platform}
                     onValueChange={(val) => handleFilterChange('platform', val)}
                   >
                     <SelectTrigger className="w-[140px] bg-white border-slate-200 h-9 text-xs font-semibold">
@@ -257,9 +218,27 @@ export function CasesList() {
                 </div>
 
                 <div className="space-y-1">
+                  <Label className="text-[10px] uppercase font-bold text-slate-400">Status</Label>
+                  <Select
+                    value={initialFilters.client_status}
+                    onValueChange={(val) => handleFilterChange('client_status', val)}
+                  >
+                    <SelectTrigger className="w-[160px] bg-white border-slate-200 h-9 text-xs font-semibold">
+                      <SelectValue placeholder="Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Statuses</SelectItem>
+                      <SelectItem value="To Be Reviewed">To Be Reviewed</SelectItem>
+                      <SelectItem value="Pass">Pass</SelectItem>
+                      <SelectItem value="Flag for Takedown">Flag for Takedown</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1">
                   <Label className="text-[10px] uppercase font-bold text-slate-400">Threat Type</Label>
                   <Select
-                    value={filters.threat_type}
+                    value={initialFilters.threat_type}
                     onValueChange={(val) => handleFilterChange('threat_type', val)}
                   >
                     <SelectTrigger className="w-[160px] bg-white border-slate-200 h-9 text-xs font-semibold">
@@ -275,7 +254,7 @@ export function CasesList() {
                   </Select>
                 </div>
 
-                {(filters.platform !== 'all' || filters.threat_type !== 'all' || filters.status !== 'all') && (
+                {(initialFilters.platform !== 'all' || initialFilters.threat_type !== 'all' || initialFilters.client_status !== 'To Be Reviewed') && (
                   <div className="pt-4">
                     <Button variant="ghost" size="sm" onClick={clearFilters} className="h-9 px-2 text-rose-600 hover:text-rose-700 hover:bg-rose-50 font-bold text-xs">
                       <X className="w-3.5 h-3.5 mr-1" /> Clear
@@ -289,16 +268,16 @@ export function CasesList() {
             <div className="flex items-center gap-5 w-full lg:w-auto justify-end">
               <ReportButton posts={mergedPosts} />
 
-              {raisedCount > 0 && (
+              {/* {(raisedCount > 0 || isInitialLoading) && (
                 <Link
                   href="/takedowns"
                   className="flex items-center gap-2 px-3 py-1.5 bg-rose-50 border border-rose-100 rounded-lg text-rose-700 hover:bg-rose-100 transition-colors group"
                 >
                   <Siren className="w-4 h-4" />
-                  <span className="text-xs font-bold">{raisedCount} Raised</span>
+                  <span className="text-xs font-bold">{isInitialLoading ? '...' : raisedCount} Raised</span>
                   <ArrowRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-1" />
                 </Link>
-              )}
+              )} */}
 
               <Separator orientation="vertical" className="h-8 bg-slate-100 hidden sm:block" />
 
@@ -311,7 +290,7 @@ export function CasesList() {
       </div>
 
       {/* Main Table */}
-      <div className="flex-1 overflow-y-auto px-8 pb-8">
+      <div className="flex-1 overflow-y-auto px-8 pb-4">
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
           <table className="min-w-full divide-y divide-slate-100">
             <thead className="bg-slate-50/80 sticky top-0 z-10 backdrop-blur-sm">
@@ -345,195 +324,173 @@ export function CasesList() {
             </thead>
 
             <tbody className="bg-white divide-y divide-slate-100">
-              {initialLoading ? (
-                Array.from({ length: 8 }).map((_, index) => (
-                  <tr key={index}>
+              {mergedPosts.map((post, index) => {
+                const currentPost = { ...post, client_status: updatedCases[post._id] || post.client_status };
+                const riskScore = currentPost.review_details?.threat_score;
+                const risk = getRiskLabel(riskScore);
+
+                const review = currentPost.review_details;
+                const analysis = currentPost.analysis;
+
+                // const isPoiPresent = review.flags?.poi_confirmed ?? (analysis.poi_check?.poi_name_found || analysis.poi_check?.face_present) ?? false;
+                const isNsfw = review.flags?.is_nsfw ?? false;
+                const isHateSpeech = review.flags?.is_hate_speech ?? false;
+                const isFakeNews = review.flags?.is_fake_news ?? false;
+                const isAigc = review.flags?.is_aigc ?? false;
+                const isFraud = review.flags?.is_fraud ?? false;
+                const isAssetMisuse = review.flags?.is_asset_misuse ?? false;
+                const isSatire = review.flags?.is_humor ?? false;
+
+                let threatTypes = [isNsfw && "NSFW", isHateSpeech && "Hate Speech", isFakeNews && "Fake News", isAigc && "AIGC", isFraud && "Fraud", isAssetMisuse && "Asset Misuse", isSatire && "Satire"];
+                threatTypes = threatTypes.filter(Boolean);
+
+                const statusConfig = getStatusConfig(currentPost);
+                const StatusIcon = statusConfig.icon;
+                const isSelected = selectedPost?._id === currentPost._id
+
+                return (
+                  <tr
+                    key={currentPost._id}
+                    ref={el => postRefs.current[currentPost._id] = el}
+                    onClick={() => setSelectedPost(currentPost)}
+                    className={cn(
+                      "transition-all cursor-pointer group",
+                      isSelected ? "bg-blue-50/60 ring-1 ring-inset ring-blue-200 z-10 relative" : "hover:bg-slate-50"
+                    )}
+                  >
                     {/* Priority */}
                     <td className="px-6 py-4 whitespace-nowrap align-top">
-                      <Skeleton className="h-6 w-20" />
+                      <span className={cn("inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold border shadow-sm", risk.color)}>
+
+                        {
+                          risk.label === "High" ? (
+                            <Siren className="w-3.5 h-3.5 mr-1.5" />
+                          ) : risk.label === "Medium" ? (
+                            <TriangleAlert className="w-3.5 h-3.5 mr-1.5" />
+                          ) : risk.label === "Low" ? (
+                            <TrendingDown className="w-3.5 h-3.5 mr-1.5" />
+                          ) : (
+                            <Smile className="w-3.5 h-3.5 mr-1.5" />
+                          )
+                        }
+
+                        {risk.label}
+                      </span>
                     </td>
+
                     {/* Status */}
                     <td className="px-6 py-4 whitespace-nowrap align-top">
-                      <Skeleton className="h-6 w-24" />
+                      <span className={cn("inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold border shadow-sm", statusConfig.color)}>
+                        <StatusIcon className="w-3.5 h-3.5 mr-1.5" />
+                        {statusConfig.label}
+                      </span>
                     </td>
+
                     {/* Content */}
-                    <td className="px-6 py-4 max-w-lg align-top">
+                    <td className="px-6 py-4 max-w-lg overflow-hidden align-top">
                       <div className="flex gap-4">
-                        <Skeleton className="h-16 w-16 rounded-lg shrink-0" />
-                        <div className="flex flex-col gap-2 w-full">
-                          <Skeleton className="h-4 w-32" />
-                          <Skeleton className="h-3 w-full" />
-                          <Skeleton className="h-3 w-2/3" />
-                        </div>
-                      </div>
-                    </td>
-                    {/* Platform */}
-                    <td className="px-6 py-4 whitespace-nowrap align-top">
-                      <Skeleton className="h-6 w-20" />
-                    </td>
-                    {/* Threat Type */}
-                    <td className="px-6 py-4 whitespace-nowrap align-top">
-                      <div className="flex gap-1">
-                        <Skeleton className="h-5 w-16" />
-                        <Skeleton className="h-5 w-16" />
-                      </div>
-                    </td>
-                    {/* Source */}
-                    <td className="px-6 py-4 whitespace-nowrap align-top">
-                      <Skeleton className="h-5 w-16" />
-                    </td>
-                    {/* Actions */}
-                    <td className="px-6 py-4 whitespace-nowrap text-right align-top">
-                      <Skeleton className="h-8 w-20 ml-auto" />
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                mergedPosts.map((post, index) => {
-                  // ... (existing map logic)
-
-                  const isLastPost = index === mergedPosts.length - 1;
-                  const riskScore = post.review_details?.threat_score || post.analysis_results?.risk_score || 0;
-                  const risk = getRiskLabel(riskScore);
-                  const threatTypes = post.review_details?.threat_types;
-                  const statusConfig = getStatusConfig(post);
-                  const StatusIcon = statusConfig.icon;
-                  const isSelected = selectedPost?._id === post._id
-
-                  return (
-                    <tr
-                      key={index}
-                      ref={el => {
-                        postRefs.current[post._id] = el
-                        if (isLastPost) lastPostElementRef(el)
-                      }}
-                      onClick={() => setSelectedPost(post)}
-                      className={cn(
-                        "transition-all cursor-pointer group",
-                        isSelected ? "bg-blue-50/60 ring-1 ring-inset ring-blue-200 z-10 relative" : "hover:bg-slate-50"
-                      )}
-                    >
-                      {/* Priority */}
-                      <td className="px-6 py-4 whitespace-nowrap align-top">
-                        <span className={cn("inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold border shadow-sm", risk.color)}>
-                          <AlertTriangle className="w-3.5 h-3.5 mr-1.5" />
-                          {risk.label}
-                        </span>
-                      </td>
-
-                      {/* Status */}
-                      <td className="px-6 py-4 whitespace-nowrap align-top">
-                        <span className={cn("inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold border shadow-sm", statusConfig.color)}>
-                          <StatusIcon className="w-3.5 h-3.5 mr-1.5" />
-                          {statusConfig.label}
-                        </span>
-                      </td>
-
-                      {/* Content */}
-                      <td className="px-6 py-4 max-w-lg overflow-hidden align-top">
-                        <div className="flex gap-4">
-                          <div className="shrink-0 relative">
-                            {post.signedImageUrl ? (
-                              <div className="h-16 w-16 rounded-lg overflow-hidden border border-slate-200 shadow-sm bg-slate-50 group-hover:shadow-md transition-all">
-                                <img
-                                  src={post.signedImageUrl}
-                                  alt="Content"
-                                  className="h-full w-full object-cover"
-                                  loading="lazy"
-                                />
-                              </div>
-                            ) : (
-                              <div className="h-16 w-16 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-center">
-                                <Quote className="h-6 w-6 text-slate-300" />
-                              </div>
-                            )}
-                          </div>
-                          <div className="flex flex-col min-w-0 gap-1">
-                            <div className="flex items-center gap-2">
-                              <span className="font-bold text-slate-900 text-sm truncate hover:text-blue-600 transition-colors">
-                                {post.user?.username ? `@${post.user.username}` : 'Unknown User'}
-                              </span>
-                              <span className="text-xs text-slate-400">•</span>
-                              <span className="text-xs text-slate-500 font-mono">
-                                {post.taken_at ? new Date(post.taken_at * 1000).toLocaleDateString() : 'N/A'}
-                              </span>
+                        <div className="shrink-0 relative">
+                          {post.signedImageUrl ? (
+                            <div className="h-16 w-16 rounded-lg overflow-hidden border border-slate-200 shadow-sm bg-slate-50 group-hover:shadow-md transition-all">
+                              <img
+                                src={post.signedImageUrl}
+                                alt="Content"
+                                className="h-full w-full object-cover"
+                                loading="lazy"
+                              />
                             </div>
-                            <span className="text-xs text-slate-600 line-clamp-2 leading-relaxed">
-                              {post.caption || <span className="italic text-slate-400">No caption content.</span>}
+                          ) : (
+                            <div className="h-16 w-16 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-center">
+                              <Quote className="h-6 w-6 text-slate-300" />
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex flex-col min-w-0 gap-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-slate-900 text-sm truncate hover:text-blue-600 transition-colors">
+                              {post.user?.username ? `@${post.user.username}` : 'Unknown User'}
+                            </span>
+                            <span className="text-xs text-slate-400">•</span>
+                            <span className="text-xs text-slate-500 font-mono">
+                              {post.taken_at ? new Date(post.taken_at * 1000).toLocaleDateString() : 'N/A'}
                             </span>
                           </div>
+                          <span className="text-xs text-slate-600 line-clamp-2 leading-relaxed">
+                            {post.caption || <span className="italic text-slate-400">No caption content.</span>}
+                          </span>
                         </div>
-                      </td>
+                      </div>
+                    </td>
 
-                      {/* Platform */}
-                      <td className="px-6 py-4 whitespace-nowrap align-top">
-                        <Badge variant="outline" className="capitalize font-semibold text-slate-600 border-slate-300 gap-1.5 pl-2 h-7">
-                          {post.platform === 'instagram' && <Instagram className="w-3.5 h-3.5 text-pink-500" />}
-                          {post.platform === 'facebook' && <Facebook className="w-3.5 h-3.5 text-blue-600" />}
-                          {post.platform === 'x' && <Twitter className="w-3.5 h-3.5 text-slate-900" />}
-                          {post.platform}
-                        </Badge>
-                      </td>
+                    {/* Platform */}
+                    <td className="px-6 py-4 whitespace-nowrap align-top">
+                      <Badge variant="outline" className="capitalize font-semibold text-slate-600 border-slate-300 gap-1.5 pl-2 h-7">
+                        {post.platform === 'instagram' && <Instagram className="w-3.5 h-3.5 text-pink-500" />}
+                        {post.platform === 'facebook' && <Facebook className="w-3.5 h-3.5 text-blue-600" />}
+                        {post.platform === 'x' && <Twitter className="w-3.5 h-3.5 text-slate-900" />}
+                        {post.platform}
+                      </Badge>
+                    </td>
 
-                      {/* Threat Type */}
-                      <td className="px-6 py-4 whitespace-nowrap align-top">
-                        <div className="flex flex-wrap gap-1.5 max-w-[200px]">
-                          {Array.isArray(threatTypes) && threatTypes.map((type, idx) => {
-                            const colorMap = {
-                              scam: 'text-orange-700 bg-orange-50 border-orange-200',
-                              aigc: 'text-purple-700 bg-purple-50 border-purple-200',
-                              fake_news: 'text-red-700 bg-red-50 border-red-200',
-                              hate_speech: 'text-rose-700 bg-rose-50 border-rose-200',
-                              nsfw: 'text-amber-700 bg-amber-50 border-amber-200',
-                            };
-                            const style = colorMap[type] || 'text-slate-600 bg-slate-100 border-slate-200';
-                            return (
-                              <span
-                                key={idx}
-                                className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold border uppercase tracking-wider shadow-sm ${style}`}
-                              >
-                                {type.replace(/_/g, ' ')}
-                              </span>
-                            );
-                          })}
-                          {(!threatTypes || threatTypes.length === 0) && <span className="text-xs text-slate-400 italic">None</span>}
-                        </div>
-                      </td>
+                    {/* Threat Type */}
+                    <td className="px-6 py-4 whitespace-nowrap align-top">
+                      <div className="flex flex-wrap gap-1.5 max-w-[200px]">
+                        {Array.isArray(threatTypes) && threatTypes.map((type, idx) => {
+                          const colorMap = {
+                            scam: 'text-orange-700 bg-orange-50 border-orange-200',
+                            aigc: 'text-purple-700 bg-purple-50 border-purple-200',
+                            fake_news: 'text-red-700 bg-red-50 border-red-200',
+                            hate_speech: 'text-rose-700 bg-rose-50 border-rose-200',
+                            nsfw: 'text-amber-700 bg-amber-50 border-amber-200',
+                          };
+                          const style = colorMap[type] || 'text-slate-600 bg-slate-100 border-slate-200';
+                          return (
+                            <span
+                              key={idx}
+                              className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold border uppercase tracking-wider shadow-sm ${style}`}
+                            >
+                              {type.replace(/_/g, ' ')}
+                            </span>
+                          );
+                        })}
+                        {(!threatTypes || threatTypes.length === 0) && <span className="text-xs text-slate-400 italic"></span>}
+                      </div>
+                    </td>
 
-                      {/* Source */}
-                      <td className="px-6 py-4 whitespace-nowrap align-top">
-                        <a
-                          href={post.original_url ? post.original_url : getPostLink(post)}
-                          target="_blank"
-                          rel="noreferrer"
-                          onClick={(e) => e.stopPropagation()}
-                          className="inline-flex items-center text-blue-600 hover:text-blue-800 font-bold text-xs transition-colors hover:underline bg-blue-50 px-2 py-1 rounded-md"
-                        >
-                          Source <ExternalLink className="w-3 h-3 ml-1" />
-                        </a>
-                      </td>
+                    {/* Source */}
+                    <td className="px-6 py-4 whitespace-nowrap align-top">
+                      <a
+                        href={post.original_url ? post.original_url : getPostLink(post)}
+                        target="_blank"
+                        rel="noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="inline-flex items-center text-blue-600 hover:text-blue-800 font-bold text-xs transition-colors hover:underline bg-blue-50 px-2 py-1 rounded-md"
+                      >
+                        Source <ExternalLink className="w-3 h-3 ml-1" />
+                      </a>
+                    </td>
 
-                      {/* Actions */}
-                      <td className="px-6 py-4 whitespace-nowrap text-right align-top">
-                        <Button
-                          size="sm"
-                          variant={isSelected ? "default" : "secondary"}
-                          className={cn(
-                            "h-8 text-xs font-bold transition-all shadow-sm",
-                            isSelected ? "bg-blue-600 hover:bg-blue-700 shadow-blue-200" : "bg-white border border-slate-200 hover:bg-slate-50 text-slate-600"
-                          )}
-                        >
-                          {isSelected ? 'Inspect' : 'Details'}
-                          <ArrowRight className="w-3 h-3 ml-1.5 opacity-50" />
-                        </Button>
-                      </td>
-                    </tr>
-                  )
-                }))}
+                    {/* Actions */}
+                    <td className="px-6 py-4 whitespace-nowrap text-right align-top">
+                      <Button
+                        size="sm"
+                        variant={isSelected ? "default" : "secondary"}
+                        className={cn(
+                          "h-8 text-xs font-bold transition-all shadow-sm",
+                          isSelected ? "bg-blue-600 hover:bg-blue-700 shadow-blue-200" : "bg-white border border-slate-200 hover:bg-slate-50 text-slate-600"
+                        )}
+                      >
+                        {isSelected ? 'Inspect' : 'Details'}
+                        <ArrowRight className="w-3 h-3 ml-1.5 opacity-50" />
+                      </Button>
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
 
-          {mergedPosts.length === 0 && !initialLoading && (
+          {mergedPosts.length === 0 && (
             <div className="flex flex-col items-center justify-center py-24 text-slate-400">
               <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mb-6 border border-slate-100">
                 <Search className="w-8 h-8 opacity-20 text-slate-500" />
@@ -545,31 +502,63 @@ export function CasesList() {
               </Button>
             </div>
           )}
-
-          {loadingMore && (
-            <div className="py-8 flex justify-center bg-slate-50/50 border-t border-slate-100">
-              <div className="flex items-center gap-2 text-blue-600 text-sm font-bold animate-pulse">
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Loading more cases...
-              </div>
-            </div>
-          )}
-
-          {!hasMore && mergedPosts.length > 0 && (
-            <div className="py-6 text-center text-[10px] font-bold text-slate-300 uppercase tracking-widest bg-slate-50/30 border-t border-slate-100">
-              End of List
-            </div>
-          )}
         </div>
       </div>
 
+      {/* Pagination Controls */}
+      {totalPages > 1 && (
+        <div className="px-8 pb-2 pt-2">
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 px-6 py-4 flex items-center justify-between">
+            <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+              Page <span className="text-slate-900">{currentPage}</span> of <span className="text-slate-900">{totalPages}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handlePageChange(currentPage - 1)}
+                disabled={currentPage === 1}
+                className="h-9 px-3 text-xs font-bold border-slate-200 hover:bg-slate-50 disabled:opacity-50"
+              >
+                <ChevronLeft className="w-4 h-4 mr-1" /> Previous
+              </Button>
+              <div className="flex items-center gap-1">
+                {/* Simple page numbers could go here if needed, but Prev/Next is cleaner for 20 items */}
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handlePageChange(currentPage + 1)}
+                disabled={currentPage === totalPages}
+                className="h-9 px-3 text-xs font-bold border-slate-200 hover:bg-slate-50 disabled:opacity-50"
+              >
+                Next <ChevronRight className="w-4 h-4 ml-1" />
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <CaseDetailPanel
-        post={selectedPost}
+        post={selectedPost ? { ...selectedPost, client_status: updatedCases[selectedPost._id] || selectedPost.client_status } : null}
+        project={project}
         isOpen={!!selectedPost}
-        onClose={() => setSelectedPost(null)}
+        onClose={() => {
+          setSelectedPost(null)
+          
+          if (searchParams.has('case_id')) {
+            updateQueryParams({ case_id: null })
+          }
+          
+          if (Object.keys(updatedCases).length > 0) {
+            router.refresh()
+            setUpdatedCases({})
+          }
+        }}
+        onUpdateStatus={(id, status) => setUpdatedCases(prev => ({ ...prev, [id]: status }))}
         onNavigate={navigatePost}
         hasPrev={mergedPosts.findIndex(p => p._id === selectedPost?._id) > 0}
-        hasNext={mergedPosts.findIndex(p => p._id === selectedPost?._id) < mergedPosts.length - 1 || hasMore}
+        hasNext={mergedPosts.findIndex(p => p._id === selectedPost?._id) < mergedPosts.length - 1}
       />
     </div>
   )

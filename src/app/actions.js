@@ -41,31 +41,72 @@ export async function getDashboardData(projectName) {
   // 3. Fetch Total Posts from MongoDB
   let totalPosts = 0
   let recentPosts = []
+  let projectDetails = { showTakedowns: true }
+
   try {
     let dbName = process.env.MONGO_DB_NAME
 
-    // Fetch project-specific DB name if projectName is provided
+    // Fetch project-specific details
     if (projectName) {
       const { data: projectData } = await supabase
         .from('project')
-        .select('mongo_db_map')
+        .select('mongo_db_map, project_details')
         .eq('project_name', projectName)
         .single()
 
       if (projectData?.mongo_db_map) {
         dbName = projectData.mongo_db_map
       }
+
+      if (projectData?.project_details) {
+        try {
+          const details = typeof projectData.project_details === 'string'
+            ? JSON.parse(projectData.project_details)
+            : projectData.project_details
+
+          if (details.do_takedowns === false) {
+            projectDetails.showTakedowns = false
+          }
+          projectDetails.description = details.description
+        } catch (parseError) {
+          console.error('Error parsing project_details:', parseError)
+        }
+      }
     }
 
     const client = await clientPromise
     const db = client.db(dbName)
     const collection = db.collection('Posts')
+    const query = {
+      processed: true,
+      'takedown_info.takedown_status': { $ne: 'raised' }
+    }
 
-    totalPosts = await collection.countDocuments({})
+    const andConditions = [
+      {
+        $or: [
+          { client_status: { $exists: false } },
+          { client_status: null },
+          { client_status: 'To Be Reviewed' },
+        ]
+      },
+      {
+        $or: [
+          { "analysis_results.poi_check.face_present": true },
+          { "analysis_results.poi_check.poi_name_found": true }
+        ]
+      }
+    ]
 
-    // Get recent 10 posts for quick view
-    const posts = await collection.find({})
-      .sort({ taken_at: -1, timestamp: -1 })
+    query.$and = andConditions
+    query["analysis_results.risk_score"] = { $exists: true }
+    query["review_details.threat_score"] = { $exists: true }
+
+    totalPosts = await collection.countDocuments(query)
+
+    // Get recent 10 posts mimicking the default view (filtered by pending, sorted by risk)
+    const posts = await collection.find(query)
+      .sort({ 'review_details.threat_score': -1 })
       .limit(10)
       .toArray()
 
@@ -80,14 +121,14 @@ export async function getDashboardData(projectName) {
 
       return {
         _id: post._id.toString(),
-        code: post.code,
+        code: post.code || post.post_id,
         platform: post.platform || 'instagram',
-        caption: post.caption || post.content || '',
-        username: post.user?.username || post.author?.username || post.author?.name || 'Unknown',
+        caption: post.post_content?.caption || post.caption || post.content || '',
+        username: post.profile?.username || post.user?.username || post.author?.username || post.author?.name || 'Unknown',
         taken_at: normalizedTimestamp,
         signedImageUrl: signedUrl,
-        threat_type: 'pending',
-        threat_score: null
+        threat_type: post.review_details?.primary_threat_type || 'pending',
+        threat_score: post.review_details?.threat_score || null
       }
     }))
   } catch (e) {
@@ -124,20 +165,21 @@ export async function getDashboardData(projectName) {
 
   // === Risk Distribution ===
   const riskDistribution = [
-    { name: 'High Risk', value: totalRiskHigh, color: '#f87171', fill: '#f87171' }, // Red 400
-    { name: 'Medium Risk', value: totalRiskMedium, color: '#fbbf24', fill: '#fbbf24' }, // Amber 400
-    { name: 'Low Risk', value: totalRiskLow, color: '#fcd34d', fill: '#fcd34d' }, // Amber 300
-    { name: 'Safe', value: totalRiskSafe, color: '#4fd1c5', fill: '#4fd1c5' } // Teal 300
+    { name: 'High Risk', value: totalRiskHigh, color: '#f43f5e', fill: '#f43f5e' }, // Rose 500
+    { name: 'Medium Risk', value: totalRiskMedium, color: '#f97316', fill: '#f97316' }, // Orange 500
+    { name: 'Low Risk', value: totalRiskLow, color: '#f59e0b', fill: '#f59e0b' }, // Amber 500
+    { name: 'Safe', value: totalRiskSafe, color: '#64748b', fill: '#64748b' } // Slate 500
   ]
+
 
   // === Threat Type Distribution ===
   const threatTypeDistribution = [
-    { name: 'Scam', value: metricsData.reduce((acc, curr) => acc + (curr.threat_scam_count || 0), 0), fill: '#818cf8' }, // Indigo 400
-    { name: 'Hate Speech', value: metricsData.reduce((acc, curr) => acc + (curr.threat_hate_speech_count || 0), 0), fill: '#94a3b8' }, // Slate 400
-    { name: 'Fake News', value: metricsData.reduce((acc, curr) => acc + (curr.threat_fake_news_count || 0), 0), fill: '#64748b' }, // Slate 500
-    { name: 'NSFW', value: metricsData.reduce((acc, curr) => acc + (curr.threat_nsfw_count || 0), 0), fill: '#475569' }, // Slate 600
-    { name: 'AIGC', value: metricsData.reduce((acc, curr) => acc + (curr.threat_aigc_count || 0), 0), fill: '#334155' }, // Slate 700
-    { name: 'Other', value: metricsData.reduce((acc, curr) => acc + (curr.threat_other_count || 0), 0), fill: '#1e293b' } // Slate 800
+    { name: 'Scam', value: metricsData.reduce((acc, curr) => acc + (curr.threat_scam_count || 0), 0), fill: '#fecdd3' },        // Rose 200
+    { name: 'Hate Speech', value: metricsData.reduce((acc, curr) => acc + (curr.threat_hate_speech_count || 0), 0), fill: '#ddd6fe' }, // Violet 200
+    { name: 'Fake News', value: metricsData.reduce((acc, curr) => acc + (curr.threat_fake_news_count || 0), 0), fill: '#bae6fd' },    // Sky 200
+    { name: 'NSFW', value: metricsData.reduce((acc, curr) => acc + (curr.threat_nsfw_count || 0), 0), fill: '#fde68a' },         // Amber 200
+    { name: 'AIGC', value: metricsData.reduce((acc, curr) => acc + (curr.threat_aigc_count || 0), 0), fill: '#a7f3d0' },         // Emerald 200
+    { name: 'Other', value: metricsData.reduce((acc, curr) => acc + (curr.threat_other_count || 0), 0), fill: '#e2e8f0' }        // Slate 200
   ]
 
   // === Platform Distribution ===
@@ -229,7 +271,10 @@ export async function getDashboardData(projectName) {
     takedownsByStatus,
 
     // Recent posts for quick view
-    recentPosts: recentPosts
+    recentPosts: recentPosts,
+
+    // Project Details for UI logic
+    projectDetails
   }
 }
 

@@ -1,25 +1,104 @@
 'use client'
 
-import { useState } from 'react'
+import { format } from "date-fns"
+import { useEffect, useState } from 'react'
 import {
     X, User, Heart, MessageCircle, Share2, AlertTriangle,
     Activity, BadgeCheck, Quote, ShieldAlert, CheckCircle,
     ExternalLink, Calendar, Info, Siren, Eye, Link as LinkIcon,
-    ChevronLeft, ChevronRight, History
+    ChevronLeft, ChevronRight, History, Facebook, Instagram, Twitter,
+    Loader2, Send, Copy, Check
 } from 'lucide-react'
 import ProfilePic from '@/components/ProfilePic'
-import { approveTakedown } from './actions'
+import { approveTakedown, updateClientStatus, addReviewNote } from './actions'
 import { cn } from '@/lib/utils'
 import { useRouter } from 'next/navigation'
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Textarea } from "@/components/ui/textarea"
 import { CaseExportButton } from '@/components/pdf/CaseExportButton'
 
-export function CaseDetailPanel({ post, isOpen, onClose, onNavigate, hasPrev, hasNext }) {
+const getRiskLabel = (score) => {
+    if (score >= 96) return { label: 'High', color: 'text-rose-500 bg-rose-50 border-rose-200' };
+    if (score >= 76) return { label: 'Medium', color: 'text-orange-500 bg-orange-50 border-orange-200' };
+    if (score >= 41) return { label: 'Low', color: 'text-amber-500 bg-amber-50 border-amber-200' };
+    return { label: 'Safe', color: 'text-slate-500 bg-slate-50 border-slate-200' };
+}
+
+export function CaseDetailPanel({ post, project, isOpen, onClose, onNavigate, hasPrev, hasNext, onUpdateStatus }) {
     const [isProcessing, setIsProcessing] = useState(false)
     const [imgError, setImgError] = useState(false)
     const router = useRouter()
+    const [showProcessed, setShowProcessed] = useState("");
+    const [noteText, setNoteText] = useState("");
+    const [isSubmittingNote, setIsSubmittingNote] = useState(false);
+    const [localNotes, setLocalNotes] = useState(post?.client_notes || []);
+    const [copied, setCopied] = useState(false);
+
+    let allowDoTakedown = false;
+    try {
+        if (project && project.project_details) {
+            const details = project.project_details;
+            if (details.do_takedowns === true || details.do_takedowns === undefined) {
+                allowDoTakedown = true;
+            } else {
+                allowDoTakedown = false;
+            }
+        } else {
+            allowDoTakedown = true;
+        }
+    } catch (e) {
+        console.log(e)
+        allowDoTakedown = true;
+    }
+
+    useEffect(() => {
+        if (post?._id !== showProcessed) {
+            setShowProcessed("")
+        }
+    }, [post, showProcessed])
+
+    useEffect(() => {
+        setLocalNotes(post?.client_notes || []);
+        setNoteText('');
+    }, [post]);
+
+    useEffect(() => {
+        let timeoutId;
+        if (showProcessed === post?._id && hasNext) {
+            timeoutId = setTimeout(() => {
+                onNavigate('next');
+            }, 1500);
+        }
+        return () => clearTimeout(timeoutId);
+    }, [showProcessed, post?._id, hasNext, onNavigate]);
+
     if (!isOpen || !post) return null
+
+    const handleAddNote = async () => {
+        if (!noteText.trim()) return;
+        setIsSubmittingNote(true);
+        try {
+            const result = await addReviewNote(post._id, noteText);
+            if (result.success) {
+                setLocalNotes(prev => [...prev, result.note]);
+                setNoteText('');
+            } else {
+                alert("Failed to add note: " + result.error);
+            }
+        } catch (error) {
+            alert("Failed to add note");
+        } finally {
+            setIsSubmittingNote(false);
+        }
+    };
+
+    const handleCopyLink = () => {
+        const url = `${window.location.origin}/test-cases/${post._id}`;
+        navigator.clipboard.writeText(url);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+    };
 
     console.log(post)
 
@@ -52,23 +131,51 @@ export function CaseDetailPanel({ post, isOpen, onClose, onNavigate, hasPrev, ha
     const takedownStatus = post.takedown_info?.takedown_status || 'None';
     const isRaised = (takedownStatus === 'raised');
     const isRequested = (takedownStatus === 'requested');
+    const clientStatus = post.client_status || 'To Be Reviewed';
+
+    let posted_date = ""
+    let sourced_date = ""
+
+    if (post.metadata?.posted_date)
+        posted_date = format(new Date(post.metadata.posted_date), "dd/MM/yyyy");
+    else if (post.sourcing_date)
+        posted_date = format(new Date(post.sourcing_date), "dd/MM/yyyy");
+
+    if (post.metadata?.created_at)
+        sourced_date = format(new Date(post.metadata.created_at), "dd/MM/yyyy");
+    else if (post.created_at)
+        sourced_date = format(new Date(post.created_at), "dd/MM/yyyy");
 
     const handleTakedown = async () => {
-        if (!confirm("Confirm initiation of takedown process? This will alert the legal team.")) return;
-
-        setIsProcessing(true);
+        setIsProcessing('takedown');
         try {
             const result = await approveTakedown(post._id);
             if (result.success) {
-                // alert("Takedown initiated successfully.");
+                if (onUpdateStatus) onUpdateStatus(post._id, 'Flag for Takedown');
                 onClose();
+                router.push("/takedowns/case/" + result.supabase_id)
             } else {
                 alert("Error: " + result.error);
             }
-            // redirect to takedown page
-            router.push("/takedowns/case/" + result.supabase_id)
         } catch (e) {
             alert("Failed to initiate takedown.");
+        } finally {
+            setIsProcessing(false);
+        }
+    }
+
+    const handleUpdateStatus = async (status) => {
+        setIsProcessing(status);
+        try {
+            const result = await updateClientStatus(post._id, status);
+            if (result.success) {
+                if (onUpdateStatus) onUpdateStatus(post._id, status);
+                setShowProcessed(post._id);
+            } else {
+                alert("Error: " + result.error);
+            }
+        } catch (e) {
+            alert("Failed to update status.");
         } finally {
             setIsProcessing(false);
         }
@@ -120,6 +227,15 @@ export function CaseDetailPanel({ post, isOpen, onClose, onNavigate, hasPrev, ha
                                 </Button>
                             </div>
                         )}
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={handleCopyLink}
+                            className="h-9 w-9 text-slate-500 hover:text-blue-600 rounded-full"
+                            title="Copy case link"
+                        >
+                            {copied ? <Check className="w-5 h-5 text-green-500" /> : <LinkIcon className="w-5 h-5" />}
+                        </Button>
                         <CaseExportButton post={post} />
                         {isRequested && (
                             <Badge className="bg-orange-50 text-orange-700 border-orange-200 gap-1.5 pl-2 animate-pulse">
@@ -213,16 +329,13 @@ export function CaseDetailPanel({ post, isOpen, onClose, onNavigate, hasPrev, ha
                                 </div>
                             </div>
                             <div className="grid grid-cols-2 gap-10">
-                                {
-                                    post.taken_at &&
-                                    <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between gap-1">
-                                        <span className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2"><Calendar className="w-3.5 h-3.5 text-slate-500" /> Taken</span>
-                                        <span className="font-bold text-sm text-slate-900">{new Date(post.taken_at * 1000).toLocaleDateString()}</span>
-                                    </div>
-                                }
+                                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between gap-1">
+                                    <span className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2"><Calendar className="w-3.5 h-3.5 text-slate-500" /> Posted</span>
+                                    <span className="font-bold text-sm text-slate-900">{posted_date}</span>
+                                </div>
                                 <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between gap-1">
                                     <span className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2"><History className="w-3.5 h-3.5 text-slate-500" /> Sourced</span>
-                                    <span className="font-bold text-sm text-slate-900">{post.sourcing_date ? new Date(post.sourcing_date).toLocaleDateString() : 'N/A'}</span>
+                                    <span className="font-bold text-sm text-slate-900">{sourced_date}</span>
                                 </div>
                             </div>
                         </div>
@@ -238,9 +351,12 @@ export function CaseDetailPanel({ post, isOpen, onClose, onNavigate, hasPrev, ha
                                 <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Risk Assessment</h4>
                                 <div className={cn(
                                     "rounded-2xl p-6 border relative overflow-hidden shadow-lg transition-all",
-                                    riskScore > 75 ? "bg-rose-600 border-rose-500 text-white" :
-                                        riskScore > 40 ? "bg-amber-500 border-amber-400 text-white" :
-                                            "bg-emerald-500 border-emerald-400 text-white"
+                                    getRiskLabel(riskScore).color.replace('text-', 'bg-').replace('bg-', 'border-').replace('500', '600').replace('50', '500'),
+                                    riskScore >= 76 ? "text-white" : "text-slate-900",
+                                    riskScore >= 96 ? "bg-rose-600 border-rose-500 text-white" :
+                                        riskScore >= 76 ? "bg-orange-500 border-orange-400 text-white" :
+                                            riskScore >= 41 ? "bg-amber-500 border-amber-400 text-white" :
+                                                "bg-slate-500 border-slate-400 text-white"
                                 )}>
                                     <div className="absolute top-0 right-0 p-32 bg-white/10 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none" />
 
@@ -248,8 +364,7 @@ export function CaseDetailPanel({ post, isOpen, onClose, onNavigate, hasPrev, ha
                                         <div>
                                             <p className="text-white/80 font-bold text-xs uppercase tracking-wide mb-1">Total Risk Score</p>
                                             <div className="text-5xl font-black tracking-tighter flex items-baseline gap-2">
-                                                {riskScore}
-                                                <span className="text-lg font-medium opacity-60">/100</span>
+                                                {getRiskLabel(riskScore).label}
                                             </div>
                                         </div>
                                         <div className="text-right">
@@ -330,7 +445,7 @@ export function CaseDetailPanel({ post, isOpen, onClose, onNavigate, hasPrev, ha
                             </div> */}
 
                             {/* Reviewer Note */}
-                            {reviewerNote && (
+                            {/* {reviewerNote && (
                                 <div className="bg-amber-50 border border-amber-100 p-5 rounded-xl">
                                     <h4 className="text-xs font-bold text-amber-700 uppercase tracking-widest mb-2 flex items-center">
                                         <User className="w-3.5 h-3.5 mr-1.5" /> Analyst Note
@@ -339,7 +454,56 @@ export function CaseDetailPanel({ post, isOpen, onClose, onNavigate, hasPrev, ha
                                         {reviewerNote}
                                     </p>
                                 </div>
-                            )}
+                            )} */}
+
+                            {/* Client Notes Section */}
+                            <div className="space-y-4">
+                                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 flex items-center">
+                                    <MessageCircle className="w-3.5 h-3.5 mr-1.5" /> Review Notes
+                                </h4>
+
+                                {localNotes && localNotes.length > 0 ? (
+                                    <div className="space-y-3 max-h-60 overflow-y-auto pr-2">
+                                        {localNotes.map((note, idx) => (
+                                            <div key={idx} className="bg-slate-50 border border-slate-100 p-4 rounded-xl">
+                                                <div className="flex justify-between items-start mb-3">
+                                                    <span className="text-[10px] font-bold text-slate-400">{note.email || 'Unknown User'}</span>
+                                                    <span className="text-[10px] text-slate-400">{new Date(note.created_at).toLocaleString()}</span>
+                                                </div>
+                                                <p className="text-sm text-slate-700 font-medium whitespace-pre-wrap">
+                                                    {note.text}
+                                                </p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <p className="text-sm text-slate-400 italic">No notes added yet.</p>
+                                )}
+
+                                <div className="relative mt-2">
+                                    <Textarea
+                                        placeholder="Add a note..."
+                                        className="min-h-[80px] pr-12 text-sm resize-none bg-white border-slate-200 focus-visible:ring-blue-500"
+                                        value={noteText}
+                                        onChange={(e) => setNoteText(e.target.value)}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter' && !e.shiftKey) {
+                                                e.preventDefault();
+                                                handleAddNote();
+                                            }
+                                        }}
+                                    />
+                                    <Button
+                                        size="icon"
+                                        variant="ghost"
+                                        className="absolute cursor-pointer bottom-2 right-2 h-8 w-8 hover:text-blue-600 bg-white transition-colors duration-200 disabled:opacity-50"
+                                        onClick={handleAddNote}
+                                        disabled={!noteText.trim() || isSubmittingNote}
+                                    >
+                                        {isSubmittingNote ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                                    </Button>
+                                </div>
+                            </div>
 
                         </div>
 
@@ -354,6 +518,17 @@ export function CaseDetailPanel({ post, isOpen, onClose, onNavigate, hasPrev, ha
                                     </div>
                                 </div>
                             )}
+                            {
+                                showProcessed === post._id && (
+                                    <div className="flex items-start gap-3 mb-4 p-4 bg-green-50 rounded-xl border border-green-100">
+                                        <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 shrink-0" />
+                                        <div>
+                                            <p className="text-sm font-bold text-green-800">Case Processed</p>
+                                            <p className="text-xs text-green-700 mt-1">This case has been processed.</p>
+                                        </div>
+                                    </div>
+                                )
+                            }
 
                             <div className="flex gap-4">
                                 {isRaised &&
@@ -370,14 +545,35 @@ export function CaseDetailPanel({ post, isOpen, onClose, onNavigate, hasPrev, ha
                                         <CheckCircle className="w-4 h-4 mr-2" /> Action in Progress
                                     </Button>
                                     : (
-                                        <Button
-                                            onClick={handleTakedown}
-                                            disabled={isProcessing}
-                                            className="flex-[2] h-12 bg-slate-900 hover:bg-slate-800 text-white shadow-lg shadow-slate-900/20 font-bold"
-                                        >
-                                            {isProcessing ? <Activity className="w-4 h-4 animate-spin mr-2" /> : <ShieldAlert className="w-4 h-4 mr-2" />}
-                                            Initiate Takedown
-                                        </Button>
+                                        <>
+                                            <Button
+                                                onClick={() => handleUpdateStatus('Pass')}
+                                                disabled={isProcessing === 'Pass' || clientStatus === 'Pass'}
+                                                variant="outline"
+                                                className=" disabled:cursor-not-allowed cursor-pointer flex-1 h-12 text-slate-700 font-bold border-slate-200 hover:bg-slate-50"
+                                            >
+                                                {isProcessing === 'Pass' && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
+                                                Pass
+                                            </Button>
+                                            <Button
+                                                onClick={() => handleUpdateStatus('Flag for Takedown')}
+                                                disabled={isProcessing === 'Flag for Takedown' || clientStatus === 'Flag for Takedown'}
+                                                className={cn("cursor-pointer h-12 font-bold flex-1 text-white shadow-lg", allowDoTakedown ? "bg-amber-500 hover:bg-amber-600 shadow-amber-900/20" : "bg-rose-600 hover:bg-rose-700 shadow-rose-900/20")}
+                                            >
+                                                {isProcessing === 'Flag for Takedown' ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <AlertTriangle className="w-4 h-4 mr-2" />}
+                                                Flag for Takedown
+                                            </Button>
+                                            {allowDoTakedown && (
+                                                <Button
+                                                    onClick={handleTakedown}
+                                                    disabled={isProcessing === 'takedown'}
+                                                    className=" cursor-pointer flex-1 h-12 bg-rose-600 hover:bg-rose-700 text-white shadow-lg shadow-rose-900/20 font-bold"
+                                                >
+                                                    {isProcessing === 'takedown' ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <ShieldAlert className="w-4 h-4 mr-2" />}
+                                                    Do Takedown
+                                                </Button>
+                                            )}
+                                        </>
                                     )}
                             </div>
                         </div>
