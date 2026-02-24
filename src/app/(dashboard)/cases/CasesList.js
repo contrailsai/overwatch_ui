@@ -184,7 +184,7 @@ export function CasesList({ cases, project, initialFilters, initialSort, current
     <div className="flex flex-col h-full bg-slate-50">
 
       {/* Filters & Controls */}
-      <div className="px-8 py-6 shrink-0">
+      <div className="px-6 py-4 shrink-0">
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
           <div className="flex flex-col lg:flex-row items-center justify-between gap-6">
 
@@ -291,14 +291,14 @@ export function CasesList({ cases, project, initialFilters, initialSort, current
       </div>
 
       {/* Main Table */}
-      <div className="flex-1 overflow-y-auto px-8 pb-4">
+      <div className="flex-1 overflow-y-auto px-6 pb-4">
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-          <table className="min-w-full divide-y divide-slate-100">
+          <table className="min-w-full table-fixed divide-y divide-slate-100">
             <thead className="bg-slate-50/80 sticky top-0 z-10 backdrop-blur-sm">
               <tr>
                 <th
                   scope="col"
-                  className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100 transition-colors group select-none"
+                  className="w-[120px] px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100 transition-colors group select-none"
                   onClick={() => handleSortChange('threat_score')}
                 >
                   <div className="flex items-center">
@@ -306,10 +306,10 @@ export function CasesList({ cases, project, initialFilters, initialSort, current
                     <SortIcon field="threat_score" />
                   </div>
                 </th>
-                <th scope="col" className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Status</th>
+                <th scope="col" className="w-[150px] px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Status</th>
                 <th
                   scope="col"
-                  className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100 transition-colors group select-none"
+                  className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100 transition-colors group select-none"
                   onClick={() => handleSortChange('created_at')}
                 >
                   <div className="flex items-center">
@@ -317,10 +317,10 @@ export function CasesList({ cases, project, initialFilters, initialSort, current
                     <SortIcon field="created_at" />
                   </div>
                 </th>
-                <th scope="col" className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Platform</th>
-                <th scope="col" className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Threat Type</th>
-                <th scope="col" className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Source</th>
-                <th scope="col" className="px-6 py-4 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Actions</th>
+                <th scope="col" className="w-[120px] px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Platform</th>
+                <th scope="col" className="w-[170px] px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Threat Type</th>
+                <th scope="col" className="w-[90px] px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Source</th>
+                <th scope="col" className="w-[110px] px-4 py-3 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
 
@@ -360,7 +360,7 @@ export function CasesList({ cases, project, initialFilters, initialSort, current
                     )}
                   >
                     {/* Priority */}
-                    <td className="px-6 py-4 whitespace-nowrap align-top">
+                    <td className="px-4 py-3 whitespace-nowrap align-top">
                       <span className={cn("inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold border shadow-sm", risk.color)}>
 
                         {
@@ -380,7 +380,7 @@ export function CasesList({ cases, project, initialFilters, initialSort, current
                     </td>
 
                     {/* Status */}
-                    <td className="px-6 py-4 whitespace-nowrap align-top">
+                    <td className="px-4 py-3 whitespace-nowrap align-top">
                       <span className={cn("inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold border shadow-sm", statusConfig.color)}>
                         <StatusIcon className="w-3.5 h-3.5 mr-1.5" />
                         {statusConfig.label}
@@ -388,7 +388,7 @@ export function CasesList({ cases, project, initialFilters, initialSort, current
                     </td>
 
                     {/* Content */}
-                    <td className="px-6 py-4 max-w-lg overflow-hidden align-top">
+                    <td className="px-4 py-3 overflow-hidden align-top">
                       <div className="flex gap-4">
                         <div className="shrink-0 relative">
                           {post.signedImageUrl ? (
@@ -424,7 +424,7 @@ export function CasesList({ cases, project, initialFilters, initialSort, current
                     </td>
 
                     {/* Platform */}
-                    <td className="px-6 py-4 whitespace-nowrap align-top">
+                    <td className="px-4 py-3 whitespace-nowrap align-top">
                       <Badge variant="outline" className="capitalize font-semibold text-slate-600 border-slate-300 gap-1.5 pl-2 h-7">
                         {post.platform === 'instagram' && <Instagram className="w-3.5 h-3.5 text-pink-500" />}
                         {post.platform === 'facebook' && <Facebook className="w-3.5 h-3.5 text-blue-600" />}
@@ -434,7 +434,7 @@ export function CasesList({ cases, project, initialFilters, initialSort, current
                     </td>
 
                     {/* Threat Type */}
-                    <td className="px-6 py-4 whitespace-nowrap align-top">
+                    <td className="px-4 py-3 whitespace-nowrap align-top">
                       <div className="flex flex-wrap gap-1.5 max-w-[200px]">
                         {Array.isArray(threatTypes) && threatTypes.map((type, idx) => {
                           const colorMap = {
@@ -459,7 +459,7 @@ export function CasesList({ cases, project, initialFilters, initialSort, current
                     </td>
 
                     {/* Source */}
-                    <td className="px-6 py-4 whitespace-nowrap align-top">
+                    <td className="px-4 py-3 whitespace-nowrap align-top">
                       <a
                         href={post.original_url ? post.original_url : getPostLink(post)}
                         target="_blank"
@@ -472,7 +472,7 @@ export function CasesList({ cases, project, initialFilters, initialSort, current
                     </td>
 
                     {/* Actions */}
-                    <td className="px-6 py-4 whitespace-nowrap text-right align-top">
+                    <td className="px-4 py-3 whitespace-nowrap text-right align-top">
                       <Button
                         size="sm"
                         variant={isSelected ? "default" : "secondary"}
@@ -508,8 +508,8 @@ export function CasesList({ cases, project, initialFilters, initialSort, current
 
       {/* Pagination Controls */}
       {totalPages > 1 && (
-        <div className="px-8 pb-2 pt-2">
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 px-6 py-4 flex items-center justify-between">
+        <div className="px-6 pb-2 pt-2">
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 px-4 py-3 flex items-center justify-between">
             <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">
               Page <span className="text-slate-900">{currentPage}</span> of <span className="text-slate-900">{totalPages}</span>
             </div>
