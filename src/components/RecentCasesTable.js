@@ -86,7 +86,7 @@ export function RecentCasesTable({ cases }) {
                   </td>
                   <td className="px-8 py-5 whitespace-nowrap text-right">
                     <Link
-                      href={`/test-cases?case_id=${caseItem._id}`}
+                      href={`/cases?case_id=${caseItem._id}`}
                       className="inline-flex items-center justify-center p-3 rounded-2xl bg-white border border-slate-200 text-slate-400 hover:text-blue-600 hover:border-blue-200 hover:bg-slate-50 transition-all duration-200 shadow-sm"
                     >
                       <ArrowRight className="h-5 w-5 transition-transform translate-x-0 group-hover:translate-x-1" />

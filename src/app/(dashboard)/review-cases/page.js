@@ -64,10 +64,14 @@ export default async function ReviewCasesPage({ searchParams }) {
   
   // Initial load filters
   const initialFilters = {
-    platform: 'all',
-    status: 'pending',
-    aiAnalyzed: true,
-    poiDetected: true
+    platform: resolvedSearchParams?.platform || 'all',
+    status: resolvedSearchParams?.status || 'pending',
+    aiAnalyzed: resolvedSearchParams?.aiAnalyzed !== 'false', // Default true
+    poiDetected: resolvedSearchParams?.poiDetected !== 'false', // Default true
+    sourcingDateStart: resolvedSearchParams?.sourcingDateStart || undefined,
+    sourcingDateEnd: resolvedSearchParams?.sourcingDateEnd || undefined,
+    dbDateStart: resolvedSearchParams?.dbDateStart || undefined,
+    dbDateEnd: resolvedSearchParams?.dbDateEnd || undefined,
   }
 
   const { posts, totalPages, totalCount } = await getPosts(clientDetails.project_name, page, 20, initialFilters)
@@ -90,6 +94,7 @@ export default async function ReviewCasesPage({ searchParams }) {
           totalPages={totalPages}
           currentPage={page}
           projectName={clientDetails.project_name}
+          initialFilters={initialFilters}
         />
       </div>
     </main>

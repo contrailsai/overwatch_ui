@@ -136,7 +136,7 @@ export function DashboardContent({ data }) {
 
             {/* Daily Trends - Reviews & Threats */}
             <ChartCard
-                title="Activity Velocity"
+                title="Activity Trends"
                 subtitle="High-frequency monitoring of content review and threat mitigation"
             >
                 <ResponsiveContainer width="100%" height={350}>
@@ -232,7 +232,7 @@ export function DashboardContent({ data }) {
 
                 {/* Threat Types Distribution */}
                 <ChartCard
-                    title="Vulnerability Taxonomy"
+                    title="Vulnerability Breakdown"
                     subtitle="Pattern analysis of identified threat vectors"
                 >
                     <ResponsiveContainer width="100%" height={320}>

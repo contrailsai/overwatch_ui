@@ -270,6 +270,22 @@ export function CaseDetailPanel({ post, project, isOpen, onClose, onNavigate, ha
                             </div>
                             <div className="flex-1 min-w-0">
                                 <h3 className="text-xl font-bold text-slate-900 truncate flex items-center gap-2">
+                                    <div className="">
+                                        {/* platform */}
+                                        <div className="flex-1 min-w-4">
+                                            {
+                                                post.platform === "twitter" ? (
+                                                    <Twitter className="w-6 h-6 text-blue-500" />
+                                                ) : post.platform === "instagram" ? (
+                                                    <Instagram className="w-6 h-6 text-pink-500" />
+                                                ) : post.platform === "facebook" ? (
+                                                    <Facebook className="w-6 h-6 text-blue-500" />
+                                                ) : (
+                                                    <p className="text-slate-500 font-medium truncate">{post.platform}</p>
+                                                )
+                                            }
+                                        </div>
+                                    </div>
                                     {post.user?.username || 'Unknown User'}
                                     {post.user?.is_verified && <BadgeCheck className="w-5 h-5 text-blue-500 fill-blue-50" />}
                                 </h3>
@@ -284,6 +300,7 @@ export function CaseDetailPanel({ post, project, isOpen, onClose, onNavigate, ha
                                 <ExternalLink className="w-4 h-4" />
                                 <span className="hidden sm:inline">View Source</span>
                             </a>
+
                         </div>
 
                         {/* Media Display */}

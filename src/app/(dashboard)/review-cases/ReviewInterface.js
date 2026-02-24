@@ -4,6 +4,7 @@ import * as React from "react"
 import { useState, useMemo, useEffect, useCallback, useRef, useActionState } from 'react'
 import { format } from "date-fns"
 import { submitCaseReview, getPosts, getAllPostsForExport } from './actions'
+import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { Skeleton } from "@/components/ui/skeleton"
 import {
   Loader2, X, CheckCircle, AlertTriangle, ExternalLink,
@@ -32,94 +33,67 @@ const initialState = {
   error: null,
 }
 
-export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, currentPage: initialCurrentPage, projectName }) {
+export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, currentPage: initialCurrentPage, projectName, initialFilters }) {
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+
   const [selectedPost, setSelectedPost] = useState(null)
   const [posts, setPosts] = useState(initialPosts)
   const [page, setPage] = useState(initialCurrentPage)
   const [loading, setLoading] = useState(false)
   const [hasMore, setHasMore] = useState(initialCurrentPage < initialTotalPages)
 
+  // Sync with props when navigation occurs
+  useEffect(() => {
+    setPosts(initialPosts)
+    setPage(initialCurrentPage)
+    setFilters(initialFilters)
+  }, [initialPosts, initialCurrentPage, initialFilters])
+
   // Filters State
-  const [filters, setFilters] = useState({
+  const [filters, setFilters] = useState(initialFilters || {
     platform: 'all',
     status: 'pending',
-    sourcingDate: undefined,
-    dbDate: undefined,
+    sourcingDateStart: undefined,
+    sourcingDateEnd: undefined,
+    dbDateStart: undefined,
+    dbDateEnd: undefined,
     aiAnalyzed: true,
     poiDetected: true
   })
 
-  const observer = useRef()
   const postRefs = useRef({})
 
-  const loadMorePosts = useCallback(async () => {
-    setLoading(true)
-    const nextPage = page + 1
-
-    const apiFilters = {
-      ...filters,
-      sourcingDateStart: filters.sourcingDate ? format(filters.sourcingDate, 'yyyy-MM-dd') : '',
-      sourcingDateEnd: '',
-      dbDateStart: filters.dbDate ? format(filters.dbDate, 'yyyy-MM-dd') : '',
-      dbDateEnd: '',
-    }
-
-    const response = await getPosts(projectName, nextPage, 20, apiFilters)
-
-    if (response.posts.length > 0) {
-      setPosts(prev => [...prev, ...response.posts])
-      setPage(nextPage)
-      setHasMore(nextPage < response.totalPages)
-    } else {
-      setHasMore(false)
-    }
-    setLoading(false)
-  }, [page, filters, projectName])
-
-  // Infinite Scroll Observer
-  const lastPostElementRef = useCallback(node => {
-    if (loading) return
-    if (observer.current) observer.current.disconnect()
-    observer.current = new IntersectionObserver(entries => {
-      if (entries[0].isIntersecting && hasMore) {
-        loadMorePosts()
+  // Navigation Logic for URL params
+  const updateQueryParams = useCallback((newParams) => {
+    const params = new URLSearchParams(searchParams.toString())
+    Object.entries(newParams).forEach(([key, value]) => {
+      if (value === 'all' || value === null || value === undefined || value === '') {
+        params.delete(key)
+      } else {
+        params.set(key, value)
       }
     })
-    if (node) observer.current.observe(node)
-  }, [loading, hasMore, loadMorePosts])
-
-  const applyFilters = useCallback(async () => {
-    setLoading(true)
-    setSelectedPost(null)
-    setPosts([])
-
-    const apiFilters = {
-      ...filters,
-      sourcingDateStart: filters.sourcingDate ? format(filters.sourcingDate, 'yyyy-MM-dd') : '',
-      sourcingDateEnd: '',
-      dbDateStart: filters.dbDate ? format(filters.dbDate, 'yyyy-MM-dd') : '',
-      dbDateEnd: '',
+    if (!newParams.page) {
+      params.delete('page')
     }
+    router.push(`${pathname}?${params.toString()}`)
+  }, [router, pathname, searchParams])
 
-    const response = await getPosts(projectName, 1, 20, apiFilters)
-    setPosts(response.posts)
-    setPage(1)
-    setHasMore(1 < response.totalPages)
-    setLoading(false)
-  }, [filters, projectName])
+  const handlePageChange = (newPage) => {
+    if (newPage < 1 || newPage > initialTotalPages) return
+    updateQueryParams({ page: newPage })
+  }
+
+  const handleFilterChange = (key, value) => {
+    updateQueryParams({ [key]: value, page: 1 })
+  }
 
   const handleExportCSV = async () => {
     setLoading(true)
     try {
-      const apiFilters = {
-        ...filters,
-        sourcingDateStart: filters.sourcingDate ? format(filters.sourcingDate, 'yyyy-MM-dd') : '',
-        sourcingDateEnd: '',
-        dbDateStart: filters.dbDate ? format(filters.dbDate, 'yyyy-MM-dd') : '',
-        dbDateEnd: '',
-      }
-
-      const { posts: allPosts } = await getAllPostsForExport(projectName, apiFilters)
+      const { posts: allPosts } = await getAllPostsForExport(projectName, filters)
 
       if (!allPosts || allPosts.length === 0) {
         alert("No posts found to export.")
@@ -164,27 +138,8 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
   }
 
   const clearFilters = () => {
-    setFilters({
-      platform: 'all',
-      status: 'pending',
-      sourcingDate: undefined,
-      dbDate: undefined,
-      aiAnalyzed: true,
-      poiDetected: false
-    })
+    router.push(pathname)
   }
-
-  const isFirstRender = useRef(true)
-  useEffect(() => {
-    if (isFirstRender.current) {
-      isFirstRender.current = false
-      return
-    }
-    const timer = setTimeout(() => {
-      applyFilters()
-    }, 500)
-    return () => clearTimeout(timer)
-  }, [applyFilters])
 
   const navigatePost = useCallback((direction) => {
     if (!selectedPost) return
@@ -224,10 +179,10 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
   }, [selectedPost, posts, navigatePost])
 
   const getRiskLabel = (score) => {
-    if (score >= 80) return { label: 'Critical', color: 'text-rose-700 bg-rose-50 border-rose-200' };
-    if (score >= 60) return { label: 'High', color: 'text-orange-700 bg-orange-50 border-orange-200' };
-    if (score >= 40) return { label: 'Medium', color: 'text-amber-700 bg-amber-50 border-amber-200' };
-    return { label: 'Low', color: 'text-slate-700 bg-slate-100 border-slate-200' };
+    if (score >= 96) return { label: 'High', color: 'text-rose-500 bg-rose-50 border-rose-200' };
+    if (score >= 76) return { label: 'Medium', color: 'text-orange-500 bg-orange-50 border-orange-200' };
+    if (score >= 41) return { label: 'Low', color: 'text-amber-500 bg-amber-50 border-amber-200' };
+    return { label: 'Safe', color: 'text-slate-500 bg-slate-50 border-slate-200' };
   }
 
   const getPostLink = (post) => {
@@ -291,7 +246,7 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
                 <Label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Status</Label>
                 <Select
                   value={filters.status}
-                  onValueChange={(val) => setFilters({ ...filters, status: val })}
+                  onValueChange={(val) => handleFilterChange('status', val)}
                 >
                   <SelectTrigger className="w-full bg-slate-50 border-slate-200 hover:border-slate-300 focus:ring-blue-500/20">
                     <SelectValue placeholder="Select Status" />
@@ -308,7 +263,7 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
                 <Label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Platform</Label>
                 <Select
                   value={filters.platform}
-                  onValueChange={(val) => setFilters({ ...filters, platform: val })}
+                  onValueChange={(val) => handleFilterChange('platform', val)}
                 >
                   <SelectTrigger className="w-full bg-slate-50 border-slate-200 hover:border-slate-300 focus:ring-blue-500/20">
                     <SelectValue placeholder="All Platforms" />
@@ -327,8 +282,8 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
                   <Calendar className="w-3.5 h-3.5" /> Sourced After
                 </Label>
                 <DatePicker
-                  date={filters.sourcingDate}
-                  setDate={(date) => setFilters({ ...filters, sourcingDate: date })}
+                  date={filters.sourcingDateStart ? new Date(filters.sourcingDateStart) : undefined}
+                  setDate={(date) => handleFilterChange('sourcingDateStart', date ? format(date, 'yyyy-MM-dd') : '')}
                   placeholder="Select Date"
                   className="w-full"
                 />
@@ -339,8 +294,8 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
                   <Database className="w-3.5 h-3.5" /> Ingested After
                 </Label>
                 <DatePicker
-                  date={filters.dbDate}
-                  setDate={(date) => setFilters({ ...filters, dbDate: date })}
+                  date={filters.dbDateStart ? new Date(filters.dbDateStart) : undefined}
+                  setDate={(date) => handleFilterChange('dbDateStart', date ? format(date, 'yyyy-MM-dd') : '')}
                   placeholder="Select Date"
                   className="w-full"
                 />
@@ -353,8 +308,8 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
                 <div className="flex items-center space-x-2.5 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200/50">
                   <Checkbox
                     id="aiAnalyzed"
-                    checked={filters.aiAnalyzed}
-                    onCheckedChange={(checked) => setFilters({ ...filters, aiAnalyzed: checked })}
+                    checked={filters.aiAnalyzed !== false}
+                    onCheckedChange={(checked) => handleFilterChange('aiAnalyzed', checked.toString())}
                     className="border-slate-300 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
                   />
                   <label
@@ -369,8 +324,8 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
                 <div className="flex items-center space-x-2.5 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200/50">
                   <Checkbox
                     id="poiDetected"
-                    checked={filters.poiDetected}
-                    onCheckedChange={(checked) => setFilters({ ...filters, poiDetected: checked })}
+                    checked={filters.poiDetected !== false}
+                    onCheckedChange={(checked) => handleFilterChange('poiDetected', checked.toString())}
                     className="border-slate-300 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
                   />
                   <label
@@ -457,7 +412,6 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
                 ) : (
                   posts.map((post, index) => {
                     const isSelected = selectedPost?._id === post._id
-                    const isLast = posts.length === index + 1
                     const riskScore = post.review_details?.threat_score || post.analysis_results?.risk_score || 0;
                     const risk = getRiskLabel(riskScore);
                     const threatType = post.review_details?.threat_types?.join(', ').replace(/_/g, ' ') || post.review_details?.threat_type?.replace(/_/g, ' ') || post.analysis_results?.category || 'Unknown';
@@ -467,7 +421,6 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
                         key={post._id}
                         ref={(el) => {
                           postRefs.current[post._id] = el
-                          if (isLast) lastPostElementRef(el)
                         }}
                         className={cn(
                           "group transition-all cursor-pointer",
@@ -557,20 +510,38 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
               </tbody>
             </table>
           </div>
-
-          {loading && posts.length > 0 && (
-            <div className="py-8 flex justify-center items-center bg-slate-50/50 border-t border-slate-100">
-              <Loader2 className="h-5 w-5 animate-spin text-blue-600 mr-2" />
-              <span className="text-sm text-slate-500 font-medium">Loading more cases...</span>
-            </div>
-          )}
-
-          {!hasMore && posts.length > 0 && (
-            <div className="py-6 text-center text-xs font-semibold text-slate-400 uppercase tracking-widest bg-slate-50 border-t border-slate-100">
-              End of List
-            </div>
-          )}
         </div>
+
+        {/* Pagination Controls */}
+        {initialTotalPages > 1 && (
+          <div className="pt-4">
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 px-6 py-4 flex items-center justify-between">
+              <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                Page <span className="text-slate-900">{page}</span> of <span className="text-slate-900">{initialTotalPages}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handlePageChange(page - 1)}
+                  disabled={page === 1}
+                  className="h-9 px-3 text-xs font-bold border-slate-200 hover:bg-slate-50 disabled:opacity-50"
+                >
+                  <ChevronLeft className="w-4 h-4 mr-1" /> Previous
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handlePageChange(page + 1)}
+                  disabled={page === initialTotalPages}
+                  className="h-9 px-3 text-xs font-bold border-slate-200 hover:bg-slate-50 disabled:opacity-50"
+                >
+                  Next <ChevronRight className="w-4 h-4 ml-1" />
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Detail Panel Drawer */}
@@ -604,6 +575,7 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
 }
 
 function ReviewForm({ post, onClose, onNavigate, hasPrev, hasNext, setPosts }) {
+  console.log(post)
   const [state, formAction, isPending] = useActionState(submitCaseReview, initialState)
 
   // Update local state when submission succeeds
@@ -711,7 +683,23 @@ function ReviewForm({ post, onClose, onNavigate, hasPrev, hasNext, setPosts }) {
               <ProfilePic user={post.user?.username || 'Unknown'} size={48} />
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  <h3 className="text-lg font-bold text-slate-900 truncate">{post.user?.username}</h3>
+                  <div className="flex items-center gap-2">
+                    <div className="">
+                      {
+                        post.platform === "twitter" ? (
+                          <Twitter className="w-6 h-6 text-blue-500" />
+                        ) : post.platform === "instagram" ? (
+                          <Instagram className="w-6 h-6 text-pink-500" />
+                        ) : post.platform === "facebook" ? (
+                          <Facebook className="w-6 h-6 text-blue-500" />
+                        ) : (
+                          <p className="text-slate-500 font-medium truncate">{post.platform}</p>
+                        )
+                      }
+                    </div>
+                    <h3 className="text-lg font-bold text-slate-900 truncate">{post.user?.username}</h3>
+
+                  </div>
                   {post.user?.is_verified && <BadgeCheck className="w-5 h-5 text-blue-500" />}
                 </div>
                 <p className="text-sm text-slate-500">{post.user?.full_name}</p>
@@ -770,14 +758,14 @@ function ReviewForm({ post, onClose, onNavigate, hasPrev, hasNext, setPosts }) {
                   <span className="font-bold text-lg text-slate-900">{post.stats?.comment_count?.toLocaleString() || 0}</span>
                 </div>
                 <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between col-span-2">
-                  <div className="flex gap-6">
-                    <span className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2">
-                      <Calendar className="w-3.5 h-3.5" /> Posted: <span className="font-mono text-slate-700">{post.taken_at ? format(new Date(post.taken_at * 1000), "dd/MM/yyyy") : 'N/A'}</span>
-                    </span>
-                    <span className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2">
-                      <History className="w-3.5 h-3.5" /> Sourced: <span className="font-mono text-slate-700">{post.sourcing_date ? format(new Date(post.sourcing_date), "dd/MM/yyyy") : 'N/A'}</span>
-                    </span>
-                  </div>
+                  {/* <div className="flex gap-6"> */}
+                  <span className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2">
+                    <Calendar className="w-3.5 h-3.5" /> Posted: <span className="font-mono text-slate-700">{post.metadata?.sourcing_date ? format(new Date(post.metadata.sourcing_date), "dd/MM/yyyy") : 'N/A'}</span>
+                  </span>
+                  <span className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2">
+                    <History className="w-3.5 h-3.5" /> Sourced: <span className="font-mono text-slate-700">{post.metadata?.created_at ? format(new Date(post.metadata.created_at), "dd/MM/yyyy") : 'N/A'}</span>
+                  </span>
+                  {/* </div> */}
                 </div>
               </div>
             </div>
@@ -786,7 +774,7 @@ function ReviewForm({ post, onClose, onNavigate, hasPrev, hasNext, setPosts }) {
         </div>
 
         {/* RIGHT COLUMN: Action Form */}
-        <div className="w-[480px] shrink-0 overflow-y-auto bg-white">
+        <div className="w-[500px] shrink-0 overflow-y-auto bg-white">
           <form action={formAction} className="flex flex-col min-h-full">
             {/* Hidden Inputs */}
             <input type="hidden" name="mongo_id" value={post._id || ''} />
@@ -894,7 +882,7 @@ function ReviewForm({ post, onClose, onNavigate, hasPrev, hasNext, setPosts }) {
                     name="reasoning"
                     defaultValue={full_analysis_reasonning}
                     placeholder="Detailed analysis..."
-                    className="min-h-[120px] bg-slate-50 border-slate-200 text-sm focus:bg-white transition-colors"
+                    className="min-h-[250px] bg-slate-50 border-slate-200 text-sm focus:bg-white transition-colors"
                   />
                 </div>
               </section>
@@ -907,34 +895,34 @@ function ReviewForm({ post, onClose, onNavigate, hasPrev, hasNext, setPosts }) {
                 </div>
 
                 <div className="bg-slate-50 rounded-xl p-5 border border-slate-200 space-y-6">
-                  <div className="space-y-4">
-                    <div className="flex justify-between items-center">
-                      <Label className="text-sm font-bold text-slate-700">Risk Score</Label>
-                      <span className={cn(
-                        "text-xl font-black font-mono px-3 py-1 rounded-lg border",
-                        threatScore > 75 ? "bg-rose-100 text-rose-700 border-rose-200" :
-                          threatScore > 40 ? "bg-amber-100 text-amber-700 border-amber-200" :
-                            "bg-emerald-100 text-emerald-700 border-emerald-200"
-                      )}>
-                        {threatScore}
-                      </span>
-                    </div>
-                    <input
-                      type="range"
-                      min="0" max="100"
-                      value={threatScore}
-                      onChange={(e) => setThreatScore(parseInt(e.target.value))}
-                      className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-slate-900"
-                      style={{
-                        background: `linear-gradient(to right, #34d399 0%, #fbbf24 50%, #f43f5e 100%)`
-                      }}
-                    />
-                    <div className="flex justify-between text-[10px] uppercase font-bold text-slate-400">
-                      <span>Safe</span>
-                      <span>Critical</span>
+                  {/* RISK LEVEL */}
+                  <div className="space-y-3">
+                    <Label className="text-xs font-bold text-slate-500 uppercase tracking-tight">Risk Level Selection</Label>
+                    <div className="flex gap-2">
+                      {[
+                        { label: "Safe", val: 0, active: threatScore < 41, color: "bg-emerald-500 border-emerald-600 shadow-emerald-200" },
+                        { label: "Low Risk", val: 41, active: threatScore > 40 && threatScore < 76, color: "bg-amber-400 border-amber-500 shadow-amber-200" },
+                        { label: "Medium Risk", val: 76, active: threatScore > 75 && threatScore < 96, color: "bg-orange-400 border-orange-500 shadow-orange-200" },
+                        { label: "High Risk", val: 96, active: threatScore > 95, color: "bg-rose-500 border-rose-600 shadow-rose-200" },
+                      ].map((level) => (
+                        <button
+                          key={level.label}
+                          type="button"
+                          onClick={() => setThreatScore(level.val)}
+                          className={cn(
+                            "flex-1 py-2 px-3 rounded-lg border cursor-pointer text-xs font-bold transition-all",
+                            level.active
+                              ? `${level.color} text-white border-b-0`
+                              : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
+                          )}
+                        >
+                          {level.label}
+                        </button>
+                      ))}
                     </div>
                   </div>
 
+                  {/* REVIEWER's MESSAGE */}
                   <div className="space-y-2">
                     <Label className="text-xs font-bold text-slate-500 uppercase">Client Notes</Label>
                     <Textarea
@@ -945,7 +933,9 @@ function ReviewForm({ post, onClose, onNavigate, hasPrev, hasNext, setPosts }) {
                     />
                   </div>
 
-                  <div className={cn(
+                  {/* NO TAKEDOWN REQUESTS FOR NOW */}
+
+                  {/* <div className={cn(
                     "flex items-start gap-3 p-4 rounded-lg border transition-all",
                     suggestTakedown ? "bg-rose-50 border-rose-200" : "bg-white border-slate-200"
                   )}>
@@ -960,7 +950,7 @@ function ReviewForm({ post, onClose, onNavigate, hasPrev, hasNext, setPosts }) {
                       <Label htmlFor="takedown" className={cn("text-sm font-bold block cursor-pointer", suggestTakedown ? "text-rose-900" : "text-slate-900")}>Request Takedown</Label>
                       <p className="text-xs text-slate-500 mt-0.5 leading-snug">Flag for immediate legal removal workflow.</p>
                     </div>
-                  </div>
+                  </div> */}
                 </div>
               </section>
 
@@ -976,7 +966,7 @@ function ReviewForm({ post, onClose, onNavigate, hasPrev, hasNext, setPosts }) {
                 disabled={isPending}
                 className="flex-[2] font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-600/20"
               >
-                {isPending ? <Loader2 className="animate-spin" /> : (hasReview ? 'Update Verdict' : 'Submit Review')}
+                {isPending ? <Loader2 className="animate-spin" /> : (hasReview ? 'Update Review' : 'Submit to Client')}
               </Button>
             </div>
           </form>

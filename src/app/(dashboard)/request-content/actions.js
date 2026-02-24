@@ -58,3 +58,25 @@ export async function requestLink(prevState, formData) {
     message: 'Data will be ingested in a few hours. Thank you for your request!'
   }
 }
+
+export async function getRequestedLinks() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { error: 'Not authenticated' }
+  }
+
+  const { data, error } = await supabase
+    .from('client_requested_links')
+    .select('*')
+    .eq('requested_by', user.id)
+    .order('created_at', { ascending: false })
+
+  if (error) {
+    console.error('Error fetching requested links:', error)
+    return { error: 'Failed to fetch requested links' }
+  }
+
+  return { data }
+}

@@ -77,36 +77,31 @@ export async function getDashboardData(projectName) {
     const client = await clientPromise
     const db = client.db(dbName)
     const collection = db.collection('Posts')
-    const query = {
-      processed: true,
-      'takedown_info.takedown_status': { $ne: 'raised' }
+    const filters = {
+      $and: [
+        {
+          $or: [
+            { client_status: { $exists: false } },
+            { client_status: null },
+            { client_status: 'To Be Reviewed' },
+          ]
+        },
+        {
+          $or: [
+            { "analysis_results.poi_check.face_present": true },
+            { "analysis_results.poi_check.poi_name_found": true }
+          ]
+        }
+      ],
+      "analysis_results.risk_score": { $exists: true },
+      "review_details.threat_score": { $exists: true },
     }
 
-    const andConditions = [
-      {
-        $or: [
-          { client_status: { $exists: false } },
-          { client_status: null },
-          { client_status: 'To Be Reviewed' },
-        ]
-      },
-      {
-        $or: [
-          { "analysis_results.poi_check.face_present": true },
-          { "analysis_results.poi_check.poi_name_found": true }
-        ]
-      }
-    ]
+    totalPosts = await collection.countDocuments(filters)
 
-    query.$and = andConditions
-    query["analysis_results.risk_score"] = { $exists: true }
-    query["review_details.threat_score"] = { $exists: true }
-
-    totalPosts = await collection.countDocuments(query)
-
-    // Get recent 10 posts mimicking the default view (filtered by pending, sorted by risk)
-    const posts = await collection.find(query)
-      .sort({ 'review_details.threat_score': -1 })
+    // Get recent 10 processed posts for quick view
+    const posts = await collection.find({ processed: true })
+      .sort({ taken_at: -1, timestamp: -1 })
       .limit(10)
       .toArray()
 
@@ -299,6 +294,32 @@ export async function getUser() {
   return { user, clientDetails }
 }
 
+export async function getClientandProjectDetails() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!user) return null
+
+  const { data: clientDetails } = await supabase
+    .from('client_details')
+    .select('*')
+    .eq('id', user.id)
+    .single()
+
+  if (!clientDetails?.project_name) return null
+
+  const { data: project } = await supabase
+    .from('project')
+    .select('mongo_db_map, project_details')
+    .eq('project_name', clientDetails.project_name)
+    .single()
+
+  return {
+    user,
+    clientDetails,
+    project
+  }
+}
 
 export async function getCases(projectName) {
   const supabase = await createClient()

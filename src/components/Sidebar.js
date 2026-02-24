@@ -3,12 +3,13 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { List, ShieldAlert, Settings, LogOut, LayoutDashboard, ShieldCheck, GitPullRequestCreateArrow } from 'lucide-react'
-import { useClient } from '@/context/ClientContext'
+// import { useClient } from '@/context/ClientContext'
 import { cn } from '@/lib/utils'
 
-export function Sidebar() {
+export function Sidebar({ user, clientDetails, project }) {
+  console.log(user, clientDetails, project)
   const pathname = usePathname()
-  const { user, clientDetails, isLoading } = useClient()
+  // const { user, clientDetails, isLoading } = useClient()
 
   // All nav items.
   const allNavItems = [
@@ -17,7 +18,7 @@ export function Sidebar() {
       name: 'Review Cases',
       href: '/review-cases',
       icon: ShieldCheck,
-      show: isLoading || clientDetails?.permission === 'reviewer'
+      show: clientDetails?.permission === 'reviewer'
     },
     { name: 'Cases List', href: '/cases', icon: List, show: true },
     { name: 'Takedowns', href: '/takedowns', icon: ShieldAlert, show: true },
@@ -41,21 +42,9 @@ export function Sidebar() {
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto px-3 py-6 space-y-1">
         {navigation.map((item) => {
-          const isGatedLoading = item.name === 'Review Cases' && isLoading;
           const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href))
 
-          if (isGatedLoading) {
-            return (
-              <div
-                key={item.name}
-                className="flex items-center px-3 py-2.5 text-sm font-medium rounded-lg text-slate-300 animate-pulse bg-slate-50/50"
-              >
-                <div className="h-5 w-5 rounded bg-slate-200 mr-3" />
-                <div className="h-4 w-24 rounded bg-slate-200" />
-              </div>
-            )
-          }
-
+          if (!item.show) return null
           return (
             <Link
               key={item.name}
