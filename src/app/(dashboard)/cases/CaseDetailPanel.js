@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Textarea } from "@/components/ui/textarea"
 import { CaseExportButton } from '@/components/pdf/CaseExportButton'
+import SafeDate from '@/components/SafeDate'
 
 const getRiskLabel = (score) => {
     if (score >= 96) return { label: 'High', color: 'text-rose-500 bg-rose-50 border-rose-200' };
@@ -485,7 +486,9 @@ export function CaseDetailPanel({ post, project, isOpen, onClose, onNavigate, ha
                                             <div key={idx} className="bg-slate-50 border border-slate-100 p-4 rounded-xl">
                                                 <div className="flex justify-between items-start mb-3">
                                                     <span className="text-[10px] font-bold text-slate-400">{note.email || 'Unknown User'}</span>
-                                                    <span className="text-[10px] text-slate-400">{new Date(note.created_at).toLocaleString()}</span>
+                                                    <span className="text-[10px] text-slate-400">
+                                                        <SafeDate date={note.created_at} />
+                                                    </span>
                                                 </div>
                                                 <p className="text-sm text-slate-700 font-medium whitespace-pre-wrap">
                                                     {note.text}

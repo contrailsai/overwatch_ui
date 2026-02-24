@@ -27,6 +27,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator"
 import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
+import SafeDate from '@/components/SafeDate'
 
 export function CasesList({ cases, project, initialFilters, initialSort, currentPage, initialCase }) {
   const router = useRouter()
@@ -412,7 +413,7 @@ export function CasesList({ cases, project, initialFilters, initialSort, current
                             </span>
                             <span className="text-xs text-slate-400">•</span>
                             <span className="text-xs text-slate-500 font-mono">
-                              {post.taken_at ? new Date(post.taken_at * 1000).toLocaleDateString() : 'N/A'}
+                              <SafeDate date={post.taken_at ? post.taken_at * 1000 : null} />
                             </span>
                           </div>
                           <span className="text-xs text-slate-600 line-clamp-2 leading-relaxed">
@@ -545,11 +546,11 @@ export function CasesList({ cases, project, initialFilters, initialSort, current
         isOpen={!!selectedPost}
         onClose={() => {
           setSelectedPost(null)
-          
+
           if (searchParams.has('case_id')) {
             updateQueryParams({ case_id: null })
           }
-          
+
           if (Object.keys(updatedCases).length > 0) {
             router.refresh()
             setUpdatedCases({})

@@ -26,7 +26,20 @@ export function Sidebar({ user, clientDetails, project }) {
     { name: 'Request Content', href: '/request-content', icon: GitPullRequestCreateArrow, show: true },
   ]
 
-  const navigation = allNavItems.filter(item => item.show)
+  // Filter and map navigation items
+  const navigation = allNavItems
+    .filter(item => item.show)
+    .map(item => {
+      // Special logic for Takedowns based on project settings
+      if (item.name === 'Takedowns') {
+        const doTakedowns = project?.project_details?.do_takedowns;
+        // If do_takedowns is explicitly false, gray it out.
+        // If it's true or undefined (default), show it normally.
+        const status = doTakedowns === false ? "grayed_out" : true;
+        return { ...item, show: status };
+      }
+      return item;
+    });
 
   return (
     <div className="flex flex-col w-64 h-full bg-white border-r border-slate-200 shadow-sm shrink-0 z-40">
@@ -45,6 +58,28 @@ export function Sidebar({ user, clientDetails, project }) {
           const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href))
 
           if (!item.show) return null
+
+          if (item.show === "grayed_out") {
+            return (
+              <div
+                key={item.name}
+                className={cn(
+                  "flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 group relative",
+                  "text-slate-400 cursor-not-allowed"
+                )}
+              >
+                <item.icon
+                  className={cn(
+                    "h-5 w-5 shrink-0 mr-3 transition-colors",
+                    "text-slate-400"
+                  )}
+                  strokeWidth={2}
+                />
+                <span className="truncate">{item.name}</span>
+              </div>
+            )
+          }
+
           return (
             <Link
               key={item.name}
