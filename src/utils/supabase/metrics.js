@@ -6,7 +6,7 @@
  */
 import { createClient } from '@/utils/supabase/server'
 
-export async function updateDailyMetrics(reviewData, previousReviewData = null) {
+export async function updateDailyMetrics(project, reviewData, previousReviewData = null) {
   const supabase = await createClient()
   const date = new Date().toISOString().split('T')[0] // YYYY-MM-DD
   const platform = reviewData.platform || 'unknown'
@@ -29,7 +29,7 @@ export async function updateDailyMetrics(reviewData, previousReviewData = null) 
       'fake_news': 'threat_fake_news_count',
       'nsfw': 'threat_nsfw_count',
       'aigc': 'threat_aigc_count',
-      'other': 'threat_other_count'
+      // 'other': 'threat_other_count'
     }
     // Normalize type string just in case
     const normalized = type ? type.toLowerCase().replace(/ /g, '_') : 'other'
@@ -124,6 +124,7 @@ export async function updateDailyMetrics(reviewData, previousReviewData = null) 
         .insert({
           date,
           platform,
+          project_name: project?.project_name,
           total_reviewed: Math.max(0, updates.total_reviewed),
           risk_high_count: Math.max(0, updates.risk_high_count),
           risk_medium_count: Math.max(0, updates.risk_medium_count),

@@ -488,7 +488,7 @@ export async function submitCaseReview(prevState, formData) {
     }
 
     // Fire and forget metrics update to not block UI
-    updateDailyMetrics(currentReviewData, previousReviewData).catch(err =>
+    updateDailyMetrics(project, currentReviewData, previousReviewData).catch(err =>
       console.error('Background metrics update failed:', err)
     )
 

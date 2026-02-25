@@ -77,25 +77,7 @@ export async function getDashboardData(projectName) {
     const client = await clientPromise
     const db = client.db(dbName)
     const collection = db.collection('Posts')
-    const filters = {
-      $and: [
-        {
-          $or: [
-            { client_status: { $exists: false } },
-            { client_status: null },
-            { client_status: 'To Be Reviewed' },
-          ]
-        },
-        {
-          $or: [
-            { "analysis_results.poi_check.face_present": true },
-            { "analysis_results.poi_check.poi_name_found": true }
-          ]
-        }
-      ],
-      "analysis_results.risk_score": { $exists: true },
-      "review_details.threat_score": { $exists: true },
-    }
+    const filters = {}
 
     totalPosts = await collection.countDocuments(filters)
 
