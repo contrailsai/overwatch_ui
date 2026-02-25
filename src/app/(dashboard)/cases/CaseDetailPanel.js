@@ -95,7 +95,7 @@ export function CaseDetailPanel({ post, project, isOpen, onClose, onNavigate, ha
     };
 
     const handleCopyLink = () => {
-        const url = `${window.location.origin}/test-cases/${post._id}`;
+        const url = `${window.location.origin}/cases/${post._id}`;
         navigator.clipboard.writeText(url);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
