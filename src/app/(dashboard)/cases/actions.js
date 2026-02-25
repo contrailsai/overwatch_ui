@@ -79,7 +79,7 @@ export async function getPosts(project, page = 1, limit = 20, filters = {}, sort
         $or: [
           { 'review_details.threat_type': filters.threat_type },
           { 'review_details.primary_threat_type': filters.threat_type },
-          { 'analysis_results.threat_category': filters.threat_type }
+          // { 'analysis_results.threat_category': filters.threat_type }
         ]
       })
     }
@@ -87,16 +87,16 @@ export async function getPosts(project, page = 1, limit = 20, filters = {}, sort
     // Default Filter: Analysis completed AND POI detected (Face OR Name)
     // We keep this to ensure relevance, even for reviewed posts
     // AI analysis is there
-    query["analysis_results.risk_score"] = { $exists: true }
+    // query["analysis_results.risk_score"] = { $exists: true }
     // Human analysis is there
     query["review_details.threat_score"] = { $exists: true }
 
-    andConditions.push({
-      $or: [
-        { "analysis_results.poi_check.face_present": true },
-        { "analysis_results.poi_check.poi_name_found": true }
-      ]
-    })
+    // andConditions.push({
+    //   $or: [
+    //     // { "analysis_results.poi_check.face_present": true },
+    //     // { "analysis_results.poi_check.poi_name_found": true }
+    //   ]
+    // })
 
     if (andConditions.length > 0) {
       query.$and = andConditions
