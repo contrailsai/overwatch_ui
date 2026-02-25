@@ -402,10 +402,13 @@ export async function submitCaseReview(prevState, formData) {
     // Flags
     flags: {
       poi_confirmed: formData.get('poi_confirmed') === 'on',
-      is_hate_speech: formData.get('is_hate_speech') === 'on',
-      is_nsfw: formData.get('is_nsfw') === 'on',
       is_fake_news: formData.get('is_fake_news') === 'on',
-      is_aigc: formData.get('is_aigc') === 'on'
+      is_aigc: formData.get('is_aigc') === 'on',
+      is_nsfw: formData.get('is_nsfw') === 'on',
+      is_hate_speech: formData.get('is_hate_speech') === 'on',
+      is_fraud: formData.get('is_fraud') === 'on',
+      is_humor: formData.get('is_humor') === 'on',
+      is_asset_misuse: formData.get('is_asset_misuse') === 'on',
     },
 
     // Text & Lists

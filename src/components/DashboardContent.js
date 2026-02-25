@@ -10,27 +10,19 @@ import { RecentCasesTable } from './RecentCasesTable'
 import Link from 'next/link'
 
 // Metric Card Component
-function MetricCard({ title, value, subtitle, icon, gradient, trend }) {
+function MetricCard({ title, value, icon }) {
     return (
         <div className={`relative overflow-hidden rounded-2xl p-6 shadow-sm border border-slate-200 transition-all duration-300 bg-white`}>
             <div className="relative z-10">
                 <div className="flex items-center justify-between mb-4">
-                    <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 uppercase text-xs font-bold tracking-wider text-slate-500">
+                    <div className="py-2.5 rounded-xl uppercase text-xs font-bold tracking-wider text-slate-500">
                         {title}
                     </div>
-                    {icon && <div className="p-2 rounded-lg bg-slate-50">{icon}</div>}
+                    {icon && <div className="p-2 rounded-lg">{icon}</div>}
                 </div>
-                <div className="flex items-baseline gap-2">
-                    <p className="text-3xl font-extrabold text-slate-900 tracking-tight">{value}</p>
+                <div className="flex items-baseline">
+                    <p className="text-4xl font-extrabold text-slate-900 tracking-tight">{value}</p>
                 </div>
-                {subtitle && <p className="text-slate-500 text-sm mt-2 font-medium">{subtitle}</p>}
-                {trend && (
-                    <div className="mt-3 flex items-center">
-                        <span className={`text-xs font-semibold ${trend.positive ? 'text-teal-600' : 'text-rose-600'}`}>
-                            {trend.value}
-                        </span>
-                    </div>
-                )}
             </div>
         </div>
     )
@@ -100,11 +92,11 @@ export function DashboardContent({ data }) {
                         </p>
                     </div>
                     <Link
-                        href="/test-cases"
+                        href="/cases"
                         className="group flex items-center gap-3 px-6 py-3.5 bg-blue-600 text-white rounded-2xl font-bold transition-all duration-300 "
                     >
                         <ClipboardList className="w-5 h-5" />
-                        <span>Go to Review Cases</span>
+                        <span>Go to Cases</span>
                         <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
                     </Link>
                 </div>
@@ -115,21 +107,18 @@ export function DashboardContent({ data }) {
                 <MetricCard
                     title="Scanning Volume"
                     value={summary.totalPosts.toLocaleString()}
-                    subtitle="Total pieces of content analyzed"
-                    icon={<Eye className="text-indigo-500 w-5 h-5" />}
+                    icon={<Eye className="text-indigo-500 w-7 h-7" />}
                 />
                 <MetricCard
-                    title="Risk Identifications"
+                    title="Threats Detected"
                     value={summary.totalThreats.toLocaleString()}
-                    subtitle={`${summary.threatDetectionRate}% detection efficacy`}
-                    icon={<AlertTriangle className="text-rose-500 w-5 h-5" />}
+                    icon={<AlertTriangle className="text-rose-500 w-7 h-7" />}
                 />
                 {showTakedowns && (
                     <MetricCard
                         title="Takedown Operations"
                         value={summary.activeTakedowns}
-                        subtitle={`${summary.completedTakedowns} resolved • ${summary.takedownSuccessRate}% success`}
-                        icon={<Target className="text-teal-500 w-5 h-5" />}
+                        icon={<Target className="text-teal-500 w-7 h-7" />}
                     />
                 )}
             </div>
