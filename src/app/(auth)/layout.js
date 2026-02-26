@@ -1,13 +1,3 @@
-import { Outfit } from "next/font/google";
-import "@/app/globals.css";
-
-const outfit = Outfit({
-  subsets: ["latin"],
-  variable: "--font-outfit",
-  display: "swap",
-  weight: ["300", "400", "500", "600", "700"],
-});
-
 export const metadata = {
   title: {
     template: '%s | Overwatch',
@@ -16,12 +6,10 @@ export const metadata = {
   description: "Threat Detection Dashboard",
 };
 
-export default async function RootLayout({ children }) {
+export default async function AuthLayout({ children }) {
   return (
-    <html lang="en" className="h-full">
-      <body className={`${outfit.className} antialiased bg-slate-50 text-slate-900 h-full`}>
-        {children}
-      </body>
-    </html>
+    <div className="min-h-full">
+      {children}
+    </div>
   );
 }

@@ -1,6 +1,6 @@
 'use server'
 
-import { createClient } from './supabase/server'
+import { createClient, getAuthenticatedUser } from './supabase/server'
 import { redirect } from 'next/navigation'
 
 /**
@@ -8,14 +8,13 @@ import { redirect } from 'next/navigation'
  * @returns {Promise<string|null>} The user's permission level or null if not found
  */
 export async function getUserPermission() {
-    const supabase = await createClient()
-
-    const { data: { user } } = await supabase.auth.getUser()
+    const user = await getAuthenticatedUser()
 
     if (!user) {
         return null
     }
 
+    const supabase = await createClient()
     const { data: clientDetails, error } = await supabase
         .from('client_details')
         .select('permission')
@@ -34,9 +33,7 @@ export async function getUserPermission() {
  * @returns {Promise<object|null>} The current user or null
  */
 export async function getCurrentUser() {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    return user
+    return await getAuthenticatedUser()
 }
 
 /**

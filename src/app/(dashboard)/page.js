@@ -1,7 +1,5 @@
-import { getDashboardData } from './actions'
+import { getDashboardData, getClientandProjectDetails } from './actions'
 import { DashboardContent } from '@/components/DashboardContent'
-import { createClient } from '@/utils/supabase/server'
-import { redirect } from 'next/navigation'
 
 export const metadata = {
   title: 'overwatch - Dashboard',
@@ -9,21 +7,12 @@ export const metadata = {
 }
 
 export default async function Home() {
-  const supabase = await createClient()
+  // 1. Get current authenticated user and project details from cached function
+  const result = await getClientandProjectDetails()
 
-  // 1. Get current authenticated user
-  const { data: { user } } = await supabase.auth.getUser()
+  if (!result) return null // Should be handled by layout redirect
 
-  if (!user) {
-    redirect('/login')
-  }
-
-  // 2. Fetch client details to check project_name
-  const { data: clientDetails } = await supabase
-    .from('client_details')
-    .select('*')
-    .eq('id', user.id)
-    .maybeSingle()
+  const { user, clientDetails } = result
 
   // 3. Handle missing setup
   if (!clientDetails?.project_name) {

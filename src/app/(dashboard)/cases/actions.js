@@ -6,33 +6,7 @@ import { getSignedImageUrl } from '@/utils/aws/s3'
 import { sendSlackNotification } from '@/utils/slack'
 import { manageTakedownCase, trackTakedownEvent } from '@/utils/supabase/metrics'
 import { ObjectId } from 'mongodb'
-
-export async function getClientandProjectDetails() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-
-  if (!user) return null
-
-  const { data: clientDetails } = await supabase
-    .from('client_details')
-    .select('*')
-    .eq('id', user.id)
-    .single()
-
-  if (!clientDetails?.project_name) return null
-
-  const { data: project } = await supabase
-    .from('project')
-    .select('mongo_db_map, project_details')
-    .eq('project_name', clientDetails.project_name)
-    .single()
-
-  return {
-    user,
-    clientDetails,
-    project
-  }
-}
+import { getClientandProjectDetails } from '@/app/(dashboard)/actions'
 
 export async function getPosts(project, page = 1, limit = 20, filters = {}, sort = { field: 'created_at', direction: 'desc' }) {
   try {

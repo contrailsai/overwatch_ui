@@ -1,8 +1,12 @@
 import { updateSession } from './utils/supabase/middleware'
 
 export async function proxy(request) {
+  // console.log('Middleware (proxy) running for:', request.nextUrl.pathname)
   return await updateSession(request)
 }
+
+// Support both export names for compatibility with different Next.js 16 sub-versions
+export const middleware = proxy
 
 export const config = {
   matcher: [

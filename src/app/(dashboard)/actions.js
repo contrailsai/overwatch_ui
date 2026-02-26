@@ -1,6 +1,7 @@
 'use server'
 
-import { createClient } from '@/utils/supabase/server'
+import { cache } from 'react'
+import { createClient, getAuthenticatedUser } from '@/utils/supabase/server'
 import clientPromise from '@/utils/mongodb/client'
 import { getSignedImageUrl } from '@/utils/aws/s3'
 
@@ -255,18 +256,17 @@ export async function getDashboardData(projectName) {
   }
 }
 
-export async function getUser() {
-  const supabase = await createClient()
-  const { data: user } = await supabase.auth.getUser()
+export const getUser = cache(async () => {
+  const user = await getAuthenticatedUser()
 
-  // console.log(user)
+  if (!user) return { user: null, clientDetails: null }
+
+  const supabase = await createClient()
   const { data: clientDetails, error } = await supabase
     .from('client_details')
     .select('*')
-    .eq('id', user.user.id)
+    .eq('id', user.id)
     .single();
-
-  console.log(clientDetails, error)
 
   if (error) {
     console.error('Error fetching client details:', error)
@@ -274,21 +274,21 @@ export async function getUser() {
   }
 
   return { user, clientDetails }
-}
+})
 
-export async function getClientandProjectDetails() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+export const getClientandProjectDetails = cache(async () => {
+  const user = await getAuthenticatedUser()
 
   if (!user) return null
 
+  const supabase = await createClient()
   const { data: clientDetails } = await supabase
     .from('client_details')
     .select('*')
     .eq('id', user.id)
     .single()
 
-  if (!clientDetails?.project_name) return null
+  if (!clientDetails?.project_name) return { user, clientDetails, project: null }
 
   const { data: project } = await supabase
     .from('project')
@@ -301,7 +301,7 @@ export async function getClientandProjectDetails() {
     clientDetails,
     project
   }
-}
+})
 
 export async function getCases(projectName) {
   const supabase = await createClient()

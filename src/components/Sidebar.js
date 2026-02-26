@@ -20,7 +20,7 @@ export function Sidebar({ user, clientDetails, project }) {
       icon: ShieldCheck,
       show: clientDetails?.permission === 'reviewer'
     },
-    { name: 'Cases List', href: '/cases', icon: List, show: true },
+    { name: 'Case List', href: '/cases', icon: List, show: true },
     { name: 'Takedowns', href: '/takedowns', icon: ShieldAlert, show: true },
     { name: 'Configurations', href: '/configurations', icon: Settings, show: true },
     { name: 'Upload Content', href: '/upload-content', icon: GitPullRequestCreateArrow, show: true },

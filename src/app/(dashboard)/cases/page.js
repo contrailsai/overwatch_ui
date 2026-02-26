@@ -1,6 +1,6 @@
 import { CasesList } from './CasesList'
-
-import { getClientandProjectDetails, getPosts, getPostById } from './actions'
+import { getPosts, getPostById } from './actions'
+import { getClientandProjectDetails } from '@/app/(dashboard)/actions'
 
 export const metadata = {
   title: 'overwatch - Active Cases',

@@ -416,7 +416,7 @@ export function CaseDetailPanel({ post, project, isOpen, onClose, onNavigate, ha
                                         title="POI Detected"
                                         icon={User}
                                         color="indigo"
-                                        extra={poiNames.length > 0 ? poiNames[0] : null}
+                                    // extra={poiNames.length > 0 ? poiNames[0] : null}
                                     />
                                     <SignalCard
                                         active={isAigc}
