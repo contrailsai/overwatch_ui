@@ -663,14 +663,22 @@ function SignalCard({ active, title, icon: Icon, color, extra }) {
         purple: "bg-purple-50 border-purple-100 text-purple-700",
         rose: "bg-rose-50 border-rose-100 text-rose-700",
         orange: "bg-orange-50 border-orange-100 text-orange-700",
-        indigo: "bg-indigo-50 border-indigo-100 text-indigo-700"
+        indigo: "bg-indigo-50 border-indigo-100 text-indigo-700",
+        red: "bg-red-50 border-red-100 text-red-700",
+        violet: "bg-violet-50 border-violet-100 text-violet-700",
+        yellow: "bg-yellow-50 border-yellow-100 text-yellow-700",
+        blue: "bg-blue-50 border-blue-100 text-blue-700",
     }[color] || "bg-slate-100 text-slate-700";
 
     const iconColors = {
         purple: "text-purple-600",
         rose: "text-rose-600",
         orange: "text-orange-600",
-        indigo: "text-indigo-600"
+        indigo: "text-indigo-600",
+        red: "text-red-600",
+        violet: "text-violet-600",
+        yellow: "text-yellow-600",
+        blue: "text-blue-600",
     }[color] || "text-slate-600";
 
     return (

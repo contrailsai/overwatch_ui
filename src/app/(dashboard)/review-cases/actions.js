@@ -409,6 +409,8 @@ export async function submitCaseReview(prevState, formData) {
       is_fraud: formData.get('is_fraud') === 'on',
       is_humor: formData.get('is_humor') === 'on',
       is_asset_misuse: formData.get('is_asset_misuse') === 'on',
+      is_terrorism: formData.get('is_terrorism') === 'on',
+      is_violence: formData.get('is_violence') === 'on',
     },
 
     // Text & Lists
