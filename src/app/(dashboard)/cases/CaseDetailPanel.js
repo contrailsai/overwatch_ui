@@ -128,6 +128,8 @@ export function CaseDetailPanel({ post, project, isOpen, onClose, onNavigate, ha
     const isFraud = review.flags?.is_fraud ?? (analysis.fraud_check?.is_fraud === true) ?? false;
     const isAssetMisuse = review.flags?.is_asset_misuse ?? (analysis.asset_misuse_check?.is_asset_misuse === true) ?? false;
     const isSatire = review.flags?.is_humor ?? (analysis.is_humor?.is_humor === true) ?? false;
+    const isTerrorism = review.flags?.is_terrorism ?? (analysis.is_terrorism?.is_terrorism === true) ?? false;
+    const isViolence = review.flags?.is_violence ?? (analysis.is_violence?.is_violence === true) ?? false;
 
     // Takedown logic
     const takedownStatus = post.takedown_info?.takedown_status || 'None';
@@ -459,6 +461,18 @@ export function CaseDetailPanel({ post, project, isOpen, onClose, onNavigate, ha
                                         title="Satire"
                                         icon={User}
                                         color="blue"
+                                    />
+                                    <SignalCard
+                                        active={isTerrorism}
+                                        title="Terrorism"
+                                        icon={User}
+                                        color="red"
+                                    />
+                                    <SignalCard
+                                        active={isViolence}
+                                        title="Violence"
+                                        icon={User}
+                                        color="violet"
                                     />
 
                                 </div>
