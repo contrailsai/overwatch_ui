@@ -1,21 +1,10 @@
 import React from 'react';
-import { Page, Text, View, Document, StyleSheet, Font, Image, Link } from '@react-pdf/renderer';
+import { Page, Text, View, Document, StyleSheet, Image, Link } from '@react-pdf/renderer';
 import { format } from 'date-fns';
+import { registerFonts } from './fontRegistration';
 
 // --- FONT REGISTRATION ---
-Font.register({
-  family: 'Outfit',
-  fonts: [
-    { src: '/fonts/Outfit-Regular.ttf' },
-    { src: '/fonts/Outfit-Bold.ttf', fontWeight: 'bold' },
-    { src: '/fonts/Outfit-Medium.ttf', fontWeight: 'medium' },
-  ]
-});
-
-Font.registerEmojiSource({
-  format: 'png',
-  url: 'https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/72x72/'
-});
+registerFonts();
 
 // --- THEME & STYLES ---
 const Theme = {

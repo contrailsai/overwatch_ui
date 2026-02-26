@@ -554,7 +554,7 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
 
       <div
         className={cn(
-          "fixed inset-y-0 right-0 w-[1100px] bg-white shadow-2xl transform transition-transform duration-300 ease-out border-l border-slate-200 z-50 flex flex-col",
+          "fixed inset-y-0 right-0 w-[1150px] bg-white shadow-2xl transform transition-transform duration-300 ease-out border-l border-slate-200 z-50 flex flex-col",
           selectedPost ? "translate-x-0" : "translate-x-full"
         )}
       >
@@ -608,6 +608,16 @@ function ReviewForm({ post, onClose, onNavigate, hasPrev, hasNext, setPosts }) {
     if (savedTypes.length === 0 && savedScore > 50) savedTypes.push('other')
   }
 
+  if (hasReview && review.flags.is_aigc) savedTypes.push("aigc")
+  if (hasReview && review.flags.is_nsfw) savedTypes.push("nsfw")
+  if (hasReview && review.flags.is_hate_speech) savedTypes.push("hate_speech")
+  if (hasReview && review.flags.is_fraud) savedTypes.push("fraud")
+  if (hasReview && review.flags.is_fake_news) savedTypes.push("fake_news")
+  if (hasReview && review.flags.is_humor) savedTypes.push("humor")
+  if (hasReview && review.flags.is_asset_misuse) savedTypes.push("asset_misuse")
+  if (hasReview && review.flags.is_terrorism) savedTypes.push("terrorism")
+  if (hasReview && review.flags.is_violence) savedTypes.push("violence")
+
   const savedTakedown = post.takedown_info?.takedown_status === "requested"
 
   const [facePresent, setFacePresent] = useState(savedFace)
@@ -621,7 +631,7 @@ function ReviewForm({ post, onClose, onNavigate, hasPrev, hasNext, setPosts }) {
   const poiPresent = facePresent || namePresent
   const defaultComments = review.reviewer_comments || '';
 
-  const full_analysis_reasonning = `REASONING: ${analysis?.reasoning || ""} ${analysis?.categorization_reason || ""}
+  const full_analysis_reasonning = hasReview ? review.reasoning : `REASONING: ${analysis?.reasoning || ""} ${analysis?.categorization_reason || ""}
   ${analysis?.threat_category ? "\nCategory: " + analysis.threat_category : ""}
   ${analysis?.nsfw_check?.reasoning ? "\nNSFW: " + analysis.nsfw_check.reasoning : ""}
   ${analysis?.hate_speech_check?.reasoning ? "\nHate Speech: " + analysis.hate_speech_check.reasoning : ""}
@@ -686,8 +696,16 @@ function ReviewForm({ post, onClose, onNavigate, hasPrev, hasNext, setPosts }) {
                   <div className="flex items-center gap-2">
                     <div className="">
                       {
-                        post.platform === "twitter" ? (
-                          <Twitter className="w-6 h-6 text-blue-500" />
+                        post.platform === "twitter" || post.platform === "x" || post.platform === "X" ? (
+                          <span className="inline-block size-4 text-black">
+                            <svg width="100%" height="100%" viewBox="0 0 1200 1227" fill="none" xmlns="http://www.w3.org/2000/svg">
+                              <path
+                                d="M714.163 519.284L1160.89 0H1055.03L667.137 450.887L357.328 0H0L468.492 681.821L0 1226.37H105.866L515.491 750.218L842.672 1226.37H1200L714.137 519.284H714.163ZM569.165 687.828L521.697 619.934L144.011 79.6944H306.615L611.412 515.685L658.88 583.579L1055.08 1150.3H892.476L569.165 687.854V687.828Z"
+                                fill="currentColor"
+                              />
+                            </svg>
+                          </span>
+                          // <Twitter className="w-6 h-6 text-blue-500" />
                         ) : post.platform === "instagram" ? (
                           <Instagram className="w-6 h-6 text-pink-500" />
                         ) : post.platform === "facebook" ? (
@@ -791,6 +809,9 @@ function ReviewForm({ post, onClose, onNavigate, hasPrev, hasNext, setPosts }) {
             <input type="hidden" name="is_fraud" value={threatTypes.includes('fraud') ? 'on' : 'off'} />
             <input type="hidden" name="is_humor" value={threatTypes.includes('humor') ? 'on' : 'off'} />
             <input type="hidden" name="is_asset_misuse" value={threatTypes.includes('asset_misuse') ? 'on' : 'off'} />
+            <input type="hidden" name="is_violence" value={threatTypes.includes('violence') ? 'on' : 'off'} />
+            <input type="hidden" name="is_terrorism" value={threatTypes.includes('terrorism') ? 'on' : 'off'} />
+
             <input type="hidden" name="face_present" value={facePresent.toString()} />
             <input type="hidden" name="name_present" value={namePresent.toString()} />
             <input type="hidden" name="threat_score" value={threatScore} />
@@ -856,7 +877,9 @@ function ReviewForm({ post, onClose, onNavigate, hasPrev, hasNext, setPosts }) {
                     { id: 'fraud', label: 'Fraud / Scam' },
                     { id: 'fake_news', label: 'Misinformation' },
                     { id: 'humor', label: 'Satire' },
-                    { id: 'asset_misuse', label: 'Asset Misuse' }
+                    { id: 'asset_misuse', label: 'Asset Misuse' },
+                    { id: 'terrorism', label: 'Terrorism' },
+                    { id: 'violence', label: 'Violence' },
                   ].map((item) => (
                     <div
                       key={item.id}
