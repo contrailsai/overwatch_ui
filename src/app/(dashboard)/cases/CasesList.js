@@ -69,7 +69,7 @@ export function CasesList({ cases, project, initialFilters, initialSort, current
   const updateQueryParams = useCallback((newParams) => {
     const params = new URLSearchParams(searchParams.toString())
     Object.entries(newParams).forEach(([key, value]) => {
-      if (value === 'all' || value === null || value === undefined) {
+      if (value === null || value === undefined || (value === 'all' && key !== 'status')) {
         params.delete(key)
       } else {
         params.set(key, value)
@@ -236,7 +236,7 @@ export function CasesList({ cases, project, initialFilters, initialSort, current
                   </Select>
                 </div>
 
-                <div className="space-y-1">
+                {/* <div className="space-y-1">
                   <Label className="text-[10px] uppercase font-bold text-slate-400">Threat Type</Label>
                   <Select
                     value={initialFilters.threat_type}
@@ -253,7 +253,7 @@ export function CasesList({ cases, project, initialFilters, initialSort, current
                       <SelectItem value="hate_speech">Hate Speech</SelectItem>
                     </SelectContent>
                   </Select>
-                </div>
+                </div> */}
 
                 {(initialFilters.platform !== 'all' || initialFilters.threat_type !== 'all' || initialFilters.client_status !== 'To Be Reviewed') && (
                   <div className="pt-4">
@@ -392,11 +392,12 @@ export function CasesList({ cases, project, initialFilters, initialSort, current
                       <div className="flex gap-4">
                         <div className="shrink-0 relative">
                           {post.signedImageUrl ? (
-                            <div className="h-16 w-16 rounded-lg overflow-hidden border border-slate-200 shadow-sm bg-slate-50 group-hover:shadow-md transition-all">
+                            <div className="h-16 w-16 rounded-lg overflow-hidden border border-slate-200 shadow-sm bg-slate-200 group-hover:shadow-md transition-all">
                               <img
                                 src={post.signedImageUrl}
                                 alt="Content"
-                                className="h-full w-full object-cover"
+                                /* text-transparent hides the alt text while loading */
+                                className="h-full w-full object-cover text-transparent"
                                 loading="lazy"
                               />
                             </div>

@@ -48,8 +48,12 @@ export async function getPosts(project, page = 1, limit = 20, filters = {}, sort
     // Build query
     // CLIENT VIEW: Enforce processed = true
     const query = {
-      processed: true,
-      'takedown_info.takedown_status': { $ne: 'raised' }
+      processed: true
+    }
+
+    // Only exclude raised cases if we are not explicitly asking for 'all' or 'Flag for Takedown'
+    if (filters.client_status !== 'all' && filters.client_status !== 'Flag for Takedown') {
+      query['takedown_info.takedown_status'] = { $ne: 'raised' }
     }
     const andConditions = []
 
@@ -139,6 +143,7 @@ export async function getPosts(project, page = 1, limit = 20, filters = {}, sort
         // Metadata
         created_at: post.metadata?.created_at ? new Date(post.metadata.created_at).toISOString() : null,
         sourcing_date: post.metadata?.sourcing_date ? new Date(post.metadata.sourcing_date).toISOString() : null,
+        posted_date: post.engagement.posted_at ? new Date(post.engagement.posted_at).toISOString() : post.metadata?.sourcing_date ? new Date(post.metadata.sourcing_date).toISOString() : null,
         taken_at: post.post_content?.taken_at || post.taken_at || null,
         platform: post.platform || 'instagram',
         processed: post.processed || false,

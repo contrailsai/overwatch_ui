@@ -13,7 +13,7 @@ export function Sidebar({ user, clientDetails, project }) {
 
   // All nav items.
   const allNavItems = [
-    { name: 'Dashboard', href: '/', icon: LayoutDashboard, show: true },
+    { name: 'Home', href: '/', icon: LayoutDashboard, show: true },
     {
       name: 'Review Cases',
       href: '/review-cases',
@@ -23,7 +23,7 @@ export function Sidebar({ user, clientDetails, project }) {
     { name: 'Cases List', href: '/cases', icon: List, show: true },
     { name: 'Takedowns', href: '/takedowns', icon: ShieldAlert, show: true },
     { name: 'Configurations', href: '/configurations', icon: Settings, show: true },
-    { name: 'Request Content', href: '/request-content', icon: GitPullRequestCreateArrow, show: true },
+    { name: 'Upload Content', href: '/upload-content', icon: GitPullRequestCreateArrow, show: true },
   ]
 
   // Filter and map navigation items

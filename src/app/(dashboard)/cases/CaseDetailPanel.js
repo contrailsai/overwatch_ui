@@ -64,15 +64,16 @@ export function CaseDetailPanel({ post, project, isOpen, onClose, onNavigate, ha
         setNoteText('');
     }, [post]);
 
-    useEffect(() => {
-        let timeoutId;
-        if (showProcessed === post?._id && hasNext) {
-            timeoutId = setTimeout(() => {
-                onNavigate('next');
-            }, 1500);
-        }
-        return () => clearTimeout(timeoutId);
-    }, [showProcessed, post?._id, hasNext, onNavigate]);
+    //MOVE TO THE NEXT CASE AFTER 1.5 SECONDS IF CASE IF SUBMITTED
+    // useEffect(() => {
+    //     let timeoutId;
+    //     if (showProcessed === post?._id && hasNext) {
+    //         timeoutId = setTimeout(() => {
+    //             onNavigate('next');
+    //         }, 1500);
+    //     }
+    //     return () => clearTimeout(timeoutId);
+    // }, [showProcessed, post?._id, hasNext, onNavigate]);
 
     if (!isOpen || !post) return null
 
@@ -137,8 +138,12 @@ export function CaseDetailPanel({ post, project, isOpen, onClose, onNavigate, ha
     let posted_date = ""
     let sourced_date = ""
 
-    if (post.metadata?.posted_date)
+    if (post.posted_date)
+        posted_date = format(new Date(post.posted_date), "dd/MM/yyyy");
+    else if (post.metadata?.posted_date)
         posted_date = format(new Date(post.metadata.posted_date), "dd/MM/yyyy");
+    else if (post.timestamp)
+        posted_date = format(new Date(post.timestamp), "dd/MM/yyyy");
     else if (post.sourcing_date)
         posted_date = format(new Date(post.sourcing_date), "dd/MM/yyyy");
 
@@ -193,169 +198,174 @@ export function CaseDetailPanel({ post, project, isOpen, onClose, onNavigate, ha
             {/* Panel */}
             <div className="relative w-full max-w-7xl bg-white h-full shadow-2xl overflow-hidden flex flex-col animate-in slide-in-from-right duration-300 border-l border-slate-200">
 
-                {/* Header */}
-                <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-white/80 backdrop-blur-md sticky top-0 z-20">
-                    <div className="flex items-center gap-4">
-                        <div className="h-10 w-10 bg-slate-50 rounded-full flex items-center justify-center border border-slate-100">
-                            <Siren className="w-5 h-5 text-slate-500" />
-                        </div>
-                        <div>
-                            <h2 className="text-lg font-bold text-slate-900 leading-tight">Case Review</h2>
-                            <p className="text-xs font-mono text-slate-400">ID: {post._id}</p>
-                        </div>
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                        {onNavigate && (
-                            <div className="flex items-center gap-1 mr-2 border-r border-slate-200 pr-3">
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={() => onNavigate('prev')}
-                                    disabled={!hasPrev}
-                                    className="h-8 w-8 text-slate-500 hover:text-blue-600"
-                                >
-                                    <ChevronLeft className="w-5 h-5" />
-                                </Button>
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={() => onNavigate('next')}
-                                    disabled={!hasNext}
-                                    className="h-8 w-8 text-slate-500 hover:text-blue-600"
-                                >
-                                    <ChevronRight className="w-5 h-5" />
-                                </Button>
-                            </div>
-                        )}
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={handleCopyLink}
-                            className="h-9 w-9 text-slate-500 hover:text-blue-600 rounded-full"
-                            title="Copy case link"
-                        >
-                            {copied ? <Check className="w-5 h-5 text-green-500" /> : <LinkIcon className="w-5 h-5" />}
-                        </Button>
-                        <CaseExportButton post={post} />
-                        {isRequested && (
-                            <Badge className="bg-orange-50 text-orange-700 border-orange-200 gap-1.5 pl-2 animate-pulse">
-                                <Siren className="w-3.5 h-3.5" /> Takedown Requested
-                            </Badge>
-                        )}
-                        <Button variant="ghost" size="icon" onClick={onClose} className="rounded-full hover:bg-slate-100 text-slate-400">
-                            <X className="w-6 h-6" />
-                        </Button>
-                    </div>
-                </div>
 
                 {/* Main Content Area */}
                 <div className="flex-1 overflow-hidden flex flex-col lg:flex-row divide-x divide-slate-100">
 
                     {/* Left: Source Content (Scrollable) */}
-                    <div className="flex-1 overflow-y-auto p-8 space-y-8 bg-slate-50/50">
+                    <div className="flex-1 overflow-y-auto space-y-4 bg-slate-50/50">
+                        {/* Header */}
+                        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-white/80 backdrop-blur-md sticky top-0 z-20">
+                            <div className="flex items-center gap-4">
+                                <div className="h-10 w-10 bg-slate-50 rounded-full flex items-center justify-center border border-slate-100">
+                                    <Siren className="w-5 h-5 text-slate-500" />
+                                </div>
+                                <div>
+                                    <h2 className="text-lg font-bold text-slate-900 leading-tight">Case Review</h2>
+                                    <p className="text-xs font-mono text-slate-400">ID: {post._id}</p>
+                                </div>
+                            </div>
 
-                        {/* User Context Card */}
-                        <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm flex items-center gap-5">
-                            <div className="relative shrink-0">
-                                {(post.user?.profile_pic_url && !imgError) ? (
+                            <div className="flex items-center gap-3">
+                                {onNavigate && (
+                                    <div className="flex items-center gap-1 mr-2 border-r border-slate-200 pr-3">
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            onClick={() => onNavigate('prev')}
+                                            disabled={!hasPrev}
+                                            className="h-8 w-8 text-slate-500 hover:text-blue-600"
+                                        >
+                                            <ChevronLeft className="w-5 h-5" />
+                                        </Button>
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            onClick={() => onNavigate('next')}
+                                            disabled={!hasNext}
+                                            className="h-8 w-8 text-slate-500 hover:text-blue-600"
+                                        >
+                                            <ChevronRight className="w-5 h-5" />
+                                        </Button>
+                                    </div>
+                                )}
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={handleCopyLink}
+                                    className="h-9 w-9 text-slate-500 hover:text-blue-600 rounded-full"
+                                    title="Copy case link"
+                                >
+                                    {copied ? <Check className="w-5 h-5 text-green-500" /> : <LinkIcon className="w-5 h-5" />}
+                                </Button>
+
+                                {isRequested && (
+                                    <Badge className="bg-orange-50 text-orange-700 border-orange-200 gap-1.5 pl-2 animate-pulse">
+                                        <Siren className="w-3.5 h-3.5" /> Takedown Requested
+                                    </Badge>
+                                )}
+                                <Button variant="ghost" size="icon" onClick={onClose} className="rounded-full hover:bg-slate-100 text-slate-400">
+                                    <X className="w-6 h-6" />
+                                </Button>
+                            </div>
+                        </div>
+
+                        <div className=" flex flex-col gap-8 px-8 pb-8  ">
+                            {/* Media Display */}
+                            <div className="bg-slate-900 rounded-2xl overflow-hidden shadow-lg border border-slate-800 relative group flex items-center justify-center min-h-[400px]">
+                                <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-slate-800/50 to-slate-950 pointer-events-none" />
+                                {post.signedImageUrl ? (
                                     <img
-                                        src={post.user.profile_pic_url}
-                                        onError={() => setImgError(true)}
-                                        alt=""
-                                        className="w-16 h-16 rounded-full object-cover border-4 border-slate-50"
+                                        src={post.signedImageUrl}
+                                        alt="Evidence"
+                                        className="max-w-full h-auto max-h-[600px] object-contain relative z-10"
                                     />
                                 ) : (
-                                    <ProfilePic user={post.user?.username || 'Unknown'} size={64} />
+                                    <div className="text-center p-12 relative z-10">
+                                        <Quote className="w-16 h-16 text-slate-700 mx-auto mb-4" />
+                                        <p className="text-slate-500 font-medium text-lg">Text-Only Content</p>
+                                    </div>
                                 )}
                             </div>
-                            <div className="flex-1 min-w-0">
-                                <h3 className="text-xl font-bold text-slate-900 truncate flex items-center gap-2">
-                                    <div className="">
-                                        {/* platform */}
-                                        <div className="flex-1 min-w-4">
-                                            {
-                                                post.platform === "twitter" ? (
-                                                    <Twitter className="w-6 h-6 text-blue-500" />
-                                                ) : post.platform === "instagram" ? (
-                                                    <Instagram className="w-6 h-6 text-pink-500" />
-                                                ) : post.platform === "facebook" ? (
-                                                    <Facebook className="w-6 h-6 text-blue-500" />
-                                                ) : post.platform === "youtube" ? (
-                                                    <Youtube className="w-6 h-6 text-red-500" />
-                                                ) : (
-                                                    <p className="text-slate-500 font-medium truncate">{post.platform}</p>
-                                                )
-                                            }
+
+                            {/* Unified User Context & Caption Card */}
+                            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+                                <div className="p-5 flex items-center gap-5">
+                                    <div className="relative shrink-0">
+                                        {(post.user?.profile_pic_url && !imgError) ? (
+                                            <img
+                                                src={post.user.profile_pic_url}
+                                                onError={() => setImgError(true)}
+                                                alt=""
+                                                className="w-16 h-16 rounded-full object-cover border-4 border-slate-50"
+                                            />
+                                        ) : (
+                                            <ProfilePic user={post.user?.username || 'Unknown'} size={64} />
+                                        )}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <h3 className="text-xl font-bold text-slate-900 truncate flex items-center gap-2">
+                                            <div className="">
+                                                {/* platform */}
+                                                <div className="flex-1 min-w-4">
+                                                    {
+                                                        post.platform === "twitter" ? (
+                                                            <Twitter className="w-6 h-6 text-blue-500" />
+                                                        ) : post.platform === "instagram" ? (
+                                                            <Instagram className="w-6 h-6 text-pink-500" />
+                                                        ) : post.platform === "facebook" ? (
+                                                            <Facebook className="w-6 h-6 text-blue-500" />
+                                                        ) : post.platform === "youtube" ? (
+                                                            <Youtube className="w-6 h-6 text-red-500" />
+                                                        ) : (
+                                                            <p className="text-slate-500 font-medium truncate">{post.platform}</p>
+                                                        )
+                                                    }
+                                                </div>
+                                            </div>
+                                            {post.user?.username || 'Unknown User'}
+                                            {post.user?.is_verified && <BadgeCheck className="w-5 h-5 text-blue-500 fill-blue-50" />}
+                                        </h3>
+                                        <p className="text-slate-500 font-medium truncate">{post.user?.full_name}</p>
+                                    </div>
+                                    <a
+                                        href={post.url || post.original_url || '#'}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-sm font-bold transition-colors flex items-center gap-2"
+                                    >
+                                        <ExternalLink className="w-4 h-4" />
+                                        <span className="hidden sm:inline">View Source</span>
+                                    </a>
+                                </div>
+
+                                <div className="px-5 pb-5 pt-0">
+                                    <div className="bg-slate-50/50 rounded-lg p-4 border border-slate-100">
+                                        <h4 className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">
+                                            <MessageCircle className="w-3 h-3" /> Post Caption
+                                        </h4>
+                                        <div className="text-slate-800 leading-relaxed whitespace-pre-wrap font-medium text-sm font-sans">
+                                            {post.caption || <span className="italic text-slate-400">No caption content available.</span>}
                                         </div>
                                     </div>
-                                    {post.user?.username || 'Unknown User'}
-                                    {post.user?.is_verified && <BadgeCheck className="w-5 h-5 text-blue-500 fill-blue-50" />}
-                                </h3>
-                                <p className="text-slate-500 font-medium truncate">{post.user?.full_name}</p>
-                            </div>
-                            <a
-                                href={post.url || post.original_url || '#'}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-sm font-bold transition-colors flex items-center gap-2"
-                            >
-                                <ExternalLink className="w-4 h-4" />
-                                <span className="hidden sm:inline">View Source</span>
-                            </a>
-
-                        </div>
-
-                        {/* Media Display */}
-                        <div className="bg-slate-900 rounded-2xl overflow-hidden shadow-lg border border-slate-800 relative group flex items-center justify-center min-h-[400px]">
-                            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-slate-800/50 to-slate-950 pointer-events-none" />
-                            {post.signedImageUrl ? (
-                                <img
-                                    src={post.signedImageUrl}
-                                    alt="Evidence"
-                                    className="max-w-full h-auto max-h-[600px] object-contain relative z-10"
-                                />
-                            ) : (
-                                <div className="text-center p-12 relative z-10">
-                                    <Quote className="w-16 h-16 text-slate-700 mx-auto mb-4" />
-                                    <p className="text-slate-500 font-medium text-lg">Text-Only Content</p>
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Caption & Stats */}
-                        <div className="space-y-6">
-                            <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-                                <h4 className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">
-                                    <MessageCircle className="w-3.5 h-3.5" /> Post Caption
-                                </h4>
-                                <div className="text-slate-800 leading-relaxed whitespace-pre-wrap font-medium text-base font-sans">
-                                    {post.caption || <span className="italic text-slate-400">No caption content available.</span>}
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-3 gap-10">
-                                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-row justify-between gap-1">
-                                    <span className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2"><Heart className="w-3.5 h-3.5 text-rose-500" /> Likes</span>
-                                    <span className="font-bold text-lg text-slate-900">{post.stats?.like_count?.toLocaleString() || 0}</span>
+                            {/* Stats & Dates */}
+                            <div className="space-y-6">
+                                <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-3 gap-10">
+                                    <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-row justify-between gap-1">
+                                        <span className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2"><Heart className="w-3.5 h-3.5 text-rose-500" /> Likes</span>
+                                        <span className="font-bold text-lg text-slate-900">{post.stats?.like_count?.toLocaleString() || 0}</span>
+                                    </div>
+                                    <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-row justify-between gap-1">
+                                        <span className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2"><MessageCircle className="w-3.5 h-3.5 text-blue-500" /> Comments</span>
+                                        <span className="font-bold text-lg text-slate-900">{post.stats?.comment_count?.toLocaleString() || 0}</span>
+                                    </div>
+                                    <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-row justify-between gap-1">
+                                        <span className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2"><Share2 className="w-3.5 h-3.5 text-green-500" /> Shares</span>
+                                        <span className="font-bold text-lg text-slate-900">{post.stats?.share_count?.toLocaleString() || 0}</span>
+                                    </div>
                                 </div>
-                                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-row justify-between gap-1">
-                                    <span className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2"><MessageCircle className="w-3.5 h-3.5 text-blue-500" /> Comments</span>
-                                    <span className="font-bold text-lg text-slate-900">{post.stats?.comment_count?.toLocaleString() || 0}</span>
-                                </div>
-                                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-row justify-between gap-1">
-                                    <span className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2"><Share2 className="w-3.5 h-3.5 text-green-500" /> Shares</span>
-                                    <span className="font-bold text-lg text-slate-900">{post.stats?.share_count?.toLocaleString() || 0}</span>
-                                </div>
-                            </div>
-                            <div className="grid grid-cols-2 gap-10">
-                                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between gap-1">
-                                    <span className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2"><Calendar className="w-3.5 h-3.5 text-slate-500" /> Posted</span>
-                                    <span className="font-bold text-sm text-slate-900">{posted_date}</span>
-                                </div>
-                                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between gap-1">
-                                    <span className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2"><History className="w-3.5 h-3.5 text-slate-500" /> Sourced</span>
-                                    <span className="font-bold text-sm text-slate-900">{sourced_date}</span>
+                                <div className="grid grid-cols-2 gap-10">
+                                    <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between gap-1">
+                                        <span className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2"><Calendar className="w-3.5 h-3.5 text-slate-500" /> Posted</span>
+                                        <span className="font-bold text-sm text-slate-900">{posted_date}</span>
+                                    </div>
+                                    <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between gap-1">
+                                        <span className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2"><History className="w-3.5 h-3.5 text-slate-500" /> Sourced</span>
+                                        <span className="font-bold text-sm text-slate-900">{sourced_date}</span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -364,7 +374,7 @@ export function CaseDetailPanel({ post, project, isOpen, onClose, onNavigate, ha
                     {/* Right: Intelligence Panel (Fixed/Scrollable) */}
                     <div className="w-full lg:w-[480px] bg-white flex flex-col h-full shrink-0">
 
-                        <div className="flex-1 overflow-y-auto p-8 space-y-8">
+                        <div className="flex-1 overflow-y-auto p-4 space-y-8">
 
                             {/* Threat Score Card */}
                             <div>
@@ -459,7 +469,7 @@ export function CaseDetailPanel({ post, project, isOpen, onClose, onNavigate, ha
                                 <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
                                     <Eye className="w-3.5 h-3.5" /> Review Analysis
                                 </h4>
-                                <div className="bg-slate-50 p-5 rounded-xl border border-slate-100 text-slate-600 leading-relaxed text-sm font-medium">
+                                <div className="w-full bg-slate-50 p-5 rounded-xl border border-slate-100 text-slate-600 leading-relaxed text-sm font-medium whitespace-pre-wrap">
                                     {reasoning}
                                 </div>
                             </div>
@@ -530,7 +540,7 @@ export function CaseDetailPanel({ post, project, isOpen, onClose, onNavigate, ha
                         </div>
 
                         {/* Footer Action Area */}
-                        <div className="p-6 border-t border-slate-100 bg-white sticky bottom-0 z-10">
+                        <div className=" border-t border-slate-100 bg-white sticky bottom-0 z-10">
                             {(isRequested) && (
                                 <div className="flex items-start gap-3 mb-4 p-4 bg-orange-50 rounded-xl border border-orange-100">
                                     <Info className="w-5 h-5 text-orange-600 mt-0.5 shrink-0" />
@@ -552,58 +562,76 @@ export function CaseDetailPanel({ post, project, isOpen, onClose, onNavigate, ha
                                 )
                             }
 
-                            <div className="flex gap-4">
-                                {isRaised &&
-                                    <Button
-                                        onClick={() => router.push(`/takedowns/case/${post.takedown_info.supabase_id}`)}
-                                        variant="outline"
-                                        className="flex-1 h-12 border-slate-200 text-slate-700 font-bold"
-                                    >
-                                        View Takedown Status
-                                    </Button>
-                                }
-                                {isRaised ?
-                                    <Button disabled className="flex-1 h-12 bg-slate-100 text-slate-400 border border-slate-200">
-                                        <CheckCircle className="w-4 h-4 mr-2" /> Action in Progress
-                                    </Button>
-                                    : (
-                                        <>
-                                            <Button
-                                                onClick={() => handleUpdateStatus('Pass')}
-                                                disabled={isProcessing === 'Pass' || clientStatus === 'Pass'}
-                                                // variant="outline"
-                                                className=" disabled:cursor-not-allowed cursor-pointer bg-emerald-500 hover:bg-emerald-600 text-white  shadow-lg shadow-emerald-900/20 flex-1 h-12 font-bold border-slate-200"
-                                            >
-                                                {isProcessing === 'Pass' && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
-                                                Pass
-                                            </Button>
-                                            <Button
-                                                onClick={() => handleUpdateStatus('Flag for Takedown')}
-                                                disabled={isProcessing === 'Flag for Takedown' || clientStatus === 'Flag for Takedown'}
-                                                className={cn("cursor-pointer h-12 font-bold flex-1 text-white shadow-lg", allowDoTakedown ? "bg-amber-500 hover:bg-amber-600 shadow-amber-900/20" : "bg-rose-600 hover:bg-rose-700 shadow-rose-900/20")}
-                                            >
-                                                {isProcessing === 'Flag for Takedown' ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <AlertTriangle className="w-4 h-4 mr-2" />}
-                                                Flag for Takedown
-                                            </Button>
-                                            {allowDoTakedown && (
+                            <div className="flex flex-col items-center pb-4 pt-1 px-4">
+
+                                <div className="w-full flex gap-4 py-2" >
+                                    {isRaised &&
+                                        <Button
+                                            onClick={() => router.push(`/takedowns/case/${post.takedown_info.supabase_id}`)}
+                                            variant="outline"
+                                            className="flex-1 h-12 border-slate-200 text-slate-700 font-bold"
+                                        >
+                                            View Takedown Status
+                                        </Button>
+                                    }
+                                    {isRaised ?
+                                        <Button disabled className="flex-1 h-12 bg-slate-100 text-slate-400 border border-slate-200">
+                                            <CheckCircle className="w-4 h-4 mr-2" /> Action in Progress
+                                        </Button>
+                                        : (
+                                            <>
                                                 <Button
-                                                    onClick={handleTakedown}
-                                                    disabled={isProcessing === 'takedown'}
-                                                    className=" cursor-pointer flex-1 h-12 bg-rose-600 hover:bg-rose-700 text-white shadow-lg shadow-rose-900/20 font-bold"
+                                                    onClick={() => { if (clientStatus !== 'Pass') handleUpdateStatus('Pass') }}
+                                                    disabled={isProcessing === 'Pass'}
+                                                    className={cn(
+                                                        "flex-1 h-12 font-bold text-white transition-all duration-200 shadow-emerald-900/20 bg-emerald-500 opacity-50 hover:opacity-100 ",
+                                                        clientStatus === 'Pass' ? "opacity-100 cursor-default hover:bg-emerald-500 ring-2 ring-emerald-600 ring-offset-2" : "cursor-pointer hover:bg-emerald-600",
+                                                        // (clientStatus !== 'To Be Reviewed' && clientStatus !== 'Pass') ? "" : ""
+                                                    )}
                                                 >
-                                                    {isProcessing === 'takedown' ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <ShieldAlert className="w-4 h-4 mr-2" />}
-                                                    Do Takedown
+                                                    {isProcessing === 'Pass' && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
+                                                    Pass
                                                 </Button>
-                                            )}
-                                        </>
-                                    )}
+                                                <Button
+                                                    onClick={() => { if (clientStatus !== 'Flag for Takedown') handleUpdateStatus('Flag for Takedown') }}
+                                                    disabled={isProcessing === 'Flag for Takedown'}
+                                                    className={cn(
+                                                        "flex-1 h-12 font-bold text-white transition-all duration-200 opacity-50 hover:opacity-100 ",
+                                                        allowDoTakedown ? "shadow-amber-900/20 bg-amber-500" : "shadow-rose-900/20 bg-rose-600",
+                                                        clientStatus === 'Flag for Takedown'
+                                                            ? cn("opacity-100 cursor-default ring-2 ring-offset-2", allowDoTakedown ? "hover:bg-amber-500 ring-amber-600" : "hover:bg-rose-600 ring-rose-700")
+                                                            : cn("cursor-pointer", allowDoTakedown ? "hover:bg-amber-600" : "hover:bg-rose-700"),
+                                                        // (clientStatus !== 'To Be Reviewed' && clientStatus !== 'Flag for Takedown') ? "" : ""
+                                                    )}
+                                                >
+                                                    {isProcessing === 'Flag for Takedown' ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <AlertTriangle className="w-4 h-4 mr-2" />}
+                                                    Flag for Takedown
+                                                </Button>
+                                                {allowDoTakedown && (
+                                                    <Button
+                                                        onClick={handleTakedown}
+                                                        disabled={isProcessing === 'takedown'}
+                                                        className={cn(
+                                                            "flex-1 h-12 font-bold text-white transition-all duration-200 shadow-rose-900/20 bg-rose-600 cursor-pointer hover:bg-rose-700",
+                                                            (clientStatus !== 'To Be Reviewed') ? "opacity-50 hover:opacity-100" : "opacity-100"
+                                                        )}
+                                                    >
+                                                        {isProcessing === 'takedown' ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <ShieldAlert className="w-4 h-4 mr-2" />}
+                                                        Do Takedown
+                                                    </Button>
+                                                )}
+                                            </>
+                                        )
+                                    }
+                                </div>
+                                <CaseExportButton post={post} />
                             </div>
                         </div>
 
                     </div>
                 </div>
             </div>
-        </div>
+        </div >
     )
 }
 

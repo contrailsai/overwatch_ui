@@ -98,7 +98,7 @@ export function CaseExportButton({ post }) {
                     variant="outline"
                     size="sm"
                     disabled={loading || imgState.loading}
-                    className="gap-2 border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-100 transition-all font-semibold shadow-sm h-8"
+                    className="gap-2 cursor-pointer disabled:cursor-not-allowed border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-100 transition-all font-semibold shadow-sm h-8"
                 >
                     {(loading || imgState.loading) ? (
                         <Loader2 className="w-4 h-4 animate-spin" />

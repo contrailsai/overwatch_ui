@@ -16,9 +16,11 @@ export default function SafeDate({ date, formatStr = null, className = "" }) {
         // we return a placeholder during SSR.
         return <span className={className}>...</span>
     }
+    if (date === null) return <span className={className}></span>
 
     const d = new Date(date)
-    if (isNaN(d.getTime())) return <span className={className}>N/A</span>
+
+    if (isNaN(d.getTime())) return <span className={className}></span>
 
     if (formatStr) {
         try {
