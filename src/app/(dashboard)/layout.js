@@ -1,4 +1,3 @@
-import { Outfit } from "next/font/google";
 import "@/app/globals.css";
 import { getClientandProjectDetails } from '@/app/(dashboard)/actions'
 import { Sidebar } from '@/components/Sidebar'

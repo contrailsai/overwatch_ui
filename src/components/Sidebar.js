@@ -130,7 +130,7 @@ export function Sidebar({ user, clientDetails, project }) {
         <form action="/auth/signout" method="post">
           <button
             type="submit"
-            className="flex w-full items-center px-3 py-2.5 text-sm font-medium text-slate-500 rounded-lg hover:bg-red-50 hover:text-red-600 transition-colors group"
+            className=" cursor-pointer flex w-full items-center px-3 py-2.5 text-sm font-medium text-slate-500 rounded-lg hover:bg-red-50 hover:text-red-600 transition-colors group"
           >
             <LogOut className="h-5 w-5 mr-3 shrink-0 text-slate-400 group-hover:text-red-500 transition-colors" />
             <span>Sign out</span>
