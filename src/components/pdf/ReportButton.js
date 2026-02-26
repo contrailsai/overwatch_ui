@@ -30,7 +30,7 @@ export function ReportButton({ posts }) {
           ) : (
             <FileDown className="w-4 h-4" />
           )}
-          {loading ? 'Generating...' : 'Export Report'}
+          {loading ? 'Generating...' : 'Export Summary Report'}
         </button>
       )}
     </PDFDownloadLink>
