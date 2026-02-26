@@ -4,7 +4,7 @@ import { ReviewInterface } from './ReviewInterface'
 import { isReviewer } from '@/utils/permissions'
 
 export const metadata = {
-  title: 'overwatch - Review Cases',
+  title: 'Review Cases',
   description: 'Review pending cases and manage threats.',
 }
 

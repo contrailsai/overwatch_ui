@@ -1,5 +1,5 @@
 export const metadata = {
-  title: 'overwatch - Login',
+  title: 'Overwatch - Login',
   description: 'Sign in to Overwatch threat detection dashboard.',
 };
 

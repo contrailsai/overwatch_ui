@@ -6,7 +6,7 @@ import { redirect } from 'next/navigation'
 
 export const metadata = {
   title: {
-    template: '%s | Overwatch',
+    template: 'Overwatch | %s',
     default: 'Overwatch',
   },
   description: "Threat Detection Dashboard",

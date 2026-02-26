@@ -3,7 +3,7 @@ import { getPosts, getPostById } from './actions'
 import { getClientandProjectDetails } from '@/app/(dashboard)/actions'
 
 export const metadata = {
-  title: 'overwatch - Active Cases',
+  title: 'Case List',
   description: 'Detailed investigation and execution of active cases.',
 }
 

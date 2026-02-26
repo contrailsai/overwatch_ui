@@ -2,7 +2,7 @@ import { getDashboardData, getClientandProjectDetails } from './actions'
 import { DashboardContent } from '@/components/DashboardContent'
 
 export const metadata = {
-  title: 'overwatch - Dashboard',
+  title: 'Dashboard',
   description: 'Overview of threat detection metrics and trends.',
 }
 
