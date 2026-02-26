@@ -130,7 +130,7 @@ export async function getPosts(project_name, page = 1, limit = 20, filters = {})
         signedImageUrl: signedUrl,
 
         // Content
-        caption: post.post_content?.caption || '',
+        caption: post.post_content?.caption || post.post_content?.content || '',
 
         // Profile
         user: {

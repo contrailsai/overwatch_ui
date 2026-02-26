@@ -17,8 +17,8 @@ export default async function ReviewCasesPage({ searchParams }) {
     return (
       <main className="flex-1 flex items-center justify-center bg-slate-50">
         <div className="text-center p-8 bg-white rounded-2xl border border-slate-200 shadow-sm">
-          <h1 className="text-3xl font-bold text-slate-900 mb-2">Access Denied</h1>
-          <p className="text-slate-500">You do not have the required permissions to access this area.</p>
+          <h1 className="text-3xl font-bold text-slate-900 mb-2">404 Not Found</h1>
+          <p className="text-slate-500">The page you are looking for does not exist.</p>
         </div>
       </main>
     )
@@ -61,13 +61,13 @@ export default async function ReviewCasesPage({ searchParams }) {
   // Fetch Data
   const resolvedSearchParams = await searchParams // Next.js 15+ await searchParams
   const page = parseInt(resolvedSearchParams?.page || '1')
-  
+
   // Initial load filters
   const initialFilters = {
     platform: resolvedSearchParams?.platform || 'all',
     status: resolvedSearchParams?.status || 'pending',
-    aiAnalyzed: resolvedSearchParams?.aiAnalyzed !== 'false', // Default true
-    poiDetected: resolvedSearchParams?.poiDetected !== 'false', // Default true
+    aiAnalyzed: resolvedSearchParams?.aiAnalyzed === 'false', // Default false
+    poiDetected: resolvedSearchParams?.poiDetected === 'false', // Default false
     sourcingDateStart: resolvedSearchParams?.sourcingDateStart || undefined,
     sourcingDateEnd: resolvedSearchParams?.sourcingDateEnd || undefined,
     dbDateStart: resolvedSearchParams?.dbDateStart || undefined,

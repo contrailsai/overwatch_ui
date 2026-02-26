@@ -6,7 +6,7 @@ import {
     X, User, Heart, MessageCircle, Share2, AlertTriangle,
     Activity, BadgeCheck, Quote, ShieldAlert, CheckCircle,
     ExternalLink, Calendar, Info, Siren, Eye, Link as LinkIcon,
-    ChevronLeft, ChevronRight, History, Facebook, Instagram, Twitter,
+    ChevronLeft, ChevronRight, History, Facebook, Instagram, Twitter, Youtube,
     Loader2, Send, Copy, Check
 } from 'lucide-react'
 import ProfilePic from '@/components/ProfilePic'
@@ -281,6 +281,8 @@ export function CaseDetailPanel({ post, project, isOpen, onClose, onNavigate, ha
                                                     <Instagram className="w-6 h-6 text-pink-500" />
                                                 ) : post.platform === "facebook" ? (
                                                     <Facebook className="w-6 h-6 text-blue-500" />
+                                                ) : post.platform === "youtube" ? (
+                                                    <Youtube className="w-6 h-6 text-red-500" />
                                                 ) : (
                                                     <p className="text-slate-500 font-medium truncate">{post.platform}</p>
                                                 )
@@ -385,12 +387,12 @@ export function CaseDetailPanel({ post, project, isOpen, onClose, onNavigate, ha
                                                 {getRiskLabel(riskScore).label}
                                             </div>
                                         </div>
-                                        <div className="text-right">
+                                        {/* <div className="text-right">
                                             <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/20 backdrop-blur-md text-[10px] font-bold uppercase mb-2 border border-white/10">
                                                 <Activity className="w-3 h-3" /> AI Analysis
                                             </div>
                                             <p className="font-bold text-base leading-tight max-w-[120px] capitalize">{category}</p>
-                                        </div>
+                                        </div> */}
                                     </div>
                                 </div>
                             </div>
@@ -453,14 +455,14 @@ export function CaseDetailPanel({ post, project, isOpen, onClose, onNavigate, ha
                             </div>
 
                             {/* Reasoning */}
-                            {/* <div className="space-y-3">
+                            <div className="space-y-3">
                                 <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                                    <Eye className="w-3.5 h-3.5" /> AI Reasoning
+                                    <Eye className="w-3.5 h-3.5" /> Review Analysis
                                 </h4>
                                 <div className="bg-slate-50 p-5 rounded-xl border border-slate-100 text-slate-600 leading-relaxed text-sm font-medium">
                                     {reasoning}
                                 </div>
-                            </div> */}
+                            </div>
 
                             {/* Reviewer Note */}
                             {/* {reviewerNote && (
@@ -569,8 +571,8 @@ export function CaseDetailPanel({ post, project, isOpen, onClose, onNavigate, ha
                                             <Button
                                                 onClick={() => handleUpdateStatus('Pass')}
                                                 disabled={isProcessing === 'Pass' || clientStatus === 'Pass'}
-                                                variant="outline"
-                                                className=" disabled:cursor-not-allowed cursor-pointer flex-1 h-12 text-slate-700 font-bold border-slate-200 hover:bg-slate-50"
+                                                // variant="outline"
+                                                className=" disabled:cursor-not-allowed cursor-pointer bg-emerald-500 hover:bg-emerald-600 text-white  shadow-lg shadow-emerald-900/20 flex-1 h-12 font-bold border-slate-200"
                                             >
                                                 {isProcessing === 'Pass' && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
                                                 Pass
@@ -608,7 +610,7 @@ export function CaseDetailPanel({ post, project, isOpen, onClose, onNavigate, ha
 function SignalCard({ active, title, icon: Icon, color, extra }) {
     if (!active) {
         return (
-            <div className="p-4 rounded-xl border border-slate-100 bg-slate-50/50 flex flex-col justify-between h-24 opacity-50">
+            <div className="p-4 rounded-xl border border-slate-100 bg-slate-50/50 flex flex-col justify-between h-16 opacity-50">
                 <Icon className="w-5 h-5 text-slate-300" />
                 <span className="text-xs font-bold text-slate-400 uppercase">{title}</span>
             </div>
@@ -630,7 +632,7 @@ function SignalCard({ active, title, icon: Icon, color, extra }) {
     }[color] || "text-slate-600";
 
     return (
-        <div className={cn("p-4 rounded-xl border flex flex-col justify-between h-24 transition-all shadow-sm", colorStyles)}>
+        <div className={cn("p-4 rounded-xl border flex flex-col justify-between h-16 transition-all", colorStyles)}>
             <div className="flex justify-between items-start">
                 <Icon className={cn("w-5 h-5", iconColors)} />
                 <div className="h-2 w-2 rounded-full bg-current animate-pulse opacity-50" />

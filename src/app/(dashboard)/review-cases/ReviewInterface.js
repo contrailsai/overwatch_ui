@@ -10,7 +10,7 @@ import {
   Loader2, X, CheckCircle, AlertTriangle, ExternalLink,
   Filter, Download, ChevronLeft, ChevronRight,
   Search, Sparkles, Calendar, Database, Plus,
-  Instagram, Facebook, Twitter, Heart, MessageCircle, AlertCircle, Quote,
+  Instagram, Facebook, Twitter, Youtube, Heart, MessageCircle, AlertCircle, Quote,
   Image as ImageIcon, ShieldAlert, BadgeCheck, Eye, History
 } from 'lucide-react'
 import ProfilePic from '@/components/ProfilePic'
@@ -692,6 +692,8 @@ function ReviewForm({ post, onClose, onNavigate, hasPrev, hasNext, setPosts }) {
                           <Instagram className="w-6 h-6 text-pink-500" />
                         ) : post.platform === "facebook" ? (
                           <Facebook className="w-6 h-6 text-blue-500" />
+                        ) : post.platform === "youtube" ? (
+                          <Youtube className="w-6 h-6 text-red-500 fill-red-500 stroke-white stroke-[1px]" />
                         ) : (
                           <p className="text-slate-500 font-medium truncate">{post.platform}</p>
                         )

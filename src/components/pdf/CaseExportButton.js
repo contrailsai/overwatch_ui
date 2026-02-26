@@ -25,7 +25,7 @@ export const fetchAndCompressImage = async (imageUrl, maxWidth = 800) => {
         // Fetch the image as a blob to bypass some strict rendering checks
         const response = await fetch(imageUrl, { mode: 'cors' });
         const blob = await response.blob();
-        
+
         return new Promise((resolve, reject) => {
             const img = new window.Image();
             img.onload = () => {
@@ -45,7 +45,7 @@ export const fetchAndCompressImage = async (imageUrl, maxWidth = 800) => {
                 ctx.drawImage(img, 0, 0, width, height);
 
                 // Export as a standard, safe JPEG
-                resolve(canvas.toDataURL('image/jpeg', 0.8)); 
+                resolve(canvas.toDataURL('image/jpeg', 0.8));
             };
             img.onerror = reject;
             img.src = URL.createObjectURL(blob);
@@ -62,13 +62,13 @@ export function CaseExportButton({ post }) {
     useEffect(() => {
         let isMounted = true;
         const processImage = async () => {
-            const sourceUrl = post?.signedImageUrl || 
-                              post?.image_url || 
-                              (post?.post_content?.media_urls?.[0]?.s3_url) || 
-                              (post?.media_urls?.[0]?.s3_url) || 
-                              (post?.post_content?.media_urls?.[0]?.original_url) || 
-                              null;
-            
+            const sourceUrl = post?.signedImageUrl ||
+                post?.image_url ||
+                (post?.post_content?.media_urls?.[0]?.s3_url) ||
+                (post?.media_urls?.[0]?.s3_url) ||
+                (post?.post_content?.media_urls?.[0]?.original_url) ||
+                null;
+
             if (sourceUrl) {
                 const compressed = await fetchAndCompressImage(sourceUrl);
                 if (isMounted) {
@@ -105,7 +105,7 @@ export function CaseExportButton({ post }) {
                     ) : (
                         <FileDown className="w-4 h-4" />
                     )}
-                    {(loading || imgState.loading) ? 'Preparing...' : 'Export PDF'}
+                    {(loading || imgState.loading) ? 'Preparing...' : 'Download Case Report'}
                 </Button>
             )}
         </PDFDownloadLink>

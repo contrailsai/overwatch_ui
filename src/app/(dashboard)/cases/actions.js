@@ -126,7 +126,7 @@ export async function getPosts(project, page = 1, limit = 20, filters = {}, sort
       let s3UrlToSign = null;
       if (post.post_content?.media_urls && post.post_content.media_urls.length > 0) {
         const firstMedia = post.post_content.media_urls[0];
-        s3UrlToSign = firstMedia.thumbnail_url || firstMedia.s3_url;
+        s3UrlToSign = firstMedia.s3_url || firstMedia.thumbnail_url;
       } else if (post.s3_url) {
         s3UrlToSign = post.s3_url;
       }
