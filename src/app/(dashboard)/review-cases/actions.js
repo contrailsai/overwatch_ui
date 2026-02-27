@@ -7,23 +7,88 @@ import { ObjectId } from 'mongodb'
 import { getSignedImageUrl } from '@/utils/aws/s3'
 import { updateDailyMetrics, manageTakedownCase } from '@/utils/supabase/metrics'
 import { sendEmail } from '@/utils/email'
+import { traceAction } from '@/utils/tracing'
 
-export async function getPosts(project_name, page = 1, limit = 20, filters = {}) {
+export const normalized_S3_post = traceAction('normalized_S3_post', async (post) => {
+  // Find S3 URL to sign from post_content.media_urls
+  let s3UrlToSign = null;
+  if (post.post_content?.media_urls && post.post_content.media_urls.length > 0) {
+    const firstMedia = post.post_content.media_urls[0];
+    // Prefer thumbnail for videos, otherwise use s3_url
+    s3UrlToSign = firstMedia.thumbnail_url || firstMedia.s3_url;
+  }
+
+  const signedUrl = s3UrlToSign ? await getSignedImageUrl(s3UrlToSign) : null;
+
+  // Map to frontend structure
+  const normalized = {
+    ...post,
+    _id: post._id.toString(),
+    created_at: post.metadata?.created_at ? new Date(post.metadata.created_at).toISOString() : null,
+    sourcing_date: post.metadata?.sourcing_date ? new Date(post.metadata.sourcing_date).toISOString() : null,
+    signedImageUrl: signedUrl,
+
+    // Content
+    caption: post.post_content?.caption || post.post_content?.content || '',
+
+    // Profile
+    user: {
+      username: post.profile?.username || 'Unknown',
+      full_name: post.profile?.display_name || '',
+      profile_pic_url: post.profile?.profile_pic_url || '', // Note: DB field is currently profile_url or profile_pic_url, need to check specific sample if strictly one. Samples show 'profile_url' in facebook/instagram but 'profile_pic' in x. Let's try to grab what's there.
+      is_verified: post.profile?.is_verified || false
+    },
+    // Fix for profile pic url variation in samples if needed, but strict mapping:
+    // Instagram sample: profile_pic_url
+    // Facebook sample: profile_url
+    // X sample: profile_pic (null in sample)
+    // Let's robustly grab it below:
+
+    // Timestamp
+    taken_at: post.engagement?.posted_at ? Math.floor(new Date(post.engagement.posted_at).getTime() / 1000) : null,
+
+    // Stats
+    stats: {
+      like_count: post.engagement?.likes || 0,
+      comment_count: post.engagement?.comments || 0,
+      view_count: post.engagement?.views || 0,
+      share_count: post.engagement?.shares || 0,
+      retweet_count: post.engagement?.retweets || 0,
+      quote_count: post.engagement?.quotes || 0,
+      reply_count: post.engagement?.replies || 0
+    },
+
+    // AI ANALYSIS
+    analysis_results: post.analysis_results || {},
+    review_details: post.review_details || {},
+    takedown_info: post.takedown_info || {},
+
+    // Platform
+    platform: post.platform || 'instagram'
+  };
+
+  // Robust profile pic handling
+  normalized.user.profile_pic_url = post.profile?.profile_pic_url || post.profile?.profile_url || post.profile?.profile_pic || '';
+
+  return normalized;
+})
+
+export const getPosts = traceAction('getPosts_review', async (project_mongo_db_map, page = 1, limit = 20, filters = {}) => {
   try {
 
-    const supabase = await createClient()
-    let { data } = await supabase
-      .from('project')
-      .select('*')
-      .eq('project_name', project_name)
-      .single()
+    // const supabase = await createClient()
+    // let { data } = await supabase
+    //   .from('project')
+    //   .select('*')
+    //   .eq('project_name', project_name)
+    //   .single()
 
-    if (!data?.mongo_db_map) {
-      return { posts: [], totalPages: 0, totalCount: 0 }
-    }
-    console.log(data.mongo_db_map)
+    // if (!data?.mongo_db_map) {
+    //   return { posts: [], totalPages: 0, totalCount: 0 }
+    // }
+    // console.log(data.mongo_db_map)
     const client = await clientPromise
-    const db = client.db(data.mongo_db_map)
+    const db = client.db(project_mongo_db_map)
     const collection = db.collection('Posts')
 
     const skip = (page - 1) * limit
@@ -110,69 +175,7 @@ export async function getPosts(project_name, page = 1, limit = 20, filters = {})
       .toArray()
 
     // Serialize and Sign URLs - use new unified schema
-    const processedPosts = await Promise.all(posts.map(async (post) => {
-      // Find S3 URL to sign from post_content.media_urls
-      let s3UrlToSign = null;
-      if (post.post_content?.media_urls && post.post_content.media_urls.length > 0) {
-        const firstMedia = post.post_content.media_urls[0];
-        // Prefer thumbnail for videos, otherwise use s3_url
-        s3UrlToSign = firstMedia.thumbnail_url || firstMedia.s3_url;
-      }
-
-      const signedUrl = s3UrlToSign ? await getSignedImageUrl(s3UrlToSign) : null;
-
-      // Map to frontend structure
-      const normalized = {
-        ...post,
-        _id: post._id.toString(),
-        created_at: post.metadata?.created_at ? new Date(post.metadata.created_at).toISOString() : null,
-        sourcing_date: post.metadata?.sourcing_date ? new Date(post.metadata.sourcing_date).toISOString() : null,
-        signedImageUrl: signedUrl,
-
-        // Content
-        caption: post.post_content?.caption || post.post_content?.content || '',
-
-        // Profile
-        user: {
-          username: post.profile?.username || 'Unknown',
-          full_name: post.profile?.display_name || '',
-          profile_pic_url: post.profile?.profile_pic_url || '', // Note: DB field is currently profile_url or profile_pic_url, need to check specific sample if strictly one. Samples show 'profile_url' in facebook/instagram but 'profile_pic' in x. Let's try to grab what's there.
-          is_verified: post.profile?.is_verified || false
-        },
-        // Fix for profile pic url variation in samples if needed, but strict mapping:
-        // Instagram sample: profile_pic_url
-        // Facebook sample: profile_url
-        // X sample: profile_pic (null in sample)
-        // Let's robustly grab it below:
-
-        // Timestamp
-        taken_at: post.engagement?.posted_at ? Math.floor(new Date(post.engagement.posted_at).getTime() / 1000) : null,
-
-        // Stats
-        stats: {
-          like_count: post.engagement?.likes || 0,
-          comment_count: post.engagement?.comments || 0,
-          view_count: post.engagement?.views || 0,
-          share_count: post.engagement?.shares || 0,
-          retweet_count: post.engagement?.retweets || 0,
-          quote_count: post.engagement?.quotes || 0,
-          reply_count: post.engagement?.replies || 0
-        },
-
-        // AI ANALYSIS
-        analysis_results: post.analysis_results || {},
-        review_details: post.review_details || {},
-        takedown_info: post.takedown_info || {},
-
-        // Platform
-        platform: post.platform || 'instagram'
-      };
-
-      // Robust profile pic handling
-      normalized.user.profile_pic_url = post.profile?.profile_pic_url || post.profile?.profile_url || post.profile?.profile_pic || '';
-
-      return normalized;
-    }));
+    const processedPosts = await Promise.all(posts.map(normalized_S3_post));
 
     const totalCount = await collection.countDocuments(finalQuery)
 
@@ -181,9 +184,9 @@ export async function getPosts(project_name, page = 1, limit = 20, filters = {})
     console.error('MongoDB Error:', e)
     return { posts: [], totalCount: 0, page: 1, totalPages: 0 }
   }
-}
+})
 
-export async function getAllPostsForExport(project_name, filters = {}) {
+export const getAllPostsForExport = traceAction('getAllPostsForExport', async (project_name, filters = {}) => {
   try {
     const supabase = await createClient()
     let { data } = await supabase
@@ -286,7 +289,7 @@ export async function getAllPostsForExport(project_name, filters = {}) {
     console.error('MongoDB Export Error:', e)
     return { posts: [] }
   }
-}
+})
 
 
 async function sendNotification(notification_config, type) {
@@ -341,7 +344,7 @@ async function sendNotification(notification_config, type) {
   }
 }
 
-export async function submitCaseReview(prevState, formData) {
+export const submitCaseReview = traceAction('submitCaseReview', async (prevState, formData) => {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
@@ -532,9 +535,9 @@ export async function submitCaseReview(prevState, formData) {
     console.error('MongoDB Update Error:', error)
     return { success: false, error: error.message }
   }
-}
+})
 
-export async function getCaseMetadata(postId) {
+export const getCaseMetadata = traceAction('getCaseMetadata', async (postId) => {
   try {
     const client = await clientPromise
     const db = client.db(process.env.MONGO_DB_NAME)
@@ -555,4 +558,4 @@ export async function getCaseMetadata(postId) {
     console.error('Error fetching case metadata:', e)
     return null
   }
-}
+})

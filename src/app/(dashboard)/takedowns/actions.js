@@ -1,41 +1,36 @@
 'use server'
 
-import { createClient } from '@/utils/supabase/server'
+import { createClient, getAuthenticatedUser } from '@/utils/supabase/server'
 import clientPromise from '@/utils/mongodb/client'
 import { ObjectId } from 'mongodb'
 import { getSignedImageUrl, uploadFileToS3, getSignedDownloadUrl } from '@/utils/aws/s3'
 import { revalidatePath } from 'next/cache'
+import { traceAction } from '@/utils/tracing'
 
 async function getProjectDetails() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getAuthenticatedUser()
 
   if (!user) return null
 
+  const supabase = await createClient()
   const { data: clientDetails } = await supabase
     .from('client_details')
-    .select('project_name')
+    .select('project_name, project:project_name(mongo_db_map)')
     .eq('id', user.id)
     .single()
 
   if (!clientDetails?.project_name) return null
 
-  const { data: project } = await supabase
-    .from('project')
-    .select('mongo_db_map')
-    .eq('project_name', clientDetails.project_name)
-    .single()
-
   return {
     projectName: clientDetails.project_name,
-    dbName: project?.mongo_db_map
+    dbName: clientDetails.project?.mongo_db_map
   }
 }
 
 /**
  * Check if the current user has reviewer permissions
  */
-export async function checkReviewerPermission() {
+export const checkReviewerPermission = traceAction('checkReviewerPermission', async () => {
   const supabase = await createClient()
 
   const { data: { user } } = await supabase.auth.getUser()
@@ -55,17 +50,17 @@ export async function checkReviewerPermission() {
   }
 
   return clientDetails.permission === 'reviewer'
-}
+})
 
 /**
  * Fetch all active takedowns with filters and enriched MongoDB data
  */
-export async function getTakedowns(filters = {}) {
+export const getTakedowns = traceAction('getTakedowns', async (filters = {}) => {
   const projectDetails = await getProjectDetails()
   if (!projectDetails?.projectName) return []
 
   const supabase = await createClient()
-  
+
   let query = supabase
     .from('takedown_cases')
     .select('*')
@@ -75,7 +70,7 @@ export async function getTakedowns(filters = {}) {
   if (filters.status && filters.status !== 'all') {
     query = query.eq('status', filters.status)
   }
-  
+
   if (filters.platform && filters.platform !== 'all') {
     query = query.eq('platform', filters.platform)
   }
@@ -93,18 +88,18 @@ export async function getTakedowns(filters = {}) {
   try {
     const client = await clientPromise
     const db = client.db(projectDetails.dbName)
-    
+
     // Collect IDs
     const mongoIds = takedowns
       .map(t => t.mongo_post_id)
       .filter(id => id && ObjectId.isValid(id))
       .map(id => new ObjectId(id))
-      
+
     const posts = await db.collection('Posts')
       .find({ _id: { $in: mongoIds } })
-      .project({ 
-        _id: 1, 
-        'post_content.caption': 1, 
+      .project({
+        _id: 1,
+        'post_content.caption': 1,
         'post_content.media_urls': 1,
         'user.username': 1,
         'user.profile_pic_url': 1,
@@ -113,35 +108,35 @@ export async function getTakedowns(filters = {}) {
         'profile.profile_url': 1 // Fallback
       })
       .toArray()
-      
+
     // Map posts to a dictionary for O(1) lookup
     const postsMap = posts.reduce((acc, post) => {
       acc[post._id.toString()] = post
       return acc
     }, {})
-    
+
     // Merge data
     const enrichedTakedowns = await Promise.all(takedowns.map(async (takedown) => {
       const post = postsMap[takedown.mongo_post_id]
-      
+
       let thumbnail = null
       let caption = ''
       let username = 'Unknown'
-      
+
       if (post) {
         // Handle Media/Thumbnail
         if (post.post_content?.media_urls?.length > 0) {
-           const media = post.post_content.media_urls[0]
-           const s3Url = media.thumbnail_url || media.s3_url
-           if (s3Url) {
-             thumbnail = await getSignedImageUrl(s3Url)
-           }
+          const media = post.post_content.media_urls[0]
+          const s3Url = media.thumbnail_url || media.s3_url
+          if (s3Url) {
+            thumbnail = await getSignedImageUrl(s3Url)
+          }
         }
-        
+
         caption = post.post_content?.caption || ''
         username = post.user?.username || post.profile?.username || 'Unknown'
       }
-      
+
       return {
         ...takedown,
         enrichment: {
@@ -151,7 +146,7 @@ export async function getTakedowns(filters = {}) {
         }
       }
     }))
-    
+
     return enrichedTakedowns
 
   } catch (mongoError) {
@@ -159,12 +154,12 @@ export async function getTakedowns(filters = {}) {
     // Return Supabase data only if Mongo fails
     return takedowns.map(t => ({ ...t, enrichment: null }))
   }
-}
+})
 
 /**
  * Upload a document for a takedown case
  */
-export async function uploadTakedownDocument(takedownId, formData) {
+export const uploadTakedownDocument = traceAction('uploadTakedownDocument', async (takedownId, formData) => {
   // Permission Check
   const isReviewer = await checkReviewerPermission()
   if (!isReviewer) return { success: false, error: 'Unauthorized: Reviewer access required' }
@@ -202,10 +197,10 @@ export async function uploadTakedownDocument(takedownId, formData) {
 
     // 3. Log History
     await supabase.from('takedown_history').insert({
-        takedown_id: takedownId,
-        action: 'document_uploaded',
-        details: `Uploaded document: ${fileName}`,
-        created_by: user.id
+      takedown_id: takedownId,
+      action: 'document_uploaded',
+      details: `Uploaded document: ${fileName}`,
+      created_by: user.id
     })
 
     revalidatePath(`/takedowns/case/${takedownId}`)
@@ -214,14 +209,14 @@ export async function uploadTakedownDocument(takedownId, formData) {
     console.error('Upload error:', error)
     return { success: false, error: error.message }
   }
-}
+})
 
 /**
  * Get documents for a takedown case
  */
-export async function getTakedownDocuments(takedownId) {
+export const getTakedownDocuments = traceAction('getTakedownDocuments', async (takedownId) => {
   const supabase = await createClient()
-  
+
   const { data, error } = await supabase
     .from('takedown_documents')
     .select('*')
@@ -233,29 +228,29 @@ export async function getTakedownDocuments(takedownId) {
     return []
   }
   return data
-}
+})
 
 /**
  * Generate download URL for a document
  */
-export async function getDocumentDownloadUrl(documentId) {
-    const supabase = await createClient()
-    
-    const { data: doc, error } = await supabase
-        .from('takedown_documents')
-        .select('*')
-        .eq('id', documentId)
-        .single()
-        
-    if (error || !doc) return null
-    
-    return await getSignedDownloadUrl(doc.s3_key, doc.file_name)
-}
+export const getDocumentDownloadUrl = traceAction('getDocumentDownloadUrl', async (documentId) => {
+  const supabase = await createClient()
+
+  const { data: doc, error } = await supabase
+    .from('takedown_documents')
+    .select('*')
+    .eq('id', documentId)
+    .single()
+
+  if (error || !doc) return null
+
+  return await getSignedDownloadUrl(doc.s3_key, doc.file_name)
+})
 
 /**
  * Fetch specific takedown details including Mongo post data and history
  */
-export async function getTakedownDetails(id) {
+export const getTakedownDetails = traceAction('getTakedownDetails', async (id) => {
   const projectDetails = await getProjectDetails()
   if (!projectDetails?.projectName) return null
 
@@ -283,65 +278,65 @@ export async function getTakedownDetails(id) {
   try {
     const client = await clientPromise
     const db = client.db(projectDetails.dbName)
-    
+
     // Try by mongo_id first if it's a valid ObjectId
     if (takedown.mongo_post_id && ObjectId.isValid(takedown.mongo_post_id)) {
-        post = await db.collection('Posts').findOne({ _id: new ObjectId(takedown.mongo_post_id) })
+      post = await db.collection('Posts').findOne({ _id: new ObjectId(takedown.mongo_post_id) })
     }
-    
+
     // Fallback if not found or ID not valid
     if (!post) {
-        post = await db.collection('Posts').findOne({ post_id: takedown.post_platform_id })
+      post = await db.collection('Posts').findOne({ post_id: takedown.post_platform_id })
     }
 
     if (post) {
-        // Serialize MongoDB objects for Next.js Client Components
-        post = JSON.parse(JSON.stringify(post))
-        
-        // Ensure _id is a string (JSON.stringify handles this but let's be explicit if needed)
-        if(post._id) post._id = post._id.toString()
-        
-        // Handle signed URL here if needed by the UI
-        let s3UrlToSign = null
-        if (post.post_content?.media_urls && post.post_content.media_urls.length > 0) {
-            const firstMedia = post.post_content.media_urls[0]
-            s3UrlToSign = firstMedia.thumbnail_url || firstMedia.s3_url
-        }
-        post.signedImageUrl = s3UrlToSign ? await getSignedImageUrl(s3UrlToSign) : null
+      // Serialize MongoDB objects for Next.js Client Components
+      post = JSON.parse(JSON.stringify(post))
 
-        // NORMALIZE USER DATA HERE for consistency across UI
-        // Checking post.user, post.profile, etc.
-        post.user = {
-            username: post.user?.username || post.profile?.username || 'Unknown',
-            full_name: post.user?.full_name || post.profile?.display_name || '',
-            profile_pic_url: post.user?.profile_pic_url || post.profile?.profile_pic_url || post.profile?.profile_url || '',
-            is_verified: post.user?.is_verified || post.profile?.is_verified || false
-        }
+      // Ensure _id is a string (JSON.stringify handles this but let's be explicit if needed)
+      if (post._id) post._id = post._id.toString()
 
-        // NORMALIZE STATS
-        post.stats = {
-            like_count: post.stats?.like_count || post.engagement?.likes || 0,
-            comment_count: post.stats?.comment_count || post.engagement?.comments || 0,
-            share_count: post.stats?.share_count || post.engagement?.shares || 0,
-            view_count: post.stats?.view_count || post.engagement?.views || '-'
-        }
+      // Handle signed URL here if needed by the UI
+      let s3UrlToSign = null
+      if (post.post_content?.media_urls && post.post_content.media_urls.length > 0) {
+        const firstMedia = post.post_content.media_urls[0]
+        s3UrlToSign = firstMedia.thumbnail_url || firstMedia.s3_url
+      }
+      post.signedImageUrl = s3UrlToSign ? await getSignedImageUrl(s3UrlToSign) : null
+
+      // NORMALIZE USER DATA HERE for consistency across UI
+      // Checking post.user, post.profile, etc.
+      post.user = {
+        username: post.user?.username || post.profile?.username || 'Unknown',
+        full_name: post.user?.full_name || post.profile?.display_name || '',
+        profile_pic_url: post.user?.profile_pic_url || post.profile?.profile_pic_url || post.profile?.profile_url || '',
+        is_verified: post.user?.is_verified || post.profile?.is_verified || false
+      }
+
+      // NORMALIZE STATS
+      post.stats = {
+        like_count: post.stats?.like_count || post.engagement?.likes || 0,
+        comment_count: post.stats?.comment_count || post.engagement?.comments || 0,
+        share_count: post.stats?.share_count || post.engagement?.shares || 0,
+        view_count: post.stats?.view_count || post.engagement?.views || '-'
+      }
     }
-    
+
   } catch (e) {
     console.error('MongoDB fetch error:', e)
   }
 
-  return { 
-    takedown: JSON.parse(JSON.stringify(takedown)), 
-    history: JSON.parse(JSON.stringify(history || [])), 
-    post 
+  return {
+    takedown: JSON.parse(JSON.stringify(takedown)),
+    history: JSON.parse(JSON.stringify(history || [])),
+    post
   }
-}
+})
 
 /**
  * Update takedown status/details and log history
  */
-export async function updateTakedown(id, updates, message) {
+export const updateTakedown = traceAction('updateTakedown', async (id, updates, message) => {
   // Permission Check
   const isReviewer = await checkReviewerPermission()
   if (!isReviewer) return { success: false, error: 'Unauthorized: Reviewer access required' }
@@ -374,59 +369,59 @@ export async function updateTakedown(id, updates, message) {
       details: message,
       created_by: user?.id
     })
-    
+
   revalidatePath(`/takedowns/case/${id}`)
   return { success: true }
-}
+})
 
 /**
  * Add a note to the takedown
  */
-export async function addTakedownNote(id, noteContent) {
-    // Permission Check
-    const isReviewer = await checkReviewerPermission()
-    if (!isReviewer) return { success: false, error: 'Unauthorized: Reviewer access required' }
+export const addTakedownNote = traceAction('addTakedownNote', async (id, noteContent) => {
+  // Permission Check
+  const isReviewer = await checkReviewerPermission()
+  if (!isReviewer) return { success: false, error: 'Unauthorized: Reviewer access required' }
 
-    const projectDetails = await getProjectDetails()
-    if (!projectDetails?.projectName) return { success: false, error: 'Unauthorized' }
+  const projectDetails = await getProjectDetails()
+  if (!projectDetails?.projectName) return { success: false, error: 'Unauthorized' }
 
-    const supabase = await createClient()
-    const user = (await supabase.auth.getUser()).data.user
-    
-    // Fetch current notes to append (or just use history for timeline view)
-    // We'll update the main notes field AND add to history
-    
-    const { data: current } = await supabase
-        .from('takedown_cases')
-        .select('notes')
-        .eq('id', id)
-        .eq('project_name', projectDetails.projectName)
-        .single()
-    
-    if (!current) return { success: false, error: 'Case not found or unauthorized' }
-        
-    const newNotes = current?.notes ? `${current.notes}\n\n[${new Date().toLocaleDateString()}] ${noteContent}` : `[${new Date().toLocaleDateString()}] ${noteContent}`
-    
-    const { error } = await supabase
-        .from('takedown_cases')
-        .update({
-            notes: newNotes,
-            last_update_message: 'New note added',
-            last_update_date: new Date().toISOString()
-        })
-        .eq('id', id)
-        .eq('project_name', projectDetails.projectName)
-        
-    if (error) return { success: false, error: error.message }
-    
-    // Log to history
-    await supabase.from('takedown_history').insert({
-        takedown_id: id,
-        action: 'note_added',
-        details: noteContent,
-        created_by: user?.id
+  const supabase = await createClient()
+  const user = (await supabase.auth.getUser()).data.user
+
+  // Fetch current notes to append (or just use history for timeline view)
+  // We'll update the main notes field AND add to history
+
+  const { data: current } = await supabase
+    .from('takedown_cases')
+    .select('notes')
+    .eq('id', id)
+    .eq('project_name', projectDetails.projectName)
+    .single()
+
+  if (!current) return { success: false, error: 'Case not found or unauthorized' }
+
+  const newNotes = current?.notes ? `${current.notes}\n\n[${new Date().toLocaleDateString()}] ${noteContent}` : `[${new Date().toLocaleDateString()}] ${noteContent}`
+
+  const { error } = await supabase
+    .from('takedown_cases')
+    .update({
+      notes: newNotes,
+      last_update_message: 'New note added',
+      last_update_date: new Date().toISOString()
     })
-    
-    revalidatePath(`/takedowns/case/${id}`)
-    return { success: true }
-}
+    .eq('id', id)
+    .eq('project_name', projectDetails.projectName)
+
+  if (error) return { success: false, error: error.message }
+
+  // Log to history
+  await supabase.from('takedown_history').insert({
+    takedown_id: id,
+    action: 'note_added',
+    details: noteContent,
+    created_by: user?.id
+  })
+
+  revalidatePath(`/takedowns/case/${id}`)
+  return { success: true }
+})

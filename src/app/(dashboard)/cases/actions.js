@@ -1,14 +1,15 @@
 'use server'
 
-import { createClient } from '@/utils/supabase/server'
+import { createClient, getAuthenticatedUser } from '@/utils/supabase/server'
 import clientPromise from '@/utils/mongodb/client'
 import { getSignedImageUrl } from '@/utils/aws/s3'
 import { sendSlackNotification } from '@/utils/slack'
 import { manageTakedownCase, trackTakedownEvent } from '@/utils/supabase/metrics'
 import { ObjectId } from 'mongodb'
 import { getClientandProjectDetails } from '@/app/(dashboard)/actions'
+import { traceAction } from '@/utils/tracing'
 
-export async function getPosts(project, page = 1, limit = 20, filters = {}, sort = { field: 'created_at', direction: 'desc' }) {
+export const getPosts = traceAction('getPosts', async (project, page = 1, limit = 20, filters = {}, sort = { field: 'created_at', direction: 'desc' }) => {
   try {
     if (!project?.mongo_db_map) {
       return { posts: [], totalCount: 0, page: 1, totalPages: 0 }
@@ -166,35 +167,29 @@ export async function getPosts(project, page = 1, limit = 20, filters = {}, sort
     console.error('MongoDB Error:', e)
     return { posts: [], totalCount: 0, page: 1, totalPages: 0 }
   }
-}
+})
 
-export async function getProjectDetails() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+export const getProjectDetails = traceAction('getProjectDetails_cases', async () => {
+  const user = await getAuthenticatedUser()
 
   if (!user) return null
 
+  const supabase = await createClient()
   const { data: clientDetails } = await supabase
     .from('client_details')
-    .select('project_name')
+    .select('project_name, project:project_name(mongo_db_map, project_details)')
     .eq('id', user.id)
     .single()
 
   if (!clientDetails?.project_name) return null
 
-  const { data: project } = await supabase
-    .from('project')
-    .select('mongo_db_map, project_details')
-    .eq('project_name', clientDetails.project_name)
-    .single()
-
   return {
     projectName: clientDetails.project_name,
-    dbName: project?.mongo_db_map
+    dbName: clientDetails.project?.mongo_db_map
   }
-}
+})
 
-export async function approveTakedown(caseId) {
+export const approveTakedown = traceAction('approveTakedown', async (caseId) => {
   try {
     const projectDetails = await getProjectDetails()
     if (!projectDetails?.dbName) {
@@ -255,9 +250,9 @@ export async function approveTakedown(caseId) {
     console.error("Approve Takedown Error:", e)
     return { success: false, error: e.message }
   }
-}
+})
 
-export async function getPriorityTakedowns() {
+export const getPriorityTakedowns = traceAction('getPriorityTakedowns', async () => {
   try {
     const projectDetails = await getProjectDetails()
     if (!projectDetails?.dbName) {
@@ -319,9 +314,9 @@ export async function getPriorityTakedowns() {
     console.error('getPriorityTakedowns Error:', e)
     return []
   }
-}
+})
 
-export async function getRaisedCount() {
+export const getRaisedCount = traceAction('getRaisedCount', async () => {
   try {
     const projectDetails = await getProjectDetails()
     if (!projectDetails?.dbName) {
@@ -335,9 +330,9 @@ export async function getRaisedCount() {
     console.error('getRaisedCount Error:', e)
     return 0
   }
-}
+})
 
-export async function updateClientStatus(caseId, status) {
+export const updateClientStatus = traceAction('updateClientStatus', async (caseId, status) => {
   try {
     const projectDetails = await getProjectDetails()
     if (!projectDetails?.dbName) {
@@ -362,9 +357,9 @@ export async function updateClientStatus(caseId, status) {
     console.error("updateClientStatus Error:", e)
     return { success: false, error: e.message }
   }
-}
+})
 
-export async function addReviewNote(caseId, noteText) {
+export const addReviewNote = traceAction('addReviewNote', async (caseId, noteText) => {
   try {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
@@ -402,9 +397,9 @@ export async function addReviewNote(caseId, noteText) {
     console.error("addReviewNote Error:", e)
     return { success: false, error: e.message }
   }
-}
+})
 
-export async function getPostById(project, id) {
+export const getPostById = traceAction('getPostById', async (project, id) => {
   try {
     if (!project?.mongo_db_map || !id) return null;
 
@@ -457,5 +452,4 @@ export async function getPostById(project, id) {
     console.error('getPostById Error:', e);
     return null;
   }
-}
-
+})

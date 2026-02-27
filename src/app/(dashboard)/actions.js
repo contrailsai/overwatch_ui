@@ -4,8 +4,9 @@ import { cache } from 'react'
 import { createClient, getAuthenticatedUser } from '@/utils/supabase/server'
 import clientPromise from '@/utils/mongodb/client'
 import { getSignedImageUrl } from '@/utils/aws/s3'
+import { traceAction } from '@/utils/tracing'
 
-export async function getDashboardData(projectName) {
+export const getDashboardData = traceAction('getDashboardData', async (projectName) => {
   const supabase = await createClient()
 
   // 1. Fetch daily_metrics with date ordering
@@ -254,9 +255,9 @@ export async function getDashboardData(projectName) {
     // Project Details for UI logic
     projectDetails
   }
-}
+})
 
-export const getUser = cache(async () => {
+export const getUser = traceAction('getUser', cache(async () => {
   const user = await getAuthenticatedUser()
 
   if (!user) return { user: null, clientDetails: null }
@@ -274,36 +275,39 @@ export const getUser = cache(async () => {
   }
 
   return { user, clientDetails }
-})
+}))
 
-export const getClientandProjectDetails = cache(async () => {
+export const getClientandProjectDetails = traceAction('getClientandProjectDetails', cache(async () => {
   const user = await getAuthenticatedUser()
 
   if (!user) return null
 
   const supabase = await createClient()
-  const { data: clientDetails } = await supabase
+
+  // Combine fetching client details and project details into a single query using a JOIN
+  // This significantly reduces latency by avoiding sequential network round-trips.
+  const { data: clientDetails, error } = await supabase
     .from('client_details')
-    .select('*')
+    .select('*, project:project_name(mongo_db_map, project_details)')
     .eq('id', user.id)
     .single()
 
-  if (!clientDetails?.project_name) return { user, clientDetails, project: null }
+  if (error) {
+    console.error('Error fetching client/project details:', error)
+    return { user, clientDetails: null, project: null }
+  }
 
-  const { data: project } = await supabase
-    .from('project')
-    .select('mongo_db_map, project_details')
-    .eq('project_name', clientDetails.project_name)
-    .single()
+  // Extract project from the JOINed result and normalize
+  const project = clientDetails.project
 
   return {
     user,
-    clientDetails,
+    clientDetails: { ...clientDetails, project: undefined }, // Clean up JOINed field if necessary
     project
   }
-})
+}))
 
-export async function getCases(projectName) {
+export const getCases = traceAction('getCases', async (projectName) => {
   const supabase = await createClient()
 
   let query = supabase
@@ -333,4 +337,4 @@ export async function getCases(projectName) {
   }))
 
   return processedCases
-}
+})

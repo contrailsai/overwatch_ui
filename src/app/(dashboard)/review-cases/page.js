@@ -10,9 +10,29 @@ export const metadata = {
 
 export default async function ReviewCasesPage({ searchParams }) {
   // Check Permissions
-  const hasReviewerPermission = await isReviewer()
+  // const hasReviewerPermission = await isReviewer()
 
-  if (!hasReviewerPermission) {
+  // if (!hasReviewerPermission) {
+  //   return (
+  //     <main className="flex-1 flex items-center justify-center bg-slate-50">
+  //       <div className="text-center p-8 bg-white rounded-2xl border border-slate-200 shadow-sm">
+  //         <h1 className="text-3xl font-bold text-slate-900 mb-2">404 Not Found</h1>
+  //         <p className="text-slate-500">The page you are looking for does not exist.</p>
+  //       </div>
+  //     </main>
+  //   )
+  // }
+
+  // 1. Get current authenticated user and project details
+  const result = await getClientandProjectDetails()
+  // console.log("got details as: ", result)
+
+  if (!result) return null // Should be handled by layout redirect
+
+  const { user, clientDetails, project } = result
+
+
+  if (clientDetails.permission !== "reviewer") {
     return (
       <main className="flex-1 flex items-center justify-center bg-slate-50">
         <div className="text-center p-8 bg-white rounded-2xl border border-slate-200 shadow-sm">
@@ -22,13 +42,6 @@ export default async function ReviewCasesPage({ searchParams }) {
       </main>
     )
   }
-
-  // 1. Get current authenticated user and project details
-  const result = await getClientandProjectDetails()
-
-  if (!result) return null // Should be handled by layout redirect
-
-  const { user, clientDetails } = result
 
   // 3. Handle missing setup
   if (!clientDetails?.project_name) {
@@ -64,7 +77,7 @@ export default async function ReviewCasesPage({ searchParams }) {
     dbDateEnd: resolvedSearchParams?.dbDateEnd || undefined,
   }
 
-  const { posts, totalPages, totalCount } = await getPosts(clientDetails.project_name, page, 20, initialFilters)
+  const { posts, totalPages, totalCount } = await getPosts(project.mongo_db_map, page, 20, initialFilters)
 
   return (
     <main className="flex-1 flex flex-col h-full overflow-hidden bg-slate-50">
