@@ -7,10 +7,14 @@ import {
     Activity, BadgeCheck, Quote, ShieldAlert, CheckCircle,
     ExternalLink, Calendar, Info, Siren, Eye, Link as LinkIcon,
     ChevronLeft, ChevronRight, History, Facebook, Instagram, Twitter, Youtube,
-    Loader2, Send, Copy, Check
+    Loader2, Send, Copy, Check, TrendingUp, ShieldX, EyeOff, Laugh, Bot,
+    ScanFace, MessageSquareWarning, Fingerprint, AlertCircle, ShieldQuestion,
+    FishingHook,
+    UserRound,
+    UserRoundX
 } from 'lucide-react'
 import ProfilePic from '@/components/ProfilePic'
-import { approveTakedown, updateClientStatus, addReviewNote } from './actions'
+import { approveTakedown, updateClientStatus, addReviewNote, trackClientClick } from './actions'
 import { cn } from '@/lib/utils'
 import { useRouter } from 'next/navigation'
 import { Button } from "@/components/ui/button"
@@ -120,16 +124,68 @@ export function CaseDetailPanel({ post, project, isOpen, onClose, onNavigate, ha
     const poiNames = review.poi_names || analysis.poi_check?.poi_names || [];
 
     // Flags
-    const isPoiPresent = review.flags?.poi_confirmed ?? (analysis.poi_check?.poi_name_found || analysis.poi_check?.face_present) ?? false;
-    const isNsfw = review.flags?.is_nsfw ?? (analysis.nsfw_check?.is_safe === false) ?? false;
-    const isHateSpeech = review.flags?.is_hate_speech ?? (analysis.hate_speech_check?.is_safe === false) ?? false;
-    const isFakeNews = review.flags?.is_fake_news ?? (analysis.truth_check?.is_credible === false) ?? false;
-    const isAigc = review.flags?.is_aigc ?? analysis.aigc_check?.is_aigc ?? false;
-    const isFraud = review.flags?.is_fraud ?? (analysis.fraud_check?.is_fraud === true) ?? false;
-    const isAssetMisuse = review.flags?.is_asset_misuse ?? (analysis.asset_misuse_check?.is_asset_misuse === true) ?? false;
-    const isSatire = review.flags?.is_humor ?? (analysis.is_humor?.is_humor === true) ?? false;
-    const isTerrorism = review.flags?.is_terrorism ?? (analysis.is_terrorism?.is_terrorism === true) ?? false;
-    const isViolence = review.flags?.is_violence ?? (analysis.is_violence?.is_violence === true) ?? false;
+    const isPoiPresent = review.face_present ?? review.flags?.poi_confirmed ?? (analysis.poi_check?.poi_name_found || analysis.poi_check?.face_present) ?? false;
+    const isAigc = review.is_aigc ?? review.flags?.is_aigc ?? analysis.aigc_check?.is_aigc ?? false;
+
+    // Helper for better icon mapping
+    const getLabelConfig = (labelName) => {
+        const name = labelName.toLowerCase().replace(/[-_]/g, ' ');
+        if (name.includes('scam') || name.includes('fraud')) return { icon: Fingerprint, color: 'rose' };
+        if (name.includes('investment')) return { icon: TrendingUp, color: 'emerald' };
+        if (name.includes('misinformation') || name.includes('fake')) return { icon: ShieldX, color: 'orange' };
+        if (name.includes('hate')) return { icon: MessageSquareWarning, color: 'red' };
+        if (name.includes('satire') || name.includes('humor')) return { icon: Laugh, color: 'blue' };
+        if (name.includes('nsfw')) return { icon: EyeOff, color: 'indigo' };
+        if (name.includes('violence') || name.includes('terrorism')) return { icon: Siren, color: 'red' };
+        if (name.includes('asset')) return { icon: ShieldQuestion, color: 'amber' };
+        if (name.includes('spam')) return { icon: ShieldX, color: 'blue' };
+        if (name.includes('phishing')) return { icon: FishingHook, color: 'indigo' };
+        if (name.includes('propaganda')) return { icon: UserRoundX, color: 'red' };
+        // keep adding more as you see fit 
+        return { icon: AlertCircle, color: 'amber' };
+    };
+
+    // Resolve Dynamic Labels and Legacy Flags
+    const projectLabels = project?.project_details?.labels || [];
+    const activeLabels = [];
+
+    // 1. Check Project Labels (New Format)
+    projectLabels.forEach(label => {
+        const isActive = review.flags?.[label.name] === true;
+        if (isActive) {
+            const config = getLabelConfig(label.name);
+            activeLabels.push({
+                name: label.name,
+                title: label.name.replace(/[-_]/g, ' '),
+                icon: config.icon,
+                color: label.severity === 'high' ? 'rose' : label.severity === 'medium' ? 'orange' : config.color
+            });
+        }
+    });
+
+    // 2. Check Legacy Flags (Backward Compatibility)
+    const legacyFlagMap = {
+        is_nsfw: { title: "NSFW Content", icon: EyeOff, color: "indigo" },
+        is_hate_speech: { title: "Hate Speech", icon: MessageSquareWarning, color: "rose" },
+        is_fake_news: { title: "Misinformation", icon: ShieldX, color: "orange" },
+        is_fraud: { title: "Fraud", icon: Fingerprint, color: "rose" },
+        is_asset_misuse: { title: "Asset Misuse", icon: ShieldQuestion, color: "yellow" },
+        is_humor: { title: "Satire", icon: Laugh, color: "blue" },
+        is_terrorism: { title: "Terrorism", icon: Siren, color: "red" },
+        is_violence: { title: "Violence", icon: Siren, color: "violet" }
+    };
+
+    Object.entries(legacyFlagMap).forEach(([key, config]) => {
+        // Only add if it's true and NOT already covered by a project label (avoid duplicates)
+        if (review.flags?.[key] === true && !activeLabels.some(l => l.name === key)) {
+            activeLabels.push({
+                name: key,
+                ...config
+            });
+        }
+    });
+
+
 
     // Takedown logic
     const takedownStatus = post.takedown_info?.takedown_status || 'None';
@@ -174,6 +230,7 @@ export function CaseDetailPanel({ post, project, isOpen, onClose, onNavigate, ha
 
     const handleUpdateStatus = async (status) => {
         setIsProcessing(status);
+        trackClientClick(status === 'Pass' ? 'pass_case' : 'flag_for_takedown', { page: 'CaseDetailPanel' });
         try {
             const result = await updateClientStatus(post._id, status);
             if (result.success) {
@@ -416,64 +473,26 @@ export function CaseDetailPanel({ post, project, isOpen, onClose, onNavigate, ha
                                     <SignalCard
                                         active={isPoiPresent}
                                         title="POI Detected"
-                                        icon={User}
+                                        icon={ScanFace}
                                         color="indigo"
-                                    // extra={poiNames.length > 0 ? poiNames[0] : null}
                                     />
                                     <SignalCard
                                         active={isAigc}
                                         title="AI Generated"
-                                        icon={Activity}
+                                        icon={Bot}
                                         color="purple"
                                     />
-                                    <SignalCard
-                                        active={isHateSpeech}
-                                        title="Hate Speech"
-                                        icon={AlertTriangle}
-                                        color="rose"
-                                    />
-                                    <SignalCard
-                                        active={isFakeNews}
-                                        title="Misinformation"
-                                        icon={ShieldAlert}
-                                        color="orange"
-                                    />
-                                    <SignalCard
-                                        active={isNsfw}
-                                        title="NSFW Content"
-                                        icon={User}
-                                        color="indigo"
-                                    />
-                                    <SignalCard
-                                        active={isFraud}
-                                        title="Fraud"
-                                        icon={User}
-                                        color="rose"
-                                    />
-                                    <SignalCard
-                                        active={isAssetMisuse}
-                                        title="Asset Misuse"
-                                        icon={User}
-                                        color="yellow"
-                                    />
-                                    <SignalCard
-                                        active={isSatire}
-                                        title="Satire"
-                                        icon={User}
-                                        color="blue"
-                                    />
-                                    <SignalCard
-                                        active={isTerrorism}
-                                        title="Terrorism"
-                                        icon={User}
-                                        color="red"
-                                    />
-                                    <SignalCard
-                                        active={isViolence}
-                                        title="Violence"
-                                        icon={User}
-                                        color="violet"
-                                    />
+
+                                    {activeLabels.map((label, idx) => (
+                                        <SignalCard
+                                            key={idx}
+                                            active={true}
+                                            title={label.title}
+                                            icon={label.icon}
+                                            color={label.color}
+                                        />
+                                    ))}
+
 
                                 </div>
                             </div>
@@ -638,7 +657,9 @@ export function CaseDetailPanel({ post, project, isOpen, onClose, onNavigate, ha
                                         )
                                     }
                                 </div>
-                                <CaseExportButton post={post} />
+                                <div onClick={() => trackClientClick('download_case_report', { page: 'CaseDetailPanel' })}>
+                                    <CaseExportButton post={post} />
+                                </div>
                             </div>
                         </div>
 
@@ -650,47 +671,49 @@ export function CaseDetailPanel({ post, project, isOpen, onClose, onNavigate, ha
 }
 
 function SignalCard({ active, title, icon: Icon, color, extra }) {
-    if (!active) {
-        return (
-            <div className="p-4 rounded-xl border border-slate-100 bg-slate-50/50 flex flex-col justify-between h-16 opacity-50">
-                <Icon className="w-5 h-5 text-slate-300" />
-                <span className="text-xs font-bold text-slate-400 uppercase">{title}</span>
-            </div>
-        )
-    }
+    if (!active) return null;
 
     const colorStyles = {
-        purple: "bg-purple-50 border-purple-100 text-purple-700",
-        rose: "bg-rose-50 border-rose-100 text-rose-700",
-        orange: "bg-orange-50 border-orange-100 text-orange-700",
-        indigo: "bg-indigo-50 border-indigo-100 text-indigo-700",
-        red: "bg-red-50 border-red-100 text-red-700",
-        violet: "bg-violet-50 border-violet-100 text-violet-700",
-        yellow: "bg-yellow-50 border-yellow-100 text-yellow-700",
-        blue: "bg-blue-50 border-blue-100 text-blue-700",
-    }[color] || "bg-slate-100 text-slate-700";
+        purple: "bg-purple-50/50 border-purple-100/50 text-purple-700",
+        rose: "bg-rose-50/50 border-rose-100/50 text-rose-700",
+        orange: "bg-orange-50/50 border-orange-100/50 text-orange-700",
+        indigo: "bg-indigo-50/50 border-indigo-100/50 text-indigo-700",
+        red: "bg-red-50/50 border-red-100/50 text-red-700",
+        violet: "bg-violet-50/50 border-violet-100/50 text-violet-700",
+        yellow: "bg-yellow-50/50 border-yellow-100/50 text-yellow-700",
+        blue: "bg-blue-50/50 border-blue-100/50 text-blue-700",
+        emerald: "bg-emerald-50/50 border-emerald-100/50 text-emerald-700",
+        amber: "bg-amber-50/50 border-amber-100/50 text-amber-700",
+    }[color] || "bg-slate-50 border-slate-100 text-slate-700";
 
-    const iconColors = {
-        purple: "text-purple-600",
-        rose: "text-rose-600",
-        orange: "text-orange-600",
-        indigo: "text-indigo-600",
-        red: "text-red-600",
-        violet: "text-violet-600",
-        yellow: "text-yellow-600",
-        blue: "text-blue-600",
-    }[color] || "text-slate-600";
+    const iconBg = {
+        purple: "bg-purple-100 text-purple-600",
+        rose: "bg-rose-100 text-rose-600",
+        orange: "bg-orange-100 text-orange-600",
+        indigo: "bg-indigo-100 text-indigo-600",
+        red: "bg-red-100 text-red-600",
+        violet: "bg-violet-100 text-violet-600",
+        yellow: "bg-yellow-100 text-yellow-600",
+        blue: "bg-blue-100 text-blue-600",
+        emerald: "bg-emerald-100 text-emerald-600",
+        amber: "bg-amber-100 text-amber-600",
+    }[color] || "bg-slate-100 text-slate-600";
 
     return (
-        <div className={cn("p-4 rounded-xl border flex flex-col justify-between h-16 transition-all", colorStyles)}>
-            <div className="flex justify-between items-start">
-                <Icon className={cn("w-5 h-5", iconColors)} />
-                <div className="h-2 w-2 rounded-full bg-current animate-pulse opacity-50" />
+        <div className={cn(
+            "group relative flex items-center gap-3 p-3 rounded-xl border transition-all duration-300 hover:shadow-md hover:scale-[1.02]",
+            colorStyles
+        )}>
+            <div className={cn("shrink-0 w-10 h-10 rounded-lg flex items-center justify-center transition-transform group-hover:rotate-6", iconBg)}>
+                <Icon className="w-5 h-5" />
             </div>
-            <div>
-                <span className="text-xs font-extrabold uppercase tracking-wide block">{title}</span>
-                {extra && <span className="text-[10px] opacity-80 font-medium truncate block mt-0.5">{extra}</span>}
+            <div className="flex-1 min-w-0">
+                {/* <span className="text-[10px] font-bold uppercase tracking-widest opacity-60 block leading-none mb-1">Signal</span> */}
+                <span className="text-sm font-bold truncate block">{title}</span>
             </div>
+            {/* <div className="absolute top-2 right-2">
+                <div className="h-1.5 w-1.5 rounded-full bg-current animate-pulse opacity-40 shadow-[0_0_8px_currentColor]" />
+            </div> */}
         </div>
     )
 }

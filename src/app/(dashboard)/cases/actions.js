@@ -7,7 +7,11 @@ import { sendSlackNotification } from '@/utils/slack'
 import { manageTakedownCase, trackTakedownEvent } from '@/utils/supabase/metrics'
 import { ObjectId } from 'mongodb'
 import { getClientandProjectDetails } from '@/app/(dashboard)/actions'
-import { traceAction } from '@/utils/tracing'
+import { traceAction, recordClickMetric } from '@/utils/tracing'
+
+export const trackClientClick = traceAction('trackClientClick', async (buttonName, attributes = {}) => {
+  recordClickMetric(buttonName, attributes);
+})
 
 export const normalized_S3_post = traceAction('normalized_S3_post', async (post) => {
   // Find S3 URL to sign

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { getPosts, approveTakedown, getPriorityTakedowns, getRaisedCount } from './actions'
+import { getPosts, approveTakedown, getPriorityTakedowns, getRaisedCount, trackClientClick } from './actions'
 import { CaseDetailPanel } from './CaseDetailPanel'
 import { Skeleton } from "@/components/ui/skeleton"
 import {
@@ -16,6 +16,8 @@ import {
   Zap,
   TriangleAlert
 } from 'lucide-react'
+
+import { format } from "date-fns"
 
 import getPostLink from '@/components/GetPostLink'
 import Link from 'next/link'
@@ -237,7 +239,9 @@ export function CasesList({ cases, project, initialFilters, initialSort, current
 
             {/* Right: Actions & Counts */}
             <div className="flex items-center gap-5 w-full lg:w-auto justify-end">
-              <ReportButton posts={mergedPosts} />
+              <div onClick={() => trackClientClick('export_summary_report', { page: 'CasesList' })}>
+                <ReportButton posts={mergedPosts} />
+              </div>
 
               {/* {(raisedCount > 0 || isInitialLoading) && (
                 <Link
@@ -279,7 +283,7 @@ export function CasesList({ cases, project, initialFilters, initialSort, current
                 <th scope="col" className="w-[150px] px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Status</th>
                 <th
                   scope="col"
-                  className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100 transition-colors group select-none"
+                  className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100 transition-colors group select-none w-full max-w-[100px]"
                   onClick={() => handleSortChange('created_at')}
                 >
                   <div className="flex items-center">
@@ -300,24 +304,68 @@ export function CasesList({ cases, project, initialFilters, initialSort, current
                 const riskScore = currentPost.review_details?.threat_score;
                 const risk = getRiskLabel(riskScore);
 
-                const review = currentPost.review_details;
-                const analysis = currentPost.analysis;
+                const review = currentPost.review_details || {};
+                const analysis = currentPost.analysis_results || {};
 
-                // const isPoiPresent = review.flags?.poi_confirmed ?? (analysis.poi_check?.poi_name_found || analysis.poi_check?.face_present) ?? false;
-                const isNsfw = review.flags?.is_nsfw ?? false;
-                const isHateSpeech = review.flags?.is_hate_speech ?? false;
-                const isFakeNews = review.flags?.is_fake_news ?? false;
-                const isAigc = review.flags?.is_aigc ?? false;
-                const isFraud = review.flags?.is_fraud ?? false;
-                const isAssetMisuse = review.flags?.is_asset_misuse ?? false;
-                const isSatire = review.flags?.is_humor ?? false;
+                // 1. Resolve Global Flags
+                const isAigc = review.is_aigc ?? review.flags?.is_aigc ?? analysis.aigc_check?.is_aigc ?? false;
 
-                let threatTypes = [isNsfw && "NSFW", isHateSpeech && "Hate Speech", isFakeNews && "Fake News", isAigc && "AIGC", isFraud && "Fraud", isAssetMisuse && "Asset Misuse", isSatire && "Satire"];
-                threatTypes = threatTypes.filter(Boolean);
+                // 2. Resolve Dynamic Labels and Legacy Flags
+                const projectLabels = project?.project_details?.labels || [];
+                const resolvedThreats = [];
+
+                if (isAigc) resolvedThreats.push({ label: "AIGC", type: 'aigc' });
+
+                // Check Project Labels (New Format)
+                projectLabels.forEach(label => {
+                  if (review.flags?.[label.name] === true) {
+                    resolvedThreats.push({
+                      label: label.name,
+                      type: label.severity === 'high' ? 'hate_speech' : label.severity === 'medium' ? 'scam' : 'nsfw'
+                    });
+                  }
+                });
+
+                // Check Legacy Flags (Backward Compatibility)
+                const legacyMapping = {
+                  is_nsfw: { label: "NSFW", type: 'nsfw' },
+                  is_hate_speech: { label: "Hate Speech", type: 'hate_speech' },
+                  is_fake_news: { label: "Fake News", type: 'fake_news' },
+                  is_fraud: { label: "Fraud", type: 'fake_news' },
+                  is_asset_misuse: { label: "Asset Misuse", type: 'scam' },
+                  is_humor: { label: "Satire", type: 'nsfw' },
+                  is_terrorism: { label: "Terrorism", type: 'fake_news' },
+                  is_violence: { label: "Violence", type: 'fake_news' }
+                };
+
+                Object.entries(legacyMapping).forEach(([key, config]) => {
+                  if (review.flags?.[key] === true && !resolvedThreats.some(t => t.label === config.label)) {
+                    resolvedThreats.push(config);
+                  }
+                });
 
                 const statusConfig = getStatusConfig(currentPost);
+
                 const StatusIcon = statusConfig.icon;
                 const isSelected = selectedPost?._id === currentPost._id
+
+                let posted_date = ""
+                let sourced_date = ""
+
+                if (post.posted_date)
+                  posted_date = format(new Date(post.posted_date), "dd/MM/yyyy");
+                else if (post.metadata?.posted_date)
+                  posted_date = format(new Date(post.metadata.posted_date), "dd/MM/yyyy");
+                else if (post.timestamp)
+                  posted_date = format(new Date(post.timestamp), "dd/MM/yyyy");
+                else if (post.sourcing_date)
+                  posted_date = format(new Date(post.sourcing_date), "dd/MM/yyyy");
+
+                if (post.metadata?.created_at)
+                  sourced_date = format(new Date(post.metadata.created_at), "dd/MM/yyyy");
+                else if (post.created_at)
+                  sourced_date = format(new Date(post.created_at), "dd/MM/yyyy");
+
 
                 return (
                   <tr
@@ -330,7 +378,7 @@ export function CasesList({ cases, project, initialFilters, initialSort, current
                     )}
                   >
                     {/* Priority */}
-                    <td className="px-4 py-3 whitespace-nowrap align-top">
+                    <td className="px-4 py-3 whitespace-nowrap align-middle">
                       <span className={cn("inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold border shadow-sm", risk.color)}>
 
                         {
@@ -350,7 +398,7 @@ export function CasesList({ cases, project, initialFilters, initialSort, current
                     </td>
 
                     {/* Status */}
-                    <td className="px-4 py-3 whitespace-nowrap align-top">
+                    <td className="px-4 py-3 whitespace-nowrap align-middle">
                       <span className={cn("inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold border shadow-sm", statusConfig.color)}>
                         <StatusIcon className="w-3.5 h-3.5 mr-1.5" />
                         {statusConfig.label}
@@ -358,7 +406,7 @@ export function CasesList({ cases, project, initialFilters, initialSort, current
                     </td>
 
                     {/* Content */}
-                    <td className="px-4 py-3 overflow-hidden align-top">
+                    <td className="px-4 py-3 overflow-hidden align-middle max-w-[300px]">
                       <div className="flex gap-4">
                         <div className="shrink-0 relative">
                           {post.signedImageUrl ? (
@@ -384,7 +432,8 @@ export function CasesList({ cases, project, initialFilters, initialSort, current
                             </span>
                             <span className="text-xs text-slate-400">•</span>
                             <span className="text-xs text-slate-500 font-mono">
-                              <SafeDate date={post.taken_at ? post.taken_at * 1000 : null} />
+                              {/* <SafeDate date={posted_date} /> */}
+                              {posted_date}
                             </span>
                           </div>
                           <span className="text-xs text-slate-600 line-clamp-2 leading-relaxed">
@@ -395,7 +444,7 @@ export function CasesList({ cases, project, initialFilters, initialSort, current
                     </td>
 
                     {/* Platform */}
-                    <td className="px-4 py-3 whitespace-nowrap align-top">
+                    <td className="px-4 py-3 whitespace-nowrap align-middle">
                       <Badge variant="outline" className="capitalize font-semibold text-slate-600 border-slate-300 gap-1.5 pl-2 h-7">
                         {post.platform === 'instagram' && <Instagram className="w-3.5 h-3.5 text-pink-500" />}
                         {post.platform === 'facebook' && <Facebook className="w-3.5 h-3.5 text-blue-600" />}
@@ -405,32 +454,25 @@ export function CasesList({ cases, project, initialFilters, initialSort, current
                     </td>
 
                     {/* Threat Type */}
-                    <td className="px-4 py-3 whitespace-nowrap align-top">
+                    <td className="px-4 py-3 whitespace-nowrap align-middle">
                       <div className="flex flex-wrap gap-1.5 max-w-[200px]">
-                        {Array.isArray(threatTypes) && threatTypes.map((type, idx) => {
-                          const colorMap = {
-                            scam: 'text-orange-700 bg-orange-50 border-orange-200',
-                            aigc: 'text-purple-700 bg-purple-50 border-purple-200',
-                            fake_news: 'text-red-700 bg-red-50 border-red-200',
-                            hate_speech: 'text-rose-700 bg-rose-50 border-rose-200',
-                            nsfw: 'text-amber-700 bg-amber-50 border-amber-200',
-                          };
-                          const style = colorMap[type] || 'text-slate-600 bg-slate-100 border-slate-200';
+                        {resolvedThreats.map((threat, idx) => {
                           return (
                             <span
                               key={idx}
-                              className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold border uppercase tracking-wider shadow-sm ${style}`}
+                              className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold border uppercase tracking-wider shadow-sm text-slate-600 bg-slate-50 border-slate-200"
                             >
-                              {type.replace(/_/g, ' ')}
+                              {threat.label.replace(/[-_]/g, ' ')}
                             </span>
                           );
                         })}
-                        {(!threatTypes || threatTypes.length === 0) && <span className="text-xs text-slate-400 italic"></span>}
+                        {resolvedThreats.length === 0 && <span className="text-xs text-slate-400 italic"></span>}
                       </div>
                     </td>
 
+
                     {/* Source */}
-                    <td className="px-4 py-3 whitespace-nowrap align-top">
+                    <td className="px-4 py-3 whitespace-nowrap align-middle">
                       <a
                         href={post.original_url ? post.original_url : getPostLink(post)}
                         target="_blank"
@@ -443,7 +485,7 @@ export function CasesList({ cases, project, initialFilters, initialSort, current
                     </td>
 
                     {/* Actions */}
-                    <td className="px-4 py-3 whitespace-nowrap text-right align-top">
+                    <td className="px-4 py-3 whitespace-nowrap text-right align-middle">
                       <Button
                         size="sm"
                         variant={isSelected ? "default" : "secondary"}
@@ -504,7 +546,7 @@ export function CasesList({ cases, project, initialFilters, initialSort, current
               >
                 <ChevronLeft className="w-4 h-4 mr-1" /> Previous
               </Button>
-              
+
               <div className="flex items-center gap-1 mx-1">
                 {(() => {
                   const pages = [];
@@ -530,8 +572,8 @@ export function CasesList({ cases, project, initialFilters, initialSort, current
                       onClick={() => handlePageChange(pageNum)}
                       className={cn(
                         "h-9 w-9 p-0 text-xs font-bold",
-                        currentPage === pageNum 
-                          ? "bg-slate-800 hover:bg-slate-900 text-white shadow-sm" 
+                        currentPage === pageNum
+                          ? "bg-slate-800 hover:bg-slate-900 text-white shadow-sm"
                           : "border-slate-200 text-slate-600 hover:bg-slate-50"
                       )}
                     >

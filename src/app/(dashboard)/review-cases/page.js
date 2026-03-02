@@ -1,7 +1,6 @@
 import { getPosts } from './actions'
 import { getClientandProjectDetails } from '@/app/(dashboard)/actions'
 import { ReviewInterface } from './ReviewInterface'
-import { isReviewer } from '@/utils/permissions'
 
 export const metadata = {
   title: 'Review Cases',
@@ -9,20 +8,6 @@ export const metadata = {
 }
 
 export default async function ReviewCasesPage({ searchParams }) {
-  // Check Permissions
-  // const hasReviewerPermission = await isReviewer()
-
-  // if (!hasReviewerPermission) {
-  //   return (
-  //     <main className="flex-1 flex items-center justify-center bg-slate-50">
-  //       <div className="text-center p-8 bg-white rounded-2xl border border-slate-200 shadow-sm">
-  //         <h1 className="text-3xl font-bold text-slate-900 mb-2">404 Not Found</h1>
-  //         <p className="text-slate-500">The page you are looking for does not exist.</p>
-  //       </div>
-  //     </main>
-  //   )
-  // }
-
   // 1. Get current authenticated user and project details
   const result = await getClientandProjectDetails()
   // console.log("got details as: ", result)
@@ -96,7 +81,7 @@ export default async function ReviewCasesPage({ searchParams }) {
           initialPosts={posts}
           totalPages={totalPages}
           currentPage={page}
-          projectName={clientDetails.project_name}
+          project={project}
           initialFilters={initialFilters}
         />
       </div>

@@ -1,4 +1,4 @@
-import { trace, SpanStatusCode } from '@opentelemetry/api';
+import { trace, metrics, SpanStatusCode } from '@opentelemetry/api';
 
 /**
  * Traces an async action function.
@@ -26,4 +26,22 @@ export function traceAction(name, fn) {
             }
         });
     };
+}
+
+const meter = metrics.getMeter('overwatch-client-meter');
+const clickCounter = meter.createCounter('client_button_clicks', {
+    description: 'Counts the number of times client buttons are clicked',
+});
+
+/**
+ * Records a client-side button click.
+ * @param {string} buttonName - The name of the button clicked.
+ * @param {object} attributes - Additional attributes for the metric.
+ */
+export function recordClickMetric(buttonName, attributes = {}) {
+    try {
+        clickCounter.add(1, { button: buttonName, ...attributes });
+    } catch (e) {
+        console.error('Error recording click metric:', e);
+    }
 }

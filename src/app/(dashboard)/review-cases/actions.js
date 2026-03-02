@@ -186,21 +186,21 @@ export const getPosts = traceAction('getPosts_review', async (project_mongo_db_m
   }
 })
 
-export const getAllPostsForExport = traceAction('getAllPostsForExport', async (project_name, filters = {}) => {
+export const getAllPostsForExport = traceAction('getAllPostsForExport', async (project_mongo_db_map, filters = {}) => {
   try {
-    const supabase = await createClient()
-    let { data } = await supabase
-      .from('project')
-      .select('*')
-      .eq('project_name', project_name)
-      .single()
+    // const supabase = await createClient()
+    // let { data } = await supabase
+    //   .from('project')
+    //   .select('*')
+    //   .eq('project_name', project_name)
+    //   .single()
 
-    if (!data?.mongo_db_map) {
+    if (!project_mongo_db_map) {
       return { posts: [] }
     }
 
     const client = await clientPromise
-    const db = client.db(data.mongo_db_map)
+    const db = client.db(project_mongo_db_map)
     const collection = db.collection('Posts')
 
     // Build query with filters (same logic as getPosts)
@@ -379,42 +379,30 @@ export const submitCaseReview = traceAction('submitCaseReview', async (prevState
     return { success: false, error: 'Missing Post ID' }
   }
 
-  // Handle Threat Types (Multi-select)
-  // formData.getAll returns an array of all values for inputs with name="threat_types"
-  let threat_types = formData.getAll('threat_types');
-  if (threat_types.length === 0) {
-    // Fallback: try to see if it came as a single string (backward compatibility or different frontend logic)
-    const raw = formData.get('threat_types');
-    if (raw) {
-      try {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) threat_types = parsed;
-        else threat_types = [raw];
-      } catch (e) {
-        threat_types = [raw];
+  // Handle dynamic flags from project labels
+  const flags = {}
+  const threat_types = []
+
+  // project.mongo_db_map is already fetched, but we might need project_details labels
+  // Currently we use 'flag_' prefix from ReviewDetails.js
+  for (const [key, value] of formData.entries()) {
+    if (key.startsWith('flag_')) {
+      const labelName = key.replace('flag_', '')
+      const isActive = value === 'on'
+      flags[labelName] = isActive
+      if (isActive) {
+        threat_types.push(labelName)
       }
-    } else {
-      threat_types = ['safe'];
     }
   }
 
   const review_details = {
     threat_score: parseInt(formData.get('threat_score') || '0'),
-    threat_types: threat_types,
+    threat_types: threat_types.length > 0 ? threat_types : ['safe'],
+    is_aigc: formData.get('is_aigc') === 'on',
 
     // Flags
-    flags: {
-      poi_confirmed: formData.get('poi_confirmed') === 'on',
-      is_fake_news: formData.get('is_fake_news') === 'on',
-      is_aigc: formData.get('is_aigc') === 'on',
-      is_nsfw: formData.get('is_nsfw') === 'on',
-      is_hate_speech: formData.get('is_hate_speech') === 'on',
-      is_fraud: formData.get('is_fraud') === 'on',
-      is_humor: formData.get('is_humor') === 'on',
-      is_asset_misuse: formData.get('is_asset_misuse') === 'on',
-      is_terrorism: formData.get('is_terrorism') === 'on',
-      is_violence: formData.get('is_violence') === 'on',
-    },
+    flags: flags,
 
     // Text & Lists
     poi_names: formData.get('poi_names') ? formData.get('poi_names').split(',').map(s => s.trim()).filter(Boolean) : [],
@@ -487,7 +475,7 @@ export const submitCaseReview = traceAction('submitCaseReview', async (prevState
     const currentReviewData = {
       threat_score: review_details.threat_score,
       threat_types: review_details.threat_types,
-      is_aigc: review_details.flags.is_aigc,
+      is_aigc: review_details.is_aigc,
       // takedown metrics are now handled in cases/actions.js
       platform: existingPost.platform
     }
