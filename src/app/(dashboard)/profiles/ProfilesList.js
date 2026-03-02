@@ -4,10 +4,11 @@ import { useState, useCallback, useEffect } from 'react'
 import { getProfileCases } from './actions'
 import {
     Filter, Search, ExternalLink, X, ChevronLeft, ChevronRight,
-    Facebook, Instagram, Twitter, Youtube, CheckCircle, ShieldOff,
+    Facebook, Instagram, Youtube, CheckCircle, ShieldOff,
     User, ArrowRight, FileText, Siren, ClockFading, Info, Globe,
     BadgeCheck, ShieldAlert, TriangleAlert, TrendingDown, Smile
 } from 'lucide-react'
+import { Twitter } from '@/utils/icons'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -72,12 +73,13 @@ function ProfileDetailPanel({ profile, project, isOpen, onClose }) {
 
     const highCount = cases?.filter(c => (c.threat_score ?? 0) >= 96).length || 0
     const medCount = cases?.filter(c => { const s = c.threat_score ?? 0; return s >= 76 && s < 96 }).length || 0
+    const lowCount = cases?.filter(c => { const s = c.threat_score ?? 0; return s >= 41 && s < 76 }).length || 0
 
     return (
         <>
             {/* Backdrop */}
             <div
-                className="fixed inset-0 bg-black/20 backdrop-blur-[2px] z-30"
+                className="fixed inset-0 bg-black/20 backdrop-blur-[2px] z-40"
                 onClick={onClose}
             />
 
@@ -146,6 +148,12 @@ function ProfileDetailPanel({ profile, project, isOpen, onClose }) {
                             <div className="text-center">
                                 <p className="text-lg font-bold text-orange-500">{medCount}</p>
                                 <p className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold">Medium</p>
+                            </div>
+                        )}
+                        {lowCount > 0 && (
+                            <div className="text-center">
+                                <p className="text-lg font-bold text-amber-500">{lowCount}</p>
+                                <p className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold">Low</p>
                             </div>
                         )}
                     </div>
