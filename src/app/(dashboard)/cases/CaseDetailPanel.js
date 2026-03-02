@@ -154,9 +154,15 @@ export function CaseDetailPanel({ post, project, isOpen, onClose, onNavigate, ha
         const isActive = review.flags?.[label.name] === true;
         if (isActive) {
             const config = getLabelConfig(label.name);
+
+            // Transform name: replace separators, then convert to Title Case
+            const formattedTitle = label.name
+                .replace(/[-_]/g, ' ')
+                .replace(/\b\w/g, char => char.toUpperCase());
+
             activeLabels.push({
                 name: label.name,
-                title: label.name.replace(/[-_]/g, ' '),
+                title: formattedTitle,
                 icon: config.icon,
                 color: label.severity === 'high' ? 'rose' : label.severity === 'medium' ? 'orange' : config.color
             });
