@@ -288,7 +288,7 @@ export const getClientandProjectDetails = traceAction('getClientandProjectDetail
   // This significantly reduces latency by avoiding sequential network round-trips.
   const { data: clientDetails, error } = await supabase
     .from('client_details')
-    .select('*, project:project_name(mongo_db_map, project_details)')
+    .select('*, project:project_name(*)')
     .eq('id', user.id)
     .single()
 

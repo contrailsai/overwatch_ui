@@ -101,3 +101,91 @@ export async function updateConfiguration(prevState, formData) {
   revalidatePath('/configurations')
   return { success: true, message: 'Configuration saved successfully' }
 }
+
+export async function updateLabels(prevState, formData) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { error: 'Not authenticated' }
+  }
+
+  // 1. Get project name from client_details
+  const { data: clientDetails, error: clientError } = await supabase
+    .from('client_details')
+    .select('project_name')
+    .eq('id', user.id)
+    .single()
+
+  if (clientError || !clientDetails?.project_name) {
+    return { error: 'Project not found' }
+  }
+
+  // 2. Fetch current project details to update
+  const { data: projectData, error: projectError } = await supabase
+    .from('project')
+    .select('*')
+    .eq('project_name', clientDetails.project_name)
+    .single()
+
+  if (projectError) {
+    return { error: 'Failed to fetch project details' }
+  }
+
+  let projectDetails = {}
+  // check if we get project details as string or object
+  try {
+    projectDetails = typeof projectData?.project_details === 'string'
+      ? JSON.parse(projectData.project_details)
+      : (projectData?.project_details || {})
+  } catch (e) {
+    console.error('Error parsing project_details:', e)
+    projectDetails = {}
+  }
+
+  // 3. Extract inputs from formData
+  const projectDescription = formData.get('project_description')
+  const labelsString = formData.get('labels') // Grab the JSON string we sent from the frontend
+
+  let labels = []
+
+  try {
+    if (labelsString) {
+      // Parse the JSON string back into an array of objects
+      const parsedLabels = JSON.parse(labelsString)
+
+      // Filter out any labels where the name is completely empty and ensure they have a severity
+      labels = parsedLabels
+        .filter(label => label.name?.trim() !== '')
+        .map(label => ({
+          ...label,
+          severity: label.severity || 'low'
+        }))
+    }
+  } catch (e) {
+    console.error("Error parsing labels JSON:", e)
+    return { error: 'Invalid label data provided' }
+  }
+
+  console.log("Parsed labels = ", labels)
+
+  // 4. Update project_details structure
+  projectDetails.description = projectDescription
+  projectDetails.labels = labels
+
+  const { error } = await supabase
+    .from('project')
+    .update({ project_details: projectDetails })
+    .eq('project_name', clientDetails.project_name)
+
+  if (error) {
+    console.error('Error updating project labels:', error)
+    return { error: 'Failed to update labels' }
+  }
+
+  // Make sure to import revalidatePath at the top of your file!
+  // import { revalidatePath } from 'next/cache'
+  revalidatePath('/configurations')
+
+  return { success: true, message: 'Labels updated successfully' }
+}

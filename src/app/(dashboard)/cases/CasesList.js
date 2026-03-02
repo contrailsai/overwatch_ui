@@ -34,36 +34,12 @@ export function CasesList({ cases, project, initialFilters, initialSort, current
   const pathname = usePathname()
   const searchParams = useSearchParams()
 
-  const [priorityPosts, setPriorityPosts] = useState([])
-  const [raisedCount, setRaisedCount] = useState(0)
-  const [isInitialLoading, setIsInitialLoading] = useState(true)
-
-  const posts = cases?.posts || []
   const totalCount = cases?.totalCount || 0
   const totalPages = cases?.totalPages || 0
 
   const [selectedPost, setSelectedPost] = useState(initialCase || null)
   const [updatedCases, setUpdatedCases] = useState({})
   const postRefs = useRef({})
-
-  // Sync Priority and Raised Count
-  useEffect(() => {
-    const fetchMetadata = async () => {
-      try {
-        const [priorityResult, countResult] = await Promise.all([
-          getPriorityTakedowns(),
-          getRaisedCount()
-        ])
-        setPriorityPosts(priorityResult)
-        setRaisedCount(countResult)
-      } catch (error) {
-        console.error('Failed to fetch metadata:', error)
-      } finally {
-        setIsInitialLoading(false)
-      }
-    }
-    fetchMetadata()
-  }, [])
 
   // Navigation Logic for URL params
   const updateQueryParams = useCallback((newParams) => {
@@ -103,14 +79,8 @@ export function CasesList({ cases, project, initialFilters, initialSort, current
 
   // Merged posts for current page view
   const mergedPosts = useMemo(() => {
-    const currentPosts = cases?.posts || []
-    // Priority posts only show on page 1 by convention or if we want them everywhere
-    // Given the previous logic merged them, let's keep it similar
-    return [
-      ...priorityPosts.map(p => ({ ...p, isPriority: true })),
-      ...currentPosts.filter(p => !priorityPosts.some(pr => pr._id === p._id))
-    ]
-  }, [priorityPosts, cases?.posts])
+    return cases?.posts || []
+  }, [cases?.posts])
 
   // Navigation Logic for CaseDetailPanel
   const navigatePost = useCallback((direction) => {
@@ -518,15 +488,59 @@ export function CasesList({ cases, project, initialFilters, initialSort, current
               <Button
                 variant="outline"
                 size="sm"
+                onClick={() => handlePageChange(1)}
+                disabled={currentPage === 1}
+                className="h-9 px-2 text-xs font-bold border-slate-200 hover:bg-slate-50 disabled:opacity-50"
+                title="First Page"
+              >
+                &lt;&lt;
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={() => handlePageChange(currentPage - 1)}
                 disabled={currentPage === 1}
                 className="h-9 px-3 text-xs font-bold border-slate-200 hover:bg-slate-50 disabled:opacity-50"
               >
                 <ChevronLeft className="w-4 h-4 mr-1" /> Previous
               </Button>
-              <div className="flex items-center gap-1">
-                {/* Simple page numbers could go here if needed, but Prev/Next is cleaner for 20 items */}
+              
+              <div className="flex items-center gap-1 mx-1">
+                {(() => {
+                  const pages = [];
+                  let start = Math.max(1, currentPage - 2);
+                  let end = Math.min(totalPages, currentPage + 2);
+
+                  if (currentPage <= 2) {
+                    end = Math.min(totalPages, 5);
+                  }
+                  if (currentPage >= totalPages - 1) {
+                    start = Math.max(1, totalPages - 4);
+                  }
+
+                  for (let i = start; i <= end; i++) {
+                    pages.push(i);
+                  }
+
+                  return pages.map(pageNum => (
+                    <Button
+                      key={pageNum}
+                      variant={currentPage === pageNum ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => handlePageChange(pageNum)}
+                      className={cn(
+                        "h-9 w-9 p-0 text-xs font-bold",
+                        currentPage === pageNum 
+                          ? "bg-slate-800 hover:bg-slate-900 text-white shadow-sm" 
+                          : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                      )}
+                    >
+                      {pageNum}
+                    </Button>
+                  ));
+                })()}
               </div>
+
               <Button
                 variant="outline"
                 size="sm"
@@ -535,6 +549,16 @@ export function CasesList({ cases, project, initialFilters, initialSort, current
                 className="h-9 px-3 text-xs font-bold border-slate-200 hover:bg-slate-50 disabled:opacity-50"
               >
                 Next <ChevronRight className="w-4 h-4 ml-1" />
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handlePageChange(totalPages)}
+                disabled={currentPage === totalPages}
+                className="h-9 px-2 text-xs font-bold border-slate-200 hover:bg-slate-50 disabled:opacity-50"
+                title="Last Page"
+              >
+                &gt;&gt;
               </Button>
             </div>
           </div>

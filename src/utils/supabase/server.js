@@ -37,6 +37,7 @@ export const getAuthenticatedUser = cache(async () => {
   const supabase = await createClient()
   // Use getSession() for performance - it reads from the cookie without a network round-trip.
   // This is safe because our middleware already verifies the user with getUser() on every request.
-  const { data: { session } } = await supabase.auth.getSession()
-  return session?.user ?? null
+  // const { data: { session } } = await supabase.auth.getSession()
+  const { data: { user } } = await supabase.auth.getUser()
+  return user ?? null
 })

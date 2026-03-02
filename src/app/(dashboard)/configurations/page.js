@@ -1,11 +1,15 @@
 import ConfigurationsPage from "./ConfigurationsPage";
+import { getClientandProjectDetails } from "@/app/(dashboard)/actions"
 export const metadata = {
   title: 'Configurations',
   description: 'Manage your account and notification settings.',
 };
 
-export default function Page() {
+export default async function Page() {
+
+  const { user, clientDetails, project } = await getClientandProjectDetails()
+
   return (
-    <ConfigurationsPage />
+    <ConfigurationsPage clientDetails={clientDetails} project={project} />
   )
 }
