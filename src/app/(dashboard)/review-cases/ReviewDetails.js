@@ -7,7 +7,7 @@ import { submitCaseReview } from './actions'
 import {
     Loader2, X, CheckCircle, ExternalLink,
     ChevronLeft, ChevronRight, Calendar, Plus,
-    Instagram, Facebook, Youtube, MessageCircle, Quote,
+    Instagram, Facebook, Youtube, Globe, MessageCircle, Quote,
     BadgeCheck, History, Bot
 } from 'lucide-react'
 import ProfilePic from '@/components/ProfilePic'
@@ -159,12 +159,14 @@ export default function ReviewForm({ post, project_details, onClose, onNavigate,
                                                         </svg>
                                                     </span>
                                                     // <Twitter className="w-6 h-6 text-blue-500" />
-                                                ) : post.platform === "instagram" ? (
+                                                ) : post.platform.toLowerCase() === "instagram" ? (
                                                     <Instagram className="w-6 h-6 text-pink-500" />
-                                                ) : post.platform === "facebook" ? (
+                                                ) : post.platform.toLowerCase() === "facebook" ? (
                                                     <Facebook className="w-6 h-6 text-blue-500" />
-                                                ) : post.platform === "youtube" ? (
+                                                ) : post.platform.toLowerCase() === "youtube" ? (
                                                     <Youtube className="w-6 h-6 text-red-500 fill-red-500 stroke-white stroke-[1px]" />
+                                                ) : post.platform.toLowerCase() === "website" ? (
+                                                    <Globe className="w-6 h-6 text-slate-500" />
                                                 ) : (
                                                     <p className="text-slate-500 font-medium truncate">{post.platform}</p>
                                                 )
@@ -221,26 +223,30 @@ export default function ReviewForm({ post, project_details, onClose, onNavigate,
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
-                                    <span className="text-xs font-bold text-slate-500 uppercase">Likes</span>
-                                    <span className="font-bold text-lg text-slate-900">{post.stats?.like_count?.toLocaleString() || 0}</span>
-                                </div>
-                                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
-                                    <span className="text-xs font-bold text-slate-500 uppercase">Comments</span>
-                                    <span className="font-bold text-lg text-slate-900">{post.stats?.comment_count?.toLocaleString() || 0}</span>
-                                </div>
-                                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between col-span-2">
-                                    {/* <div className="flex gap-6"> */}
-                                    <span className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2">
-                                        <Calendar className="w-3.5 h-3.5" /> Posted: <span className="font-mono text-slate-700">{post.metadata?.sourcing_date ? format(new Date(post.metadata.sourcing_date), "dd/MM/yyyy") : 'N/A'}</span>
-                                    </span>
-                                    <span className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2">
-                                        <History className="w-3.5 h-3.5" /> Sourced: <span className="font-mono text-slate-700">{post.metadata?.created_at ? format(new Date(post.metadata.created_at), "dd/MM/yyyy") : 'N/A'}</span>
-                                    </span>
-                                    {/* </div> */}
-                                </div>
-                            </div>
+                            {
+                                post.platform.toLowerCase() !== "website" && (
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+                                            <span className="text-xs font-bold text-slate-500 uppercase">Likes</span>
+                                            <span className="font-bold text-lg text-slate-900">{post.stats?.like_count?.toLocaleString() || 0}</span>
+                                        </div>
+                                        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+                                            <span className="text-xs font-bold text-slate-500 uppercase">Comments</span>
+                                            <span className="font-bold text-lg text-slate-900">{post.stats?.comment_count?.toLocaleString() || 0}</span>
+                                        </div>
+                                        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between col-span-2">
+                                            {/* <div className="flex gap-6"> */}
+                                            <span className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2">
+                                                <Calendar className="w-3.5 h-3.5" /> Posted: <span className="font-mono text-slate-700">{post.metadata?.sourcing_date ? format(new Date(post.metadata.sourcing_date), "dd/MM/yyyy") : 'N/A'}</span>
+                                            </span>
+                                            <span className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2">
+                                                <History className="w-3.5 h-3.5" /> Sourced: <span className="font-mono text-slate-700">{post.metadata?.created_at ? format(new Date(post.metadata.created_at), "dd/MM/yyyy") : 'N/A'}</span>
+                                            </span>
+                                            {/* </div> */}
+                                        </div>
+                                    </div>
+                                )
+                            }
                         </div>
 
                     </div>

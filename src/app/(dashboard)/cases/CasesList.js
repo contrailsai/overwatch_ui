@@ -20,7 +20,7 @@ import {
 import { format } from "date-fns"
 
 import getPostLink from '@/components/GetPostLink'
-import Link from 'next/link'
+// import Link from 'next/link'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { ReportButton } from '@/components/pdf/ReportButton'
 import { Button } from "@/components/ui/button"
@@ -29,7 +29,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator"
 import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
-import SafeDate from '@/components/SafeDate'
+// import SafeDate from '@/components/SafeDate'
 
 export function CasesList({ cases, project, initialFilters, initialSort, currentPage, initialCase }) {
   const router = useRouter()

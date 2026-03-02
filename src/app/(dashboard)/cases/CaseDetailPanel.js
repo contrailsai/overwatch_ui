@@ -391,7 +391,7 @@ export function CaseDetailPanel({ post, project, isOpen, onClose, onNavigate, ha
                                 <div className="px-5 pb-5 pt-0">
                                     <div className="bg-slate-50/50 rounded-lg p-4 border border-slate-100">
                                         <h4 className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">
-                                            <MessageCircle className="w-3 h-3" /> Post Caption
+                                            <MessageCircle className="w-3 h-3" />  {post.platform.toLowerCase() === "website" ? "Post Content" : "Post Caption"}
                                         </h4>
                                         <div className="text-slate-800 leading-relaxed whitespace-pre-wrap font-medium text-sm font-sans">
                                             {post.caption || <span className="italic text-slate-400">No caption content available.</span>}
@@ -400,33 +400,39 @@ export function CaseDetailPanel({ post, project, isOpen, onClose, onNavigate, ha
                                 </div>
                             </div>
 
-                            {/* Stats & Dates */}
-                            <div className="space-y-6">
-                                <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-3 gap-10">
-                                    <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-row justify-between gap-1">
-                                        <span className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2"><Heart className="w-3.5 h-3.5 text-rose-500" /> Likes</span>
-                                        <span className="font-bold text-lg text-slate-900">{post.stats?.like_count?.toLocaleString() || 0}</span>
-                                    </div>
-                                    <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-row justify-between gap-1">
-                                        <span className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2"><MessageCircle className="w-3.5 h-3.5 text-blue-500" /> Comments</span>
-                                        <span className="font-bold text-lg text-slate-900">{post.stats?.comment_count?.toLocaleString() || 0}</span>
-                                    </div>
-                                    <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-row justify-between gap-1">
-                                        <span className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2"><Share2 className="w-3.5 h-3.5 text-green-500" /> Shares</span>
-                                        <span className="font-bold text-lg text-slate-900">{post.stats?.share_count?.toLocaleString() || 0}</span>
-                                    </div>
-                                </div>
-                                <div className="grid grid-cols-2 gap-10">
-                                    <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between gap-1">
-                                        <span className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2"><Calendar className="w-3.5 h-3.5 text-slate-500" /> Posted</span>
-                                        <span className="font-bold text-sm text-slate-900">{posted_date}</span>
-                                    </div>
-                                    <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between gap-1">
-                                        <span className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2"><History className="w-3.5 h-3.5 text-slate-500" /> Sourced</span>
-                                        <span className="font-bold text-sm text-slate-900">{sourced_date}</span>
-                                    </div>
-                                </div>
-                            </div>
+                            {
+                                post.platform.toLowerCase() !== "website" && (
+                                    <>
+                                        {/* Stats & Dates */}
+                                        <div className="space-y-6">
+                                            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-3 gap-10">
+                                                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-row justify-between gap-1">
+                                                    <span className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2"><Heart className="w-3.5 h-3.5 text-rose-500" /> Likes</span>
+                                                    <span className="font-bold text-lg text-slate-900">{post.stats?.like_count?.toLocaleString() || 0}</span>
+                                                </div>
+                                                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-row justify-between gap-1">
+                                                    <span className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2"><MessageCircle className="w-3.5 h-3.5 text-blue-500" /> Comments</span>
+                                                    <span className="font-bold text-lg text-slate-900">{post.stats?.comment_count?.toLocaleString() || 0}</span>
+                                                </div>
+                                                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-row justify-between gap-1">
+                                                    <span className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2"><Share2 className="w-3.5 h-3.5 text-green-500" /> Shares</span>
+                                                    <span className="font-bold text-lg text-slate-900">{post.stats?.share_count?.toLocaleString() || 0}</span>
+                                                </div>
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-10">
+                                                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between gap-1">
+                                                    <span className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2"><Calendar className="w-3.5 h-3.5 text-slate-500" /> Posted</span>
+                                                    <span className="font-bold text-sm text-slate-900">{posted_date}</span>
+                                                </div>
+                                                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between gap-1">
+                                                    <span className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2"><History className="w-3.5 h-3.5 text-slate-500" /> Sourced</span>
+                                                    <span className="font-bold text-sm text-slate-900">{sourced_date}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </>
+                                )
+                            }
                         </div>
                     </div>
 
