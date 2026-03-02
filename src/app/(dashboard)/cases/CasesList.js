@@ -7,15 +7,18 @@ import { Skeleton } from "@/components/ui/skeleton"
 import {
   Filter, ChevronDown, Search, ArrowUpDown, Loader2,
   AlertTriangle, ShieldAlert, CheckCircle, ExternalLink,
-  Info, Eye, LayoutGrid, List, Facebook, Instagram, Twitter,
+  Info, Eye, LayoutGrid, List, Facebook, Instagram,
   Activity, User, Siren, FileSignature, ArrowRight, Quote, X, Download,
   ArrowUp, ArrowDown, Calendar, ClockFading, ChevronLeft, ChevronRight,
   ShieldCheck,
   Smile,
   TrendingDown,
   Zap,
-  TriangleAlert
+  TriangleAlert,
+  Youtube
 } from 'lucide-react'
+
+import { Twitter } from '@/utils/icons'
 
 import { format } from "date-fns"
 
@@ -186,6 +189,8 @@ export function CasesList({ cases, project, initialFilters, initialSort, current
                       <SelectItem value="instagram">Instagram</SelectItem>
                       <SelectItem value="facebook">Facebook</SelectItem>
                       <SelectItem value="x">X (Twitter)</SelectItem>
+                      <SelectItem value="youtube">Youtube</SelectItem>
+                      <SelectItem value="website">Websites</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -449,6 +454,7 @@ export function CasesList({ cases, project, initialFilters, initialSort, current
                         {post.platform === 'instagram' && <Instagram className="w-3.5 h-3.5 text-pink-500" />}
                         {post.platform === 'facebook' && <Facebook className="w-3.5 h-3.5 text-blue-600" />}
                         {post.platform === 'x' && <Twitter className="w-3.5 h-3.5 text-slate-900" />}
+                        {post.platform === 'youtube' && <Youtube className="w-3.5 h-3.5 text-red-600" />}
                         {post.platform}
                       </Badge>
                     </td>

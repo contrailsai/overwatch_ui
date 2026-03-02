@@ -64,7 +64,7 @@ export const normalized_S3_post = traceAction('normalized_S3_post', async (post)
     takedown_info: post.takedown_info || {},
 
     // Platform
-    platform: post.platform || 'instagram'
+    platform: post.platform ? post.platform.toLowerCase() : 'instagram'
   };
 
   // Robust profile pic handling
@@ -126,7 +126,7 @@ export const getPosts = traceAction('getPosts_review', async (project_mongo_db_m
 
     // Platform filter - handle both explicit platform field and default to instagram
     if (filters.platform && filters.platform !== 'all') {
-      query.$and.push({ platform: filters.platform })
+      query.$and.push({ platform: { $regex: new RegExp(`^${filters.platform}\$`, 'i') } })
     }
 
     // Sourcing Date Filter (metadata.sourcing_date)
@@ -226,7 +226,7 @@ export const getAllPostsForExport = traceAction('getAllPostsForExport', async (p
     }
 
     if (filters.platform && filters.platform !== 'all') {
-      query.$and.push({ platform: filters.platform })
+      query.$and.push({ platform: { $regex: new RegExp(`^${filters.platform}\$`, 'i') } })
     }
 
     if (filters.sourcingDateStart || filters.sourcingDateEnd) {
@@ -270,7 +270,7 @@ export const getAllPostsForExport = traceAction('getAllPostsForExport', async (p
       post_id: post.post_id || post.code || '',
       url: post.original_url || post.result_origin?.source_url || '',
       caption: post.post_content?.caption || post.caption || '',
-      platform: post.platform || '',
+      platform: post.platform ? post.platform.toLowerCase() : '',
       author_url: post.profile?.profile_url || post.author?.url || '',
       author_username: post.profile?.username || '',
       author_name: post.profile?.display_name || post.author?.name || '',
@@ -477,7 +477,7 @@ export const submitCaseReview = traceAction('submitCaseReview', async (prevState
       threat_types: review_details.threat_types,
       is_aigc: review_details.is_aigc,
       // takedown metrics are now handled in cases/actions.js
-      platform: existingPost.platform
+      platform: existingPost.platform ? existingPost.platform.toLowerCase() : 'instagram'
     }
 
     // Fire and forget metrics update to not block UI

@@ -6,13 +6,14 @@ import {
     X, User, Heart, MessageCircle, Share2, AlertTriangle,
     Activity, BadgeCheck, Quote, ShieldAlert, CheckCircle,
     ExternalLink, Calendar, Info, Siren, Eye, Link as LinkIcon,
-    ChevronLeft, ChevronRight, History, Facebook, Instagram, Twitter, Youtube,
+    ChevronLeft, ChevronRight, History, Facebook, Instagram, Youtube,
     Loader2, Send, Copy, Check, TrendingUp, ShieldX, EyeOff, Laugh, Bot,
     ScanFace, MessageSquareWarning, Fingerprint, AlertCircle, ShieldQuestion,
     FishingHook,
     UserRound,
     UserRoundX
 } from 'lucide-react'
+import { Twitter } from '@/utils/icons'
 import ProfilePic from '@/components/ProfilePic'
 import { approveTakedown, updateClientStatus, addReviewNote, trackClientClick } from './actions'
 import { cn } from '@/lib/utils'
@@ -364,13 +365,15 @@ export function CaseDetailPanel({ post, project, isOpen, onClose, onNavigate, ha
                                                 {/* platform */}
                                                 <div className="flex-1 min-w-4">
                                                     {
-                                                        post.platform === "twitter" ? (
-                                                            <Twitter className="w-6 h-6 text-blue-500" />
-                                                        ) : post.platform === "instagram" ? (
+                                                        post.platform === "x" || post.platform === "twitter" ? (
+                                                            <span className="inline-block size-4 text-black">
+                                                                <Twitter className="w-3.5 h-3.5 text-slate-900" />
+                                                            </span>
+                                                        ) : post.platform?.toLowerCase() === "instagram" ? (
                                                             <Instagram className="w-6 h-6 text-pink-500" />
-                                                        ) : post.platform === "facebook" ? (
+                                                        ) : post.platform?.toLowerCase() === "facebook" ? (
                                                             <Facebook className="w-6 h-6 text-blue-500" />
-                                                        ) : post.platform === "youtube" ? (
+                                                        ) : post.platform?.toLowerCase() === "youtube" ? (
                                                             <Youtube className="w-6 h-6 text-red-500" />
                                                         ) : (
                                                             <p className="text-slate-500 font-medium truncate">{post.platform}</p>

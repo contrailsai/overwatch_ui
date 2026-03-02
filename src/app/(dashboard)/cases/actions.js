@@ -6,7 +6,7 @@ import { getSignedImageUrl } from '@/utils/aws/s3'
 import { sendSlackNotification } from '@/utils/slack'
 import { manageTakedownCase, trackTakedownEvent } from '@/utils/supabase/metrics'
 import { ObjectId } from 'mongodb'
-import { getClientandProjectDetails } from '@/app/(dashboard)/actions'
+// import { getClientandProjectDetails } from '@/app/(dashboard)/actions'
 import { traceAction, recordClickMetric } from '@/utils/tracing'
 
 export const trackClientClick = traceAction('trackClientClick', async (buttonName, attributes = {}) => {
@@ -33,7 +33,7 @@ export const normalized_S3_post = traceAction('normalized_S3_post', async (post)
     sourcing_date: post.metadata?.sourcing_date ? new Date(post.metadata.sourcing_date).toISOString() : null,
     posted_date: post.engagement.posted_at ? new Date(post.engagement.posted_at).toISOString() : post.metadata?.sourcing_date ? new Date(post.metadata.sourcing_date).toISOString() : null,
     taken_at: post.post_content?.taken_at || post.taken_at || null,
-    platform: post.platform || 'instagram',
+    platform: post.platform ? post.platform.toLowerCase() : 'instagram',
     processed: post.processed || false,
     client_status: post.client_status || 'To Be Reviewed',
 
@@ -94,7 +94,7 @@ export const getPosts = traceAction('getPosts', async (project, page = 1, limit 
 
     // Platform filter
     if (filters.platform && filters.platform !== 'all') {
-      query.platform = filters.platform
+      query.platform = { $regex: new RegExp(`^${filters.platform}\$`, 'i') }
     }
 
     // Client Status filter
@@ -218,7 +218,7 @@ export const approveTakedown = traceAction('approveTakedown', async (caseId) => 
     const supabaseCase = await manageTakedownCase({
       mongo_post_id: caseId,
       post_platform_id: post.post_id || post.code,
-      platform: post.platform || 'instagram',
+      platform: post.platform ? post.platform.toLowerCase() : 'instagram',
       is_in_takedown: true,
       risk_score: post.review_details?.threat_score || 0,
       threat_type: post.review_details?.primary_threat_type || 'safe'
@@ -228,7 +228,7 @@ export const approveTakedown = traceAction('approveTakedown', async (caseId) => 
     })
 
     // Track takedown event metric
-    await trackTakedownEvent(post.platform || 'instagram').catch(err => {
+    await trackTakedownEvent(post.platform ? post.platform.toLowerCase() : 'instagram').catch(err => {
       console.error('Failed to track takedown metric:', err)
     })
 
@@ -293,7 +293,7 @@ export const getPriorityTakedowns = traceAction('getPriorityTakedowns', async ()
         _id: post._id.toString(),
         created_at: post.metadata?.created_at ? new Date(post.metadata.created_at).toISOString() : null,
         taken_at: post.post_content?.taken_at || post.taken_at || null,
-        platform: post.platform || 'instagram',
+        platform: post.platform ? post.platform.toLowerCase() : 'instagram',
         processed: post.processed || false,
         client_status: post.client_status || 'To Be Reviewed',
         caption: post.post_content?.caption || post.caption || '',
@@ -432,7 +432,7 @@ export const getPostById = traceAction('getPostById', async (project, id) => {
       created_at: post.metadata?.created_at ? new Date(post.metadata.created_at).toISOString() : null,
       sourcing_date: post.metadata?.sourcing_date ? new Date(post.metadata.sourcing_date).toISOString() : null,
       taken_at: post.post_content?.taken_at || post.taken_at || null,
-      platform: post.platform || 'instagram',
+      platform: post.platform ? post.platform.toLowerCase() : 'instagram',
       processed: post.processed || false,
       client_status: post.client_status || 'To Be Reviewed',
       caption: post.post_content?.caption || post.caption || '',

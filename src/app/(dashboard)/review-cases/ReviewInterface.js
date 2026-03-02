@@ -9,9 +9,10 @@ import { Skeleton } from "@/components/ui/skeleton"
 import {
   Loader2, X, Filter, Download, ChevronLeft, ChevronRight,
   Search, Sparkles, Calendar, Database,
-  Instagram, Facebook, Twitter, Youtube, AlertCircle, Quote,
+  Instagram, Facebook, Youtube, AlertCircle, Quote,
   Globe
 } from 'lucide-react'
+import { Twitter } from "@/utils/icons"
 
 import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -265,6 +266,8 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
                     <SelectItem value="instagram">Instagram</SelectItem>
                     <SelectItem value="facebook">Facebook</SelectItem>
                     <SelectItem value="x">X (Twitter)</SelectItem>
+                    <SelectItem value="youtube">YouTube</SelectItem>
+                    <SelectItem value="website">Websites</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -448,7 +451,9 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
                               )}
                               {post.platform.toLowerCase() === 'instagram' && <div className="absolute -bottom-1 -right-1 bg-white rounded-full p-0.5 shadow-sm"><Instagram className="w-4 h-4 text-pink-500 fill-pink-50" /></div>}
                               {post.platform.toLowerCase() === 'facebook' && <div className="absolute -bottom-1 -right-1 bg-white rounded-full p-0.5 shadow-sm"><Facebook className="w-4 h-4 text-blue-600 fill-blue-50" /></div>}
-                              {post.platform.toLowerCase() === 'x' && <div className="absolute -bottom-1 -right-1 bg-white rounded-full p-0.5 shadow-sm"><Twitter className="w-4 h-4 text-slate-900 fill-slate-50" /></div>}
+                              {post.platform.toLowerCase() === 'x' && <div className="absolute -bottom-1 -right-1 bg-white rounded-full p-0.5 shadow-sm"> <span className="inline-block size-4 text-black">
+                                <Twitter />
+                              </span> </div>}
                               {post.platform.toLowerCase() === 'youtube' && <div className="absolute -bottom-1 -right-1 bg-white rounded-full p-0.5 shadow-sm"><Youtube className="w-4 h-4 text-red-600 fill-red-50" /></div>}
                               {post.platform.toLowerCase() === 'website' && <div className="absolute -bottom-1 -right-1 bg-white rounded-full p-0.5 shadow-sm"><Globe className="w-4 h-4 text-slate-500" /></div>}
                             </div>

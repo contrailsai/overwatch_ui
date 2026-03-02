@@ -10,6 +10,7 @@ import {
     Instagram, Facebook, Youtube, Globe, MessageCircle, Quote,
     BadgeCheck, History, Bot
 } from 'lucide-react'
+import { Twitter } from '@/utils/icons'
 import ProfilePic from '@/components/ProfilePic'
 
 import { Input } from "@/components/ui/input"
@@ -107,6 +108,23 @@ export default function ReviewForm({ post, project_details, onClose, onNavigate,
         setThreatTypes(prev => prev.includes(type) ? prev.filter(t => t !== type) : [...prev, type])
     }
 
+    let posted_date = ""
+    let sourced_date = ""
+
+    if (post.posted_date)
+        posted_date = format(new Date(post.posted_date), "dd/MM/yyyy");
+    else if (post.metadata?.posted_date)
+        posted_date = format(new Date(post.metadata.posted_date), "dd/MM/yyyy");
+    else if (post.timestamp)
+        posted_date = format(new Date(post.timestamp), "dd/MM/yyyy");
+    else if (post.sourcing_date)
+        posted_date = format(new Date(post.sourcing_date), "dd/MM/yyyy");
+
+    if (post.metadata?.created_at)
+        sourced_date = format(new Date(post.metadata.created_at), "dd/MM/yyyy");
+    else if (post.created_at)
+        sourced_date = format(new Date(post.created_at), "dd/MM/yyyy");
+
     return (
         <div className="h-full flex flex-col bg-white">
             {/* Panel Header */}
@@ -151,14 +169,8 @@ export default function ReviewForm({ post, project_details, onClose, onNavigate,
                                             {
                                                 post.platform === "twitter" || post.platform === "x" || post.platform === "X" ? (
                                                     <span className="inline-block size-4 text-black">
-                                                        <svg width="100%" height="100%" viewBox="0 0 1200 1227" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                                            <path
-                                                                d="M714.163 519.284L1160.89 0H1055.03L667.137 450.887L357.328 0H0L468.492 681.821L0 1226.37H105.866L515.491 750.218L842.672 1226.37H1200L714.137 519.284H714.163ZM569.165 687.828L521.697 619.934L144.011 79.6944H306.615L611.412 515.685L658.88 583.579L1055.08 1150.3H892.476L569.165 687.854V687.828Z"
-                                                                fill="currentColor"
-                                                            />
-                                                        </svg>
+                                                        <Twitter />
                                                     </span>
-                                                    // <Twitter className="w-6 h-6 text-blue-500" />
                                                 ) : post.platform.toLowerCase() === "instagram" ? (
                                                     <Instagram className="w-6 h-6 text-pink-500" />
                                                 ) : post.platform.toLowerCase() === "facebook" ? (
@@ -237,10 +249,10 @@ export default function ReviewForm({ post, project_details, onClose, onNavigate,
                                         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between col-span-2">
                                             {/* <div className="flex gap-6"> */}
                                             <span className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2">
-                                                <Calendar className="w-3.5 h-3.5" /> Posted: <span className="font-mono text-slate-700">{post.metadata?.sourcing_date ? format(new Date(post.metadata.sourcing_date), "dd/MM/yyyy") : 'N/A'}</span>
+                                                <Calendar className="w-3.5 h-3.5" /> Posted: <span className="font-mono text-slate-700">{posted_date}</span>
                                             </span>
                                             <span className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2">
-                                                <History className="w-3.5 h-3.5" /> Sourced: <span className="font-mono text-slate-700">{post.metadata?.created_at ? format(new Date(post.metadata.created_at), "dd/MM/yyyy") : 'N/A'}</span>
+                                                <History className="w-3.5 h-3.5" /> Sourced: <span className="font-mono text-slate-700">{sourced_date}</span>
                                             </span>
                                             {/* </div> */}
                                         </div>
