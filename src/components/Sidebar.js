@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { List, ShieldAlert, Settings, LogOut, LayoutDashboard, ShieldCheck, GitPullRequestCreateArrow } from 'lucide-react'
+import { List, ShieldAlert, Settings, LogOut, LayoutDashboard, ShieldCheck, GitPullRequestCreateArrow, Users } from 'lucide-react'
 // import { useClient } from '@/context/ClientContext'
 import { cn } from '@/lib/utils'
 
@@ -21,6 +21,7 @@ export function Sidebar({ user, clientDetails, project }) {
       show: clientDetails?.permission === 'reviewer'
     },
     { name: 'Case List', href: '/cases', icon: List, show: true },
+    { name: 'Profiles', href: '/profiles', icon: Users, show: true },
     { name: 'Takedowns', href: '/takedowns', icon: ShieldAlert, show: true },
     { name: 'Configurations', href: '/configurations', icon: Settings, show: true },
     { name: 'Upload Content', href: '/upload-content', icon: GitPullRequestCreateArrow, show: true },
