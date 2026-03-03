@@ -17,6 +17,7 @@ export default async function ProfilesPage({ searchParams }) {
     const filters = {
         platform: resolvedParams.platform || 'all',
         is_verified: resolvedParams.is_verified || 'all',
+        status: resolvedParams.status || 'all',
     }
 
     const profiles = await getProfiles(project, currentPage, itemsPerPage, filters)

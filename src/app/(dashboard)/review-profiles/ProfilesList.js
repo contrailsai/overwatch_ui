@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect, useTransition } from 'react'
 import { getProfileCases, submitProfileReview } from './actions'
 import {
     Filter, Search, ExternalLink, X, ChevronLeft, ChevronRight,
+    ChevronsLeft, ChevronsRight,
     Facebook, Instagram, Youtube, CheckCircle, ShieldOff,
     User, ArrowRight, FileText, Siren, ClockFading, Info, Globe,
     BadgeCheck, ShieldAlert, TriangleAlert, TrendingDown, Smile,
@@ -333,9 +334,13 @@ function ProfileReviewForm({ profile, project, onReviewSaved }) {
 }
 
 // ─── Profile Detail Panel ────────────────────────────────────────────────────
-function ProfileDetailPanel({ profile, project, isOpen, onClose, onReviewSaved }) {
+function ProfileDetailPanel({ profile, profiles = [], project, isOpen, onClose, onReviewSaved, onSelectProfile }) {
     const [cases, setCases] = useState(null)
     const [loading, setLoading] = useState(false)
+
+    const currentIndex = profiles.findIndex(p => p._id === profile?._id)
+    const hasPrev = currentIndex > 0
+    const hasNext = currentIndex < profiles.length - 1 && currentIndex !== -1
 
     useEffect(() => {
         if (!isOpen || !profile) return
@@ -351,9 +356,24 @@ function ProfileDetailPanel({ profile, project, isOpen, onClose, onReviewSaved }
             .catch(() => { if (!cancelled) setCases([]) })
             .finally(() => { if (!cancelled) setLoading(false) })
         return () => { cancelled = true }
-    }, [isOpen, profile?._id])
+    }, [isOpen, profile?._id, project])
+
+    useEffect(() => {
+        const handleKeyDown = (e) => {
+            if (e.key === 'Escape') onClose()
+            if (e.key === 'ArrowLeft' && hasPrev) onSelectProfile(profiles[currentIndex - 1])
+            if (e.key === 'ArrowRight' && hasNext) onSelectProfile(profiles[currentIndex + 1])
+        }
+        window.addEventListener('keydown', handleKeyDown)
+        return () => window.removeEventListener('keydown', handleKeyDown)
+    }, [isOpen, currentIndex, hasPrev, hasNext, onClose, onSelectProfile, profiles])
 
     if (!isOpen || !profile) return null
+
+    const handleFirst = () => profiles.length > 0 && onSelectProfile(profiles[0])
+    const handleLast = () => profiles.length > 0 && onSelectProfile(profiles[profiles.length - 1])
+    const handlePrev = () => hasPrev && onSelectProfile(profiles[currentIndex - 1])
+    const handleNext = () => hasNext && onSelectProfile(profiles[currentIndex + 1])
 
     const highCount = cases?.filter(c => (c.threat_score ?? 0) >= 96).length || 0
     const medCount = cases?.filter(c => { const s = c.threat_score ?? 0; return s >= 76 && s < 96 }).length || 0
@@ -368,10 +388,62 @@ function ProfileDetailPanel({ profile, project, isOpen, onClose, onReviewSaved }
             />
 
             {/* Panel */}
-            <div className="fixed right-0 top-0 h-full bg-white shadow-2xl border-l border-slate-200 z-40 flex flex-row">
+            <div className="fixed right-0 top-0 h-full bg-white shadow-2xl border-l border-slate-200 z-40 flex flex-row animate-in slide-in-from-right duration-300">
 
                 {/* LEFT: Profile & Post Details */}
-                <div className='w-[480px] h-full flex flex-col overflow-hidden'>
+                <div className='w-[540px] h-full flex flex-col overflow-hidden'>
+                    {/* Navigation Header */}
+                    <div className="px-6 py-2 bg-slate-50 border-b border-slate-200 flex items-center justify-between shrink-0">
+                        <div className="flex items-center gap-1">
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={handleFirst}
+                                disabled={currentIndex <= 0}
+                                className="h-8 w-8 p-0 text-slate-400 hover:text-slate-900"
+                                title="First Profile"
+                            >
+                                <ChevronsLeft className="w-4 h-4" />
+                            </Button>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={handlePrev}
+                                disabled={!hasPrev}
+                                className="h-8 gap-1 px-2 text-slate-500 hover:text-slate-900 font-bold text-[10px] uppercase tracking-wider"
+                            >
+                                <ChevronLeft className="w-3.5 h-3.5" />
+                                Prev
+                            </Button>
+                        </div>
+
+                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                            Profile <span className="text-slate-900">{currentIndex + 1}</span> of <span className="text-slate-900">{profiles.length}</span>
+                        </div>
+
+                        <div className="flex items-center gap-1">
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={handleNext}
+                                disabled={!hasNext}
+                                className="h-8 gap-1 px-2 text-slate-500 hover:text-slate-900 font-bold text-[10px] uppercase tracking-wider"
+                            >
+                                Next
+                                <ChevronRight className="w-3.5 h-3.5" />
+                            </Button>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={handleLast}
+                                disabled={currentIndex >= profiles.length - 1}
+                                className="h-8 w-8 p-0 text-slate-400 hover:text-slate-900"
+                                title="Last Profile"
+                            >
+                                <ChevronsRight className="w-4 h-4" />
+                            </Button>
+                        </div>
+                    </div>
                     {/* Header */}
                     <div className="px-6 py-5 border-b border-slate-100 bg-linear-to-r from-slate-50 to-white shrink-0">
                         <div className="flex items-start justify-between gap-3">
@@ -479,16 +551,19 @@ function ProfileDetailPanel({ profile, project, isOpen, onClose, onReviewSaved }
                                             >
                                                 {/* Top row: badge + status + platform + external link */}
                                                 <div className="flex items-center gap-2 flex-wrap">
-                                                    {risk && (
+                                                    {risk ? (
                                                         <span className={cn('inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border', risk.color)}>
                                                             <RiskIcon label={risk.label} />
                                                             {risk.label}
                                                         </span>
-                                                    )}
-                                                    <span className={cn('inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border', statusCfg.color)}>
-                                                        <StatusIcon className="w-2.5 h-2.5" />
-                                                        {statusCfg.label}
-                                                    </span>
+                                                    ) :
+                                                        (
+                                                            <span className={cn('inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border', statusCfg.color)}>
+                                                                <StatusIcon className="w-2.5 h-2.5" />
+                                                                {statusCfg.label}
+                                                            </span>
+                                                        )
+                                                    }
                                                     <Badge variant="outline" className="capitalize font-semibold text-slate-500 border-slate-200 gap-1 pl-1.5 h-5 text-[10px]">
                                                         <PlatformIcon platform={c.platform} />
                                                         {c.platform}
@@ -512,19 +587,39 @@ function ProfileDetailPanel({ profile, project, isOpen, onClose, onReviewSaved }
                                                     </div>
                                                 </div>
 
-                                                {/* Caption */}
-                                                {c.caption && (
-                                                    <p className="text-xs text-slate-600 line-clamp-2 leading-relaxed">
-                                                        {c.caption}
-                                                    </p>
-                                                )}
+                                                {/* Image and Caption */}
+                                                <div className="flex gap-3">
+                                                    {c.signedImageUrl && (
+                                                        <div className="shrink-0 w-16 h-16 rounded-lg overflow-hidden border border-slate-100 bg-slate-50">
+                                                            <img src={c.signedImageUrl} alt="" className="w-full h-full object-cover" />
+                                                        </div>
+                                                    )}
+                                                    {c.caption && (
+                                                        <p className="text-xs text-slate-600 line-clamp-3 leading-relaxed flex-1">
+                                                            {c.caption}
+                                                        </p>
+                                                    )}
+                                                </div>
 
-                                                {/* Date */}
-                                                {c.created_at && (
-                                                    <p className="text-[10px] text-slate-400">
-                                                        {format(new Date(c.created_at), 'dd MMM yyyy')}
-                                                    </p>
-                                                )}
+                                                {/* Footer: Date + Inspect Action */}
+                                                <div className="flex items-center justify-between mt-0.5 pt-2 border-t border-slate-50">
+                                                    <div className="flex items-center gap-2">
+                                                        {c.created_at && (
+                                                            <p className="text-[10px] text-slate-400 font-medium whitespace-nowrap">
+                                                                {format(new Date(c.created_at), 'dd MMM yyyy')}
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                    <a
+                                                        href={`/cases/${c._id}`}
+                                                        target="_blank"
+                                                        rel="noreferrer"
+                                                        className="inline-flex items-center gap-1.5 text-[10px] font-bold text-slate-600 hover:text-blue-600 hover:bg-white hover:border-blue-200 px-2 py-1 rounded-md border border-slate-100 transition-all group/link"
+                                                    >
+                                                        Inspect Case
+                                                        <ArrowRight className="w-2.5 h-2.5 opacity-40 group-hover/link:opacity-100 group-hover/link:translate-x-0.5 transition-all" />
+                                                    </a>
+                                                </div>
                                             </div>
                                         )
                                     })}
@@ -586,9 +681,10 @@ export function ProfilesList({ profiles, project, initialFilters, currentPage })
     const hasActiveFilter = initialFilters.platform !== 'all' || initialFilters.is_verified !== 'all'
 
     const handleSelectProfile = (profile) => {
+        setSelectedProfile(profile);
         // Reset panel state so cases are reloaded for new profile
-        setSelectedProfile(null)
-        setTimeout(() => setSelectedProfile(profile), 0)
+        // setSelectedProfile(null)
+        // setTimeout(() => setSelectedProfile(profile), 0)
     }
 
     // Update review_details in selectedProfile after save
@@ -878,10 +974,12 @@ export function ProfilesList({ profiles, project, initialFilters, currentPage })
             {/* Detail Panel */}
             <ProfileDetailPanel
                 profile={selectedProfile}
+                profiles={profileList}
                 project={project}
                 isOpen={!!selectedProfile}
                 onClose={() => setSelectedProfile(null)}
                 onReviewSaved={handleReviewSaved}
+                onSelectProfile={handleSelectProfile}
             />
         </div>
     )
