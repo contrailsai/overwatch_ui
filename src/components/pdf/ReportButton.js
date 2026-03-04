@@ -12,14 +12,17 @@ const PDFDownloadLink = dynamic(
 
 import RiskReportDocument from './RiskReport';
 import { fetchAndCompressImage } from './CaseExportButton';
+import { getPostsByIds } from '@/app/(dashboard)/cases/actions';
 
 export function ReportButton({ posts, project, className }) {
   const [imgState, setImgState] = React.useState({ compressedImages: [], loading: true });
+  const [fetchingData, setFetchingData] = React.useState(false);
+  const [fullyLoadedPosts, setFullyLoadedPosts] = React.useState([]);
 
   React.useEffect(() => {
     let isMounted = true;
-    const processImages = async () => {
-      if (!posts || posts.length === 0) {
+    const processImages = async (postsToProcess) => {
+      if (!postsToProcess || postsToProcess.length === 0) {
         if (isMounted) setImgState({ compressedImages: [], loading: false });
         return;
       }
@@ -27,7 +30,7 @@ export function ReportButton({ posts, project, className }) {
       setImgState(prev => ({ ...prev, loading: true }));
 
       try {
-        const imagePromises = posts.map(async (post) => {
+        const imagePromises = postsToProcess.map(async (post) => {
           try {
             const sourceUrl = post?.signedImageUrl ||
               post?.image_url ||
@@ -58,28 +61,65 @@ export function ReportButton({ posts, project, className }) {
         }
       }
     };
-    processImages();
+
+    const loadDataAndProcess = async () => {
+      if (!posts || posts.length === 0) {
+        setFullyLoadedPosts([]);
+        processImages([]);
+        return;
+      }
+
+      // Check if we have placeholder posts (only _id)
+      const placeholderIds = posts
+        .filter(p => !p.caption && !p.user && p._id)
+        .map(p => p._id);
+
+      let finalPosts = [...posts];
+
+      if (placeholderIds.length > 0) {
+        if (isMounted) setFetchingData(true);
+        try {
+          const fullPosts = await getPostsByIds(project, placeholderIds);
+          // Merge full posts back into our list
+          finalPosts = posts.map(p => {
+            const full = fullPosts.find(fp => fp._id === p._id);
+            return full || p;
+          });
+        } catch (err) {
+          console.error("Failed to fetch full posts:", err);
+        } finally {
+          if (isMounted) setFetchingData(false);
+        }
+      }
+
+      if (isMounted) {
+        setFullyLoadedPosts(finalPosts);
+        processImages(finalPosts);
+      }
+    };
+
+    loadDataAndProcess();
     return () => { isMounted = false; };
-  }, [posts]);
+  }, [posts, project]);
 
   const fileName = `Overwatch_Report_${new Date().toISOString().split('T')[0]}.pdf`;
 
   return (
     <PDFDownloadLink
-      document={<RiskReportDocument posts={posts} project={project} compressedImages={imgState.compressedImages} />}
+      document={<RiskReportDocument posts={fullyLoadedPosts} project={project} compressedImages={imgState.compressedImages} />}
       fileName={fileName}
     >
       {({ blob, url, loading, error }) => (
         <button
-          disabled={loading || imgState.loading}
+          disabled={loading || imgState.loading || fetchingData}
           className={className || "flex cursor-pointer items-center gap-2 px-3 py-2 bg-white border border-slate-200 text-slate-700 font-medium rounded-lg hover:bg-slate-50 transition-colors text-sm shadow-sm"}
         >
-          {(loading || imgState.loading) ? (
+          {(loading || imgState.loading || fetchingData) ? (
             <Loader2 className="w-4 h-4 animate-spin" />
           ) : (
             <FileDown className="w-4 h-4" />
           )}
-          {(loading || imgState.loading) ? 'Preparing...' : 'Export Summary Report'}
+          {(loading || imgState.loading || fetchingData) ? 'Preparing...' : 'Export Summary Report'}
         </button>
       )}
     </PDFDownloadLink>

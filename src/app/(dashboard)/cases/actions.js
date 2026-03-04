@@ -216,6 +216,105 @@ export const getPosts = traceAction('getPosts', async (project, page = 1, limit 
   }
 })
 
+export const getAllPostIds = traceAction('getAllPostIds', async (project, filters = {}) => {
+  try {
+    if (!project?.mongo_db_map) return []
+
+    const client = await clientPromise
+    const db = client.db(project.mongo_db_map)
+    const collection = db.collection('Posts')
+
+    // Build the same query as getPosts
+    const query = { processed: true }
+    const andConditions = []
+
+    if (filters.platform && filters.platform !== 'all') {
+      query.platform = { $regex: new RegExp(`^${filters.platform}$`, 'i') }
+    }
+
+    if (filters.client_status && filters.client_status !== 'all') {
+      if (filters.client_status === 'To Be Reviewed') {
+        andConditions.push({
+          $or: [
+            { client_status: { $exists: false } },
+            { client_status: null },
+            { client_status: 'To Be Reviewed' }
+          ]
+        })
+      } else {
+        query.client_status = filters.client_status
+      }
+    }
+
+    query['review_details.threat_score'] = { $exists: true }
+
+    if (filters.risk_priority && filters.risk_priority !== 'all') {
+      if (filters.risk_priority === 'high') {
+        query['review_details.threat_score'] = { $gt: 95 }
+      } else if (filters.risk_priority === 'medium') {
+        query['review_details.threat_score'] = { $gt: 75, $lte: 95 }
+      } else if (filters.risk_priority === 'low') {
+        query['review_details.threat_score'] = { $gt: 40, $lte: 75 }
+      } else if (filters.risk_priority === 'safe') {
+        query['review_details.threat_score'] = { $lte: 40 }
+      }
+    }
+
+    if (andConditions.length > 0) query.$and = andConditions
+
+    const matchStage = { ...query }
+    const dateFilterStage = {}
+    if (filters.posted_after) {
+      dateFilterStage.sort_posted_at = { $gte: new Date(filters.posted_after) }
+    }
+
+    const pipeline = [
+      { $match: matchStage },
+      ...(filters.posted_after ? [
+        {
+          $addFields: {
+            sort_posted_at: {
+              $toDate: { $ifNull: ['$engagement.posted_at', '$metadata.posted_date'] }
+            }
+          }
+        },
+        { $match: dateFilterStage }
+      ] : []),
+      { $project: { _id: 1 } }
+    ]
+
+    const docs = await collection.aggregate(pipeline).toArray()
+    return docs.map(d => d._id.toString())
+  } catch (e) {
+    console.error('getAllPostIds Error:', e)
+    return []
+  }
+})
+
+export const getPostsByIds = traceAction('getPostsByIds', async (project, ids) => {
+  try {
+    if (!project?.mongo_db_map || !ids || ids.length === 0) {
+      return []
+    }
+    const client = await clientPromise
+    const db = client.db(project.mongo_db_map)
+    const collection = db.collection('Posts')
+
+    const objectIds = ids.map(id => new ObjectId(id))
+    const posts = await collection.find({ _id: { $in: objectIds } }).toArray()
+
+    // Normalize and Sign URLs (using the existing helper)
+    const processedPosts = await Promise.all(posts.map(normalized_S3_post))
+
+    // Important: Maintain the order of IDs if possible, or just return them
+    // Returning processedPosts is enough for the export components
+    return processedPosts
+  } catch (e) {
+    console.error('getPostsByIds Error:', e)
+    return []
+  }
+})
+
 export const getProjectDetails = traceAction('getProjectDetails_cases', async () => {
   const user = await getAuthenticatedUser()
 

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { getPosts, approveTakedown, getPriorityTakedowns, getRaisedCount, trackClientClick } from './actions'
+import { getPosts, approveTakedown, getPriorityTakedowns, getRaisedCount, trackClientClick, getAllPostIds } from './actions'
 import { CaseDetailPanel } from './CaseDetailPanel'
 import { Skeleton } from "@/components/ui/skeleton"
 import {
@@ -49,6 +49,10 @@ export function CasesList({ cases, project, initialFilters, initialSort, current
 
   const [selectedCases, setSelectedCases] = useState({})
   const selectedCount = Object.keys(selectedCases).length
+
+  // Select-all-filtered state
+  const [isAllFilterSelected, setIsAllFilterSelected] = useState(false)
+  const [isSelectingAll, setIsSelectingAll] = useState(false)
 
   // Memoize the selected posts array to stabilize the reference passed to report buttons
   const selectedPostsArray = useMemo(() => Object.values(selectedCases), [selectedCases])
@@ -101,6 +105,7 @@ export function CasesList({ cases, project, initialFilters, initialSort, current
       const newSelections = { ...prev }
       if (newSelections[post._id]) {
         delete newSelections[post._id]
+        setIsAllFilterSelected(false)
       } else {
         newSelections[post._id] = post
       }
@@ -109,19 +114,43 @@ export function CasesList({ cases, project, initialFilters, initialSort, current
   }
   const handleToggleAllOnPage = (e) => {
     const isChecked = e.target.checked
+    if (!isChecked) {
+      // Clear everything — including any cross-page selection
+      setSelectedCases({})
+      setIsAllFilterSelected(false)
+      return
+    }
     setSelectedCases(prev => {
       const newSelections = { ...prev }
-      if (isChecked) {
-        mergedPosts.forEach(post => {
-          newSelections[post._id] = post
-        })
-      } else {
-        mergedPosts.forEach(post => {
-          delete newSelections[post._id]
-        })
-      }
+      mergedPosts.forEach(post => {
+        newSelections[post._id] = post
+      })
       return newSelections
     })
+  }
+
+  const handleSelectAllFiltered = async () => {
+    setIsSelectingAll(true)
+    try {
+      const ids = await getAllPostIds(project, initialFilters)
+      // We store lightweight placeholder objects keyed by id.
+      // The id is enough for the export actions.
+      setSelectedCases(prev => {
+        const next = { ...prev }
+        ids.forEach(id => {
+          if (!next[id]) next[id] = { _id: id }
+        })
+        return next
+      })
+      setIsAllFilterSelected(true)
+    } finally {
+      setIsSelectingAll(false)
+    }
+  }
+
+  const handleClearAllSelected = () => {
+    setSelectedCases({})
+    setIsAllFilterSelected(false)
   }
 
   // Check if all items on the *current page* are selected for the header checkbox
@@ -195,6 +224,14 @@ export function CasesList({ cases, project, initialFilters, initialSort, current
     if (initialSort.direction === 'asc') return <ArrowUp className="w-3.5 h-3.5 text-blue-600 ml-1.5" />
     return <ArrowDown className="w-3.5 h-3.5 text-blue-600 ml-1.5" />
   }
+
+  // Reset isAllFilterSelected when filters change
+  const filtersKey = JSON.stringify(initialFilters)
+  useEffect(() => {
+    setIsAllFilterSelected(false)
+    setSelectedCases({})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtersKey])
 
   return (
     <div className="flex flex-col h-full bg-slate-50">
@@ -336,10 +373,10 @@ export function CasesList({ cases, project, initialFilters, initialSort, current
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => setSelectedCases({})}
+                    onClick={handleClearAllSelected}
                     className="h-8 px-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 font-bold text-xs cursor-pointer"
                   >
-                    Clear
+                    Clear All
                   </Button>
                 </div>
               )}
@@ -395,6 +432,41 @@ export function CasesList({ cases, project, initialFilters, initialSort, current
           </div>
         </div>
       </div>
+
+      {/* Select-all-filtered banner */}
+      {isAllCurrentPageSelected && totalCount > mergedPosts.length && (
+        <div className="px-6 pb-2 shrink-0">
+          <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-2.5 flex items-center justify-between">
+            {isAllFilterSelected ? (
+              <>
+                <span className="text-xs font-semibold text-blue-700">
+                  All <span className="font-bold">{totalCount}</span> cases across all pages are selected.
+                </span>
+                <button
+                  onClick={handleClearAllSelected}
+                  className="text-xs font-bold text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
+                >
+                  Clear selection
+                </button>
+              </>
+            ) : (
+              <>
+                <span className="text-xs font-semibold text-blue-700">
+                  Only the <span className="font-bold">{mergedPosts.length}</span> cases on this page are selected.
+                </span>
+                <button
+                  onClick={handleSelectAllFiltered}
+                  disabled={isSelectingAll}
+                  className="text-xs font-bold text-blue-600 hover:text-blue-800 hover:underline cursor-pointer disabled:opacity-60 flex items-center gap-1"
+                >
+                  {isSelectingAll && <Loader2 className="w-3 h-3 animate-spin" />}
+                  Select all {totalCount} cases
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Main Table */}
       <div className="flex-1 overflow-y-auto px-6 pb-4">
