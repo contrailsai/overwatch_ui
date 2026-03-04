@@ -31,7 +31,7 @@ export const normalized_S3_post = traceAction('normalized_S3_post', async (post)
     // Metadata
     created_at: post.metadata?.created_at ? new Date(post.metadata.created_at).toISOString() : null,
     sourcing_date: post.metadata?.sourcing_date ? new Date(post.metadata.sourcing_date).toISOString() : null,
-    posted_date: post.engagement.posted_at ? new Date(post.engagement.posted_at).toISOString() : post.metadata?.sourcing_date ? new Date(post.metadata.sourcing_date).toISOString() : null,
+    posted_date: post.engagement?.posted_at ? new Date(post.engagement.posted_at).toISOString() : post.metadata?.posted_date ? new Date(post.metadata.posted_date).toISOString() : null,
     taken_at: post.post_content?.taken_at || post.taken_at || null,
     platform: post.platform ? post.platform.toLowerCase() : 'instagram',
     processed: post.processed || false,
@@ -88,9 +88,9 @@ export const getPosts = traceAction('getPosts', async (project, page = 1, limit 
     }
 
     // Only exclude raised cases if we are not explicitly asking for 'all' or 'Flag for Takedown'
-    if (filters.client_status !== 'all' && filters.client_status !== 'Flag for Takedown') {
-      query['takedown_info.takedown_status'] = { $ne: 'raised' }
-    }
+    // if (filters.client_status !== 'all' && filters.client_status !== 'Flag for Takedown') {
+    //   query['takedown_info.takedown_status'] = { $ne: 'raised' }
+    // }
     const andConditions = []
 
     // Platform filter
@@ -113,60 +113,96 @@ export const getPosts = traceAction('getPosts', async (project, page = 1, limit 
       }
     }
 
-    // Threat Type filter (if applicable to raw posts or if they have analysis results)
-    // if (filters.threat_type && filters.threat_type !== 'all') {
-    //   andConditions.push({
-    //     $or: [
-    //       { 'review_details.threat_type': filters.threat_type },
-    //       { 'review_details.primary_threat_type': filters.threat_type },
-    //       // { 'analysis_results.threat_category': filters.threat_type }
-    //     ]
-    //   })
-    // }
-
-    // Default Filter: Analysis completed AND POI detected (Face OR Name)
-    // We keep this to ensure relevance, even for reviewed posts
-    // AI analysis is there
-    // query["analysis_results.risk_score"] = { $exists: true }
-    // Human analysis is there
+    // NECESSARY CONDITION FOR POSTS TO APPEAR ON THIS PAGE (CONTENT MUST BE REVIEWED ON REVIEW-CASES PAGE BEFORE COMMING HERE)
     query["review_details.threat_score"] = { $exists: true }
 
-    // andConditions.push({
-    //   $or: [
-    //     // { "analysis_results.poi_check.face_present": true },
-    //     // { "analysis_results.poi_check.poi_name_found": true }
-    //   ]
-    // })
+    // Risk Priority filter
+    if (filters.risk_priority && filters.risk_priority !== 'all') {
+      if (filters.risk_priority === 'high') {
+        query['review_details.threat_score'] = { $gt: 95 }
+      } else if (filters.risk_priority === 'medium') {
+        query['review_details.threat_score'] = { $gt: 75, $lte: 95 }
+      } else if (filters.risk_priority === 'low') {
+        query['review_details.threat_score'] = { $gt: 40, $lte: 75 }
+      } else if (filters.risk_priority === 'safe') {
+        query['review_details.threat_score'] = { $lte: 40 }
+      }
+    }
 
     if (andConditions.length > 0) {
       query.$and = andConditions
     }
 
-    const sortOptions = {}
-    if (sort.field === 'created_at') {
-      sortOptions['metadata.created_at'] = sort.direction === 'asc' ? 1 : -1
-      sortOptions['_id'] = 1 // Secondary unique sort
-    } else if (sort.field === 'threat_score') {
-      sortOptions['review_details.threat_score'] = sort.direction === 'asc' ? 1 : -1
-      sortOptions['metadata.created_at'] = sort.direction === 'asc' ? 1 : -1
-      sortOptions['_id'] = 1 // Secondary unique sort
+    // SORT STUFF OUT
+    let sortPipeline = {};
+    if (sort.field === 'threat_score') {
+      sortPipeline = {
+        'review_details.threat_score': sort.direction === 'asc' ? 1 : -1,
+        'sort_posted_at': -1,
+        '_id': 1
+      };
+    } else if (sort.field === 'posted_at') {
+      sortPipeline = {
+        'sort_posted_at': sort.direction === 'asc' ? 1 : -1,
+        'review_details.threat_score': -1,
+        '_id': 1
+      };
     } else {
-      // Default sort
-      sortOptions['review_details.threat_score'] = -1
-      sortOptions['metadata.created_at'] = sort.direction === 'asc' ? 1 : -1
-      sortOptions['_id'] = 1 // Secondary unique sort
+      // Default sort: Risk Priority (desc) -> Post Date (desc) -> _id (asc)
+      sortPipeline = {
+        'review_details.threat_score': -1,
+        'sort_posted_at': -1,
+        '_id': 1
+      };
     }
 
-    const posts = await collection.find(query)
-      .sort(sortOptions)
-      .skip(skip)
-      .limit(limit)
-      .toArray()
+    // "Posted After" filter (requires computed field)
+    const matchStage = { ...query };
+    const dateFilterStage = {};
+    if (filters.posted_after) {
+      dateFilterStage.sort_posted_at = { $gte: new Date(filters.posted_after) };
+    }
+
+    const posts = await collection.aggregate([
+      { $match: matchStage },
+      {
+        $addFields: {
+          sort_posted_at: {
+            // $toDate standardizes the field so comparisons and sorting work flawlessly
+            $toDate: {
+              $ifNull: ["$engagement.posted_at", "$metadata.posted_date"]
+            }
+          }
+        }
+      },
+      ...(filters.posted_after ? [{ $match: dateFilterStage }] : []),
+      { $sort: sortPipeline },
+      { $skip: skip },
+      { $limit: limit }
+    ]).toArray();
 
     // Serialize and Sign URLs
     const processedPosts = await Promise.all(posts.map(normalized_S3_post));
 
-    const totalCount = await collection.countDocuments(query)
+    // For count, we need to respect the posted_after filter if present
+    let totalCount;
+    if (filters.posted_after) {
+      const countResult = await collection.aggregate([
+        { $match: matchStage },
+        {
+          $addFields: {
+            sort_posted_at: {
+              $ifNull: ["$engagement.posted_at", "$metadata.posted_date"]
+            }
+          }
+        },
+        { $match: dateFilterStage },
+        { $count: "total" }
+      ]).toArray();
+      totalCount = countResult[0]?.total || 0;
+    } else {
+      totalCount = await collection.countDocuments(query)
+    }
 
     return {
       posts: processedPosts,

@@ -17,7 +17,8 @@ export default async function CasesPage({ searchParams }) {
   const filters = {
     platform: resolvedParams.platform || 'all',
     client_status: resolvedParams.status || 'To Be Reviewed',
-    threat_type: resolvedParams.threat_type || 'all'
+    risk_priority: resolvedParams.risk_priority || 'all',
+    posted_after: resolvedParams.posted_after || null
   }
 
   const sort = {

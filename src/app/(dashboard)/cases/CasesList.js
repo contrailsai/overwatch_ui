@@ -165,16 +165,46 @@ export function CasesList({ cases, project, initialFilters, initialSort, current
 
             {/* Left: Filters */}
             <div className="flex items-center gap-6 w-full lg:w-auto">
-              <div className="flex items-center gap-2.5 shrink-0">
-                <div className="bg-blue-50 p-2 rounded-lg text-blue-600">
-                  <Filter className="w-4 h-4" />
+
+              <div className='flex flex-col gap-2 items-center justify-center'>
+                <div className="flex items-center gap-2.5 shrink-0">
+                  <div className="bg-blue-50 p-1 rounded-lg text-blue-600">
+                    <Filter className="w-4 h-4" />
+                  </div>
+                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Filters</span>
                 </div>
-                <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Filters</span>
+
+                <div className="text-xs font-medium text-slate-500 whitespace-nowrap">
+                  <span className="font-bold text-slate-900 text-base  px-1">{totalCount}</span> cases found
+                </div>
               </div>
 
               <Separator orientation="vertical" className="h-8 bg-slate-100 hidden sm:block" />
 
+              {/* FILTERS */}
               <div className="flex flex-wrap items-center gap-4">
+
+                {/* RISK LEVEL */}
+                <div className="space-y-1">
+                  <Label className="text-[10px] uppercase font-bold text-slate-400">Risk Level</Label>
+                  <Select
+                    value={initialFilters.risk_priority || 'all'}
+                    onValueChange={(val) => handleFilterChange('risk_priority', val)}
+                  >
+                    <SelectTrigger className="w-[140px] bg-white border-slate-200 h-9 text-xs font-semibold">
+                      <SelectValue placeholder="All Risks" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Risks</SelectItem>
+                      <SelectItem value="high">High Risk</SelectItem>
+                      <SelectItem value="medium">Medium Risk</SelectItem>
+                      <SelectItem value="low">Low Risk</SelectItem>
+                      <SelectItem value="safe">Safe</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* PLATFORM */}
                 <div className="space-y-1">
                   <Label className="text-[10px] uppercase font-bold text-slate-400">Platform</Label>
                   <Select
@@ -195,6 +225,7 @@ export function CasesList({ cases, project, initialFilters, initialSort, current
                   </Select>
                 </div>
 
+                {/* STATUS */}
                 <div className="space-y-1">
                   <Label className="text-[10px] uppercase font-bold text-slate-400">Status</Label>
                   <Select
@@ -211,6 +242,17 @@ export function CasesList({ cases, project, initialFilters, initialSort, current
                       <SelectItem value="Flag for Takedown">Flag for Takedown</SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
+
+                {/* POSTED AFTER */}
+                <div className="space-y-1">
+                  <Label className="text-[10px] uppercase font-bold text-slate-400">Posted After</Label>
+                  <input
+                    type="date"
+                    value={initialFilters.posted_after || ''}
+                    onChange={(e) => handleFilterChange('posted_after', e.target.value)}
+                    className="w-[150px] bg-white border border-slate-200 rounded-md h-9 px-3 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  />
                 </div>
 
                 {/* <div className="space-y-1">
@@ -232,7 +274,7 @@ export function CasesList({ cases, project, initialFilters, initialSort, current
                   </Select>
                 </div> */}
 
-                {(initialFilters.platform !== 'all' || initialFilters.threat_type !== 'all' || initialFilters.client_status !== 'To Be Reviewed') && (
+                {(initialFilters.platform !== 'all' || initialFilters.risk_priority !== 'all' || initialFilters.client_status !== 'To Be Reviewed' || initialFilters.posted_after) && (
                   <div className="pt-4">
                     <Button variant="ghost" size="sm" onClick={clearFilters} className="h-9 px-2 text-rose-600 hover:text-rose-700 hover:bg-rose-50 font-bold text-xs">
                       <X className="w-3.5 h-3.5 mr-1" /> Clear
@@ -258,12 +300,6 @@ export function CasesList({ cases, project, initialFilters, initialSort, current
                   <ArrowRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-1" />
                 </Link>
               )} */}
-
-              <Separator orientation="vertical" className="h-8 bg-slate-100 hidden sm:block" />
-
-              <div className="text-xs font-medium text-slate-500 whitespace-nowrap">
-                <span className="font-bold text-slate-900 text-sm">{totalCount}</span> cases found
-              </div>
             </div>
           </div>
         </div>
@@ -288,17 +324,24 @@ export function CasesList({ cases, project, initialFilters, initialSort, current
                 <th scope="col" className="w-[150px] px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Status</th>
                 <th
                   scope="col"
-                  className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100 transition-colors group select-none w-full max-w-[100px]"
-                  onClick={() => handleSortChange('created_at')}
+                  className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider w-full max-w-[100px]"
                 >
                   <div className="flex items-center">
                     Content & Date
-                    <SortIcon field="created_at" />
                   </div>
                 </th>
                 <th scope="col" className="w-[120px] px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Platform</th>
                 <th scope="col" className="w-[170px] px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Threat Type</th>
-                <th scope="col" className="w-[90px] px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Source</th>
+                <th
+                  scope="col"
+                  className="w-[120px] px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100 transition-colors group select-none"
+                  onClick={() => handleSortChange('posted_at')}
+                >
+                  <div className="flex items-center">
+                    Post Date
+                    <SortIcon field="posted_at" />
+                  </div>
+                </th>
                 <th scope="col" className="w-[110px] px-4 py-3 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
