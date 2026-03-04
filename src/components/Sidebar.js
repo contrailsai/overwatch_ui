@@ -15,12 +15,12 @@ export function Sidebar({ user, clientDetails, project }) {
   const allNavItems = [
     { name: 'Home', href: '/', icon: LayoutDashboard, show: true },
     { name: 'Review Cases', href: '/review-cases', icon: ShieldCheck, show: clientDetails?.permission === 'reviewer' },
-    { name: 'Case List', href: '/cases', icon: List, show: true },
+    { name: 'Content', href: '/cases', icon: List, show: true },
     { name: 'Review Profiles', href: '/review-profiles', icon: ShieldCheck, show: clientDetails?.permission === 'reviewer' },
     { name: 'Profiles', href: '/profiles', icon: Users, show: true },
     { name: 'Takedowns', href: '/takedowns', icon: ShieldAlert, show: true },
-    { name: 'Configurations', href: '/configurations', icon: Settings, show: true },
     { name: 'Upload Content', href: '/upload-content', icon: GitPullRequestCreateArrow, show: true },
+    { name: 'Configurations', href: '/configurations', icon: Settings, show: true },
   ]
 
   // Filter and map navigation items

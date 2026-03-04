@@ -43,7 +43,7 @@ const RiskIcon = ({ label }) => {
 
 const getStatusConfig = (status) => {
     if (status === 'To Be Reviewed' || !status) return { label: 'Pending', color: 'text-slate-600 bg-slate-50 border-slate-200', icon: ClockFading }
-    if (status === 'Pass') return { label: 'Pass', color: 'text-emerald-700 bg-emerald-50 border-emerald-200', icon: CheckCircle }
+    if (status === 'No Action' || status === 'Pass') return { label: 'No Action', color: 'text-emerald-700 bg-emerald-50 border-emerald-200', icon: CheckCircle }
     if (status === 'Flag for Takedown') return { label: 'Takedown', color: 'text-rose-700 bg-rose-50 border-rose-200', icon: Siren }
     return { label: status, color: 'text-slate-600 bg-slate-50 border-slate-200', icon: Info }
 }
@@ -464,16 +464,16 @@ export default function ProfileDetailPanel({ profile, project, isOpen, onClose, 
                     <div className="p-5 border-t border-slate-100 bg-white sticky bottom-0 z-10 space-y-4">
                         <div className="flex gap-4">
                             <Button
-                                onClick={() => { if (clientStatus !== 'Pass') handleUpdateStatus('Pass') }}
+                                onClick={() => { if (clientStatus !== 'No Action' && clientStatus !== 'Pass') handleUpdateStatus('No Action') }}
                                 disabled={isUpdatingStatus}
                                 className={cn(
                                     "flex-1 h-12 font-bold text-white transition-all duration-200 shadow-emerald-900/20 bg-emerald-500 opacity-50 hover:opacity-100 ",
-                                    clientStatus === 'Pass' ? "opacity-100 cursor-default hover:bg-emerald-500 ring-2 ring-emerald-600 ring-offset-2" : "cursor-pointer hover:bg-emerald-600",
-                                    // (clientStatus !== 'To Be Reviewed' && clientStatus !== 'Pass') ? "" : ""
+                                    (clientStatus === 'No Action' || clientStatus === 'Pass') ? "opacity-100 cursor-default hover:bg-emerald-500 ring-2 ring-emerald-600 ring-offset-2" : "cursor-pointer hover:bg-emerald-600",
+                                    // (clientStatus !== 'To Be Reviewed' && clientStatus !== 'No Action' && clientStatus !== 'Pass') ? "" : ""
                                 )}
                             >
                                 {isUpdatingStatus && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
-                                Pass
+                                No Action
                             </Button>
                             <Button
                                 onClick={() => { if (clientStatus !== 'Flag for Takedown') handleUpdateStatus('Flag for Takedown') }}

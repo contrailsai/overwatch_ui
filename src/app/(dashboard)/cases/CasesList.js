@@ -140,8 +140,8 @@ export function CasesList({ cases, project, initialFilters, initialSort, current
     if (status === 'To Be Reviewed') {
       return { label: 'To Be Reviewed', icon: ClockFading, color: 'text-slate-700 bg-slate-50 border-slate-200' };
     }
-    if (status === 'Pass') {
-      return { label: 'Pass', icon: CheckCircle, color: 'text-emerald-700 bg-emerald-50 border-emerald-200' };
+    if (status === 'No Action' || status === 'Pass') {
+      return { label: 'No Action', icon: CheckCircle, color: 'text-emerald-700 bg-emerald-50 border-emerald-200' };
     }
     if (status === 'Flag for Takedown') {
       return { label: 'Flag for Takedown', icon: Siren, color: 'text-rose-700 bg-rose-50 border-rose-200' };
@@ -207,7 +207,7 @@ export function CasesList({ cases, project, initialFilters, initialSort, current
                     <SelectContent>
                       <SelectItem value="all">All Statuses</SelectItem>
                       <SelectItem value="To Be Reviewed">To Be Reviewed</SelectItem>
-                      <SelectItem value="Pass">Pass</SelectItem>
+                      <SelectItem value="No Action">No Action</SelectItem>
                       <SelectItem value="Flag for Takedown">Flag for Takedown</SelectItem>
                     </SelectContent>
                   </Select>

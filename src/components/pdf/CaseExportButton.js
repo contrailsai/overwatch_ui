@@ -56,7 +56,7 @@ export const fetchAndCompressImage = async (imageUrl, maxWidth = 800) => {
     }
 };
 
-export function CaseExportButton({ post }) {
+export function CaseExportButton({ post, project }) {
     const [imgState, setImgState] = useState({ compressedUrl: null, loading: true });
 
     useEffect(() => {
@@ -90,7 +90,7 @@ export function CaseExportButton({ post }) {
 
     return (
         <PDFDownloadLink
-            document={<SingleCaseReportDocument post={post} compressedImage={imgState.compressedUrl} />}
+            document={<SingleCaseReportDocument post={post} project={project} compressedImage={imgState.compressedUrl} />}
             fileName={fileName}
         >
             {({ blob, url, loading, error }) => (
@@ -105,7 +105,7 @@ export function CaseExportButton({ post }) {
                     ) : (
                         <FileDown className="w-4 h-4" />
                     )}
-                    {(loading || imgState.loading) ? 'Preparing...' : 'Download Case Report'}
+                    {(loading || imgState.loading) ? 'Preparing...' : 'Download Content Report'}
                 </Button>
             )}
         </PDFDownloadLink>

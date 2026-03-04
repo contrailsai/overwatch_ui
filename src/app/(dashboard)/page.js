@@ -6,13 +6,13 @@ export const metadata = {
   description: 'Overview of threat detection metrics and trends.',
 }
 
-export default async function Home() {
+export default async function Home({ searchParams }) {
   // 1. Get current authenticated user and project details from cached function
   const result = await getClientandProjectDetails()
 
   if (!result) return null // Should be handled by layout redirect
 
-  const { user, clientDetails } = result
+  const { user, clientDetails, project } = result
 
   // 3. Handle missing setup
   if (!clientDetails?.project_name) {
@@ -32,10 +32,13 @@ export default async function Home() {
     )
   }
 
-  // 4. Fetch dashboard data for this specific project
-  const data = await getDashboardData(clientDetails.project_name)
+  // 4. Parse date filter (1, 7, or 30 days — default 30)
+  const resolvedSearchParams = await searchParams
+  const rawDays = parseInt(resolvedSearchParams?.days)
+  const days = [1, 7, 30].includes(rawDays) ? rawDays : 30
 
-  // console.log(data)
+  // 5. Fetch dashboard data for this specific project + date window
+  const data = await getDashboardData(project, days)
 
   return <DashboardContent data={data} />
 }

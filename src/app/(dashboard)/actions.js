@@ -6,254 +6,216 @@ import clientPromise from '@/utils/mongodb/client'
 import { getSignedImageUrl } from '@/utils/aws/s3'
 import { traceAction } from '@/utils/tracing'
 
-export const getDashboardData = traceAction('getDashboardData', async (projectName) => {
+export const getDashboardData = traceAction('getDashboardData', async (project, days = 30) => {
   const supabase = await createClient()
+  const projectName = typeof project === 'string' ? project : project?.project_name
 
-  // 1. Fetch daily_metrics with date ordering
-  let query = supabase
-    .from('daily_metrics')
+  // Compute date range
+  const now = new Date()
+  const startDate = new Date(now)
+  startDate.setDate(startDate.getDate() - days)
+  const startDateStr = startDate.toISOString().split('T')[0] // YYYY-MM-DD
+
+  // 1. Fetch daily_cases_metrics (total cases discovered, risk & category breakdowns)
+  let casesQuery = supabase
+    .from('daily_case_metrics')
     .select('*')
+    .gte('date', startDateStr)
     .order('date', { ascending: true })
 
   if (projectName) {
-    query = query.eq('project_name', projectName)
+    casesQuery = casesQuery.eq('project_name', projectName)
   }
 
-  const { data: dailyMetrics, error: metricsError } = await query
+  const { data: casesMetrics, error: casesError } = await casesQuery
 
-  if (metricsError) {
-    console.error('Error fetching daily metrics:', metricsError)
+  if (casesError) {
+    console.error('Error fetching daily_case_metrics:', casesError)
   }
 
-  // 2. Fetch Takedown Cases with all details
-  let takedownQuery = supabase
-    .from('takedown_cases')
+  // 2. Fetch daily_reviewed_metrics (what the client has reviewed)
+  let reviewedQuery = supabase
+    .from('daily_reviewed_metrics')
     .select('*')
+    .gte('date', startDateStr)
+    .order('date', { ascending: true })
 
   if (projectName) {
-    takedownQuery = takedownQuery.eq('project_name', projectName)
+    reviewedQuery = reviewedQuery.eq('project_name', projectName)
   }
 
-  const { data: takedownCases, error: takedownsError } = await takedownQuery
+  const { data: reviewedMetrics, error: reviewedError } = await reviewedQuery
 
-  if (takedownsError) {
-    console.error('Error fetching takedown cases:', takedownsError)
+  if (reviewedError) {
+    console.error('Error fetching daily_reviewed_metrics:', reviewedError)
   }
 
-  // 3. Fetch Total Posts from MongoDB
-  let totalPosts = 0
-  let recentPosts = []
-  let projectDetails = { showTakedowns: true }
+  const casesData = casesMetrics || []
+  const reviewedData = reviewedMetrics || []
 
-  try {
-    let dbName = process.env.MONGO_DB_NAME
-
-    // Fetch project-specific details
-    if (projectName) {
-      const { data: projectData } = await supabase
-        .from('project')
-        .select('mongo_db_map, project_details')
-        .eq('project_name', projectName)
-        .single()
-
-      if (projectData?.mongo_db_map) {
-        dbName = projectData.mongo_db_map
-      }
-
-      if (projectData?.project_details) {
-        try {
-          const details = typeof projectData.project_details === 'string'
-            ? JSON.parse(projectData.project_details)
-            : projectData.project_details
-
-          if (details.do_takedowns === false) {
-            projectDetails.showTakedowns = false
-          }
-          projectDetails.description = details.description
-        } catch (parseError) {
-          console.error('Error parsing project_details:', parseError)
-        }
-      }
+  // Helper to safely parse JSON fields that may arrive as string or object
+  const parseJsonField = (field) => {
+    if (!field) return {}
+    if (typeof field === 'string') {
+      try { return JSON.parse(field) } catch { return {} }
     }
-
-    const client = await clientPromise
-    const db = client.db(dbName)
-    const collection = db.collection('Posts')
-    const filters = {}
-
-    totalPosts = await collection.countDocuments(filters)
-
-    // Get recent 10 processed posts for quick view
-    const posts = await collection.find({ processed: true })
-      .sort({ taken_at: -1, timestamp: -1 })
-      .limit(10)
-      .toArray()
-
-    // Process posts with signed URLs
-    recentPosts = await Promise.all(posts.map(async (post) => {
-      let s3UrlToSign = post.s3_url || post.media_urls?.[0]?.thumbnail_s3_url || post.media_urls?.[0]?.s3_url
-      const signedUrl = s3UrlToSign ? await getSignedImageUrl(s3UrlToSign) : null
-
-      const timestamp = post.taken_at || post.timestamp
-      const normalizedTimestamp = typeof timestamp === 'string' ?
-        Math.floor(new Date(timestamp).getTime() / 1000) : timestamp
-
-      return {
-        _id: post._id.toString(),
-        code: post.code || post.post_id,
-        platform: post.platform || 'instagram',
-        caption: post.post_content?.caption || post.caption || post.content || '',
-        username: post.profile?.username || post.user?.username || post.author?.username || post.author?.name || 'Unknown',
-        taken_at: normalizedTimestamp,
-        signedImageUrl: signedUrl,
-        threat_type: post.review_details?.primary_threat_type || 'pending',
-        threat_score: post.review_details?.threat_score || null
-      }
-    }))
-  } catch (e) {
-    console.error('MongoDB Error:', e)
+    return field
   }
 
-  // --- Data Processing ---
-  const metricsData = dailyMetrics || []
-  const takedownsData = takedownCases || []
+  // =========================================================
+  // SECTION 1 — CLIENT ACTION TRACKER
+  // =========================================================
 
-  // === Summary Metrics ===
-  const totalRiskHigh = metricsData.reduce((acc, curr) => acc + (curr.risk_high_count || 0), 0)
-  const totalRiskMedium = metricsData.reduce((acc, curr) => acc + (curr.risk_medium_count || 0), 0)
-  const totalRiskLow = metricsData.reduce((acc, curr) => acc + (curr.risk_low_count || 0), 0)
-  const totalRiskSafe = metricsData.reduce((acc, curr) => acc + (curr.risk_safe_count || 0), 0)
+  // Aggregate review stats
+  let totalReviewed = 0
+  let totalPass = 0
+  let totalFlagForTakedown = 0
+  let totalTakedown = 0
+  // Risk breakdown from reviewed_metrics
+  let reviewedRiskSafe = 0, reviewedRiskLow = 0, reviewedRiskMedium = 0, reviewedRiskHigh = 0
 
-  // Calculate totalReviewed and totalThreats by summing risk buckets 
-  // This is more robust than relying on 'total_reviewed' which might be misaligned in DB
-  const totalReviewed = totalRiskHigh + totalRiskMedium + totalRiskLow + totalRiskSafe
-  const totalThreats = totalRiskHigh + totalRiskMedium + totalRiskLow
-  const totalTakedownsInitiated = metricsData.reduce((acc, curr) => acc + (curr.takedowns_initiated || 0), 0)
+  reviewedData.forEach(row => {
+    totalReviewed += row.total_reviewed || 0
+    const reviewed = parseJsonField(row.reviewed)
+    totalPass += reviewed.pass || 0
+    totalFlagForTakedown += reviewed['Flag for Takedown'] || 0
+    totalTakedown += reviewed.Takedown || 0
+    const risk = parseJsonField(row.risk)
+    reviewedRiskSafe += risk.safe || 0
+    reviewedRiskLow += risk.low || 0
+    reviewedRiskMedium += risk.medium || 0
+    reviewedRiskHigh += risk.high || 0
+  })
 
-  // Takedown Status Counts
-  const takedownsByStatus = {
-    initiated: takedownsData.filter(c => c.status === 'initiated').length,
-    email_sent: takedownsData.filter(c => c.email_sent && c.status !== 'resolved').length,
-    platform_replied: takedownsData.filter(c => c.platform_replied && c.status !== 'resolved').length,
-    resolved: takedownsData.filter(c => c.status === 'resolved').length,
-    rejected: takedownsData.filter(c => c.status === 'rejected').length,
+  // Aggregate total cases discovered in window
+  let totalCasesDiscovered = 0
+  let caseRiskSafe = 0, caseRiskLow = 0, caseRiskMedium = 0, caseRiskHigh = 0
+
+  casesData.forEach(row => {
+    totalCasesDiscovered += row.total_cases || 0
+    const risk = parseJsonField(row.risk)
+    caseRiskSafe += risk.safe || 0
+    caseRiskLow += risk.low || 0
+    caseRiskMedium += risk.medium || 0
+    caseRiskHigh += risk.high || 0
+  })
+
+  // Pending cases = total discovered - total reviewed (clamped to 0)
+  const totalPending = Math.max(0, totalCasesDiscovered - totalReviewed)
+
+  // Distribute pending proportionally across risk levels using cases risk ratio
+  const caseRiskTotal = caseRiskSafe + caseRiskLow + caseRiskMedium + caseRiskHigh || 1
+  const pendingRisk = {
+    safe: Math.round((caseRiskSafe / caseRiskTotal) * totalPending),
+    low: Math.round((caseRiskLow / caseRiskTotal) * totalPending),
+    medium: Math.round((caseRiskMedium / caseRiskTotal) * totalPending),
+    high: Math.round((caseRiskHigh / caseRiskTotal) * totalPending),
   }
 
-  const activeTakedowns = takedownsByStatus.initiated + takedownsByStatus.email_sent + takedownsByStatus.platform_replied
-  const completedTakedowns = takedownsByStatus.resolved + takedownsByStatus.rejected
+  // =========================================================
+  // SECTION 2 — ANALYTICS (static / grows over time)
+  // =========================================================
 
-  // === Risk Distribution ===
+  // Category Distribution — aggregate all categories from daily_cases_metrics
+  const categoryTotals = {}
+  casesData.forEach(row => {
+    const cats = parseJsonField(row.categories)
+    Object.entries(cats).forEach(([cat, count]) => {
+      categoryTotals[cat] = (categoryTotals[cat] || 0) + (count || 0)
+    })
+  })
+  const categoryDistribution = Object.entries(categoryTotals)
+    .map(([name, value]) => ({ name, value }))
+    .sort((a, b) => b.value - a.value)
+
+  // Risk Distribution — from cases data for the full picture
+  const RISK_COLORS = {
+    high: '#f43f5e',    // rose-500
+    medium: '#f97316',  // orange-500
+    low: '#f59e0b',     // amber-500
+    safe: '#64748b',    // slate-500
+  }
   const riskDistribution = [
-    { name: 'High Risk', value: totalRiskHigh, color: '#f43f5e', fill: '#f43f5e' }, // Rose 500
-    { name: 'Medium Risk', value: totalRiskMedium, color: '#f97316', fill: '#f97316' }, // Orange 500
-    { name: 'Low Risk', value: totalRiskLow, color: '#f59e0b', fill: '#f59e0b' }, // Amber 500
-    { name: 'Safe', value: totalRiskSafe, color: '#64748b', fill: '#64748b' } // Slate 500
+    { name: 'High', value: caseRiskHigh, fill: RISK_COLORS.high },
+    { name: 'Medium', value: caseRiskMedium, fill: RISK_COLORS.medium },
+    { name: 'Low', value: caseRiskLow, fill: RISK_COLORS.low },
+    { name: 'Safe', value: caseRiskSafe, fill: RISK_COLORS.safe },
   ]
 
-
-  // === Threat Type Distribution ===
-  const threatTypeDistribution = [
-    { name: 'Scam', value: metricsData.reduce((acc, curr) => acc + (curr.threat_scam_count || 0), 0), fill: '#fecdd3' },        // Rose 200
-    { name: 'Hate Speech', value: metricsData.reduce((acc, curr) => acc + (curr.threat_hate_speech_count || 0), 0), fill: '#ddd6fe' }, // Violet 200
-    { name: 'Fake News', value: metricsData.reduce((acc, curr) => acc + (curr.threat_fake_news_count || 0), 0), fill: '#bae6fd' },    // Sky 200
-    { name: 'NSFW', value: metricsData.reduce((acc, curr) => acc + (curr.threat_nsfw_count || 0), 0), fill: '#fde68a' },         // Amber 200
-    { name: 'AIGC', value: metricsData.reduce((acc, curr) => acc + (curr.threat_aigc_count || 0), 0), fill: '#a7f3d0' },         // Emerald 200
-    { name: 'Other', value: metricsData.reduce((acc, curr) => acc + (curr.threat_other_count || 0), 0), fill: '#e2e8f0' }        // Slate 200
-  ]
-
-  // === Platform Distribution ===
-  const platformMetrics = {}
-  metricsData.forEach(row => {
-    const platform = row.platform || 'unknown'
-    if (!platformMetrics[platform]) {
-      platformMetrics[platform] = {
-        platform,
-        reviewed: 0,
-        threats: 0,
-        takedowns: 0
-      }
-    }
-    platformMetrics[platform].reviewed += ((row.risk_high_count || 0) + (row.risk_medium_count || 0) + (row.risk_low_count || 0) + (row.risk_safe_count || 0))
-    platformMetrics[platform].threats += ((row.risk_high_count || 0) + (row.risk_medium_count || 0) + (row.risk_low_count || 0))
-    platformMetrics[platform].takedowns += (row.takedowns_initiated || 0)
+  // Platform Line Chart — cases per platform per date
+  // 1. Identify all unique platforms in the result set
+  const platformsSet = new Set()
+  casesData.forEach(row => {
+    const platform = (row.platform || 'unknown').toLowerCase()
+    platformsSet.add(platform)
   })
-  const platformDistribution = Object.values(platformMetrics)
+  const platforms = Array.from(platformsSet)
 
-  // === Daily Trends (last 30 days) ===
-  const dailyTrends = metricsData.slice(-30).map(row => {
-    const dateObj = new Date(row.date)
-    return {
-      date: dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-      fullDate: row.date,
-      reviewed: (row.risk_high_count || 0) + (row.risk_medium_count || 0) + (row.risk_low_count || 0) + (row.risk_safe_count || 0),
-      threats: (row.risk_high_count || 0) + (row.risk_medium_count || 0) + (row.risk_low_count || 0),
-      highRisk: row.risk_high_count || 0,
-      mediumRisk: row.risk_medium_count || 0,
-      lowRisk: row.risk_low_count || 0,
-      takedowns: row.takedowns_initiated || 0,
-      platform: row.platform
+  // 2. Generate all dates in the range [startDate, now]
+  const platformLineData = []
+  const dateCursor = new Date(startDate)
+  const today = new Date()
+  today.setHours(23, 59, 59, 999) // include today fully
+
+  while (dateCursor <= today) {
+    const dateLabel = dateCursor.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    const entry = { date: dateLabel, rawDate: dateCursor.toISOString().split('T')[0] }
+
+    // Initialize all platforms to 0
+    platforms.forEach(p => { entry[p] = 0 })
+    platformLineData.push(entry)
+
+    dateCursor.setDate(dateCursor.getDate() + 1)
+  }
+
+  // 3. Fill in actual data
+  casesData.forEach(row => {
+    const rowDateStr = new Date(row.date).toISOString().split('T')[0]
+    const platform = (row.platform || 'unknown').toLowerCase()
+
+    // Find matching date entry
+    const entry = platformLineData.find(d => d.rawDate === rowDateStr)
+    if (entry) {
+      entry[platform] = (entry[platform] || 0) + (row.total_cases || 0)
     }
   })
 
-  // Group daily trends by date (aggregate platforms)
-  const dailyTrendsMap = {}
-  dailyTrends.forEach(day => {
-    if (!dailyTrendsMap[day.date]) {
-      dailyTrendsMap[day.date] = {
-        date: day.date,
-        reviewed: 0,
-        threats: 0,
-        highRisk: 0,
-        mediumRisk: 0,
-        lowRisk: 0,
-        takedowns: 0
-      }
-    }
-    dailyTrendsMap[day.date].reviewed += day.reviewed
-    dailyTrendsMap[day.date].threats += day.threats
-    dailyTrendsMap[day.date].highRisk += day.highRisk
-    dailyTrendsMap[day.date].mediumRisk += day.mediumRisk
-    dailyTrendsMap[day.date].lowRisk += day.lowRisk
-    dailyTrendsMap[day.date].takedowns += day.takedowns
-  })
-  const aggregatedDailyTrends = Object.values(dailyTrendsMap)
+  // Clean up rawDate before returning
+  platformLineData.forEach(d => delete d.rawDate)
 
-  // === Takedown Funnel Data ===
-  const takedownFunnel = [
-    { stage: 'Initiated', count: takedownsByStatus.initiated, fill: '#818cf8' }, // Indigo 400
-    { stage: 'Email Sent', count: takedownsByStatus.email_sent, fill: '#94a3b8' }, // Slate 400
-    { stage: 'Platform Replied', count: takedownsByStatus.platform_replied, fill: '#64748b' }, // Slate 500
-    { stage: 'Resolved', count: takedownsByStatus.resolved, fill: '#4fd1c5' }, // Teal 300
-  ]
+  const PLATFORM_COLORS = {
+    instagram: '#e1306c',
+    facebook: '#1877f2',
+    x: '#0f172a',
+    twitter: '#1da1f2',
+    youtube: '#ff0000',
+    website: '#8b5cf6',
+    tiktok: '#010101',
+    unknown: '#94a3b8',
+  }
 
   return {
-    // Summary Cards
-    summary: {
-      totalPosts,
+    // Date filter context
+    days,
+
+    // ---- Section 1: Client Action Tracker ----
+    clientTracker: {
       totalReviewed,
-      totalThreats,
-      totalTakedownsInitiated,
-      activeTakedowns,
-      completedTakedowns,
-      threatDetectionRate: totalReviewed > 0 ? ((totalThreats / totalReviewed) * 100).toFixed(1) : 0,
-      takedownSuccessRate: (takedownsByStatus.resolved + takedownsByStatus.rejected) > 0
-        ? ((takedownsByStatus.resolved / (takedownsByStatus.resolved + takedownsByStatus.rejected)) * 100).toFixed(1)
-        : 0
+      totalPass,
+      totalFlagForTakedown,
+      totalTakedown,
+      totalPending,
+      pendingRisk,
+      totalCasesDiscovered,
     },
 
-    // Chart Data
+    // ---- Section 2: Analytics ----
     riskDistribution,
-    threatTypeDistribution,
-    platformDistribution,
-    dailyTrends: aggregatedDailyTrends,
-    takedownFunnel,
-    takedownsByStatus,
-
-    // Recent posts for quick view
-    recentPosts: recentPosts,
-
-    // Project Details for UI logic
-    projectDetails
+    categoryDistribution,
+    platformLineData,
+    platforms,
+    platformColors: PLATFORM_COLORS,
+    riskColors: RISK_COLORS,
   }
 })
 

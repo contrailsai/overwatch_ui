@@ -10,187 +10,251 @@ export async function updateDailyMetrics(project, reviewData, previousReviewData
   const supabase = await createClient()
   const date = new Date().toISOString().split('T')[0] // YYYY-MM-DD
   const platform = reviewData.platform || 'unknown'
+  const project_name = project?.project_name
+
+  if (!project_name) {
+    console.error('Project name is missing in updateDailyMetrics')
+    return
+  }
 
   // Helper to determine risk bucket
-  // Safe: 0-40, Low: 40-60, Mid: 60-85, High: 85-100
+  // Safe: 0-40, Low: 40-75, Mid: 76-95, High: 96-100 (based on ReviewDetails.js)
   const getRiskBucket = (score) => {
-    if (score >= 85) return 'risk_high_count'
-    if (score >= 60) return 'risk_medium_count'
-    if (score >= 40) return 'risk_low_count'
-    return 'risk_safe_count'
+    if (score === undefined || score === null) return null
+    if (score > 95) return 'high'
+    if (score > 75) return 'medium'
+    if (score > 40) return 'low'
+    return 'safe'
   }
 
-  // Helper to determine threat column
-  const getThreatColumn = (type) => {
-    const map = {
-      'safe': 'threat_safe_count',
-      'scam': 'threat_scam_count',
-      'hate_speech': 'threat_hate_speech_count',
-      'fake_news': 'threat_fake_news_count',
-      'nsfw': 'threat_nsfw_count',
-      'aigc': 'threat_aigc_count',
-      // 'other': 'threat_other_count'
-    }
-    // Normalize type string just in case
-    const normalized = type ? type.toLowerCase().replace(/ /g, '_') : 'other'
-    return map[normalized] || 'threat_other_count'
-  }
+  // Calculate deltas for JSON fields
+  const riskDeltas = { safe: 0, low: 0, medium: 0, high: 0 }
+  const categoryDeltas = {}
 
-  // Calculate deltas
-  const updates = {
-    total_reviewed: 0,
-    risk_high_count: 0,
-    risk_medium_count: 0,
-    risk_low_count: 0,
-    risk_safe_count: 0,
-    threat_safe_count: 0,
-    threat_scam_count: 0,
-    threat_hate_speech_count: 0,
-    threat_fake_news_count: 0,
-    threat_nsfw_count: 0,
-    threat_aigc_count: 0,
-    threat_other_count: 0
-  }
-
-  // If this is a new review (not an update to a previous one done TODAY), increment total
-  // Note: If previousReviewData exists, we assume it's an adjustment.
-
-  // Add new values
-  updates.total_reviewed++
-  updates[getRiskBucket(reviewData.threat_score)]++
-  updates[getThreatColumn(reviewData.is_aigc && 'aigc')]++
+  // 1. Add current review data
+  const currentRiskBucket = getRiskBucket(reviewData.threat_score)
+  if (currentRiskBucket) riskDeltas[currentRiskBucket]++
 
   const currentTypes = Array.isArray(reviewData.threat_types)
     ? reviewData.threat_types
     : [reviewData.threat_type || 'safe']
 
-  currentTypes.forEach(type => {
-    updates[getThreatColumn(type)]++
+  currentTypes.filter(t => typeof t === 'string').forEach(type => {
+    const normalized = type.toLowerCase().replace(/ /g, '_')
+    categoryDeltas[normalized] = (categoryDeltas[normalized] || 0) + 1
   })
 
-  // Subtract old values if they exist
+  if (reviewData.is_aigc) {
+    categoryDeltas['aigc'] = (categoryDeltas['aigc'] || 0) + 1
+  }
+
+  let totalDelta = 1
+
+  // 2. Subtract previous review data if it's an update
   if (previousReviewData) {
-    updates.total_reviewed-- // Net change 0 for total if updating
-    updates[getRiskBucket(previousReviewData.threat_score)]--
+    totalDelta = 0 // Net change 0 for total if updating
+    const prevRiskBucket = getRiskBucket(previousReviewData.threat_score)
+    if (prevRiskBucket) riskDeltas[prevRiskBucket]--
 
     const prevTypes = Array.isArray(previousReviewData.threat_types)
       ? previousReviewData.threat_types
       : [previousReviewData.threat_type || 'safe']
 
-    prevTypes.forEach(type => {
-      updates[getThreatColumn(type)]--
+    prevTypes.filter(t => typeof t === 'string').forEach(type => {
+      const normalized = type.toLowerCase().replace(/ /g, '_')
+      categoryDeltas[normalized] = (categoryDeltas[normalized] || 0) - 1
     })
+
+    if (previousReviewData.is_aigc) {
+      categoryDeltas['aigc'] = (categoryDeltas['aigc'] || 0) - 1
+    }
   }
 
   try {
     // 1. Try to fetch existing row
     const { data: existing, error: fetchError } = await supabase
-      .from('daily_metrics')
+      .from('daily_case_metrics')
       .select('*')
       .eq('date', date)
       .eq('platform', platform)
+      .eq('project_name', project_name)
       .maybeSingle()
 
     if (fetchError) throw fetchError
 
     if (existing) {
-      // 2. Update existing row
+      // Merge risk JSON
+      const updatedRisk = { ...(existing.risk || { safe: 0, low: 0, medium: 0, high: 0 }) }
+      Object.keys(riskDeltas).forEach(key => {
+        updatedRisk[key] = Math.max(0, (updatedRisk[key] || 0) + riskDeltas[key])
+      })
+
+      // Merge categories JSON
+      const updatedCategories = { ...(existing.categories || {}) }
+      Object.keys(categoryDeltas).forEach(key => {
+        updatedCategories[key] = Math.max(0, (updatedCategories[key] || 0) + categoryDeltas[key])
+      })
+
       const { error: updateError } = await supabase
-        .from('daily_metrics')
+        .from('daily_case_metrics')
         .update({
-          total_reviewed: existing.total_reviewed + updates.total_reviewed,
-          risk_high_count: existing.risk_high_count + updates.risk_high_count,
-          risk_medium_count: existing.risk_medium_count + updates.risk_medium_count,
-          risk_low_count: existing.risk_low_count + updates.risk_low_count,
-          risk_safe_count: (existing.risk_safe_count || 0) + updates.risk_safe_count,
-
-          threat_safe_count: existing.threat_safe_count + updates.threat_safe_count,
-          threat_scam_count: existing.threat_scam_count + updates.threat_scam_count,
-          threat_hate_speech_count: existing.threat_hate_speech_count + updates.threat_hate_speech_count,
-          threat_fake_news_count: existing.threat_fake_news_count + updates.threat_fake_news_count,
-          threat_nsfw_count: existing.threat_nsfw_count + updates.threat_nsfw_count,
-          threat_aigc_count: (existing.threat_aigc_count || 0) + updates.threat_aigc_count,
-          threat_other_count: existing.threat_other_count + updates.threat_other_count,
-
-          updated_at: new Date().toISOString()
+          total_cases: Math.max(0, (existing.total_cases || 0) + totalDelta),
+          risk: updatedRisk,
+          categories: updatedCategories,
+          // created_at is automatic, but maybe we want an updated_at? (not in schema provided)
         })
         .eq('id', existing.id)
 
       if (updateError) throw updateError
     } else {
-      // 3. Insert new row
+      // Insert new row
+      // Initialize risk and categories with deltas, ensuring no negatives (though unlikely on insert)
+      const initialRisk = {}
+      Object.keys(riskDeltas).forEach(key => {
+        initialRisk[key] = Math.max(0, riskDeltas[key])
+      })
+
+      const initialCategories = {}
+      Object.keys(categoryDeltas).forEach(key => {
+        initialCategories[key] = Math.max(0, categoryDeltas[key])
+      })
+
       const { error: insertError } = await supabase
-        .from('daily_metrics')
+        .from('daily_case_metrics')
         .insert({
           date,
           platform,
-          project_name: project?.project_name,
-          total_reviewed: Math.max(0, updates.total_reviewed),
-          risk_high_count: Math.max(0, updates.risk_high_count),
-          risk_medium_count: Math.max(0, updates.risk_medium_count),
-          risk_low_count: Math.max(0, updates.risk_low_count),
-          risk_safe_count: Math.max(0, updates.risk_safe_count),
-
-          threat_safe_count: Math.max(0, updates.threat_safe_count),
-          threat_scam_count: Math.max(0, updates.threat_scam_count),
-          threat_hate_speech_count: Math.max(0, updates.threat_hate_speech_count),
-          threat_fake_news_count: Math.max(0, updates.threat_fake_news_count),
-          threat_nsfw_count: Math.max(0, updates.threat_nsfw_count),
-          threat_aigc_count: Math.max(0, updates.threat_aigc_count),
-          threat_other_count: Math.max(0, updates.threat_other_count),
-
-          takedowns_initiated: 0 // handled separately
+          project_name,
+          total_cases: Math.max(0, totalDelta),
+          risk: initialRisk,
+          categories: initialCategories
         })
 
       if (insertError) throw insertError
     }
   } catch (err) {
-    console.error('Failed to update metrics:', err)
-  }
-}
-
-/**
- * Tracks a takedown initiation event in metrics
- */
-export async function trackTakedownEvent(platform) {
-  const supabase = await createClient()
-  const date = new Date().toISOString().split('T')[0]
-
-  try {
-    const { data: existing, error: fetchError } = await supabase
-      .from('daily_metrics')
-      .select('*')
-      .eq('date', date)
-      .eq('platform', platform)
-      .maybeSingle()
-
-    if (fetchError) throw fetchError
-
-    if (existing) {
-      await supabase.from('daily_metrics')
-        .update({
-          takedowns_initiated: (existing.takedowns_initiated || 0) + 1,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', existing.id)
-    } else {
-      await supabase.from('daily_metrics')
-        .insert({
-          date,
-          platform,
-          takedowns_initiated: 1,
-          // Default others to 0
-          total_reviewed: 0
-        })
-    }
-  } catch (err) {
-    console.error('Failed to track takedown event:', err)
+    console.error('Failed to update daily_case_metrics:', err)
   }
 }
 
 /**
  * Manages takedown cases in Supabase
  */
+/**
+ * Updates the client reviewed metrics in Supabase.
+ * Tracks client decisions: 'no-action', 'Flag for Takedown', 'Takedown'
+ */
+export async function updateClientReviewedMetrics(project, reviewData, previousReviewData = null) {
+  const supabase = await createClient()
+  const date = new Date().toISOString().split('T')[0]
+  const platform = reviewData.platform || 'unknown'
+  const project_name = project?.project_name
+
+  if (!project_name) {
+    console.error('Project name is missing in updateClientReviewedMetrics')
+    return
+  }
+
+  const getRiskBucket = (score) => {
+    if (score === undefined || score === null) return null
+    if (score > 95) return 'high'
+    if (score > 75) return 'medium'
+    if (score > 40) return 'low'
+    return 'safe'
+  }
+
+  // Map status to the exact keys provided in the requirement
+  const getActionKey = (status) => {
+    if (!status) return null
+    if (status.toLowerCase().includes('no action') || status.toLowerCase().includes('no-action')) return 'no-action'
+    if (status === 'Flag for Takedown') return 'Flag for Takedown'
+    if (status === 'Takedown' || status === 'do_takedown' || status === 'Takedown Action') return 'Takedown'
+    return null
+  }
+
+  const riskDeltas = { safe: 0, low: 0, medium: 0, high: 0 }
+  const actionDeltas = { 'no-action': 0, 'Flag for Takedown': 0, 'Takedown': 0 }
+
+  // 1. Add current state
+  const currentRiskBucket = getRiskBucket(reviewData.risk_score)
+  if (currentRiskBucket) riskDeltas[currentRiskBucket]++
+
+  const currentActionKey = getActionKey(reviewData.client_status)
+  if (currentActionKey) actionDeltas[currentActionKey]++
+
+  let totalDelta = 1
+
+  // 2. Subtract previous state if update
+  if (previousReviewData) {
+    totalDelta = 0
+    const prevRiskBucket = getRiskBucket(previousReviewData.risk_score)
+    if (prevRiskBucket) riskDeltas[prevRiskBucket]--
+
+    const prevActionKey = getActionKey(previousReviewData.client_status)
+    if (prevActionKey) actionDeltas[prevActionKey]--
+  }
+
+  try {
+    const { data: existing, error: fetchError } = await supabase
+      .from('daily_reviewed_metrics')
+      .select('*')
+      .eq('date', date)
+      .eq('platform', platform)
+      .eq('project_name', project_name)
+      .maybeSingle()
+
+    if (fetchError) throw fetchError
+
+    if (existing) {
+      const updatedRisk = { ...(existing.risk || { safe: 0, low: 0, medium: 0, high: 0 }) }
+      Object.keys(riskDeltas).forEach(key => {
+        updatedRisk[key] = Math.max(0, (updatedRisk[key] || 0) + riskDeltas[key])
+      })
+
+      const updatedAction = { ...(existing.reviewed || { 'no-action': 0, 'Flag for Takedown': 0, 'Takedown': 0 }) }
+      Object.keys(actionDeltas).forEach(key => {
+        updatedAction[key] = Math.max(0, (updatedAction[key] || 0) + actionDeltas[key])
+      })
+
+      const { error: updateError } = await supabase
+        .from('daily_reviewed_metrics')
+        .update({
+          total_reviewed: Math.max(0, (existing.total_reviewed || 0) + totalDelta),
+          risk: updatedRisk,
+          reviewed: updatedAction
+        })
+        .eq('id', existing.id)
+
+      if (updateError) throw updateError
+    } else {
+      const initialRisk = {}
+      Object.keys(riskDeltas).forEach(key => {
+        initialRisk[key] = Math.max(0, riskDeltas[key])
+      })
+
+      const initialAction = {}
+      Object.keys(actionDeltas).forEach(key => {
+        initialAction[key] = Math.max(0, actionDeltas[key])
+      })
+
+      const { error: insertError } = await supabase
+        .from('daily_reviewed_metrics')
+        .insert({
+          date,
+          platform,
+          project_name,
+          total_reviewed: Math.max(0, totalDelta),
+          risk: initialRisk,
+          reviewed: initialAction
+        })
+
+      if (insertError) throw insertError
+    }
+  } catch (err) {
+    console.error('Failed to update daily_reviewed_metrics:', err)
+  }
+}
+
 export async function manageTakedownCase(data) {
   const supabase = await createClient()
   const {

@@ -237,7 +237,7 @@ export function CaseDetailPanel({ post, project, isOpen, onClose, onNavigate, ha
 
     const handleUpdateStatus = async (status) => {
         setIsProcessing(status);
-        trackClientClick(status === 'Pass' ? 'pass_case' : 'flag_for_takedown', { page: 'CaseDetailPanel' });
+        trackClientClick(status === 'No Action' ? 'no_action_case' : 'flag_for_takedown', { page: 'CaseDetailPanel' });
         try {
             const result = await updateClientStatus(post._id, status);
             if (result.success) {
@@ -277,7 +277,7 @@ export function CaseDetailPanel({ post, project, isOpen, onClose, onNavigate, ha
                                     <Siren className="w-5 h-5 text-slate-500" />
                                 </div>
                                 <div>
-                                    <h2 className="text-lg font-bold text-slate-900 leading-tight">Case Review</h2>
+                                    <h2 className="text-lg font-bold text-slate-900 leading-tight">Content Review</h2>
                                     <p className="text-xs font-mono text-slate-400">ID: {post._id}</p>
                                 </div>
                             </div>
@@ -629,16 +629,16 @@ export function CaseDetailPanel({ post, project, isOpen, onClose, onNavigate, ha
                                         : (
                                             <>
                                                 <Button
-                                                    onClick={() => { if (clientStatus !== 'Pass') handleUpdateStatus('Pass') }}
-                                                    disabled={isProcessing === 'Pass'}
+                                                    onClick={() => { if (clientStatus !== 'No Action' && clientStatus !== 'Pass') handleUpdateStatus('No Action') }}
+                                                    disabled={isProcessing === 'No Action'}
                                                     className={cn(
                                                         "flex-1 h-12 font-bold text-white transition-all duration-200 shadow-emerald-900/20 bg-emerald-500 opacity-50 hover:opacity-100 ",
-                                                        clientStatus === 'Pass' ? "opacity-100 cursor-default hover:bg-emerald-500 ring-2 ring-emerald-600 ring-offset-2" : "cursor-pointer hover:bg-emerald-600",
-                                                        // (clientStatus !== 'To Be Reviewed' && clientStatus !== 'Pass') ? "" : ""
+                                                        (clientStatus === 'No Action' || clientStatus === 'Pass') ? "opacity-100 cursor-default hover:bg-emerald-500 ring-2 ring-emerald-600 ring-offset-2" : "cursor-pointer hover:bg-emerald-600",
+                                                        // (clientStatus !== 'To Be Reviewed' && clientStatus !== 'No Action' && clientStatus !== 'Pass') ? "" : ""
                                                     )}
                                                 >
-                                                    {isProcessing === 'Pass' && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
-                                                    Pass
+                                                    {isProcessing === 'No Action' && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
+                                                    No Action
                                                 </Button>
                                                 <Button
                                                     onClick={() => { if (clientStatus !== 'Flag for Takedown') handleUpdateStatus('Flag for Takedown') }}
@@ -673,7 +673,7 @@ export function CaseDetailPanel({ post, project, isOpen, onClose, onNavigate, ha
                                     }
                                 </div>
                                 <div onClick={() => trackClientClick('download_case_report', { page: 'CaseDetailPanel' })}>
-                                    <CaseExportButton post={post} />
+                                    <CaseExportButton post={post} project={project} />
                                 </div>
                             </div>
                         </div>

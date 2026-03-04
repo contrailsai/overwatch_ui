@@ -4,7 +4,7 @@ import { createClient, getAuthenticatedUser } from '@/utils/supabase/server'
 import clientPromise from '@/utils/mongodb/client'
 import { getSignedImageUrl } from '@/utils/aws/s3'
 import { sendSlackNotification } from '@/utils/slack'
-import { manageTakedownCase, trackTakedownEvent } from '@/utils/supabase/metrics'
+import { manageTakedownCase, updateClientReviewedMetrics } from '@/utils/supabase/metrics'
 import { ObjectId } from 'mongodb'
 // import { getClientandProjectDetails } from '@/app/(dashboard)/actions'
 import { traceAction, recordClickMetric } from '@/utils/tracing'
@@ -61,7 +61,8 @@ export const normalized_S3_post = traceAction('normalized_S3_post', async (post)
     stats: {
       like_count: post.engagement?.likes || 0,
       comment_count: post.engagement?.comments || 0,
-      share_count: post.engagement?.shares || 0
+      share_count: post.engagement?.shares || 0,
+      view_count: post.engagement?.views || 0
     }
   };
 
@@ -228,7 +229,19 @@ export const approveTakedown = traceAction('approveTakedown', async (caseId) => 
     })
 
     // Track takedown event metric
-    await trackTakedownEvent(post.platform ? post.platform.toLowerCase() : 'instagram').catch(err => {
+    const currentReviewData = {
+      risk_score: post.review_details?.threat_score || 0,
+      client_status: 'Takedown',
+      platform: post.platform ? post.platform.toLowerCase() : 'instagram'
+    }
+
+    const previousReviewData = post.client_status && post.client_status !== 'To Be Reviewed' ? {
+      risk_score: post.review_details?.threat_score || 0,
+      client_status: post.client_status,
+      platform: post.platform ? post.platform.toLowerCase() : 'instagram'
+    } : null
+
+    updateClientReviewedMetrics({ project_name: projectDetails.projectName }, currentReviewData, previousReviewData).catch(err => {
       console.error('Failed to track takedown metric:', err)
     })
 
@@ -350,12 +363,34 @@ export const updateClientStatus = traceAction('updateClientStatus', async (caseI
     const db = client.db(projectDetails.dbName)
     const collection = db.collection('Posts')
 
+    const post = await collection.findOne({ _id: new ObjectId(caseId) })
+    if (!post) {
+      return { success: false, error: "Case not found" }
+    }
+
     const result = await collection.updateOne(
       { _id: new ObjectId(caseId) },
-      { $set: { client_status: status } }
+      { $set: { client_status: status, "metadata.updated_at": new Date().toISOString() } }
     )
 
     if (result.matchedCount > 0) {
+      // Track metrics
+      const currentReviewData = {
+        risk_score: post.review_details?.threat_score || 0,
+        client_status: status,
+        platform: post.platform ? post.platform.toLowerCase() : 'instagram'
+      }
+
+      const previousReviewData = post.client_status && post.client_status !== 'To Be Reviewed' ? {
+        risk_score: post.review_details?.threat_score || 0,
+        client_status: post.client_status,
+        platform: post.platform ? post.platform.toLowerCase() : 'instagram'
+      } : null
+
+      updateClientReviewedMetrics({ project_name: projectDetails.projectName }, currentReviewData, previousReviewData).catch(err =>
+        console.error('Failed to update client metrics:', err)
+      )
+
       return { success: true }
     } else {
       return { success: false, error: "Case not found" }

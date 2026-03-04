@@ -8,434 +8,409 @@ registerFonts();
 
 // --- THEME & STYLES ---
 const Theme = {
-    PRIMARY_BLUE: '#1E3A8A', // Formal Dark Blue
-    SECONDARY_GRAY: '#4B5563',
-    BORDER_DARK: '#1F2937',
-    BORDER_LIGHT: '#E5E7EB',
-    RED_ALERT: '#B91C1C',
-    AMBER_WARN: '#D97706',
-    GREEN_SAFE: '#059669',
-    BG_SECTION: '#F9FAFB',
+    PRIMARY_BLUE: '#1E293B',
+    SECONDARY_GRAY: '#64748B',
+    BORDER_LIGHT: '#E2E8F0',
+    BG_SECTION: '#F8FAFC',
+    RISK_HIGH: '#F43F5E',
+    RISK_MEDIUM: '#F97316',
+    RISK_LOW: '#F59E0B',
+    SAFE: '#64748B',
 };
 
 const styles = StyleSheet.create({
     page: {
-        paddingTop: 40,
-        paddingHorizontal: 40,
-        paddingBottom: 70, // Increased to protect footer
+        paddingTop: 25,
+        paddingHorizontal: 25,
+        paddingBottom: 35,
         fontFamily: 'Outfit',
         backgroundColor: '#FFFFFF',
-        flexDirection: 'column',
     },
-    // Unified Header (Parity with CasesList)
+    // ID-in-Header
     header: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        borderBottomWidth: 2,
-        borderBottomColor: Theme.PRIMARY_BLUE,
-        paddingBottom: 15,
-        marginBottom: 20,
-    },
-    headerLeft: {
-        flexDirection: 'column',
-    },
-    headerRight: {
-        flexDirection: 'column',
-        alignItems: 'flex-end',
-        justifyContent: 'center',
+        borderBottomWidth: 1,
+        borderBottomColor: Theme.BORDER_LIGHT,
+        paddingBottom: 8,
+        marginBottom: 12,
     },
     title: {
-        fontSize: 24,
-        fontWeight: 'bold',
+        fontSize: 18,
+        fontWeight: '900',
         color: Theme.PRIMARY_BLUE,
-        letterSpacing: 1,
-    },
-    subtitle: {
-        fontSize: 10,
-        color: Theme.SECONDARY_GRAY,
-        marginTop: 2,
-        textTransform: 'uppercase',
-    },
-    headerInfo: {
-        fontSize: 9,
-        color: Theme.SECONDARY_GRAY,
-    },
-
-    // Report Section Styling
-    sectionHeader: {
-        fontSize: 13,
-        fontWeight: 'bold',
-        color: Theme.PRIMARY_BLUE,
-        backgroundColor: Theme.BG_SECTION,
-        padding: 6,
-        paddingLeft: 10,
-        borderLeftWidth: 3,
-        borderLeftColor: Theme.PRIMARY_BLUE,
-        marginBottom: 12,
-        marginTop: 18,
-        textTransform: 'uppercase',
-    },
-
-    // Data Grid
-    grid: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        marginBottom: 10,
-    },
-    field: {
-        width: '50%',
-        marginBottom: 10,
-    },
-    fullField: {
-        width: '100%',
-        marginBottom: 12,
-    },
-    label: {
-        fontSize: 8,
-        fontWeight: 'bold',
-        color: Theme.SECONDARY_GRAY,
-        textTransform: 'uppercase',
-        marginBottom: 3,
         letterSpacing: 0.5,
     },
-    value: {
-        fontSize: 10,
-        color: '#111827',
-        lineHeight: 1.4,
+    subtitle: {
+        fontSize: 7,
+        color: Theme.SECONDARY_GRAY,
+        textTransform: 'uppercase',
+        letterSpacing: 2,
     },
-    valueBold: {
-        fontSize: 10,
+    headerRight: {
+        alignItems: 'flex-end',
+    },
+    headerDate: {
+        fontSize: 8,
         fontWeight: 'bold',
-        color: '#111827',
+        color: Theme.PRIMARY_BLUE,
     },
-    link: {
-        fontSize: 10,
-        color: '#2563EB',
-        textDecoration: 'none',
+    headerID: {
+        fontSize: 6,
+        fontWeight: 'bold',
+        color: Theme.SECONDARY_GRAY,
+        marginTop: 2,
     },
 
-    // Content Evidence Container
-    evidenceContainer: {
-        flexDirection: 'column',
+    // Layout Sections - Minimized Gaps
+    topSection: {
+        marginBottom: 12,
+    },
+    splitSection: {
+        flexDirection: 'row',
         gap: 15,
-        width: '100%',
-        alignItems: 'center',
+    },
+    leftCol: {
+        width: '58%',
+    },
+    rightCol: {
+        width: '38%',
     },
 
-    // Image Container
-    imageWrapper: {
-        borderWidth: 1,
-        borderColor: Theme.BORDER_LIGHT,
-        borderRadius: 2,
-        overflow: 'hidden',
-        backgroundColor: '#f8f9fa',
-        alignSelf: 'center',
-    },
-    evidenceImage: {
-        maxWidth: '100%',
-        maxHeight: 400,
-        objectFit: 'contain',
+    sectionLabel: {
+        fontSize: 7,
+        fontWeight: '900',
+        color: Theme.SECONDARY_GRAY,
+        textTransform: 'uppercase',
+        letterSpacing: 1,
+        marginBottom: 4,
     },
 
-    // Formal Text Blocks
-    formalTextBox: {
-        padding: 10,
+    // Analysis Top Box
+    reviewCard: {
+        backgroundColor: Theme.BG_SECTION,
         borderWidth: 0.5,
         borderColor: Theme.BORDER_LIGHT,
-        backgroundColor: '#FCFDFF',
-        borderRadius: 2,
-        marginTop: 4,
-        width: '100%',
-    },
-    textDescription: {
-        marginBottom: 10,
-        fontSize: 9,
-        lineHeight: 1.6,
-        color: '#374151',
-    },
-
-    // Intelligence Summary (Text based)
-    riskRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 10,
-        marginBottom: 10,
-    },
-    riskTag: {
-        fontSize: 9,
-        fontWeight: 'bold',
-        color: 'white',
-        paddingHorizontal: 8,
-        paddingVertical: 3,
-        borderRadius: 2,
-    },
-
-    signalsList: {
+        borderRadius: 6,
+        padding: 10,
         flexDirection: 'column',
         gap: 8,
-        marginTop: 5,
     },
-    signalEntry: {
+    riskBox: {
+        flexDirection: 'column',
+    },
+    riskLabel: {
+        fontSize: 14,
+        fontWeight: '900',
+        textTransform: 'uppercase',
+    },
+
+    reasoningText: {
+        fontSize: 8,
+        lineHeight: 1.5,
+        color: '#334155',
+        marginTop: 4,
+    },
+
+    // Media
+    imageWrapper: {
+        borderWidth: 0.5,
+        borderColor: Theme.BORDER_LIGHT,
+        borderRadius: 6,
+        overflow: 'hidden',
+        backgroundColor: '#0F172A',
+        width: '100%',
+        marginBottom: 8,
+    },
+    evidenceImage: {
+        width: '100%',
+        height: 200,
+        objectFit: 'contain',
+    },
+    captionBox: {
+        padding: 8,
+        backgroundColor: '#FFFFFF',
+        borderWidth: 0.5,
+        borderColor: Theme.BORDER_LIGHT,
+        borderRadius: 4,
+    },
+    captionText: {
+        fontSize: 7.5,
+        lineHeight: 1.4,
+        color: '#475569',
+    },
+
+    // Right Col Items
+    entityInfo: {
+        marginBottom: 10,
+    },
+    handleText: {
+        fontSize: 10,
+        fontWeight: 'bold',
+        color: Theme.PRIMARY_BLUE,
+    },
+    platformText: {
+        paddingTop: 4,
+        fontSize: 8,
+        color: Theme.SECONDARY_GRAY,
+    },
+
+    metricRow: {
         flexDirection: 'row',
-        borderBottomWidth: 0.5,
-        borderBottomColor: '#F3F4F6',
-        paddingBottom: 4,
+        justifyContent: 'space-between',
+        marginBottom: 10,
+        backgroundColor: Theme.BG_SECTION,
+        padding: 6,
+        borderRadius: 4,
     },
-    signalLabel: {
-        width: '30%',
+    metricItem: {
+        alignItems: 'center',
+    },
+    metricValue: {
         fontSize: 9,
+        fontWeight: 'bold',
+        color: Theme.PRIMARY_BLUE,
+    },
+    metricLabel: {
+        fontSize: 6,
+        color: Theme.SECONDARY_GRAY,
+        textTransform: 'uppercase',
+    },
+
+    dateRow: {
+        marginBottom: 12,
+    },
+    dateLabel: {
+        fontSize: 7,
         fontWeight: 'bold',
         color: Theme.SECONDARY_GRAY,
     },
-    signalValue: {
-        flex: 1,
-        fontSize: 9,
+    dateValue: {
+        fontSize: 8,
         color: Theme.PRIMARY_BLUE,
-        fontWeight: 'medium',
     },
-    signalValueRed: {
-        flex: 1,
-        fontSize: 9,
-        color: Theme.RED_ALERT,
-        fontWeight: 'medium',
+
+    // Violation Badges
+    violationGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 6,
     },
-    signalValueGreen: {
-        flex: 1,
-        fontSize: 9,
-        color: Theme.GREEN_SAFE,
-        fontWeight: 'medium',
+    violationBadge: {
+        paddingHorizontal: 6,
+        paddingVertical: 3,
+        borderRadius: 3,
+        borderWidth: 0.5,
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    violationText: {
+        fontSize: 7,
+        fontWeight: 'bold',
+    },
+
+    link: {
+        fontSize: 7,
+        color: '#3B82F6',
+        textDecoration: 'none',
+        marginTop: 4,
     },
 
     footer: {
         position: 'absolute',
-        bottom: 25,
-        left: 40,
-        right: 40,
+        bottom: 15,
+        left: 25,
+        right: 25,
         textAlign: 'center',
-        fontSize: 8,
+        fontSize: 6.5,
         color: Theme.SECONDARY_GRAY,
         borderTopWidth: 0.5,
         borderTopColor: Theme.BORDER_LIGHT,
-        paddingTop: 10,
+        paddingTop: 8,
     }
 });
 
-/**
- * Sanitizes text to only allow standard English (ASCII) and Emojis.
- */
-const sanitizeText = (text) => {
+const processText = (text, maxLength = 300) => {
     if (!text) return '';
-    return Array.from(text).map(char => {
-        const codePoint = char.codePointAt(0);
-        if ((codePoint >= 32 && codePoint <= 126) || codePoint === 10 || codePoint === 13 || codePoint === 9) {
-            return char;
-        }
-        const isEmoji = /[\u{1F300}-\u{1F5FF}\u{1F600}-\u{1F64F}\u{1F680}-\u{1F6FF}\u{1F900}-\u{1F9FF}\u{2600}-\u{27BF}\u{1F1E6}-\u{1F1FF}\u{FE00}-\u{FE0F}]/u.test(char);
-        if (isEmoji) return char;
-        return '[]';
+    let sanitized = Array.from(text).filter(char => {
+        const cp = char.codePointAt(0);
+        return (cp >= 32 && cp <= 126) || cp === 10 || cp === 13 || cp === 9 ||
+            /[\u{1F300}-\u{1F5FF}\u{1F600}-\u{1F64F}\u{1F680}-\u{1F6FF}\u{1F900}-\u{1F9FF}\u{2600}-\u{27BF}\u{1F1E6}-\u{1F1FF}\u{FE00}-\u{FE0F}]/u.test(char);
     }).join('');
+    return sanitized.length > maxLength ? sanitized.substring(0, maxLength) + '...' : sanitized;
 };
 
-const PageHeader = () => (
+const getRiskLabel = (score) => {
+    if (score >= 96) return { label: 'High Risk', color: Theme.RISK_HIGH, bg: '#FFF1F2' };
+    if (score >= 76) return { label: 'Medium Risk', color: Theme.RISK_MEDIUM, bg: '#FFF7ED' };
+    if (score >= 41) return { label: 'Low Risk', color: Theme.RISK_LOW, bg: '#FFFBEB' };
+    return { label: 'Safe Content', color: Theme.SAFE, bg: '#F8FAFC' };
+};
+
+const PageHeader = ({ caseId }) => (
     <View style={styles.header} fixed>
-        <View style={styles.headerLeft}>
+        <View>
             <Text style={styles.title}>OVERWATCH</Text>
-            <Text style={styles.subtitle}>Digital Intelligence & Compliance Report</Text>
         </View>
         <View style={styles.headerRight}>
-            <Text style={styles.headerInfo}>SECURED BY CONTRAILS AI</Text>
-            <Text style={[styles.headerInfo, { fontWeight: 'bold' }]}>{format(new Date(), 'dd/MM/yyyy')} IST</Text>
+            <Text style={styles.headerDate}>{format(new Date(), 'dd/MM/yyyy')}</Text>
+            <Text style={styles.headerID}>CASEREF: {String(caseId).toUpperCase()}</Text>
         </View>
     </View>
 );
 
 const PageFooter = () => (
     <Text style={styles.footer} fixed render={({ pageNumber, totalPages }) => (
-        `CONFIDENTIAL - PROPERTY OF CONTRAILS AI | PAGE ${pageNumber} OF ${totalPages}`
+        `CONFIDENTIAL DOCUMENT - PROPERTY OF CONTRAILS AI | PAGE ${pageNumber} OF ${totalPages}`
     )} />
 );
 
-export const SingleCaseReportDocument = ({ post, compressedImage }) => {
+export const SingleCaseReportDocument = ({ post, project, compressedImage }) => {
     const review = post.review_details || {};
     const analysis = post.analysis_results || {};
     const riskScore = review.threat_score ?? analysis.risk_score ?? 0;
+    const riskInfo = getRiskLabel(riskScore);
 
-    // Urgency Calculation
-    let urgency = "Low";
-    if (riskScore >= 90) urgency = "Critical";
-    else if (riskScore >= 75) urgency = "High";
-    else if (riskScore > 40) urgency = "Medium";
+    const reasoning = review.reasoning || analysis.categorization_reason || "Analyzed content for policy adherence.";
 
-    // Policy / Category
-    let category = (review.primary_threat_type || review.threat_type || analysis.category || 'General Violation').replace(/_/g, ' ');
+    // Active Violations Mapping
+    const projectLabels = project?.project_details?.labels || [];
+    const activeViolations = [];
 
-    const disclosureDate = post.sourcing_date?.["$date"] || post.sourcing_date || post.metadata?.sourcing_date?.["$date"] || new Date();
-    const discoveryFormatted = format(new Date(disclosureDate), 'dd/MM/yyyy, HH:mm') + ' IST';
+    projectLabels.forEach(label => {
+        if (review.flags?.[label.name] === true) {
+            const labelTitle = label.name.replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+            activeViolations.push({ title: labelTitle, severity: label.severity });
+        }
+    });
 
-    const isPoiPresent = review.flags?.poi_confirmed ?? (analysis.poi_check?.poi_name_found || analysis.poi_check?.face_present) ?? false;
-    const isAigc = review.flags?.is_aigc ?? analysis.aigc_check?.is_aigc ?? false;
-    const isHateSpeech = review.flags?.is_hate_speech ?? (analysis.hate_speech_check?.is_safe === false) ?? false;
-    const isNsfw = review.flags?.is_nsfw ?? (analysis.nsfw_check?.is_safe === false) ?? false;
-    const isFraud = review.flags?.is_fraud ?? (analysis.fraud_check?.is_fraud === true) ?? false;
-    const isAssetMisuse = review.flags?.is_asset_misuse ?? (analysis.asset_misuse_check?.is_asset_misuse === true) ?? false;
+    const legacyFlags = {
+        is_nsfw: "NSFW Content",
+        is_hate_speech: "Hate Speech",
+        is_fake_news: "Misinformation",
+        is_fraud: "Fraud",
+        is_asset_misuse: "Asset Misuse",
+        is_terrorism: "Terrorism",
+        is_violence: "Violence"
+    };
 
-    const harmStatement = review.notes || analysis.categorization_reason || "Analyzed content suggests a potential breach of community standards regarding " + category.toLowerCase() + ".";
+    Object.entries(legacyFlags).forEach(([key, title]) => {
+        if (review.flags?.[key] === true && !activeViolations.some(v => v.title === title)) {
+            activeViolations.push({ title, severity: 'medium' });
+        }
+    });
 
-    const riskColor = riskScore >= 75 ? Theme.RED_ALERT : riskScore > 40 ? Theme.AMBER_WARN : Theme.GREEN_SAFE;
+    // Dates & Metrics
+    let posted_date = "N/A";
+    let sourced_date = "N/A";
 
-    // Image URL Resolution: Try signed URL first, then fallbacks from various possible paths
-    const imageUrl = compressedImage || 
-                     post.signedImageUrl || 
-                     post.image_url || 
-                     (post.post_content?.media_urls?.[0]?.s3_url) || 
-                     (post.media_urls?.[0]?.s3_url) || 
-                     (post.post_content?.media_urls?.[0]?.original_url) || 
-                     null;
+    if (post.posted_date) posted_date = format(new Date(post.posted_date), "dd/MM/yyyy");
+    else if (post.metadata?.posted_date) posted_date = format(new Date(post.metadata.posted_date), "dd/MM/yyyy");
+    else if (post.timestamp) posted_date = format(new Date(post.timestamp), "dd/MM/yyyy");
+    else if (post.sourcing_date) posted_date = format(new Date(post.sourcing_date), "dd/MM/yyyy");
+
+    if (post.metadata?.created_at) sourced_date = format(new Date(post.metadata.created_at), "dd/MM/yyyy");
+    else if (post.created_at) sourced_date = format(new Date(post.created_at), "dd/MM/yyyy");
+
+    const stats = post.stats || {};
+    const imageUrl = compressedImage || post.signedImageUrl || post.image_url || null;
+
     return (
-        <Document title={`Report_${post._id}`}>
-            {/* PAGE 1: PRIMARY EVIDENCE */}
+        <Document title={`CaseExport_${post._id}`}>
             <Page size="A4" style={styles.page}>
-                <PageHeader />
+                <PageHeader caseId={post._id} />
 
-                {/* Section 1: Case Overview */}
-                <Text style={styles.sectionHeader}>CASE OVERVIEW</Text>
-                <View style={styles.grid}>
-                    <View style={styles.field}>
-                        <Text style={styles.label}>Internal Case ID</Text>
-                        <Text style={styles.valueBold}>{sanitizeText(String(post._id))}</Text>
-                    </View>
-                    <View style={styles.field}>
-                        <Text style={styles.label}>Platform</Text>
-                        <Text style={[styles.valueBold, { textTransform: 'capitalize' }]}>{sanitizeText(post.platform)}</Text>
-                    </View>
-                    <View style={styles.field}>
-                        <Text style={styles.label}>Date & Time of Discovery</Text>
-                        <Text style={styles.value}>{sanitizeText(discoveryFormatted)}</Text>
-                    </View>
-                    <View style={styles.field}>
-                        <Text style={styles.label}>Urgency Level</Text>
-                        <Text style={[styles.valueBold, { color: riskColor }]}>
-                            {urgency}
-                        </Text>
+                {/* SECTION 1: ANALYSIS & REVIEW */}
+                <View style={styles.topSection}>
+                    <Text style={styles.sectionLabel}>Analysis & Review</Text>
+                    <View style={styles.reviewCard}>
+                        <View style={styles.riskBox}>
+                            <Text style={[styles.riskLabel, { color: riskInfo.color }]}>{riskInfo.label}</Text>
+                            <Text style={styles.reasoningText}>{processText(reasoning, 220)}</Text>
+                        </View>
                     </View>
                 </View>
 
-                {/* Section 2: Violation Details */}
-                <Text style={styles.sectionHeader}>VIOLATION DETAILS</Text>
-                <View style={styles.grid}>
-                    <View style={styles.fullField}>
-                        <Text style={styles.label}>Direct Link to Post/Video</Text>
+                {/* SECTION 2: CONTENT & INTELLIGENCE */}
+                <View style={styles.splitSection}>
+                    {/* LEFT: VISUALS */}
+                    <View style={styles.leftCol}>
+                        <Text style={styles.sectionLabel}>Visual Evidence</Text>
+                        {imageUrl && (
+                            <View style={styles.imageWrapper}>
+                                <Image src={imageUrl} style={styles.evidenceImage} />
+                            </View>
+                        )}
+                        <View style={styles.captionBox}>
+                            <Text style={styles.captionText}>{processText(post.caption || post.content || "Empty content field.", 400)}</Text>
+                        </View>
+                    </View>
+
+                    {/* RIGHT: TARGET DISCOVERY */}
+                    <View style={styles.rightCol}>
+                        <Text style={styles.sectionLabel}>Target Entity</Text>
+                        <View style={styles.entityInfo}>
+                            <Text style={styles.handleText}>@{post.user?.username || 'unknown'}</Text>
+                            <Text style={styles.platformText}>Source Platform: {post.platform.toUpperCase()}</Text>
+                        </View>
+
+                        <Text style={styles.sectionLabel}>Engagement Stats</Text>
+                        <View style={styles.metricRow}>
+                            <View style={styles.metricItem}>
+                                <Text style={styles.metricValue}>{stats.like_count ? stats.like_count.toLocaleString() : '0'}</Text>
+                                <Text style={styles.metricLabel}>Likes</Text>
+                            </View>
+                            <View style={styles.metricItem}>
+                                <Text style={styles.metricValue}>{stats.comment_count ? stats.comment_count.toLocaleString() : '0'}</Text>
+                                <Text style={styles.metricLabel}>Comments</Text>
+                            </View>
+                            {
+                                stats.share_count && stats.share_count !== 0 &&
+                                <View style={styles.metricItem}>
+                                    <Text style={styles.metricValue}>{stats.share_count ? stats.share_count.toLocaleString() : '0'}</Text>
+                                    <Text style={styles.metricLabel}>Shares</Text>
+                                </View>
+                            }
+                            {
+                                stats.view_count && stats.view_count !== 0 &&
+                                <View style={styles.metricItem}>
+                                    <Text style={styles.metricValue}>{stats.view_count ? stats.view_count.toLocaleString() : '0'}</Text>
+                                    <Text style={styles.metricLabel}>Views</Text>
+                                </View>
+                            }
+                        </View>
+
+                        <View style={styles.dateRow}>
+                            <Text style={styles.dateLabel}>DATE POSTED</Text>
+                            <Text style={styles.dateValue}>{posted_date}</Text>
+                        </View>
+                        <View style={styles.dateRow}>
+                            <Text style={styles.dateLabel}>DATE SOURCED</Text>
+                            <Text style={styles.dateValue}>{sourced_date}</Text>
+                        </View>
+
+                        <Text style={styles.sectionLabel}>Violations Detected</Text>
+                        {activeViolations.length > 0 ? (
+                            <View style={styles.violationGrid}>
+                                {activeViolations.map((v, i) => {
+                                    const vColor = v.severity === 'high' ? Theme.RISK_HIGH : v.severity === 'medium' ? Theme.RISK_MEDIUM : Theme.RISK_LOW;
+                                    return (
+                                        <View key={i} style={[styles.violationBadge, { borderColor: vColor + '40', backgroundColor: vColor + '10' }]}>
+                                            <Text style={[styles.violationText, { color: vColor }]}>{v.title}</Text>
+                                        </View>
+                                    );
+                                })}
+                            </View>
+                        ) : (
+                            <Text style={{ fontSize: 7, color: Theme.SECONDARY_GRAY, italic: true }}>No specific violations flagged.</Text>
+                        )}
+
+                        <Text style={[styles.sectionLabel, { marginTop: 15 }]}>Primary URL</Text>
                         <Link src={post.original_url || post.url || "#"} style={styles.link}>
-                            {sanitizeText(post.original_url || post.url || "N/A")}
+                            {processText(post.original_url || post.url || "N/A", 50)}
                         </Link>
                     </View>
-                    <View style={styles.field}>
-                        <Text style={styles.label}>Target User/Handle</Text>
-                        <Link src={post.user?.url || "#"} style={styles.link}>
-                            @{sanitizeText(post.user?.username || 'unknown')}
-                        </Link>
-                    </View>
-                    <View style={styles.field}>
-                        <Text style={styles.label}>Specific Policy Violated</Text>
-                        <Text style={[styles.valueBold, { textTransform: 'capitalize' }]}>{sanitizeText(category)}</Text>
-                    </View>
                 </View>
-
-                {/* Section 3: Content Evidence */}
-                <Text style={styles.sectionHeader}>CONTENT EVIDENCE</Text>
-
-                <View style={styles.evidenceContainer}>
-                    {imageUrl && (
-                        <View style={styles.imageWrapper} wrap={false}>
-                            <Image
-                                src={imageUrl}
-                                style={styles.evidenceImage}
-                            />
-                        </View>
-                    )}
-                    <View style={{ width: '100%' }}>
-                        <Text style={styles.label}>Transcript / Description Summary</Text>
-                        <View style={styles.formalTextBox}>
-                            <Text style={styles.textDescription}>{sanitizeText(post.caption || post.content || "No transcript available.")}</Text>
-                        </View>
-                    </View>
-                </View>
-
-                <PageFooter />
-            </Page>
-
-            {/* PAGE 2: INTELLIGENCE & OBSERVATIONS */}
-            <Page size="A4" style={styles.page}>
-                <PageHeader />
-
-                {/* Section 4: Intelligence & Analyst Observations */}
-                <Text style={styles.sectionHeader}>INTELLIGENCE & ANALYST OBSERVATIONS</Text>
-
-                <View style={styles.grid}>
-                    <View style={styles.field}>
-                        <Text style={styles.label}>Consolidated Risk Index</Text>
-                        <View style={styles.riskRow}>
-                            <Text style={[styles.riskTag, { backgroundColor: riskColor }]}>{riskScore}/100</Text>
-                            <Text style={[styles.valueBold, { textTransform: 'uppercase' }]}>{urgency} Risk</Text>
-                        </View>
-                    </View>
-                    <View style={styles.field}>
-                        <Text style={styles.label}>Violation Category</Text>
-                        <Text style={[styles.valueBold, { textTransform: 'capitalize' }]}>{category}</Text>
-                    </View>
-                </View>
-
-                {/* Harm Statement */}
-                <View style={styles.fullField}>
-                    <Text style={styles.label}>Potential Harm Statement</Text>
-                    <View style={[styles.formalTextBox, { borderLeftWidth: 2, borderLeftColor: Theme.RED_ALERT }]}>
-                        <Text style={styles.textDescription}>{sanitizeText(harmStatement)}</Text>
-                    </View>
-                </View>
-
-                {/* Detection Signals */}
-                <View style={styles.fullField}>
-                    <Text style={styles.label}>Automated Detection Signals</Text>
-                    <View style={styles.signalsList}>
-                        <View style={styles.signalEntry}>
-                            <Text style={styles.signalLabel}>POI Identification:</Text>
-                            <Text style={styles.signalValue}>{isPoiPresent ? (analysis.poi_check?.poi_names?.join(', ') || 'Identified') : 'Negative'}</Text>
-                        </View>
-                        <View style={styles.signalEntry}>
-                            <Text style={styles.signalLabel}>AI Synthetic Media:</Text>
-                            <Text style={isAigc ? styles.signalValueRed : styles.signalValueGreen}>{isAigc ? 'Positive' : 'Negative'}</Text>
-                        </View>
-                        <View style={styles.signalEntry}>
-                            <Text style={styles.signalLabel}>Hate Speech Flag:</Text>
-                            <Text style={isHateSpeech ? styles.signalValueRed : styles.signalValueGreen}>{isHateSpeech ? 'Positive' : 'Negative'}</Text>
-                        </View>
-                        <View style={styles.signalEntry}>
-                            <Text style={styles.signalLabel}>Adult Content:</Text>
-                            <Text style={isNsfw ? styles.signalValueRed : styles.signalValueGreen}>{isNsfw ? 'Positive' : 'Negative'}</Text>
-                        </View>
-                        <View style={styles.signalEntry}>
-                            <Text style={styles.signalLabel}>Financial Fraud:</Text>
-                            <Text style={isFraud ? styles.signalValueRed : styles.signalValueGreen}>{isFraud ? 'Positive' : 'Negative'}</Text>
-                        </View>
-                        <View style={styles.signalEntry}>
-                            <Text style={styles.signalLabel}>Asset Misuse:</Text>
-                            <Text style={isAssetMisuse ? styles.signalValueRed : styles.signalValueGreen}>{isAssetMisuse ? 'Positive' : 'Negative'}</Text>
-                        </View>
-                    </View>
-                </View>
-
-                {/* Reviewer Note (Formalized) */}
-                {review.reviewer_comments && (
-                    <View style={[styles.fullField, { marginTop: 10 }]}>
-                        <Text style={styles.label}>Reviewer Observations & Recommendations</Text>
-                        <View style={styles.formalTextBox}>
-                            <Text style={styles.textDescription}>{sanitizeText(review.reviewer_comments)}</Text>
-                        </View>
-                        <Text style={[styles.headerInfo, { marginTop: 8, fontSize: 8 }]}>
-                            Verified by Overwatch Compliance Analyst on {discoveryFormatted}
-                        </Text>
-                    </View>
-                )}
 
                 <PageFooter />
             </Page>

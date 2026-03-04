@@ -5,7 +5,7 @@ import clientPromise from '@/utils/mongodb/client'
 import { redirect } from 'next/navigation'
 import { ObjectId } from 'mongodb'
 import { getSignedImageUrl } from '@/utils/aws/s3'
-import { updateDailyMetrics, manageTakedownCase } from '@/utils/supabase/metrics'
+import { updateDailyMetrics } from '@/utils/supabase/metrics'
 import { sendEmail } from '@/utils/email'
 import { traceAction } from '@/utils/tracing'
 
@@ -365,7 +365,7 @@ export const submitCaseReview = traceAction('submitCaseReview', async (prevState
 
   const { data: project } = await supabase
     .from('project')
-    .select('mongo_db_map')
+    .select('project_name, mongo_db_map')
     .eq('project_name', client_details.project_name)
     .single()
 
@@ -449,12 +449,15 @@ export const submitCaseReview = traceAction('submitCaseReview', async (prevState
       return { success: false, error: 'Post not found' }
     }
 
-    // Check if it was previously reviewed today to handle metrics updates correctly
-    // If processed=true and review_details exist, we treat it as an update
-    const previousReviewData = existingPost.processed && existingPost.review_details ? {
-      threat_score: existingPost.review_details.threat_score,
-      threat_types: existingPost.review_details.threat_types || [existingPost.review_details.primary_threat_type || existingPost.review_details.threat_type], // Handle backward compat
-      // is_in_takedown: existingPost.takedown_info?.is_in_takedown, // This metrics should only be updated when the client approves the takedown request
+    // Check if it was previously reviewed to handle metrics updates correctly
+    // We only treat it as an update if it has a valid threat_score from a previous session
+    const prevReview = existingPost.review_details;
+    const isPreviouslyReviewed = existingPost.processed && prevReview && prevReview.threat_score !== undefined;
+
+    const previousReviewData = isPreviouslyReviewed ? {
+      threat_score: prevReview.threat_score,
+      threat_types: prevReview.threat_types || [prevReview.primary_threat_type || prevReview.threat_type], // Handle backward compat
+      is_aigc: prevReview.is_aigc,
       platform: existingPost.platform
     } : null
 
