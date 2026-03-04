@@ -1,6 +1,6 @@
 import React from 'react';
 import { Page, Text, View, Document, StyleSheet, Image, Link } from '@react-pdf/renderer';
-import { format } from 'date-fns';
+import { format, isValid, parseISO } from 'date-fns';
 import { registerFonts } from './fontRegistration';
 
 // --- FONT REGISTRATION ---
@@ -15,14 +15,14 @@ const Theme = {
     RISK_HIGH: '#F43F5E',
     RISK_MEDIUM: '#F97316',
     RISK_LOW: '#F59E0B',
-    SAFE: '#64748B',
+    SAFE: '#10B981', // Changed safe to a clear green
 };
 
 const styles = StyleSheet.create({
     page: {
-        paddingTop: 25,
-        paddingHorizontal: 25,
-        paddingBottom: 35,
+        paddingTop: 30,
+        paddingHorizontal: 30,
+        paddingBottom: 40,
         fontFamily: 'Outfit',
         backgroundColor: '#FFFFFF',
     },
@@ -32,8 +32,8 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         borderBottomWidth: 1,
         borderBottomColor: Theme.BORDER_LIGHT,
-        paddingBottom: 8,
-        marginBottom: 12,
+        paddingBottom: 12,
+        marginBottom: 16,
     },
     title: {
         fontSize: 18,
@@ -45,7 +45,7 @@ const styles = StyleSheet.create({
         fontSize: 7,
         color: Theme.SECONDARY_GRAY,
         textTransform: 'uppercase',
-        letterSpacing: 2,
+        letterSpacing: 1.5,
     },
     headerRight: {
         alignItems: 'flex-end',
@@ -62,57 +62,72 @@ const styles = StyleSheet.create({
         marginTop: 2,
     },
 
-    // Layout Sections - Minimized Gaps
-    topSection: {
-        marginBottom: 12,
+    // --- TOP BANNER (Details + Risk) ---
+    topBanner: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        backgroundColor: Theme.BG_SECTION,
+        padding: 12,
+        borderRadius: 6,
+        borderWidth: 0.5,
+        borderColor: Theme.BORDER_LIGHT,
+        marginBottom: 16,
     },
+    bannerLeft: {
+        width: '65%',
+        flexDirection: 'column',
+        gap: 6,
+    },
+    bannerRight: {
+        width: '30%',
+        alignItems: 'flex-end',
+        justifyContent: 'center',
+    },
+
+    // Risk Badge
+    riskBadgeLarge: {
+        paddingVertical: 10,
+        paddingHorizontal: 16,
+        borderRadius: 6,
+        borderWidth: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: '100%',
+    },
+    riskBadgeText: {
+        fontSize: 14,
+        fontWeight: '900',
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+    },
+
+    // --- SPLIT LAYOUT ---
     splitSection: {
         flexDirection: 'row',
-        gap: 15,
+        justifyContent: 'space-between',
     },
     leftCol: {
-        width: '58%',
+        width: '55%',
+        flexDirection: 'column',
+        gap: 12,
     },
     rightCol: {
-        width: '38%',
+        width: '40%',
+        flexDirection: 'column',
+        gap: 12,
     },
 
     sectionLabel: {
-        fontSize: 7,
+        fontSize: 8,
         fontWeight: '900',
         color: Theme.SECONDARY_GRAY,
         textTransform: 'uppercase',
         letterSpacing: 1,
-        marginBottom: 4,
+        marginBottom: 6,
     },
 
-    // Analysis Top Box
-    reviewCard: {
-        backgroundColor: Theme.BG_SECTION,
-        borderWidth: 0.5,
-        borderColor: Theme.BORDER_LIGHT,
-        borderRadius: 6,
-        padding: 10,
-        flexDirection: 'column',
-        gap: 8,
-    },
-    riskBox: {
-        flexDirection: 'column',
-    },
-    riskLabel: {
-        fontSize: 14,
-        fontWeight: '900',
-        textTransform: 'uppercase',
-    },
-
-    reasoningText: {
-        fontSize: 8,
-        lineHeight: 1.5,
-        color: '#334155',
-        marginTop: 4,
-    },
-
-    // Media
+    // --- LEFT COL ITEMS ---
     imageWrapper: {
         borderWidth: 0.5,
         borderColor: Theme.BORDER_LIGHT,
@@ -120,141 +135,204 @@ const styles = StyleSheet.create({
         overflow: 'hidden',
         backgroundColor: '#0F172A',
         width: '100%',
-        marginBottom: 8,
     },
     evidenceImage: {
         width: '100%',
-        height: 200,
+        height: 220,
         objectFit: 'contain',
     },
-    captionBox: {
-        padding: 8,
-        backgroundColor: '#FFFFFF',
-        borderWidth: 0.5,
-        borderColor: Theme.BORDER_LIGHT,
-        borderRadius: 4,
-    },
-    captionText: {
-        fontSize: 7.5,
-        lineHeight: 1.4,
-        color: '#475569',
-    },
-
-    // Right Col Items
-    entityInfo: {
-        marginBottom: 10,
-    },
-    handleText: {
-        fontSize: 10,
-        fontWeight: 'bold',
-        color: Theme.PRIMARY_BLUE,
-    },
-    platformText: {
-        paddingTop: 4,
-        fontSize: 8,
-        color: Theme.SECONDARY_GRAY,
-    },
-
     metricRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        marginBottom: 10,
         backgroundColor: Theme.BG_SECTION,
-        padding: 6,
-        borderRadius: 4,
+        padding: 8,
+        borderRadius: 6,
+        borderWidth: 0.5,
+        borderColor: Theme.BORDER_LIGHT,
     },
     metricItem: {
         alignItems: 'center',
     },
     metricValue: {
-        fontSize: 9,
-        fontWeight: 'bold',
+        fontSize: 10,
+        fontWeight: '900',
         color: Theme.PRIMARY_BLUE,
     },
     metricLabel: {
         fontSize: 6,
         color: Theme.SECONDARY_GRAY,
         textTransform: 'uppercase',
+        marginTop: 2,
     },
-
-    dateRow: {
-        marginBottom: 12,
+    contentBox: {
+        padding: 10,
+        backgroundColor: Theme.BG_SECTION,
+        borderWidth: 0.5,
+        borderColor: Theme.BORDER_LIGHT,
+        borderRadius: 6,
     },
-    dateLabel: {
-        fontSize: 7,
-        fontWeight: 'bold',
-        color: Theme.SECONDARY_GRAY,
-    },
-    dateValue: {
+    contentText: {
         fontSize: 8,
+        lineHeight: 1.5,
         color: Theme.PRIMARY_BLUE,
     },
 
-    // Violation Badges
+    // --- RIGHT COL ITEMS ---
+    analysisBox: {
+        padding: 12,
+        backgroundColor: '#FFFFFF',
+        borderWidth: 0.5,
+        borderColor: Theme.BORDER_LIGHT,
+        borderRadius: 6,
+    },
+    reasoningText: {
+        fontSize: 8.5,
+        lineHeight: 1.6,
+        color: Theme.PRIMARY_BLUE,
+        marginTop: 8,
+    },
     violationGrid: {
         flexDirection: 'row',
         flexWrap: 'wrap',
         gap: 6,
     },
     violationBadge: {
-        paddingHorizontal: 6,
-        paddingVertical: 3,
-        borderRadius: 3,
-        borderWidth: 0.5,
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 4,
+        borderWidth: 1,
         flexDirection: 'row',
         alignItems: 'center',
     },
     violationText: {
-        fontSize: 7,
+        fontSize: 7.5,
+        fontWeight: '900',
+        textTransform: 'uppercase',
+    },
+    commentsBox: {
+        padding: 10,
+        backgroundColor: '#FFFBEB', // Light yellow tint for notes
+        borderWidth: 0.5,
+        borderColor: '#FDE68A',
+        borderRadius: 6,
+    },
+    commentText: {
+        fontSize: 8,
+        lineHeight: 1.5,
+        color: '#92400E',
+        // fontStyle: 'italic',
+    },
+    singleComment: {
+        marginBottom: 6,
+    },
+    commentMeta: {
+        fontSize: 6,
+        color: '#B45309', // slightly darker orange/brown
+        marginTop: 2,
         fontWeight: 'bold',
     },
-
-    link: {
-        fontSize: 7,
-        color: '#3B82F6',
-        textDecoration: 'none',
-        marginTop: 4,
+    commentDivider: {
+        borderBottomWidth: 0.5,
+        borderBottomColor: '#FCD34D',
+        marginVertical: 4,
     },
 
+    // --- TYPOGRAPHY HELPERS ---
+    detailRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+    },
+    detailLabel: {
+        fontSize: 7,
+        fontWeight: 'bold',
+        color: Theme.SECONDARY_GRAY,
+        width: 65,
+        textTransform: 'uppercase',
+    },
+    detailValue: {
+        fontSize: 8,
+        color: Theme.PRIMARY_BLUE,
+        fontWeight: 'bold',
+    },
+    link: {
+        fontSize: 8,
+        color: '#3B82F6',
+        textDecoration: 'none',
+    },
     footer: {
         position: 'absolute',
-        bottom: 15,
-        left: 25,
-        right: 25,
+        bottom: 20,
+        left: 30,
+        right: 30,
         textAlign: 'center',
         fontSize: 6.5,
         color: Theme.SECONDARY_GRAY,
         borderTopWidth: 0.5,
         borderTopColor: Theme.BORDER_LIGHT,
-        paddingTop: 8,
+        paddingTop: 10,
     }
 });
 
-const processText = (text, maxLength = 300) => {
+// --- UTILS ---
+const processText = (text, maxLength = 500, maxLines = null) => {
     if (!text) return '';
     let sanitized = Array.from(text).filter(char => {
         const cp = char.codePointAt(0);
         return (cp >= 32 && cp <= 126) || cp === 10 || cp === 13 || cp === 9 ||
             /[\u{1F300}-\u{1F5FF}\u{1F600}-\u{1F64F}\u{1F680}-\u{1F6FF}\u{1F900}-\u{1F9FF}\u{2600}-\u{27BF}\u{1F1E6}-\u{1F1FF}\u{FE00}-\u{FE0F}]/u.test(char);
     }).join('');
-    return sanitized.length > maxLength ? sanitized.substring(0, maxLength) + '...' : sanitized;
+
+    let result = sanitized;
+    let truncated = false;
+
+    if (maxLines) {
+        const lines = result.split(/\r\n|\r|\n/);
+        if (lines.length > maxLines) {
+            result = lines.slice(0, maxLines).join('\n');
+            truncated = true;
+        }
+    }
+
+    if (result.length > maxLength) {
+        result = result.substring(0, maxLength);
+        truncated = true;
+    }
+
+    return truncated ? result.trim() + '...' : result;
+};
+
+const formatCompleteDate = (dateInput) => {
+    if (!dateInput) return "N/A";
+    try {
+        const dateObj = typeof dateInput === 'string' ? parseISO(dateInput) : new Date(dateInput);
+        if (isValid(dateObj)) {
+            // Displays: 02 Mar 2026, 02:30 PM
+            return format(dateObj, "dd MMM yyyy, hh:mm a");
+        }
+    } catch (error) {
+        return "N/A";
+    }
+    return "N/A";
 };
 
 const getRiskLabel = (score) => {
     if (score >= 96) return { label: 'High Risk', color: Theme.RISK_HIGH, bg: '#FFF1F2' };
     if (score >= 76) return { label: 'Medium Risk', color: Theme.RISK_MEDIUM, bg: '#FFF7ED' };
     if (score >= 41) return { label: 'Low Risk', color: Theme.RISK_LOW, bg: '#FFFBEB' };
-    return { label: 'Safe Content', color: Theme.SAFE, bg: '#F8FAFC' };
+    return { label: 'Safe Content', color: Theme.SAFE, bg: '#ECFDF5' };
 };
 
+// --- SUB-COMPONENTS ---
 const PageHeader = ({ caseId }) => (
     <View style={styles.header} fixed>
         <View>
             <Text style={styles.title}>OVERWATCH</Text>
+            <Text style={styles.subtitle}>Threat Intelligence Platform</Text>
         </View>
         <View style={styles.headerRight}>
-            <Text style={styles.headerDate}>{format(new Date(), 'dd/MM/yyyy')}</Text>
-            <Text style={styles.headerID}>CASEREF: {String(caseId).toUpperCase()}</Text>
+            <Text style={styles.headerDate}>{formatCompleteDate(new Date())} </Text>
+            <Text style={styles.headerID}>CASE-ID: {String(caseId).toUpperCase()}</Text>
         </View>
     </View>
 );
@@ -265,13 +343,14 @@ const PageFooter = () => (
     )} />
 );
 
-export const SingleCaseReportDocument = ({ post, project, compressedImage }) => {
+// --- MAIN DOCUMENT ---
+export const SingleCasePage = ({ post, project, compressedImage }) => {
     const review = post.review_details || {};
     const analysis = post.analysis_results || {};
     const riskScore = review.threat_score ?? analysis.risk_score ?? 0;
     const riskInfo = getRiskLabel(riskScore);
 
-    const reasoning = review.reasoning || analysis.categorization_reason || "Analyzed content for policy adherence.";
+    const reasoning = review.reasoning || analysis.categorization_reason || "Analyzed content for policy adherence. No detailed reasoning provided.";
 
     // Active Violations Mapping
     const projectLabels = project?.project_details?.labels || [];
@@ -301,59 +380,88 @@ export const SingleCaseReportDocument = ({ post, project, compressedImage }) => 
     });
 
     // Dates & Metrics
-    let posted_date = "N/A";
-    let sourced_date = "N/A";
-
-    if (post.posted_date) posted_date = format(new Date(post.posted_date), "dd/MM/yyyy");
-    else if (post.metadata?.posted_date) posted_date = format(new Date(post.metadata.posted_date), "dd/MM/yyyy");
-    else if (post.timestamp) posted_date = format(new Date(post.timestamp), "dd/MM/yyyy");
-    else if (post.sourcing_date) posted_date = format(new Date(post.sourcing_date), "dd/MM/yyyy");
-
-    if (post.metadata?.created_at) sourced_date = format(new Date(post.metadata.created_at), "dd/MM/yyyy");
-    else if (post.created_at) sourced_date = format(new Date(post.created_at), "dd/MM/yyyy");
+    const posted_date = formatCompleteDate(post.posted_date || post.metadata?.posted_date || post.timestamp || post.sourcing_date);
+    const sourced_date = formatCompleteDate(post.metadata?.created_at || post.created_at);
 
     const stats = post.stats || {};
     const imageUrl = compressedImage || post.signedImageUrl || post.image_url || null;
 
-    return (
-        <Document title={`CaseExport_${post._id}`}>
-            <Page size="A4" style={styles.page}>
-                <PageHeader caseId={post._id} />
+    // Safely parse client notes/comments
+    let parsedComments = [];
+    const rawComments = post.client_notes || post.notes || post.comments;
 
-                {/* SECTION 1: ANALYSIS & REVIEW */}
-                <View style={styles.topSection}>
-                    <Text style={styles.sectionLabel}>Analysis & Review</Text>
-                    <View style={styles.reviewCard}>
-                        <View style={styles.riskBox}>
-                            <Text style={[styles.riskLabel, { color: riskInfo.color }]}>{riskInfo.label}</Text>
-                            <Text style={styles.reasoningText}>{processText(reasoning, 220)}</Text>
-                        </View>
+    if (Array.isArray(rawComments)) {
+        parsedComments = rawComments;
+    } else if (typeof rawComments === 'string') {
+        try {
+            parsedComments = JSON.parse(rawComments);
+        } catch (e) {
+            // If it fails to parse but isn't empty, treat it as a plain text comment
+            if (rawComments.trim().length > 0 && rawComments !== '[]') {
+                parsedComments = [{ text: rawComments }];
+            }
+        }
+    }
+    // Fallbacks for client comments/notes
+    // const clientNotes = post.client_notes || post.notes || post.comments || "No client notes or comments provided for this case.";
+
+    return (
+        <Page size="A4" style={styles.page}>
+            <PageHeader caseId={post._id} />
+
+            {/* --- SECTION 1: TOP BANNER --- */}
+            <View style={styles.topBanner}>
+                <View style={styles.bannerLeft}>
+                    <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>Account:</Text>
+                        <Text style={styles.detailValue}>@{post.user?.username || 'unknown'}</Text>
+                    </View>
+                    <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>Platform:</Text>
+                        <Text style={styles.detailValue}>{(post.platform || 'Unknown').toUpperCase()}</Text>
+                    </View>
+                    <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>URL:</Text>
+                        <Link src={post.original_url || post.url || "#"} style={styles.link}>
+                            {processText(post.original_url || post.url || "N/A", 60)}
+                        </Link>
+                    </View>
+                    <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>Posted:</Text>
+                        <Text style={styles.detailValue}>{posted_date}</Text>
+                    </View>
+                    <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>Sourced:</Text>
+                        <Text style={styles.detailValue}>{sourced_date}</Text>
                     </View>
                 </View>
 
-                {/* SECTION 2: CONTENT & INTELLIGENCE */}
-                <View style={styles.splitSection}>
-                    {/* LEFT: VISUALS */}
-                    <View style={styles.leftCol}>
+                <View style={styles.bannerRight}>
+                    <View style={[styles.riskBadgeLarge, { backgroundColor: riskInfo.bg, borderColor: riskInfo.color }]}>
+                        <Text style={[styles.riskBadgeText, { color: riskInfo.color }]}>{riskInfo.label}</Text>
+                    </View>
+                </View>
+            </View>
+
+            {/* --- SECTION 2: SPLIT CONTENT & ANALYSIS --- */}
+            <View style={styles.splitSection}>
+
+                {/* LEFT COL: CONTENT DETAILS */}
+                <View style={styles.leftCol}>
+                    <View>
                         <Text style={styles.sectionLabel}>Visual Evidence</Text>
-                        {imageUrl && (
+                        {imageUrl ? (
                             <View style={styles.imageWrapper}>
                                 <Image src={imageUrl} style={styles.evidenceImage} />
                             </View>
+                        ) : (
+                            <View style={[styles.imageWrapper, { height: 100, justifyContent: 'center', alignItems: 'center' }]}>
+                                <Text style={{ color: Theme.SECONDARY_GRAY, fontSize: 8 }}>No Image Available</Text>
+                            </View>
                         )}
-                        <View style={styles.captionBox}>
-                            <Text style={styles.captionText}>{processText(post.caption || post.content || "Empty content field.", 400)}</Text>
-                        </View>
                     </View>
 
-                    {/* RIGHT: TARGET DISCOVERY */}
-                    <View style={styles.rightCol}>
-                        <Text style={styles.sectionLabel}>Target Entity</Text>
-                        <View style={styles.entityInfo}>
-                            <Text style={styles.handleText}>@{post.user?.username || 'unknown'}</Text>
-                            <Text style={styles.platformText}>Source Platform: {post.platform.toUpperCase()}</Text>
-                        </View>
-
+                    <View>
                         <Text style={styles.sectionLabel}>Engagement Stats</Text>
                         <View style={styles.metricRow}>
                             <View style={styles.metricItem}>
@@ -364,56 +472,99 @@ export const SingleCaseReportDocument = ({ post, project, compressedImage }) => 
                                 <Text style={styles.metricValue}>{stats.comment_count ? stats.comment_count.toLocaleString() : '0'}</Text>
                                 <Text style={styles.metricLabel}>Comments</Text>
                             </View>
-                            {
-                                stats.share_count && stats.share_count !== 0 &&
+                            {stats.share_count !== undefined && (
                                 <View style={styles.metricItem}>
-                                    <Text style={styles.metricValue}>{stats.share_count ? stats.share_count.toLocaleString() : '0'}</Text>
+                                    <Text style={styles.metricValue}>{stats.share_count.toLocaleString()}</Text>
                                     <Text style={styles.metricLabel}>Shares</Text>
                                 </View>
-                            }
-                            {
-                                stats.view_count && stats.view_count !== 0 &&
+                            )}
+                            {stats.view_count !== undefined && (
                                 <View style={styles.metricItem}>
-                                    <Text style={styles.metricValue}>{stats.view_count ? stats.view_count.toLocaleString() : '0'}</Text>
+                                    <Text style={styles.metricValue}>{stats.view_count.toLocaleString()}</Text>
                                     <Text style={styles.metricLabel}>Views</Text>
                                 </View>
-                            }
+                            )}
                         </View>
+                    </View>
 
-                        <View style={styles.dateRow}>
-                            <Text style={styles.dateLabel}>DATE POSTED</Text>
-                            <Text style={styles.dateValue}>{posted_date}</Text>
+                    <View>
+                        <Text style={styles.sectionLabel}>Caption / Content</Text>
+                        <View style={styles.contentBox}>
+                            <Text style={styles.contentText}>
+                                {processText(post.caption || post.content || "Empty content field.", 600, 16)}
+                            </Text>
                         </View>
-                        <View style={styles.dateRow}>
-                            <Text style={styles.dateLabel}>DATE SOURCED</Text>
-                            <Text style={styles.dateValue}>{sourced_date}</Text>
-                        </View>
-
-                        <Text style={styles.sectionLabel}>Violations Detected</Text>
-                        {activeViolations.length > 0 ? (
-                            <View style={styles.violationGrid}>
-                                {activeViolations.map((v, i) => {
-                                    const vColor = v.severity === 'high' ? Theme.RISK_HIGH : v.severity === 'medium' ? Theme.RISK_MEDIUM : Theme.RISK_LOW;
-                                    return (
-                                        <View key={i} style={[styles.violationBadge, { borderColor: vColor + '40', backgroundColor: vColor + '10' }]}>
-                                            <Text style={[styles.violationText, { color: vColor }]}>{v.title}</Text>
-                                        </View>
-                                    );
-                                })}
-                            </View>
-                        ) : (
-                            <Text style={{ fontSize: 7, color: Theme.SECONDARY_GRAY, italic: true }}>No specific violations flagged.</Text>
-                        )}
-
-                        <Text style={[styles.sectionLabel, { marginTop: 15 }]}>Primary URL</Text>
-                        <Link src={post.original_url || post.url || "#"} style={styles.link}>
-                            {processText(post.original_url || post.url || "N/A", 50)}
-                        </Link>
                     </View>
                 </View>
 
-                <PageFooter />
-            </Page>
+                {/* RIGHT COL: ANALYSIS & THREATS */}
+                <View style={styles.rightCol}>
+
+                    <View>
+                        <Text style={styles.sectionLabel}>Violations Identified</Text>
+                        <View style={styles.analysisBox}>
+                            {activeViolations.length > 0 ? (
+                                <View style={styles.violationGrid}>
+                                    {activeViolations.map((v, i) => {
+                                        const vColor = v.severity === 'high' ? Theme.RISK_HIGH : v.severity === 'medium' ? Theme.RISK_MEDIUM : Theme.RISK_LOW;
+                                        return (
+                                            <View key={i} style={[styles.violationBadge, { borderColor: vColor, backgroundColor: vColor + '15' }]}>
+                                                <Text style={[styles.violationText, { color: vColor }]}>{v.title}</Text>
+                                            </View>
+                                        );
+                                    })}
+                                </View>
+                            ) : (
+                                <Text style={{ fontSize: 8, color: Theme.SECONDARY_GRAY }}>No specific violations flagged by the system.</Text>
+                            )}
+                        </View>
+                    </View>
+
+                    <View>
+                        <Text style={styles.sectionLabel}>Analysis & Complete Reasoning</Text>
+                        <View style={[styles.analysisBox, { minHeight: 120 }]}>
+                            <Text style={styles.reasoningText}>{reasoning}</Text>
+                        </View>
+                    </View>
+
+                    {parsedComments && parsedComments.length > 0 && (
+                        <View>
+                            <Text style={styles.sectionLabel}>Client Notes & Comments</Text>
+                            <View style={styles.commentsBox}>
+                                {parsedComments.map((comment, index) => (
+                                    <View key={index} style={styles.singleComment}>
+                                        <Text style={styles.commentText}>"{comment.text}"</Text>
+
+                                        {/* Show email and date if they exist */}
+                                        {(comment.email || comment.created_at) && (
+                                            <Text style={styles.commentMeta}>
+                                                {comment.email || 'Unknown User'}
+                                                {comment.created_at ? ` • ${formatCompleteDate(comment.created_at)}` : ''}
+                                            </Text>
+                                        )}
+
+                                        {/* Divider between multiple comments */}
+                                        {index < parsedComments.length - 1 && (
+                                            <View style={styles.commentDivider} />
+                                        )}
+                                    </View>
+                                ))}
+                            </View>
+                        </View>
+                    )}
+
+                </View>
+            </View>
+
+            <PageFooter />
+        </Page>
+    );
+};
+
+export const SingleCaseReportDocument = ({ post, project, compressedImage }) => {
+    return (
+        <Document title={`CaseExport_${post._id}`}>
+            <SingleCasePage post={post} project={project} compressedImage={compressedImage} />
         </Document>
     );
 };

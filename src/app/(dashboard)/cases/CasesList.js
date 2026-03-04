@@ -8,7 +8,7 @@ import {
   Filter, ChevronDown, Search, ArrowUpDown, Loader2,
   AlertTriangle, ShieldAlert, CheckCircle, ExternalLink,
   Info, Eye, LayoutGrid, List, Facebook, Instagram,
-  Activity, User, Siren, FileSignature, ArrowRight, Quote, X, Download,
+  Activity, User, Siren, FileSignature, ArrowRight, Quote, X, Download, FileDown,
   ArrowUp, ArrowDown, Calendar, ClockFading, ChevronLeft, ChevronRight,
   ShieldCheck,
   Smile,
@@ -26,6 +26,7 @@ import getPostLink from '@/components/GetPostLink'
 // import Link from 'next/link'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { ReportButton } from '@/components/pdf/ReportButton'
+import { DetailedReportButton } from '@/components/pdf/DetailedReportButton'
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -45,6 +46,12 @@ export function CasesList({ cases, project, initialFilters, initialSort, current
   const [selectedPost, setSelectedPost] = useState(initialCase || null)
   const [updatedCases, setUpdatedCases] = useState({})
   const postRefs = useRef({})
+
+  const [selectedCases, setSelectedCases] = useState({})
+  const selectedCount = Object.keys(selectedCases).length
+
+  // Memoize the selected posts array to stabilize the reference passed to report buttons
+  const selectedPostsArray = useMemo(() => Object.values(selectedCases), [selectedCases])
 
   // Navigation Logic for URL params
   const updateQueryParams = useCallback((newParams) => {
@@ -86,6 +93,40 @@ export function CasesList({ cases, project, initialFilters, initialSort, current
   const mergedPosts = useMemo(() => {
     return cases?.posts || []
   }, [cases?.posts])
+
+  // --- Selection Handlers ---
+  const handleToggleCase = (post, e) => {
+    e.stopPropagation() // Prevents the detail panel from opening when clicking the checkbox
+    setSelectedCases(prev => {
+      const newSelections = { ...prev }
+      if (newSelections[post._id]) {
+        delete newSelections[post._id]
+      } else {
+        newSelections[post._id] = post
+      }
+      return newSelections
+    })
+  }
+  const handleToggleAllOnPage = (e) => {
+    const isChecked = e.target.checked
+    setSelectedCases(prev => {
+      const newSelections = { ...prev }
+      if (isChecked) {
+        mergedPosts.forEach(post => {
+          newSelections[post._id] = post
+        })
+      } else {
+        mergedPosts.forEach(post => {
+          delete newSelections[post._id]
+        })
+      }
+      return newSelections
+    })
+  }
+
+  // Check if all items on the *current page* are selected for the header checkbox
+  const isAllCurrentPageSelected = mergedPosts.length > 0 && mergedPosts.every(post => !!selectedCases[post._id])
+  const isSomeCurrentPageSelected = mergedPosts.some(post => !!selectedCases[post._id])
 
   // Navigation Logic for CaseDetailPanel
   const navigatePost = useCallback((direction) => {
@@ -286,8 +327,58 @@ export function CasesList({ cases, project, initialFilters, initialSort, current
 
             {/* Right: Actions & Counts */}
             <div className="flex items-center gap-5 w-full lg:w-auto justify-end">
-              <div onClick={() => trackClientClick('export_summary_report', { page: 'CasesList' })}>
-                <ReportButton posts={mergedPosts} />
+
+              {selectedCount > 0 && (
+                <div className="flex flex-col items-center gap-2">
+                  <span className="text-xs font-bold text-blue-600 bg-blue-50 px-1 py-1 rounded-md border border-blue-100">
+                    {selectedCount} Selected
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setSelectedCases({})}
+                    className="h-8 px-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 font-bold text-xs cursor-pointer"
+                  >
+                    Clear
+                  </Button>
+                </div>
+              )}
+
+              <div className="flex flex-col gap-2 shrink-0 ml-auto">
+                <div onClick={() => {
+                  if (selectedCount === 0) alert("Select some cases before exporting");
+                  trackClientClick('export_summary_report', { page: 'CasesList' });
+                }}>
+                  {selectedCount > 0 ? (
+                    <ReportButton
+                      posts={selectedPostsArray}
+                      project={project}
+                      className="flex w-full cursor-pointer items-center justify-start gap-2 px-2.5 py-1.5 bg-white border border-slate-200 text-slate-700 font-bold rounded-md hover:bg-slate-50 transition-colors text-xs shadow-sm"
+                    />
+                  ) : (
+                    <button className="flex w-full cursor-pointer items-center justify-start gap-2 px-2.5 py-1.5 bg-white border border-slate-200 text-slate-700 font-bold rounded-md hover:bg-slate-50 transition-colors text-xs shadow-sm">
+                      <FileDown className="w-3.5 h-3.5" />
+                      Export Summary Report
+                    </button>
+                  )}
+                </div>
+                <div onClick={() => {
+                  if (selectedCount === 0) alert("Select some cases before exporting");
+                  trackClientClick('export_detailed_report', { page: 'CasesList' });
+                }}>
+                  {selectedCount > 0 ? (
+                    <DetailedReportButton
+                      posts={selectedPostsArray}
+                      project={project}
+                      className="flex w-full cursor-pointer items-center justify-start gap-2 px-2.5 py-1.5 bg-white border border-slate-200 text-slate-700 font-bold rounded-md hover:bg-slate-50 transition-colors text-xs shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
+                    />
+                  ) : (
+                    <button className="flex w-full cursor-pointer items-center justify-start gap-2 px-2.5 py-1.5 bg-white border border-slate-200 text-slate-700 font-bold rounded-md hover:bg-slate-50 transition-colors text-xs shadow-sm">
+                      <FileDown className="w-3.5 h-3.5" />
+                      Export Detailed Report
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* {(raisedCount > 0 || isInitialLoading) && (
@@ -311,6 +402,21 @@ export function CasesList({ cases, project, initialFilters, initialSort, current
           <table className="min-w-full table-fixed divide-y divide-slate-100">
             <thead className="bg-slate-50/80 sticky top-0 z-10 backdrop-blur-sm">
               <tr>
+                {/* ---  Checkbox Header --- */}
+                <th scope="col" className="w-[48px] px-4 py-3 text-left">
+                  <input
+                    type="checkbox"
+                    checked={isAllCurrentPageSelected}
+                    ref={input => {
+                      if (input) {
+                        // Optional: Show a dash in the checkbox if only some are selected
+                        input.indeterminate = isSomeCurrentPageSelected && !isAllCurrentPageSelected;
+                      }
+                    }}
+                    onChange={handleToggleAllOnPage}
+                    className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                  />
+                </th>
                 <th
                   scope="col"
                   className="w-[120px] px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100 transition-colors group select-none"
@@ -395,7 +501,7 @@ export function CasesList({ cases, project, initialFilters, initialSort, current
                 const statusConfig = getStatusConfig(currentPost);
 
                 const StatusIcon = statusConfig.icon;
-                const isSelected = selectedPost?._id === currentPost._id
+                // const isPanelOpen = selectedPost?._id === currentPost._id
 
                 let posted_date = ""
                 let sourced_date = ""
@@ -414,6 +520,8 @@ export function CasesList({ cases, project, initialFilters, initialSort, current
                 else if (post.created_at)
                   sourced_date = format(new Date(post.created_at), "dd/MM/yyyy");
 
+                const isSelectedRow = !!selectedCases[currentPost._id];
+                const isPanelOpen = selectedPost?._id === currentPost._id;
 
                 return (
                   <tr
@@ -422,9 +530,21 @@ export function CasesList({ cases, project, initialFilters, initialSort, current
                     onClick={() => setSelectedPost(currentPost)}
                     className={cn(
                       "transition-all cursor-pointer group",
-                      isSelected ? "bg-blue-50/60 ring-1 ring-inset ring-blue-200 z-10 relative" : "hover:bg-slate-50"
+                      isPanelOpen ? "bg-blue-50/60 ring-1 ring-inset ring-blue-200 z-10 relative" : "hover:bg-slate-50",
+                      // Optional: lightly highlight rows that are checked
+                      isSelectedRow && !isPanelOpen && "bg-slate-50"
                     )}
                   >
+                    {/* SELECTED OR NOT  */}
+                    <td className="px-4 py-3 whitespace-nowrap align-middle" onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        checked={isSelectedRow}
+                        onChange={(e) => handleToggleCase(currentPost, e)}
+                        className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                      />
+                    </td>
+
                     {/* Priority */}
                     <td className="px-4 py-3 whitespace-nowrap align-middle">
                       <span className={cn("inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold border shadow-sm", risk.color)}>
@@ -526,8 +646,7 @@ export function CasesList({ cases, project, initialFilters, initialSort, current
                       </div>
                     </td>
 
-
-                    {/* Source */}
+                    {/* Posted At */}
                     <td className="px-4 py-3 whitespace-nowrap align-middle text-sm font-semibold text-slate-500">
                       {posted_date}
                     </td>
@@ -536,10 +655,10 @@ export function CasesList({ cases, project, initialFilters, initialSort, current
                     <td className="px-4 py-3 whitespace-nowrap text-right align-middle">
                       <Button
                         size="sm"
-                        variant={isSelected ? "default" : "secondary"}
+                        variant={isPanelOpen ? "default" : "secondary"}
                         className={cn(
                           "h-8 text-xs font-bold transition-all shadow-sm",
-                          isSelected ? "bg-blue-600 hover:bg-blue-700 shadow-blue-200" : "bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 group "
+                          isPanelOpen ? "bg-blue-600 hover:bg-blue-700 shadow-blue-200" : "bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 group "
                         )}
                       >
                         <ArrowRight className="w-8 h-8 group-hover:translate-x-0.5 transition-all duration-200 " />
