@@ -114,15 +114,15 @@ export const getPosts = traceAction('getPosts', async (project, page = 1, limit 
     }
 
     // Threat Type filter (if applicable to raw posts or if they have analysis results)
-    if (filters.threat_type && filters.threat_type !== 'all') {
-      andConditions.push({
-        $or: [
-          { 'review_details.threat_type': filters.threat_type },
-          { 'review_details.primary_threat_type': filters.threat_type },
-          // { 'analysis_results.threat_category': filters.threat_type }
-        ]
-      })
-    }
+    // if (filters.threat_type && filters.threat_type !== 'all') {
+    //   andConditions.push({
+    //     $or: [
+    //       { 'review_details.threat_type': filters.threat_type },
+    //       { 'review_details.primary_threat_type': filters.threat_type },
+    //       // { 'analysis_results.threat_category': filters.threat_type }
+    //     ]
+    //   })
+    // }
 
     // Default Filter: Analysis completed AND POI detected (Face OR Name)
     // We keep this to ensure relevance, even for reviewed posts
@@ -142,16 +142,19 @@ export const getPosts = traceAction('getPosts', async (project, page = 1, limit 
       query.$and = andConditions
     }
 
-    // Build Sort
     const sortOptions = {}
     if (sort.field === 'created_at') {
       sortOptions['metadata.created_at'] = sort.direction === 'asc' ? 1 : -1
+      sortOptions['_id'] = 1 // Secondary unique sort
     } else if (sort.field === 'threat_score') {
-      console.log("sorting by threat_score in review_details")
       sortOptions['review_details.threat_score'] = sort.direction === 'asc' ? 1 : -1
+      sortOptions['metadata.created_at'] = sort.direction === 'asc' ? 1 : -1
+      sortOptions['_id'] = 1 // Secondary unique sort
     } else {
       // Default sort
       sortOptions['review_details.threat_score'] = -1
+      sortOptions['metadata.created_at'] = sort.direction === 'asc' ? 1 : -1
+      sortOptions['_id'] = 1 // Secondary unique sort
     }
 
     const posts = await collection.find(query)

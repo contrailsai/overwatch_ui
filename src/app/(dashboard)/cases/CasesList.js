@@ -437,8 +437,15 @@ export function CasesList({ cases, project, initialFilters, initialSort, current
                             </span>
                             <span className="text-xs text-slate-400">•</span>
                             <span className="text-xs text-slate-500 font-mono">
-                              {/* <SafeDate date={posted_date} /> */}
-                              {posted_date}
+                              <a
+                                href={post.original_url ? post.original_url : getPostLink(post)}
+                                target="_blank"
+                                rel="noreferrer"
+                                onClick={(e) => e.stopPropagation()}
+                                className="inline-flex items-center tracking-tight text-blue-600 hover:text-blue-800 font-bold text-xs transition-colors hover:underline bg-blue-50 px-1.5 py-0.5 rounded-md"
+                              >
+                                Source <ExternalLink className="w-3 h-3 ml-1" />
+                              </a>
                             </span>
                           </div>
                           <span className="text-xs text-slate-600 line-clamp-2 leading-relaxed">
@@ -478,16 +485,8 @@ export function CasesList({ cases, project, initialFilters, initialSort, current
 
 
                     {/* Source */}
-                    <td className="px-4 py-3 whitespace-nowrap align-middle">
-                      <a
-                        href={post.original_url ? post.original_url : getPostLink(post)}
-                        target="_blank"
-                        rel="noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                        className="inline-flex items-center text-blue-600 hover:text-blue-800 font-bold text-xs transition-colors hover:underline bg-blue-50 px-2 py-1 rounded-md"
-                      >
-                        Source <ExternalLink className="w-3 h-3 ml-1" />
-                      </a>
+                    <td className="px-4 py-3 whitespace-nowrap align-middle text-sm font-semibold text-slate-500">
+                      {posted_date}
                     </td>
 
                     {/* Actions */}
@@ -497,11 +496,10 @@ export function CasesList({ cases, project, initialFilters, initialSort, current
                         variant={isSelected ? "default" : "secondary"}
                         className={cn(
                           "h-8 text-xs font-bold transition-all shadow-sm",
-                          isSelected ? "bg-blue-600 hover:bg-blue-700 shadow-blue-200" : "bg-white border border-slate-200 hover:bg-slate-50 text-slate-600"
+                          isSelected ? "bg-blue-600 hover:bg-blue-700 shadow-blue-200" : "bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 group "
                         )}
                       >
-                        {isSelected ? 'Inspect' : 'Details'}
-                        <ArrowRight className="w-3 h-3 ml-1.5 opacity-50" />
+                        <ArrowRight className="w-8 h-8 group-hover:translate-x-0.5 transition-all duration-200 " />
                       </Button>
                     </td>
                   </tr>
