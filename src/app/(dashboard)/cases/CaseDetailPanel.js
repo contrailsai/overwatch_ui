@@ -31,7 +31,7 @@ const getRiskLabel = (score) => {
     return { label: 'Safe', color: 'text-slate-500 bg-slate-50 border-slate-200' };
 }
 
-export function CaseDetailPanel({ post, project, isOpen, onClose, onNavigate, hasPrev, hasNext, onUpdateStatus }) {
+export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose, onNavigate, hasPrev, hasNext, onUpdateStatus }) {
     const [isProcessing, setIsProcessing] = useState(false)
     const [imgError, setImgError] = useState(false)
     const router = useRouter()
@@ -86,7 +86,7 @@ export function CaseDetailPanel({ post, project, isOpen, onClose, onNavigate, ha
         if (!noteText.trim()) return;
         setIsSubmittingNote(true);
         try {
-            const result = await addReviewNote(post._id, noteText);
+            const result = await addReviewNote(post._id, noteText, project, clientDetails);
             if (result.success) {
                 setLocalNotes(prev => [...prev, result.note]);
                 setNoteText('');
@@ -106,8 +106,6 @@ export function CaseDetailPanel({ post, project, isOpen, onClose, onNavigate, ha
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
     };
-
-    console.log(post)
 
     // --- Data Resolution ---
     const review = post.review_details || {};
@@ -165,21 +163,21 @@ export function CaseDetailPanel({ post, project, isOpen, onClose, onNavigate, ha
                 name: label.name,
                 title: formattedTitle,
                 icon: config.icon,
-                color: label.severity === 'high' ? 'rose' : label.severity === 'medium' ? 'orange' : config.color
+                color: label.severity === 'high' ? 'rose' : label.severity === 'medium' ? 'orange' : label.severity === 'low' ? 'yellow' : config.color
             });
         }
     });
 
     // 2. Check Legacy Flags (Backward Compatibility)
     const legacyFlagMap = {
-        is_nsfw: { title: "NSFW Content", icon: EyeOff, color: "indigo" },
-        is_hate_speech: { title: "Hate Speech", icon: MessageSquareWarning, color: "rose" },
+        is_hate_speech: { title: "Hate Speech", icon: MessageSquareWarning, color: "orange" },
         is_fake_news: { title: "Misinformation", icon: ShieldX, color: "orange" },
+        is_nsfw: { title: "NSFW Content", icon: EyeOff, color: "orange" },
         is_fraud: { title: "Fraud", icon: Fingerprint, color: "rose" },
         is_asset_misuse: { title: "Asset Misuse", icon: ShieldQuestion, color: "yellow" },
-        is_humor: { title: "Satire", icon: Laugh, color: "blue" },
-        is_terrorism: { title: "Terrorism", icon: Siren, color: "red" },
-        is_violence: { title: "Violence", icon: Siren, color: "violet" }
+        is_humor: { title: "Satire", icon: Laugh, color: "yellow" },
+        is_terrorism: { title: "Terrorism", icon: Siren, color: "rose" },
+        is_violence: { title: "Violence", icon: Siren, color: "orange" }
     };
 
     Object.entries(legacyFlagMap).forEach(([key, config]) => {
@@ -414,19 +412,27 @@ export function CaseDetailPanel({ post, project, isOpen, onClose, onNavigate, ha
                                     <>
                                         {/* Stats & Dates */}
                                         <div className="space-y-6">
-                                            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-3 gap-10">
-                                                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-row justify-between gap-1">
+                                            <div className="flex flex-row gap-4">
+                                                <div className="w-full bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-row justify-between gap-1">
                                                     <span className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2"><Heart className="w-3.5 h-3.5 text-rose-500" /> Likes</span>
                                                     <span className="font-bold text-lg text-slate-900">{post.stats?.like_count?.toLocaleString() || 0}</span>
                                                 </div>
-                                                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-row justify-between gap-1">
+                                                <div className="w-full bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-row justify-between gap-1">
                                                     <span className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2"><MessageCircle className="w-3.5 h-3.5 text-blue-500" /> Comments</span>
                                                     <span className="font-bold text-lg text-slate-900">{post.stats?.comment_count?.toLocaleString() || 0}</span>
                                                 </div>
-                                                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-row justify-between gap-1">
+                                                <div className="w-full bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-row justify-between gap-1">
                                                     <span className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2"><Share2 className="w-3.5 h-3.5 text-green-500" /> Shares</span>
                                                     <span className="font-bold text-lg text-slate-900">{post.stats?.share_count?.toLocaleString() || 0}</span>
                                                 </div>
+                                                {
+                                                    post.stats?.view_count > 0 && (
+                                                        <div className="w-full bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-row justify-between gap-1">
+                                                            <span className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2"><Eye className="w-3.5 h-3.5 text-violet-600" /> Views</span>
+                                                            <span className="font-bold text-lg text-slate-900">{post.stats?.view_count?.toLocaleString() || 0}</span>
+                                                        </div>
+                                                    )
+                                                }
                                             </div>
                                             <div className="grid grid-cols-2 gap-10">
                                                 <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between gap-1">
@@ -481,17 +487,17 @@ export function CaseDetailPanel({ post, project, isOpen, onClose, onNavigate, ha
                                 </div>
                             </div>
 
-                            {/* Detection Grid */}
+                            {/* Violation Grid */}
                             <div>
-                                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Detection Signals</h4>
+                                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Violations</h4>
                                 <div className="grid grid-cols-2 gap-3">
-                                    <SignalCard
+                                    <ViolationCard
                                         active={isPoiPresent}
                                         title="POI Detected"
                                         icon={ScanFace}
                                         color="indigo"
                                     />
-                                    <SignalCard
+                                    <ViolationCard
                                         active={isAigc}
                                         title="AI Generated"
                                         icon={Bot}
@@ -499,7 +505,7 @@ export function CaseDetailPanel({ post, project, isOpen, onClose, onNavigate, ha
                                     />
 
                                     {activeLabels.map((label, idx) => (
-                                        <SignalCard
+                                        <ViolationCard
                                             key={idx}
                                             active={true}
                                             title={label.title}
@@ -685,7 +691,7 @@ export function CaseDetailPanel({ post, project, isOpen, onClose, onNavigate, ha
     )
 }
 
-function SignalCard({ active, title, icon: Icon, color, extra }) {
+function ViolationCard({ active, title, icon: Icon, color, extra }) {
     if (!active) return null;
 
     const colorStyles = {

@@ -35,7 +35,8 @@ import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
 // import SafeDate from '@/components/SafeDate'
 
-export function CasesList({ cases, project, initialFilters, initialSort, currentPage, initialCase }) {
+export function CasesList({ cases, project, clientDetails, initialFilters, initialSort, currentPage, initialCase }) {
+
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -264,7 +265,7 @@ export function CasesList({ cases, project, initialFilters, initialSort, current
 
                 {/* RISK LEVEL */}
                 <div className="space-y-1">
-                  <Label className="text-[10px] uppercase font-bold text-slate-400">Risk Level</Label>
+                  <Label className="text-[10px] uppercase font-bold text-slate-400">Risk Severity</Label>
                   <Select
                     value={initialFilters.risk_priority || 'all'}
                     onValueChange={(val) => handleFilterChange('risk_priority', val)}
@@ -495,7 +496,7 @@ export function CasesList({ cases, project, initialFilters, initialSort, current
                   onClick={() => handleSortChange('threat_score')}
                 >
                   <div className="flex items-center">
-                    Risk Priority
+                    Risk Severity
                     <SortIcon field="threat_score" />
                   </div>
                 </th>
@@ -505,11 +506,11 @@ export function CasesList({ cases, project, initialFilters, initialSort, current
                   className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider w-full max-w-[100px]"
                 >
                   <div className="flex items-center">
-                    Content & Date
+                    Content
                   </div>
                 </th>
                 <th scope="col" className="w-[120px] px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Platform</th>
-                <th scope="col" className="w-[170px] px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Threat Type</th>
+                <th scope="col" className="w-[170px] px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Violations</th>
                 <th
                   scope="col"
                   className="w-[120px] px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100 transition-colors group select-none"
@@ -667,7 +668,7 @@ export function CasesList({ cases, project, initialFilters, initialSort, current
                         </div>
                         <div className="flex flex-col min-w-0 gap-1">
                           <div className="flex items-center gap-2">
-                            <span className="font-bold text-slate-900 text-sm truncate hover:text-blue-600 transition-colors">
+                            <span className="font-bold text-slate-900 text-sm truncate transition-colors">
                               {post.user?.username ? `@${post.user.username}` : 'Unknown User'}
                             </span>
                             <span className="text-xs text-slate-400">•</span>
@@ -848,6 +849,7 @@ export function CasesList({ cases, project, initialFilters, initialSort, current
       <CaseDetailPanel
         post={selectedPost ? { ...selectedPost, client_status: updatedCases[selectedPost._id] || selectedPost.client_status } : null}
         project={project}
+        clientDetails={clientDetails}
         isOpen={!!selectedPost}
         onClose={() => {
           setSelectedPost(null)

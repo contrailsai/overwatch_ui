@@ -490,6 +490,7 @@ export const getRaisedCount = traceAction('getRaisedCount', async () => {
   }
 })
 
+// FLAG FOR TAKEDOWN / NO ACTION
 export const updateClientStatus = traceAction('updateClientStatus', async (caseId, status) => {
   try {
     const projectDetails = await getProjectDetails()
@@ -539,33 +540,25 @@ export const updateClientStatus = traceAction('updateClientStatus', async (caseI
   }
 })
 
-export const addReviewNote = traceAction('addReviewNote', async (caseId, noteText) => {
+export const addReviewNote = traceAction('addReviewNote', async (caseId, noteText, project, clientDetails) => {
   try {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { success: false, error: "Unauthorized" }
-    }
-
-    const projectDetails = await getProjectDetails()
-    if (!projectDetails?.dbName) {
+    if (!project?.mongo_db_map) {
       return { success: false, error: "Project configuration not found" }
     }
 
     const client = await clientPromise
-    const db = client.db(projectDetails.dbName)
+    const db = client.db(project.mongo_db_map)
     const collection = db.collection('Posts')
 
     const newNote = {
       text: noteText,
-      email: user.email,
+      email: clientDetails.email,
       created_at: new Date().toISOString()
     }
 
     const result = await collection.updateOne(
       { _id: new ObjectId(caseId) },
-      { $push: { client_notes: newNote } }
+      { $push: { client_notes: newNote }, $set: { "metadata.updated_at": new Date().toISOString() } }
     )
 
     if (result.matchedCount > 0) {
@@ -590,44 +583,9 @@ export const getPostById = traceAction('getPostById', async (project, id) => {
     const post = await collection.findOne({ _id: new ObjectId(id) });
     if (!post) return null;
 
-    let s3UrlToSign = null;
-    if (post.post_content?.media_urls && post.post_content.media_urls.length > 0) {
-      const firstMedia = post.post_content.media_urls[0];
-      s3UrlToSign = firstMedia.thumbnail_url || firstMedia.s3_url;
-    } else if (post.s3_url) {
-      s3UrlToSign = post.s3_url;
-    }
+    // get normalized post
+    return await normalized_S3_post(post);
 
-    const signedUrl = s3UrlToSign ? await getSignedImageUrl(s3UrlToSign) : null;
-
-    return {
-      _id: post._id.toString(),
-      created_at: post.metadata?.created_at ? new Date(post.metadata.created_at).toISOString() : null,
-      sourcing_date: post.metadata?.sourcing_date ? new Date(post.metadata.sourcing_date).toISOString() : null,
-      taken_at: post.post_content?.taken_at || post.taken_at || null,
-      platform: post.platform ? post.platform.toLowerCase() : 'instagram',
-      processed: post.processed || false,
-      client_status: post.client_status || 'To Be Reviewed',
-      caption: post.post_content?.caption || post.caption || '',
-      signedImageUrl: signedUrl,
-      original_url: post.original_url,
-      post_id: post.post_id || post.code,
-      user: {
-        username: post.profile?.username || post.user?.username || 'Unknown',
-        full_name: post.profile?.display_name || '',
-        profile_pic_url: post.profile?.profile_pic_url || post.profile?.profile_url || '',
-        is_verified: post.profile?.is_verified || false
-      },
-      review_details: post.review_details || null,
-      takedown_info: post.takedown_info || null,
-      analysis_results: post.analysis_results || null,
-      client_notes: post.client_notes || [],
-      stats: {
-        like_count: post.engagement?.likes || 0,
-        comment_count: post.engagement?.comments || 0,
-        share_count: post.engagement?.shares || 0
-      }
-    };
   } catch (e) {
     console.error('getPostById Error:', e);
     return null;

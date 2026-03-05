@@ -46,6 +46,7 @@ export default async function CasesPage({ searchParams }) {
         <CasesList
           cases={cases}
           project={project}
+          clientDetails={clientDetails}
           initialFilters={filters}
           initialSort={sort}
           currentPage={currentPage}
