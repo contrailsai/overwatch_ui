@@ -10,7 +10,7 @@ const PDFDownloadLink = dynamic(
   { ssr: false, loading: () => <button className="px-4 py-2 bg-slate-100 text-slate-400 rounded-lg flex items-center gap-2" disabled><Loader2 className="w-4 h-4 animate-spin" /> Preparing...</button> }
 );
 
-import RiskReportDocument from './RiskReport';
+import RiskReportDocument from './SummaryReport';
 import { fetchAndCompressImage } from './CaseExportButton';
 import { getPostsByIds } from '@/app/(dashboard)/cases/actions';
 

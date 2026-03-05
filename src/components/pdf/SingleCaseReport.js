@@ -179,7 +179,7 @@ const styles = StyleSheet.create({
 
     // --- RIGHT COL ITEMS ---
     analysisBox: {
-        padding: 12,
+        padding: 8,
         backgroundColor: '#FFFFFF',
         borderWidth: 0.5,
         borderColor: Theme.BORDER_LIGHT,
@@ -210,7 +210,7 @@ const styles = StyleSheet.create({
         textTransform: 'uppercase',
     },
     commentsBox: {
-        padding: 10,
+        padding: 6,
         backgroundColor: '#FFFBEB', // Light yellow tint for notes
         borderWidth: 0.5,
         borderColor: '#FDE68A',
@@ -225,10 +225,15 @@ const styles = StyleSheet.create({
     singleComment: {
         marginBottom: 6,
     },
+    commentMetaRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginTop: 6,
+    },
     commentMeta: {
         fontSize: 6,
-        color: '#B45309', // slightly darker orange/brown
-        marginTop: 2,
+        color: '#C28B6B', // Duller, more whitish/greyish color
         fontWeight: 'bold',
     },
     commentDivider: {
@@ -265,12 +270,25 @@ const styles = StyleSheet.create({
         bottom: 20,
         left: 30,
         right: 30,
-        textAlign: 'center',
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
         fontSize: 6.5,
         color: Theme.SECONDARY_GRAY,
         borderTopWidth: 0.5,
         borderTopColor: Theme.BORDER_LIGHT,
         paddingTop: 10,
+    },
+    footerLeft: {
+        textTransform: 'uppercase',
+        fontWeight: 'bold',
+    },
+    footerCenter: {
+        textTransform: 'uppercase',
+    },
+    footerRight: {
+        textTransform: 'uppercase',
+        fontWeight: 'bold',
     }
 });
 
@@ -317,9 +335,9 @@ const formatCompleteDate = (dateInput) => {
 };
 
 const getRiskLabel = (score) => {
-    if (score >= 96) return { label: 'High Risk', color: Theme.RISK_HIGH, bg: '#FFF1F2' };
-    if (score >= 76) return { label: 'Medium Risk', color: Theme.RISK_MEDIUM, bg: '#FFF7ED' };
-    if (score >= 41) return { label: 'Low Risk', color: Theme.RISK_LOW, bg: '#FFFBEB' };
+    if (score > 95) return { label: 'High Risk', color: Theme.RISK_HIGH, bg: '#FFF1F2' };
+    if (score > 75) return { label: 'Medium Risk', color: Theme.RISK_MEDIUM, bg: '#FFF7ED' };
+    if (score > 40) return { label: 'Low Risk', color: Theme.RISK_LOW, bg: '#FFFBEB' };
     return { label: 'Safe Content', color: Theme.SAFE, bg: '#ECFDF5' };
 };
 
@@ -338,9 +356,13 @@ const PageHeader = ({ caseId }) => (
 );
 
 const PageFooter = () => (
-    <Text style={styles.footer} fixed render={({ pageNumber, totalPages }) => (
-        `CONFIDENTIAL DOCUMENT - PROPERTY OF CONTRAILS AI | PAGE ${pageNumber} OF ${totalPages}`
-    )} />
+    <View style={styles.footer} fixed>
+        <Text style={styles.footerLeft}>CONFIDENTIAL DOCUMENT</Text>
+        <Text style={styles.footerCenter}>POWERED BY CONTRAILS AI</Text>
+        <Text style={styles.footerRight} render={({ pageNumber, totalPages }) => (
+            `PAGE ${pageNumber} OF ${totalPages}`
+        )} />
+    </View>
 );
 
 // --- MAIN DOCUMENT ---
@@ -352,14 +374,32 @@ export const SingleCasePage = ({ post, project, compressedImage }) => {
 
     const reasoning = review.reasoning || analysis.categorization_reason || "Analyzed content for policy adherence. No detailed reasoning provided.";
 
+    // Safely parse project details if it's a string
+    let projectDetails = project?.project_details;
+    if (typeof projectDetails === 'string') {
+        try {
+            projectDetails = JSON.parse(projectDetails);
+        } catch (e) {
+            projectDetails = {};
+        }
+    }
+
     // Active Violations Mapping
-    const projectLabels = project?.project_details?.labels || [];
+    const projectLabels = projectDetails?.labels || [];
     const activeViolations = [];
+    const severityMap = { high: 1, medium: 2, low: 3 };
+
+    // Check if it's a legacy case (no severities defined in project labels)
+    const isLegacyCase = projectLabels.length > 0 && projectLabels.every(l => !l.severity);
 
     projectLabels.forEach(label => {
         if (review.flags?.[label.name] === true) {
             const labelTitle = label.name.replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-            activeViolations.push({ title: labelTitle, severity: label.severity });
+            activeViolations.push({
+                title: labelTitle,
+                severity: label.severity || 'medium',
+                order: severityMap[label.severity] || 4
+            });
         }
     });
 
@@ -375,13 +415,22 @@ export const SingleCasePage = ({ post, project, compressedImage }) => {
 
     Object.entries(legacyFlags).forEach(([key, title]) => {
         if (review.flags?.[key] === true && !activeViolations.some(v => v.title === title)) {
-            activeViolations.push({ title, severity: 'medium' });
+            activeViolations.push({
+                title,
+                severity: 'medium',
+                order: severityMap['medium']
+            });
         }
     });
+
+    // Sort violations: High > Medium > Low
+    activeViolations.sort((a, b) => a.order - b.order);
 
     // Dates & Metrics
     const posted_date = formatCompleteDate(post.posted_date || post.metadata?.posted_date || post.timestamp || post.sourcing_date);
     const sourced_date = formatCompleteDate(post.metadata?.created_at || post.created_at);
+    const reviewedDate = formatCompleteDate(post.updated_at || review.reviewed_at || post.created_at);
+
 
     const stats = post.stats || {};
     const imageUrl = compressedImage || post.signedImageUrl || post.image_url || null;
@@ -434,6 +483,11 @@ export const SingleCasePage = ({ post, project, compressedImage }) => {
                         <Text style={styles.detailLabel}>Sourced:</Text>
                         <Text style={styles.detailValue}>{sourced_date}</Text>
                     </View>
+                    <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>Reviewed:</Text>
+                        <Text style={styles.detailValue}>{reviewedDate}</Text>
+                    </View>
+
                 </View>
 
                 <View style={styles.bannerRight}>
@@ -478,7 +532,7 @@ export const SingleCasePage = ({ post, project, compressedImage }) => {
                                     <Text style={styles.metricLabel}>Shares</Text>
                                 </View>
                             )}
-                            {stats.view_count !== undefined && (
+                            {stats.view_count !== undefined && stats.view_count !== 0 && (
                                 <View style={styles.metricItem}>
                                     <Text style={styles.metricValue}>{stats.view_count.toLocaleString()}</Text>
                                     <Text style={styles.metricLabel}>Views</Text>
@@ -491,7 +545,7 @@ export const SingleCasePage = ({ post, project, compressedImage }) => {
                         <Text style={styles.sectionLabel}>Caption / Content</Text>
                         <View style={styles.contentBox}>
                             <Text style={styles.contentText}>
-                                {processText(post.caption || post.content || "Empty content field.", 600, 16)}
+                                {processText(post.caption || post.content || "Empty content field.", 600, 14)}
                             </Text>
                         </View>
                     </View>
@@ -501,12 +555,20 @@ export const SingleCasePage = ({ post, project, compressedImage }) => {
                 <View style={styles.rightCol}>
 
                     <View>
-                        <Text style={styles.sectionLabel}>Violations Identified</Text>
+                        <Text style={styles.sectionLabel}>Violations</Text>
                         <View style={styles.analysisBox}>
                             {activeViolations.length > 0 ? (
                                 <View style={styles.violationGrid}>
                                     {activeViolations.map((v, i) => {
-                                        const vColor = v.severity === 'high' ? Theme.RISK_HIGH : v.severity === 'medium' ? Theme.RISK_MEDIUM : Theme.RISK_LOW;
+                                        // For older/legacy cases, use a uniform color (Theme.PRIMARY_BLUE or just the medium color)
+                                        // The user said "show all of them in the same color" for older cases.
+                                        let vColor;
+                                        if (isLegacyCase) {
+                                            vColor = Theme.PRIMARY_BLUE;
+                                        } else {
+                                            vColor = v.severity === 'high' ? Theme.RISK_HIGH : v.severity === 'medium' ? Theme.RISK_MEDIUM : Theme.RISK_LOW;
+                                        }
+
                                         return (
                                             <View key={i} style={[styles.violationBadge, { borderColor: vColor, backgroundColor: vColor + '15' }]}>
                                                 <Text style={[styles.violationText, { color: vColor }]}>{v.title}</Text>
@@ -537,10 +599,16 @@ export const SingleCasePage = ({ post, project, compressedImage }) => {
 
                                         {/* Show email and date if they exist */}
                                         {(comment.email || comment.created_at) && (
-                                            <Text style={styles.commentMeta}>
-                                                {comment.email || 'Unknown User'}
-                                                {comment.created_at ? ` • ${formatCompleteDate(comment.created_at)}` : ''}
-                                            </Text>
+                                            <View style={styles.commentMetaRow}>
+                                                <Text style={styles.commentMeta}>
+                                                    {comment.email || 'Unknown User'}
+                                                </Text>
+                                                {comment.created_at && (
+                                                    <Text style={styles.commentMeta}>
+                                                        {formatCompleteDate(comment.created_at)}
+                                                    </Text>
+                                                )}
+                                            </View>
                                         )}
 
                                         {/* Divider between multiple comments */}

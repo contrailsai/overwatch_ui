@@ -66,12 +66,25 @@ const styles = StyleSheet.create({
     bottom: 20,
     left: 30,
     right: 30,
-    textAlign: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     fontSize: 6.5,
     color: Theme.SECONDARY_GRAY,
     borderTopWidth: 0.5,
     borderTopColor: Theme.BORDER_LIGHT,
     paddingTop: 10,
+  },
+  footerLeft: {
+    textTransform: 'uppercase',
+    fontWeight: 'bold',
+  },
+  footerCenter: {
+    textTransform: 'uppercase',
+  },
+  footerRight: {
+    textTransform: 'uppercase',
+    fontWeight: 'bold',
   },
 
   // --- METRICS SECTION ---
@@ -141,9 +154,9 @@ const styles = StyleSheet.create({
   },
 
   // Column Widths
-  colContent: { width: '33%', paddingRight: 8 },
-  colPlatform: { width: '18%', paddingRight: 8 },
-  colThreat: { width: '22%', paddingRight: 4 },
+  colContent: { width: '34%', paddingRight: 8 },
+  colPlatform: { width: '17%', paddingRight: 4 },
+  colThreat: { width: '22%', paddingRight: 8 },
   colRisk: { width: '15%', paddingRight: 4 },
   colStatus: { width: '12%', alignItems: 'flex-start' },
 
@@ -221,7 +234,7 @@ const styles = StyleSheet.create({
     borderColor: Theme.BORDER_LIGHT,
   },
   threatText: {
-    fontSize: 5.5,
+    fontSize: 7,
     fontWeight: 'bold',
     color: Theme.PRIMARY_BLUE,
     textTransform: 'capitalize',
@@ -263,7 +276,7 @@ const styles = StyleSheet.create({
   },
   dateValue: {
     fontSize: 6,
-    color: Theme.SECONDARY_GRAY,
+    // color: Theme.SECONDARY_GRAY,
   }
 });
 
@@ -298,6 +311,7 @@ const processText = (text, maxLength = 100) => {
   return sanitized.length > maxLength ? sanitized.substring(0, maxLength) + '...' : sanitized;
 };
 
+// DD/MM/YYYY
 const formatShortDate = (dateInput) => {
   if (!dateInput) return "N/A";
   try {
@@ -307,6 +321,7 @@ const formatShortDate = (dateInput) => {
   return "N/A";
 };
 
+// DD/MM/YYYY, hh:mm a
 const formatCompleteDate = (dateInput) => {
   if (!dateInput) return "N/A";
   try {
@@ -336,29 +351,38 @@ const PageHeader = () => (
     </View>
     <View style={styles.headerRight}>
       <Text style={styles.headerDate}>{formatCompleteDate(new Date())}</Text>
-      <Text style={styles.headerID}>BATCH SUMMARY</Text>
+      {/* <Text style={styles.headerID}> SUMMARY REPORT </Text> */}
     </View>
   </View>
 );
 
 const PageFooter = () => (
-  <Text style={styles.footer} fixed render={({ pageNumber, totalPages }) => (
-    `CONFIDENTIAL DOCUMENT - PROPERTY OF CONTRAILS AI | PAGE ${pageNumber} OF ${totalPages}`
-  )} />
+  <View style={styles.footer} fixed>
+    <Text style={styles.footerLeft}>CONFIDENTIAL DOCUMENT</Text>
+    <Text style={styles.footerCenter}>POWERED BY CONTRAILS AI</Text>
+    <Text style={styles.footerRight} render={({ pageNumber, totalPages }) => (
+      `PAGE ${pageNumber} OF ${totalPages}`
+    )} />
+  </View>
 );
 
 const MetricsSection = ({ posts }) => {
   const total = posts.length;
-  let highRisk = 0;
-  let problematic = 0;
+  let safe_content = 0;
+  let low_content = 0;
+  let medium_content = 0;
+  let high_content = 0;
+  // let problematic = 0;
 
   posts.forEach(p => {
     const score = p.review_details?.threat_score ?? p.analysis_results?.risk_score ?? 0;
-    if (score >= 76) highRisk++;
-    if (score >= 41) problematic++;
+    if (score > 95) high_content++;
+    else if (score > 75) medium_content++;
+    else if (score > 40) low_content++;
+    else safe_content++;
   });
 
-  const safe = total - problematic;
+  // const safe = total - problematic;
 
   return (
     <View style={styles.metricsSection}>
@@ -370,15 +394,19 @@ const MetricsSection = ({ posts }) => {
         </View>
         <View style={styles.metricCard}>
           <Text style={styles.metricLabel}>Safe Content</Text>
-          <Text style={[styles.metricValue, { color: Theme.SAFE }]}>{safe.toLocaleString()}</Text>
+          <Text style={[styles.metricValue, { color: Theme.SAFE }]}>{safe_content.toLocaleString()}</Text>
         </View>
         <View style={styles.metricCard}>
-          <Text style={styles.metricLabel}>Problematic</Text>
-          <Text style={[styles.metricValue, { color: Theme.RISK_LOW }]}>{problematic.toLocaleString()}</Text>
+          <Text style={styles.metricLabel}>Low Risk</Text>
+          <Text style={[styles.metricValue, { color: Theme.RISK_LOW }]}>{low_content.toLocaleString()}</Text>
+        </View>
+        <View style={styles.metricCard}>
+          <Text style={styles.metricLabel}>Medium Risk</Text>
+          <Text style={[styles.metricValue, { color: Theme.RISK_MEDIUM }]}>{medium_content.toLocaleString()}</Text>
         </View>
         <View style={styles.metricCard}>
           <Text style={styles.metricLabel}>High Risk</Text>
-          <Text style={[styles.metricValue, { color: Theme.RISK_HIGH }]}>{highRisk.toLocaleString()}</Text>
+          <Text style={[styles.metricValue, { color: Theme.RISK_HIGH }]}>{high_content.toLocaleString()}</Text>
         </View>
       </View>
     </View>
@@ -389,8 +417,8 @@ const TableHeader = () => (
   <View style={styles.tableHeader} fixed>
     <Text style={[styles.tableHeaderCell, styles.colContent]}>Visual & Caption</Text>
     <Text style={[styles.tableHeaderCell, styles.colPlatform]}>Source Details</Text>
-    <Text style={[styles.tableHeaderCell, styles.colThreat]}>Threats Detected</Text>
-    <Text style={[styles.tableHeaderCell, styles.colRisk]}>Severity</Text>
+    <Text style={[styles.tableHeaderCell, styles.colThreat]}>Violations</Text>
+    <Text style={[styles.tableHeaderCell, styles.colRisk]}>Risk Severity</Text>
     <Text style={[styles.tableHeaderCell, styles.colStatus]}>Analysis Dates</Text>
   </View>
 );
@@ -400,41 +428,63 @@ const TableRow = ({ post, project, compressedImage }) => {
   const riskScore = review.threat_score ?? post.analysis_results?.risk_score ?? 0;
   const riskInfo = getRiskLabel(riskScore);
 
-  const projectLabels = project?.project_details?.labels || [];
+  // Safely parse project details if it's a string
+  let projectDetails = project?.project_details;
+  if (typeof projectDetails === 'string') {
+    try {
+      projectDetails = JSON.parse(projectDetails);
+    } catch (e) {
+      projectDetails = {};
+    }
+  }
+
+  const projectLabels = projectDetails?.labels || [];
   const resolvedThreats = [];
+  const severityMap = { high: 1, medium: 2, low: 3 };
+
+  // Check if it's a legacy case
+  const isLegacyCase = projectLabels.length > 0 && projectLabels.every(l => !l.severity);
 
   projectLabels.forEach(label => {
     if (review.flags?.[label.name] === true) {
       resolvedThreats.push({
-        label: label.name,
-        type: label.severity === 'high' ? 'hate_speech' : label.severity === 'medium' ? 'scam' : 'nsfw'
+        label: label.name.replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+        severity: label.severity || 'medium',
+        order: severityMap[label.severity] || 4
       });
     }
   });
 
   // Check Legacy Flags (Backward Compatibility)
   const legacyMapping = {
-    is_nsfw: { label: "NSFW", type: 'nsfw' },
-    is_hate_speech: { label: "Hate Speech", type: 'hate_speech' },
-    is_fake_news: { label: "Fake News", type: 'fake_news' },
-    is_fraud: { label: "Fraud", type: 'fake_news' },
-    is_asset_misuse: { label: "Asset Misuse", type: 'scam' },
-    is_humor: { label: "Satire", type: 'nsfw' },
-    is_terrorism: { label: "Terrorism", type: 'fake_news' },
-    is_violence: { label: "Violence", type: 'fake_news' }
+    is_nsfw: "NSFW",
+    is_hate_speech: "Hate Speech",
+    is_fake_news: "Misinformation",
+    is_fraud: "Fraud",
+    is_asset_misuse: "Asset Misuse",
+    is_humor: "Satire",
+    is_terrorism: "Terrorism",
+    is_violence: "Violence"
   };
 
-  Object.entries(legacyMapping).forEach(([key, config]) => {
-    if (review.flags?.[key] === true && !resolvedThreats.some(t => t.label === config.label)) {
-      resolvedThreats.push(config);
+  Object.entries(legacyMapping).forEach(([key, label]) => {
+    if (review.flags?.[key] === true && !resolvedThreats.some(t => t.label === label)) {
+      resolvedThreats.push({
+        label,
+        severity: 'medium',
+        order: severityMap['medium']
+      });
     }
   });
+
+  // Sort violations: High > Medium > Low
+  resolvedThreats.sort((a, b) => a.order - b.order);
 
   // Correctly prioritize image sources
   const imageUrl = compressedImage || post.compressedImage || post.signedImageUrl || post.image_url || null;
   const postedDate = formatCompleteDate(post.posted_date || post.metadata?.posted_date || post.timestamp || post.created_at);
   const sourcedDate = formatCompleteDate(post.metadata?.created_at || post.created_at);
-  const analyzedDate = formatCompleteDate(review.reviewed_at || post.updated_at || post.created_at);
+  const reviewedDate = formatCompleteDate(post.updated_at || review.reviewed_at || post.created_at);
 
   return (
     <View style={styles.tableRow} wrap={false}>
@@ -450,7 +500,10 @@ const TableRow = ({ post, project, compressedImage }) => {
           )}
           <View style={styles.contentInfo}>
             <Text style={styles.captionText}>{processText(post.caption || post.content, 85)}</Text>
-            <Text style={styles.captionDate}>Posted: {postedDate}</Text>
+            {/* <Text style={styles.captionDate}>Posted: {postedDate}</Text> */}
+            <Link src={post.original_url || post.url || '#'} style={styles.linkText} target="_blank" >
+              View Source
+            </Link>
           </View>
         </View>
       </View>
@@ -475,20 +528,26 @@ const TableRow = ({ post, project, compressedImage }) => {
             </View>
           )}
         </View>
-        <Link src={post.original_url || post.url || '#'} style={styles.linkText}>
-          View Source
-        </Link>
       </View>
 
       {/* Column 3: Threat */}
       <View style={styles.colThreat}>
         <View style={styles.threatContainer}>
           {resolvedThreats.length > 0 ? (
-            resolvedThreats.map((threat, idx) => (
-              <View key={idx} style={styles.threatBadge}>
-                <Text style={styles.threatText}>{processText(threat.label, 25).replace(/_/g, ' ')}</Text>
-              </View>
-            ))
+            resolvedThreats.map((threat, idx) => {
+              let vColor;
+              if (isLegacyCase) {
+                vColor = Theme.PRIMARY_BLUE;
+              } else {
+                vColor = threat.severity === 'high' ? Theme.RISK_HIGH : threat.severity === 'medium' ? Theme.RISK_MEDIUM : Theme.RISK_LOW;
+              }
+
+              return (
+                <View key={idx} style={[styles.threatBadge, { borderColor: vColor, backgroundColor: vColor + '15' }]}>
+                  <Text style={[styles.threatText, { color: vColor }]}>{processText(threat.label, 25)}</Text>
+                </View>
+              );
+            })
           ) : (
             <View style={styles.threatBadge}>
               <Text style={styles.threatText}>General</Text>
@@ -507,12 +566,16 @@ const TableRow = ({ post, project, compressedImage }) => {
       {/* Column 5: Status */}
       <View style={styles.colStatus}>
         <View style={styles.dateItem}>
-          <Text style={styles.dateLabel}>Analyzed:</Text>
-          <Text style={styles.dateValue}>{analyzedDate}</Text>
+          <Text style={styles.dateLabel}>Posted:</Text>
+          <Text style={styles.dateValue}>{postedDate}</Text>
         </View>
         <View style={styles.dateItem}>
           <Text style={styles.dateLabel}>Sourced:</Text>
           <Text style={styles.dateValue}>{sourcedDate}</Text>
+        </View>
+        <View style={styles.dateItem}>
+          <Text style={styles.dateLabel}>Reviewed:</Text>
+          <Text style={styles.dateValue}>{reviewedDate}</Text>
         </View>
       </View>
     </View>
