@@ -18,11 +18,29 @@ export const metadata = {
 
 export default async function RootLayout({ children }) {
 
+    const isProd = process.env.NODE_ENV === 'production'
+    const gaId = process.env.NEXT_PUBLIC_GA_ID
+
     return (
         <html lang="en" className="h-full">
             <head>
                 <meta property="og:image" content="/logo.png" />
                 <link rel="icon" href="/logo.png" />
+                {/* Google tag (gtag.js) */}
+                {isProd && gaId && (
+                    <>
+                        <script async src={`https://www.googletagmanager.com/gtag/js?id=${gaId}`}></script>
+                        <script>
+                            {`
+                                window.dataLayer = window.dataLayer || [];
+                                function gtag(){dataLayer.push(arguments);}
+                                gtag('js', new Date());
+
+                                gtag('config', ${gaId});
+                            `}
+                        </script>
+                    </>
+                )}
             </head>
             <body className={`${outfit.className} antialiased bg-slate-50 text-slate-900 h-full`}>
                 {children}
