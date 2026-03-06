@@ -33,7 +33,7 @@ const getRiskLabel = (score) => {
     return { label: 'Safe', color: 'text-slate-500 bg-slate-50 border-slate-200' };
 }
 
-export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose, onNavigate, hasPrev, hasNext, onUpdateStatus }) {
+export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose, onNavigate, hasPrev, hasNext, onUpdateStatus, onUpdatePost }) {
     const [isProcessing, setIsProcessing] = useState(false)
     const [imgError, setImgError] = useState(false)
     const router = useRouter()
@@ -193,8 +193,6 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
             });
         }
     });
-
-
 
     // Takedown logic
     const takedownStatus = post.takedown_info?.takedown_status || 'None';
@@ -457,9 +455,9 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
 
                     {
                         isEditing ? (
-                            <EditForm post={post} project={project} setIsEditing={setIsEditing} />
+                            <EditForm post={post} project={project} setIsEditing={setIsEditing} onUpdatePost={onUpdatePost} />
                         ) : (
-                            <div className="relative w-full lg:w-[480px] bg-white flex flex-col h-full shrink-0">
+                            <div className="relative w-full lg:w-[500px] bg-white flex flex-col h-full shrink-0">
 
                                 {/* EDIT BUTTON HERE */}
                                 <div>
@@ -549,15 +547,15 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
 
                                     {/* Reviewer Note */}
                                     {/* {reviewerNote && (
-                                <div className="bg-amber-50 border border-amber-100 p-5 rounded-xl">
-                                    <h4 className="text-xs font-bold text-amber-700 uppercase tracking-widest mb-2 flex items-center">
-                                        <User className="w-3.5 h-3.5 mr-1.5" /> Analyst Note
-                                    </h4>
-                                    <p className="text-amber-900/80 font-medium text-sm">
-                                        {reviewerNote}
-                                    </p>
-                                </div>
-                            )} */}
+                                        <div className="bg-amber-50 border border-amber-100 p-5 rounded-xl">
+                                            <h4 className="text-xs font-bold text-amber-700 uppercase tracking-widest mb-2 flex items-center">
+                                                <User className="w-3.5 h-3.5 mr-1.5" /> Analyst Note
+                                            </h4>
+                                            <p className="text-amber-900/80 font-medium text-sm">
+                                                {reviewerNote}
+                                            </p>
+                                        </div>
+                                    )} */}
 
                                     {/* Client Notes Section */}
                                     <div className="space-y-4">

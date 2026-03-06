@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from "react"
-import { useState, useMemo, useEffect, useCallback, useRef, useActionState } from 'react'
+import { useState, useEffect, useCallback, useRef, useTransition } from 'react'
 import { format } from "date-fns"
 import { submitCaseReview, getPosts, getAllPostsForExport } from './actions'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
@@ -26,37 +26,30 @@ import { DatePicker } from "@/components/ui/date-picker"
 
 import ReviewForm from "./ReviewDetails"
 
-export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, currentPage: initialCurrentPage, project, initialFilters }) {
+export function ReviewInterface({
+  initialPosts,
+  totalPages,
+  currentPage,
+  project,
+  initialFilters
+}) {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
 
+  // UI States
   const [selectedPost, setSelectedPost] = useState(null)
   const [posts, setPosts] = useState(initialPosts)
-  const [page, setPage] = useState(initialCurrentPage)
-  const [loading, setLoading] = useState(false)
-  // const [hasMore, setHasMore] = useState(initialCurrentPage < initialTotalPages) 
+  const [isExporting, setIsExporting] = useState(false) // Renamed for clarity
 
-  // Sync with props when navigation occurs
+  // useTransition gives us a loading state when Next.js is fetching new URL params!
+  const [isPending, startTransition] = useTransition()
+  const postRefs = useRef({})
+
+  // Keep local posts in sync when the server sends new ones (filtering/pagination)
   useEffect(() => {
     setPosts(initialPosts)
-    setPage(initialCurrentPage)
-    setFilters(initialFilters)
-  }, [initialPosts, initialCurrentPage, initialFilters])
-
-  // Filters State
-  const [filters, setFilters] = useState(initialFilters || {
-    platform: 'all',
-    status: 'pending',
-    sourcingDateStart: undefined,
-    sourcingDateEnd: undefined,
-    dbDateStart: undefined,
-    dbDateEnd: undefined,
-    aiAnalyzed: true,
-    poiDetected: true
-  })
-
-  const postRefs = useRef({})
+  }, [initialPosts])
 
   // Navigation Logic for URL params
   const updateQueryParams = useCallback((newParams) => {
@@ -68,14 +61,19 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
         params.set(key, value)
       }
     })
+
     if (!newParams.page) {
       params.delete('page')
     }
-    router.push(`${pathname}?${params.toString()}`)
+
+    // Wrap router.push in startTransition to trigger the isPending loading state
+    startTransition(() => {
+      router.push(`${pathname}?${params.toString()}`, { scroll: false })
+    })
   }, [router, pathname, searchParams])
 
   const handlePageChange = (newPage) => {
-    if (newPage < 1 || newPage > initialTotalPages) return
+    if (newPage < 1 || newPage > totalPages) return
     updateQueryParams({ page: newPage })
   }
 
@@ -84,9 +82,9 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
   }
 
   const handleExportCSV = async () => {
-    setLoading(true)
+    setIsExporting(true)
     try {
-      const { posts: allPosts } = await getAllPostsForExport(project.mongo_db_map, filters)
+      const { posts: allPosts } = await getAllPostsForExport(project.mongo_db_map, initialFilters)
 
       if (!allPosts || allPosts.length === 0) {
         alert("No posts found to export.")
@@ -126,12 +124,14 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
       console.error('Export Error:', error)
       alert('Failed to export CSV. Please try again.')
     } finally {
-      setLoading(false)
+      setIsExporting(false)
     }
   }
 
   const clearFilters = () => {
-    router.push(pathname)
+    startTransition(() => {
+      router.push(pathname, { scroll: false })
+    })
   }
 
   const navigatePost = useCallback((direction) => {
@@ -172,19 +172,14 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
   }, [selectedPost, posts, navigatePost])
 
   const getRiskLabel = (score) => {
-    if (score >= 96) return { label: 'High', color: 'text-rose-500 bg-rose-50 border-rose-200' };
-    if (score >= 76) return { label: 'Medium', color: 'text-orange-500 bg-orange-50 border-orange-200' };
-    if (score >= 41) return { label: 'Low', color: 'text-amber-500 bg-amber-50 border-amber-200' };
-    return { label: 'Safe', color: 'text-slate-500 bg-slate-50 border-slate-200' };
+    if (score > 95) return { label: 'High', color: 'text-rose-500 bg-rose-50 border-rose-200' }
+    if (score > 75) return { label: 'Medium', color: 'text-orange-500 bg-orange-50 border-orange-200' }
+    if (score > 40) return { label: 'Low', color: 'text-amber-500 bg-amber-50 border-amber-200' }
+    return { label: 'Safe', color: 'text-slate-500 bg-slate-50 border-slate-200' }
   }
 
-  // const getPostLink = (post) => {
-  //   const id = post.post_id || post.code
-  //   if (post.platform === 'instagram') return `https://www.instagram.com/p/${id}/`
-  //   if (post.platform === 'facebook') return `https://www.facebook.com/${id}`
-  //   if (post.platform === 'x') return `https://twitter.com/${post.user?.username}/status/${id}`
-  //   return '#'
-  // }
+  // Fallback defaults for safety during destructing
+  const currentFilters = initialFilters || {}
 
   return (
     <div className="flex h-full relative bg-slate-50">
@@ -210,14 +205,14 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
                   variant="outline"
                   size="sm"
                   onClick={handleExportCSV}
-                  disabled={loading || posts.length === 0}
+                  disabled={isExporting || posts.length === 0}
                   className="h-9 text-xs font-bold text-slate-600 hover:text-blue-600 border-slate-200 hover:bg-blue-50 transition-all"
                 >
-                  <Download className="h-3.5 w-3.5 mr-2" />
+                  {isExporting ? <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" /> : <Download className="h-3.5 w-3.5 mr-2" />}
                   Export CSV
                 </Button>
 
-                {(filters.status !== 'pending' || filters.platform !== 'all' || !filters.aiAnalyzed || filters.poiDetected || filters.sourcingDate || filters.dbDate) && (
+                {(currentFilters.status !== 'pending' || currentFilters.platform !== 'all' || !currentFilters.aiAnalyzed || currentFilters.poiDetected || currentFilters.sourcingDateStart || currentFilters.dbDateStart) && (
                   <Button
                     variant="ghost"
                     size="sm"
@@ -238,7 +233,7 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
               <div className="space-y-2">
                 <Label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Status</Label>
                 <Select
-                  value={filters.status}
+                  value={currentFilters.status || 'pending'}
                   onValueChange={(val) => handleFilterChange('status', val)}
                 >
                   <SelectTrigger className="w-full bg-slate-50 border-slate-200 hover:border-slate-300 focus:ring-blue-500/20">
@@ -255,7 +250,7 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
               <div className="space-y-2">
                 <Label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Platform</Label>
                 <Select
-                  value={filters.platform}
+                  value={currentFilters.platform || 'all'}
                   onValueChange={(val) => handleFilterChange('platform', val)}
                 >
                   <SelectTrigger className="w-full bg-slate-50 border-slate-200 hover:border-slate-300 focus:ring-blue-500/20">
@@ -277,7 +272,7 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
                   <Calendar className="w-3.5 h-3.5" /> Sourced After
                 </Label>
                 <DatePicker
-                  date={filters.sourcingDateStart ? new Date(filters.sourcingDateStart) : undefined}
+                  date={currentFilters.sourcingDateStart ? new Date(currentFilters.sourcingDateStart) : undefined}
                   setDate={(date) => handleFilterChange('sourcingDateStart', date ? format(date, 'yyyy-MM-dd') : '')}
                   placeholder="Select Date"
                   className="w-full"
@@ -289,7 +284,7 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
                   <Database className="w-3.5 h-3.5" /> Ingested After
                 </Label>
                 <DatePicker
-                  date={filters.dbDateStart ? new Date(filters.dbDateStart) : undefined}
+                  date={currentFilters.dbDateStart ? new Date(currentFilters.dbDateStart) : undefined}
                   setDate={(date) => handleFilterChange('dbDateStart', date ? format(date, 'yyyy-MM-dd') : '')}
                   placeholder="Select Date"
                   className="w-full"
@@ -303,7 +298,7 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
                 <div className="flex items-center space-x-2.5 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200/50">
                   <Checkbox
                     id="aiAnalyzed"
-                    checked={filters.aiAnalyzed !== false}
+                    checked={currentFilters.aiAnalyzed !== 'false' && currentFilters.aiAnalyzed !== false}
                     onCheckedChange={(checked) => handleFilterChange('aiAnalyzed', checked.toString())}
                     className="border-slate-300 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
                   />
@@ -319,7 +314,7 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
                 <div className="flex items-center space-x-2.5 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200/50">
                   <Checkbox
                     id="poiDetected"
-                    checked={filters.poiDetected !== false}
+                    checked={currentFilters.poiDetected !== 'false' && currentFilters.poiDetected !== false}
                     onCheckedChange={(checked) => handleFilterChange('poiDetected', checked.toString())}
                     className="border-slate-300 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
                   />
@@ -334,10 +329,10 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
               </div>
 
               <div className="flex items-center gap-3">
-                {loading && (
+                {isPending && (
                   <div className="flex items-center gap-2 text-blue-600 text-xs font-medium animate-pulse">
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    Refreshing...
+                    Updating...
                   </div>
                 )}
                 <Badge variant="secondary" className="px-3 py-1 bg-slate-100 text-slate-600 border-slate-200">
@@ -349,7 +344,7 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
         </div>
 
         {/* Data Table */}
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+        <div className={cn("bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden transition-opacity", isPending && "opacity-60")}>
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-slate-100">
               <thead className="bg-slate-50/80">
@@ -362,14 +357,10 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-slate-100">
-                {loading && posts.length === 0 ? (
+                {isPending && posts.length === 0 ? (
                   Array.from({ length: 10 }).map((_, index) => (
                     <tr key={index}>
-                      {/* Risk Level */}
-                      <td className="px-6 py-4 whitespace-nowrap align-top">
-                        <Skeleton className="h-6 w-20 rounded-md" />
-                      </td>
-                      {/* Content */}
+                      <td className="px-6 py-4 whitespace-nowrap align-top"><Skeleton className="h-6 w-20 rounded-md" /></td>
                       <td className="px-6 py-4 max-w-lg align-top">
                         <div className="flex gap-4">
                           <Skeleton className="h-16 w-16 rounded-lg shrink-0" />
@@ -380,18 +371,9 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
                           </div>
                         </div>
                       </td>
-                      {/* Platform */}
-                      <td className="px-6 py-4 whitespace-nowrap align-top">
-                        <Skeleton className="h-6 w-24 rounded-md" />
-                      </td>
-                      {/* Threat Type */}
-                      <td className="px-6 py-4 whitespace-nowrap align-top">
-                        <Skeleton className="h-6 w-28 rounded-md" />
-                      </td>
-                      {/* Actions */}
-                      <td className="px-6 py-4 whitespace-nowrap text-right align-top">
-                        <Skeleton className="h-9 w-24 ml-auto rounded-md" />
-                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap align-top"><Skeleton className="h-6 w-24 rounded-md" /></td>
+                      <td className="px-6 py-4 whitespace-nowrap align-top"><Skeleton className="h-6 w-28 rounded-md" /></td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right align-top"><Skeleton className="h-9 w-24 ml-auto rounded-md" /></td>
                     </tr>
                   ))
                 ) : posts.length === 0 ? (
@@ -405,18 +387,16 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
                     </td>
                   </tr>
                 ) : (
-                  posts.map((post, index) => {
+                  posts.map((post) => {
                     const isSelected = selectedPost?._id === post._id
-                    const riskScore = post.review_details?.threat_score || post.analysis_results?.risk_score || 0;
-                    const risk = getRiskLabel(riskScore);
-                    const threatType = post.review_details?.threat_types?.join(', ').replace(/_/g, ' ') || post.review_details?.threat_type?.replace(/_/g, ' ') || post.analysis_results?.category || 'Unknown';
+                    const riskScore = post.review_details?.threat_score || post.analysis_results?.risk_score || 0
+                    const risk = getRiskLabel(riskScore)
+                    const threatType = post.review_details?.threat_types?.join(', ').replace(/_/g, ' ') || post.review_details?.threat_type?.replace(/_/g, ' ') || post.analysis_results?.category || 'Unknown'
 
                     return (
                       <tr
                         key={post._id}
-                        ref={(el) => {
-                          postRefs.current[post._id] = el
-                        }}
+                        ref={(el) => { postRefs.current[post._id] = el }}
                         className={cn(
                           "group transition-all cursor-pointer",
                           isSelected ? "bg-blue-50/60" : "hover:bg-slate-50"
@@ -451,9 +431,7 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
                               )}
                               {post.platform.toLowerCase() === 'instagram' && <div className="absolute -bottom-1 -right-1 bg-white rounded-full p-0.5 shadow-sm"><Instagram className="w-4 h-4 text-pink-500 fill-pink-50" /></div>}
                               {post.platform.toLowerCase() === 'facebook' && <div className="absolute -bottom-1 -right-1 bg-white rounded-full p-0.5 shadow-sm"><Facebook className="w-4 h-4 text-blue-600 fill-blue-50" /></div>}
-                              {post.platform.toLowerCase() === 'x' && <div className="absolute -bottom-1 -right-1 bg-white rounded-full p-0.5 shadow-sm"> <span className="inline-block size-4 text-black">
-                                <Twitter />
-                              </span> </div>}
+                              {post.platform.toLowerCase() === 'x' && <div className="absolute -bottom-1 -right-1 bg-white rounded-full p-0.5 shadow-sm"> <span className="inline-block size-4 text-black"><Twitter /></span> </div>}
                               {post.platform.toLowerCase() === 'youtube' && <div className="absolute -bottom-1 -right-1 bg-white rounded-full p-0.5 shadow-sm"><Youtube className="w-4 h-4 text-red-600 fill-red-50" /></div>}
                               {post.platform.toLowerCase() === 'website' && <div className="absolute -bottom-1 -right-1 bg-white rounded-full p-0.5 shadow-sm"><Globe className="w-4 h-4 text-slate-500" /></div>}
                             </div>
@@ -512,18 +490,18 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
         </div>
 
         {/* Pagination Controls */}
-        {initialTotalPages > 1 && (
+        {totalPages > 1 && (
           <div className="pt-4">
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 px-6 py-4 flex items-center justify-between">
               <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                Page <span className="text-slate-900">{page}</span> of <span className="text-slate-900">{initialTotalPages}</span>
+                Page <span className="text-slate-900">{currentPage}</span> of <span className="text-slate-900">{totalPages}</span>
               </div>
               <div className="flex items-center gap-2">
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => handlePageChange(page - 1)}
-                  disabled={page === 1}
+                  onClick={() => handlePageChange(currentPage - 1)}
+                  disabled={currentPage === 1 || isPending}
                   className="h-9 px-3 text-xs font-bold border-slate-200 hover:bg-slate-50 disabled:opacity-50"
                 >
                   <ChevronLeft className="w-4 h-4 mr-1" /> Previous
@@ -531,8 +509,8 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => handlePageChange(page + 1)}
-                  disabled={page === initialTotalPages}
+                  onClick={() => handlePageChange(currentPage + 1)}
+                  disabled={currentPage === totalPages || isPending}
                   className="h-9 px-3 text-xs font-bold border-slate-200 hover:bg-slate-50 disabled:opacity-50"
                 >
                   Next <ChevronRight className="w-4 h-4 ml-1" />
@@ -573,5 +551,3 @@ export function ReviewInterface({ initialPosts, totalPages: initialTotalPages, c
     </div>
   )
 }
-
-

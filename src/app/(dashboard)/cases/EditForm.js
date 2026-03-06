@@ -18,7 +18,7 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { cn } from "@/lib/utils"
 
-export default function EditForm({ post, project, setIsEditing }) {
+export default function EditForm({ post, project, setIsEditing, onUpdatePost }) {
     const project_details = project.project_details
 
     const initialState = {
@@ -29,6 +29,18 @@ export default function EditForm({ post, project, setIsEditing }) {
     const submit_to_edit = submitCaseReview.bind(null, project)
 
     const [state, formAction, isPending] = useActionState(submit_to_edit, initialState);
+
+    React.useEffect(() => {
+        if (state?.success && state?.updatedFields) {
+            if (onUpdatePost) {
+                onUpdatePost({
+                    ...post,
+                    ...state.updatedFields
+                });
+            }
+            setIsEditing(false);
+        }
+    }, [state, post, onUpdatePost, setIsEditing]);
 
     // Initial Values
     const review = post.review_details || {}
@@ -57,33 +69,29 @@ export default function EditForm({ post, project, setIsEditing }) {
     const [facePresent, setFacePresent] = useState(savedFace)
     const [namePresent, setNamePresent] = useState(savedName)
     const [poiNames, setPoiNames] = useState(savedPoiNames)
-    const [newPoiInput, setNewPoiInput] = useState('')
+    // const [newPoiInput, setNewPoiInput] = useState('')
     const [threatScore, setThreatScore] = useState(savedScore)
     const [threatTypes, setThreatTypes] = useState(savedTypes)
     const [isAIGC, setIsAIGC] = useState(savedAigc)
     // const [suggestTakedown, setSuggestTakedown] = useState(savedTakedown)
 
     const poiPresent = facePresent || namePresent
-    const defaultComments = review.reviewer_comments || '';
+    // const defaultComments = review.reviewer_comments || '';
 
-    const full_analysis_reasonning = hasReview ? review.reasoning : `${analysis?.reasoning || ""} ${analysis?.categorization_reason || ""}
-      ${analysis?.threat_category ? "\nCategory: " + analysis.threat_category : ""}
-      ${analysis?.nsfw_check?.reasoning ? "\nNSFW: " + analysis.nsfw_check.reasoning : ""}
-      ${analysis?.hate_speech_check?.reasoning ? "\nHate Speech: " + analysis.hate_speech_check.reasoning : ""}
-      `.trim();
+    const full_analysis_reasonning = hasReview ? review.reasoning : "";
 
-    const handleAddPoi = () => {
-        if (newPoiInput.trim()) {
-            if (!(poiNames.map(name => name.toLowerCase())).includes(newPoiInput.trim().toLowerCase())) {
-                setPoiNames([...poiNames, newPoiInput.trim()])
-            }
-            setNewPoiInput('')
-        }
-    }
+    // const handleAddPoi = () => {
+    //     if (newPoiInput.trim()) {
+    //         if (!(poiNames.map(name => name.toLowerCase())).includes(newPoiInput.trim().toLowerCase())) {
+    //             setPoiNames([...poiNames, newPoiInput.trim()])
+    //         }
+    //         setNewPoiInput('')
+    //     }
+    // }
 
-    const handleRemovePoi = (index) => {
-        setPoiNames(poiNames.filter((_, i) => i !== index))
-    }
+    // const handleRemovePoi = (index) => {
+    //     setPoiNames(poiNames.filter((_, i) => i !== index))
+    // }
 
     const toggleThreatType = (type) => {
         setThreatTypes(prev => prev.includes(type) ? prev.filter(t => t !== type) : [...prev, type])
@@ -91,7 +99,10 @@ export default function EditForm({ post, project, setIsEditing }) {
 
 
     return (
-        <div className="w-[500px] shrink-0 overflow-y-auto bg-white">
+        <div className="w-[500px] shrink-0 overflow-y-auto bg-white relative">
+            <button onClick={() => setIsEditing(false)} className="absolute top-4 right-4 p-1 bg-slate-100 rounded-full hover:bg-slate-200 cursor-pointer">
+                <X className="w-6 h-6" />
+            </button>
             <form action={formAction} className="flex flex-col min-h-full">
                 {/* Hidden Inputs */}
                 {
@@ -252,7 +263,7 @@ export default function EditForm({ post, project, setIsEditing }) {
                     <Button
                         type="submit"
                         disabled={isPending}
-                        className="flex-[2] font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-600/20"
+                        className="flex-2 font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-600/20"
                     >
                         {isPending ? <Loader2 className="animate-spin" /> : (hasReview ? 'Update Review' : 'Submit to Client')}
                     </Button>

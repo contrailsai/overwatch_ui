@@ -95,9 +95,16 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
   }
 
   // Merged posts for current page view
-  const mergedPosts = useMemo(() => {
-    return cases?.posts || []
+  const [mergedPosts, setMergedPosts] = useState([])
+
+  useEffect(() => {
+    setMergedPosts(cases?.posts || [])
   }, [cases?.posts])
+
+  const handleUpdatePost = useCallback((updatedPost) => {
+    setMergedPosts(prev => prev.map(p => p._id === updatedPost._id ? updatedPost : p))
+    setSelectedPost(prev => prev && prev._id === updatedPost._id ? { ...prev, ...updatedPost } : prev)
+  }, [])
 
   // --- Selection Handlers ---
   const handleToggleCase = (post, e) => {
@@ -867,6 +874,7 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
         onNavigate={navigatePost}
         hasPrev={mergedPosts.findIndex(p => p._id === selectedPost?._id) > 0}
         hasNext={mergedPosts.findIndex(p => p._id === selectedPost?._id) < mergedPosts.length - 1}
+        onUpdatePost={handleUpdatePost}
       />
     </div>
   )
