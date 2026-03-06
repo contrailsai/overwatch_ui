@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Separator } from "@/components/ui/separator"
 import { cn } from "@/lib/utils"
+import PageHeader from "@/components/PageHeader"
 
 export default function TakedownsPage() {
   const [takedowns, setTakedowns] = useState([])
@@ -54,78 +55,79 @@ export default function TakedownsPage() {
   return (
     <div className="flex flex-col h-full w-full bg-slate-50">
       {/* Header */}
-      <header className="bg-white border-b border-slate-200 py-5 px-8 shrink-0">
+      <PageHeader title="Takedown Requests" description="Manage and track active content removal requests" />
+      {/* <header className="bg-white border-b border-slate-200 py-5 px-8 shrink-0">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Takedown Requests</h1>
           <p className="text-sm text-slate-500 mt-0.5">Manage and track active content removal requests</p>
         </div>
-      </header>
+      </header> */}
 
       {/* Filters & Controls */}
       <div className="px-8 py-6 shrink-0">
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
-           <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
-              
-              {/* Left: Filters */}
-              <div className="flex items-center gap-6 w-full sm:w-auto">
-                 <div className="flex items-center gap-2.5 shrink-0">
-                    <div className="bg-blue-50 p-2 rounded-lg text-blue-600">
-                       <Filter className="w-4 h-4" />
-                    </div>
-                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Filters</span>
-                 </div>
-                 
-                 <Separator orientation="vertical" className="h-8 bg-slate-100 hidden sm:block" />
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
 
-                 <div className="flex flex-wrap items-center gap-4">
-                    <div className="space-y-1">
-                      <Label className="text-[10px] uppercase font-bold text-slate-400">Status</Label>
-                      <Select
-                         value={filters.status}
-                         onValueChange={(val) => handleFilterChange('status', val)}
-                      >
-                         <SelectTrigger className="w-[160px] bg-white border-slate-200 h-9 text-xs font-semibold">
-                            <SelectValue placeholder="All Statuses" />
-                         </SelectTrigger>
-                         <SelectContent>
-                            <SelectItem value="all">All Statuses</SelectItem>
-                            <SelectItem value="raised">Raised</SelectItem>
-                            <SelectItem value="under_review">Under Review</SelectItem>
-                            <SelectItem value="accepted">Accepted</SelectItem>
-                            <SelectItem value="rejected">Rejected</SelectItem>
-                            <SelectItem value="suspended">Suspended</SelectItem>
-                         </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="space-y-1">
-                      <Label className="text-[10px] uppercase font-bold text-slate-400">Platform</Label>
-                      <Select
-                         value={filters.platform}
-                         onValueChange={(val) => handleFilterChange('platform', val)}
-                      >
-                         <SelectTrigger className="w-[140px] bg-white border-slate-200 h-9 text-xs font-semibold">
-                            <SelectValue placeholder="All Platforms" />
-                         </SelectTrigger>
-                         <SelectContent>
-                            <SelectItem value="all">All Platforms</SelectItem>
-                            <SelectItem value="instagram">Instagram</SelectItem>
-                            <SelectItem value="facebook">Facebook</SelectItem>
-                            <SelectItem value="x">X (Twitter)</SelectItem>
-                         </SelectContent>
-                      </Select>
-                    </div>
-                    
-                    {(filters.platform !== 'all' || filters.status !== 'all') && (
-                      <div className="pt-4">
-                        <Button variant="ghost" size="sm" onClick={clearFilters} className="h-9 px-2 text-rose-600 hover:text-rose-700 hover:bg-rose-50 font-bold text-xs">
-                           <X className="w-3.5 h-3.5 mr-1" /> Clear
-                        </Button>
-                      </div>
-                    )}
-                 </div>
+            {/* Left: Filters */}
+            <div className="flex items-center gap-6 w-full sm:w-auto">
+              <div className="flex items-center gap-2.5 shrink-0">
+                <div className="bg-blue-50 p-2 rounded-lg text-blue-600">
+                  <Filter className="w-4 h-4" />
+                </div>
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Filters</span>
               </div>
-           </div>
+
+              <Separator orientation="vertical" className="h-8 bg-slate-100 hidden sm:block" />
+
+              <div className="flex flex-wrap items-center gap-4">
+                <div className="space-y-1">
+                  <Label className="text-[10px] uppercase font-bold text-slate-400">Status</Label>
+                  <Select
+                    value={filters.status}
+                    onValueChange={(val) => handleFilterChange('status', val)}
+                  >
+                    <SelectTrigger className="w-[160px] bg-white border-slate-200 h-9 text-xs font-semibold">
+                      <SelectValue placeholder="All Statuses" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Statuses</SelectItem>
+                      <SelectItem value="raised">Raised</SelectItem>
+                      <SelectItem value="under_review">Under Review</SelectItem>
+                      <SelectItem value="accepted">Accepted</SelectItem>
+                      <SelectItem value="rejected">Rejected</SelectItem>
+                      <SelectItem value="suspended">Suspended</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-[10px] uppercase font-bold text-slate-400">Platform</Label>
+                  <Select
+                    value={filters.platform}
+                    onValueChange={(val) => handleFilterChange('platform', val)}
+                  >
+                    <SelectTrigger className="w-[140px] bg-white border-slate-200 h-9 text-xs font-semibold">
+                      <SelectValue placeholder="All Platforms" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Platforms</SelectItem>
+                      <SelectItem value="instagram">Instagram</SelectItem>
+                      <SelectItem value="facebook">Facebook</SelectItem>
+                      <SelectItem value="x">X (Twitter)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {(filters.platform !== 'all' || filters.status !== 'all') && (
+                  <div className="pt-4">
+                    <Button variant="ghost" size="sm" onClick={clearFilters} className="h-9 px-2 text-rose-600 hover:text-rose-700 hover:bg-rose-50 font-bold text-xs">
+                      <X className="w-3.5 h-3.5 mr-1" /> Clear
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -135,20 +137,20 @@ export default function TakedownsPage() {
           <div className="space-y-4">
             {Array.from({ length: 5 }).map((_, i) => (
               <div key={i} className="bg-white rounded-xl border border-slate-200 p-4 flex gap-4 h-32 items-center">
-                 <Skeleton className="w-24 h-24 rounded-lg shrink-0" />
-                 <div className="flex-1 space-y-2">
-                    <Skeleton className="h-5 w-1/3" />
-                    <Skeleton className="h-4 w-1/2" />
-                    <Skeleton className="h-4 w-1/4" />
-                 </div>
-                 <Skeleton className="h-8 w-8 rounded-full ml-auto" />
+                <Skeleton className="w-24 h-24 rounded-lg shrink-0" />
+                <div className="flex-1 space-y-2">
+                  <Skeleton className="h-5 w-1/3" />
+                  <Skeleton className="h-4 w-1/2" />
+                  <Skeleton className="h-4 w-1/4" />
+                </div>
+                <Skeleton className="h-8 w-8 rounded-full ml-auto" />
               </div>
             ))}
           </div>
         ) : takedowns.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-24 text-slate-400">
             <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mb-6 border border-slate-100">
-               <ShieldAlert className="w-8 h-8 opacity-20 text-slate-500" />
+              <ShieldAlert className="w-8 h-8 opacity-20 text-slate-500" />
             </div>
             <h3 className="text-lg font-bold text-slate-700 mb-1">No active takedowns found</h3>
             <p className="text-sm text-slate-500 max-w-xs text-center">Try adjusting your filters or checking back later.</p>

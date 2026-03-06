@@ -3,6 +3,7 @@ import { getClientandProjectDetails } from '@/app/(dashboard)/actions'
 import { Sidebar } from '@/components/Sidebar'
 import { redirect } from 'next/navigation'
 import { GoogleAnalyticsConfig } from '@/components/GoogleAnalyticsConfig'
+import { ClientProvider } from '@/context/ClientContext'
 
 export const metadata = {
   title: {
@@ -29,9 +30,11 @@ export default async function DashboardLayout({ children }) {
         )
       }
       <Sidebar user={user} clientDetails={clientDetails} project={project} />
-      <main className="flex-1 relative overflow-y-auto focus:outline-none">
-        {children}
-      </main>
+      <ClientProvider>
+        <main className="flex-1 relative overflow-y-auto focus:outline-none">
+          {children}
+        </main>
+      </ClientProvider>
     </div>
   );
 }

@@ -9,6 +9,7 @@ import {
 } from 'recharts'
 import { Clock, Eye, Activity, TrendingUp, ShieldCheck, Filter, ChevronDown, LayoutDashboard, Siren } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import PageHeader from '@/components/PageHeader'
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 const fmt = (n) => (n ?? 0).toLocaleString()
@@ -235,15 +236,16 @@ export function DashboardContent({ data }) {
 
             {/* ── Header ────────────────────────────────────────────── */}
 
-            <header className="bg-white border-b border-slate-200 py-5 px-8 shrink-0 flex justify-between items-center z-10">
-                <div>
+            <PageHeader Icon={LayoutDashboard} title="Home" />
+            {/* <header className="bg-white border-b border-slate-200 py-5 px-8 shrink-0 flex justify-between items-center z-10"> */}
+            {/* <div>
                     <h1 className="text-2xl flex items-center gap-2 font-bold text-slate-900 tracking-tight">
                         <LayoutDashboard className="w-6 h-6 stroke-3 text-slate-900" />
                         Home
-                    </h1>
-                    {/* <p className="text-sm text-slate-500 mt-0.5">Overview of all cases</p> */}
-                </div>
-            </header>
+                    </h1> */}
+            {/* <p className="text-sm text-slate-500 mt-0.5">Overview of all cases</p> */}
+            {/* </div> */}
+            {/* </header> */}
 
             {/* ── Main Content ────────────────────────────────────────── */}
             <main className="px-6 pt-6 pb-20 relative z-10 space-y-8">

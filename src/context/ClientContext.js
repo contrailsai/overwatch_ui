@@ -1,100 +1,16 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState } from 'react';
-import { createClient } from '@/utils/supabase/client';
-import { useRouter } from 'next/navigation';
+// import { createClient } from '@/utils/supabase/client';
+// import { useRouter } from 'next/navigation';
 
 const ClientContext = createContext();
 
 export const ClientProvider = ({ children }) => {
-    const [supabase] = useState(() => createClient());
-    const [user, setUser] = useState(null);
-    const [clientDetails, setClientDetails] = useState(null);
-    const [isLoading, setIsLoading] = useState(true);
     const [lastAction, setLastAction] = useState(Date.now());
-    const router = useRouter();
 
-    // 1. Monitor Auth State Changes (Handles refreshes automatically)
-    useEffect(() => {
-        // Initial session check
-        supabase.auth.getSession().then(({ data: { session } }) => {
-            console.log("Initial Session CHECK", session?.user)
-            if (session?.user) {
-                setUser(session.user);
-            } else {
-                setIsLoading(false);
-            }
-        });
-
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-            console.log("Auth State Changed:", event, session?.user?.email);
-            const currentUser = session?.user ?? null;
-            setUser(currentUser);
-
-            if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-                setLastAction(Date.now());
-            }
-
-            if (event === 'SIGNED_OUT') {
-                setClientDetails(null);
-                setIsLoading(false);
-            }
-        });
-
-        return () => subscription.unsubscribe();
-    }, [supabase]);
-
-    // 2. Proactive Fetch: Run whenever the user changes or is set
-    useEffect(() => {
-        const fetchDetails = async () => {
-            if (!user) {
-                // Done loading if no user
-                setIsLoading(false);
-                return;
-            }
-
-            // If we have a user but no details (or user changed), fetch them.
-            if (!clientDetails || clientDetails.id !== user.id) {
-                setIsLoading(true);
-                console.log("Fetching client details for:", user.email);
-
-                const { data, error } = await supabase
-                    .from('client_details')
-                    .select('*')
-                    .eq('id', user.id)
-                    .maybeSingle();
-
-                if (data) {
-                    setClientDetails(data);
-                }
-                if (error) {
-                    console.error('Error fetching client details:', error);
-                }
-                setIsLoading(false);
-            } else {
-                // We have user and matching details
-                setIsLoading(false);
-            }
-        };
-
-        fetchDetails();
-    }, [user, supabase, clientDetails?.id]);
-
-    // 3. Background Service: Inactivity Checker
-    useEffect(() => {
-        const CHECK_INTERVAL = 3 * 60 * 60 * 1000;
-
-        const interval = setInterval(() => {
-            if (user && Date.now() - lastAction > CHECK_INTERVAL) {
-                console.log("Inactivity limit reached. Logging out...");
-                supabase.auth.signOut().then(() => {
-                    router.push('/login');
-                });
-            }
-        }, 3 * 60 * 1000); // Check every three minutes
-
-        return () => clearInterval(interval);
-    }, [lastAction, user, supabase, router]);
+    const [clientDetails, setClientDetails] = useState("YO ");
+    // const [projectDetails, setProjectDetails] = useState(null);
 
     // 4. Realtime Notification Listener (Future Feature)
     /*
@@ -123,7 +39,7 @@ export const ClientProvider = ({ children }) => {
     const trackAction = () => setLastAction(Date.now());
 
     return (
-        <ClientContext.Provider value={{ user, clientDetails, isLoading, trackAction }}>
+        <ClientContext.Provider value={{ trackAction, clientDetails, setClientDetails }}>
             {children}
         </ClientContext.Provider>
     );

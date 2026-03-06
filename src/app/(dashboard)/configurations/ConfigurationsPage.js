@@ -15,6 +15,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Loader2, Mail, Slack, MessageCircle, Settings, Bell, CheckCircle2, AlertCircle, Tag, Plus, Trash2, Globe, Calendar, FileText } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { format } from 'date-fns'
+import PageHeader from '@/components/PageHeader'
 
 export default function ConfigurationsPage({ clientDetails, project }) {
     const [state, formAction, isPending] = useActionState(updateConfiguration, null)
@@ -94,12 +95,14 @@ export default function ConfigurationsPage({ clientDetails, project }) {
     return (
         <main className="flex-1 flex flex-col h-full w-full overflow-hidden bg-slate-50">
             {/* Header */}
-            <header className="bg-white border-b border-slate-200 py-5 px-8 shrink-0 flex justify-between items-center z-10">
+            <PageHeader title="Configurations" description="Manage your account preferences and project-specific categorization rules" />
+
+            {/* <header className="bg-white border-b border-slate-200 py-5 px-8 shrink-0 flex justify-between items-center z-10">
                 <div>
                     <h1 className="text-2xl font-bold text-slate-900 tracking-tight">System Configuration</h1>
                     <p className="text-sm text-slate-500 mt-0.5">Manage your account preferences and project-specific categorization rules</p>
                 </div>
-            </header>
+            </header> */}
 
             {/* Content Area */}
             <div className="flex-1 overflow-y-auto p-8 w-full">

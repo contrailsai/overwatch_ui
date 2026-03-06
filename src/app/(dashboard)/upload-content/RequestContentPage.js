@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card'
 import { Loader2, Link as LinkIcon, CheckCircle2, AlertCircle, Send, Clock, History, RefreshCw, ExternalLink } from 'lucide-react'
 import { format } from 'date-fns'
+import PageHeader from '@/components/PageHeader'
 
 export default function RequestContentPage() {
     const [state, formAction, isPending] = useActionState(requestLink, null)
@@ -37,12 +38,7 @@ export default function RequestContentPage() {
     return (
         <main className="flex-1 flex flex-col h-full overflow-hidden bg-slate-50 font-outfit">
             {/* Header */}
-            <header className="bg-white border-b border-slate-200 py-6 px-8 shrink-0 flex justify-between items-center z-10">
-                <div>
-                    <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Request Content</h1>
-                    <p className="text-sm text-slate-500 mt-1">Submit new links for data ingestion and analysis</p>
-                </div>
-            </header>
+            <PageHeader title="Request Content" description="Submit new links for data ingestion and analysis" />
 
             {/* Content Area */}
             <div className="flex-1 overflow-y-auto p-8">

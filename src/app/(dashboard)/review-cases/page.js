@@ -1,6 +1,7 @@
 import { getPosts } from './actions'
 import { getClientandProjectDetails } from '@/app/(dashboard)/actions'
 import { ReviewInterface } from './ReviewInterface'
+import PageHeader from '@/components/PageHeader'
 
 export const metadata = {
   title: 'Review Cases',
@@ -66,15 +67,20 @@ export default async function ReviewCasesPage({ searchParams }) {
 
   return (
     <main className="flex-1 flex flex-col h-full overflow-hidden bg-slate-50">
-      <header className="bg-white border-b border-slate-200 py-5 px-8 shrink-0 flex justify-between items-center z-10">
+
+      <PageHeader title="Review Cases" description="Prioritize and verify AI-detected threats" />
+
+      {/* <header className="bg-white border-b border-slate-200 py-5 px-8 shrink-0 flex justify-between items-center z-10">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Review Cases</h1>
           <p className="text-sm text-slate-500 mt-0.5">Prioritize and verify AI-detected threats</p>
         </div>
+      </header> */}
+      {/*
         <div className="bg-slate-100 px-3 py-1.5 rounded-full border border-slate-200 text-xs font-semibold text-slate-600">
           {totalCount.toLocaleString()} pending cases
-        </div>
-      </header>
+        </div> 
+      */}
 
       <div className="flex-1 overflow-hidden relative">
         <ReviewInterface
@@ -83,6 +89,7 @@ export default async function ReviewCasesPage({ searchParams }) {
           currentPage={page}
           project={project}
           initialFilters={initialFilters}
+          totalCount={totalCount}
         />
       </div>
     </main>

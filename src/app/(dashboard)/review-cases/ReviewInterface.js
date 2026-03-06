@@ -31,7 +31,8 @@ export function ReviewInterface({
   totalPages,
   currentPage,
   project,
-  initialFilters
+  initialFilters,
+  totalCount
 }) {
   const router = useRouter()
   const pathname = usePathname()
@@ -201,6 +202,10 @@ export function ReviewInterface({
               </div>
 
               <div className="flex items-center gap-3">
+                <Badge variant="secondary" className="px-3 py-1 bg-slate-100 text-slate-600 border-slate-200">
+                  {totalCount.toLocaleString()} Reviews Pending
+                </Badge>
+
                 <Button
                   variant="outline"
                   size="sm"
