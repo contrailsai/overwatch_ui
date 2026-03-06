@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 
 export default function NotificationsBell() {
     const { notifications, unreadCount, markAsRead, deleteNotification } = useClient();
+    console.log(notifications)
 
     return (
         <Popover>
@@ -61,8 +62,6 @@ export default function NotificationsBell() {
                                     } catch (e) { /* silent fail */ }
                                 }
 
-                                console.log(notification)
-
                                 return (
                                     <div
                                         key={notification.id}
@@ -73,52 +72,66 @@ export default function NotificationsBell() {
                                     >
                                         {/* Unread Indicator Dot */}
                                         {!notification.has_read && (
-                                            <div className="absolute left-2 top-1/2 -translate-y-1/2 w-1.5 h-1.5 bg-blue-600 rounded-full" />
+                                            <div className="absolute left-3 top-[26px] -translate-y-1/2 w-1.5 h-1.5 bg-blue-500 rounded-full shadow-[0_0_6px_rgba(59,130,246,0.6)]" />
                                         )}
 
-                                        <div className="flex-1 space-y-2">
-                                            <p className={cn(
-                                                "text-[13.5px] leading-snug tracking-tight",
-                                                !notification.has_read ? "font-semibold text-slate-900" : "text-slate-600"
-                                            )}>
-                                                {notification.notification_msg}
-                                            </p>
+                                        <div className="flex-1 space-y-3 pl-2">
+                                            <div className="space-y-1">
+                                                <p className={cn(
+                                                    "text-[13px] leading-relaxed",
+                                                    !notification.has_read ? "font-medium text-slate-800" : "text-slate-600"
+                                                )}>
+                                                    {notification.notification_msg}
+                                                </p>
 
-                                            <div className="flex items-center gap-4">
+                                                {actionData?.button?.redirect && (
+                                                    <div className="pt-2">
+                                                        <Link href={actionData.button.redirect}>
+                                                            <Button size="sm" className="h-8 px-4 text-[12px] font-medium bg-blue-50 text-blue-600 hover:bg-blue-100/80 hover:text-blue-700 border border-blue-100 shadow-none transition-all rounded-md">
+                                                                View details
+                                                                <ExternalLink className="ml-2 w-3.5 h-3.5" />
+                                                            </Button>
+                                                        </Link>
+                                                    </div>
+                                                )}
+
+                                                {actionData?.url && (
+                                                    <div className="pt-1">
+                                                        <Link
+                                                            href={actionData.url}
+                                                            className="inline-flex items-center gap-1 text-[12px] font-bold text-blue-600 hover:underline decoration-2 underline-offset-4"
+                                                        >
+                                                            {actionData.label || 'View'}
+                                                            <ExternalLink className="w-3 h-3" />
+                                                        </Link>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            <div className="flex items-center justify-between pt-2 border-t border-slate-100">
                                                 <span className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">
                                                     {formatDistanceToNow(new Date(notification.created_at), { addSuffix: true })}
                                                 </span>
 
-                                                {actionData?.url && (
-                                                    <Link
-                                                        href={actionData.url}
-                                                        className="inline-flex items-center gap-1 text-[12px] font-bold text-blue-600 hover:underline decoration-2 underline-offset-4"
+                                                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                                                    {!notification.has_read && (
+                                                        <button
+                                                            onClick={() => markAsRead(notification.id)}
+                                                            className="p-1.5 cursor-pointer text-slate-400 hover:text-blue-600 hover:bg-slate-100 rounded-md transition-all"
+                                                            title="Mark as read"
+                                                        >
+                                                            <MailOpen className="w-3.5 h-3.5" strokeWidth={3} />
+                                                        </button>
+                                                    )}
+                                                    <button
+                                                        onClick={() => deleteNotification(notification.id)}
+                                                        className="p-1.5 cursor-pointer text-slate-400 hover:text-rose-600 hover:bg-slate-100 rounded-md transition-all"
+                                                        title="Delete"
                                                     >
-                                                        {actionData.label || 'View'}
-                                                        <ExternalLink className="w-3 h-3" />
-                                                    </Link>
-                                                )}
+                                                        <Trash2 className="w-3.5 h-3.5" />
+                                                    </button>
+                                                </div>
                                             </div>
-                                        </div>
-
-                                        {/* Actions */}
-                                        <div className="flex items-start gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                                            {!notification.has_read && (
-                                                <button
-                                                    onClick={() => markAsRead(notification.id)}
-                                                    className="p-1.5 cursor-pointer text-slate-400 hover:text-blue-600 hover:bg-white rounded-md border border-transparent hover:border-blue-100 shadow-sm transition-all"
-                                                    title="Mark as read"
-                                                >
-                                                    <MailOpen className="w-3.5 h-3.5" strokeWidth={3} />
-                                                </button>
-                                            )}
-                                            <button
-                                                onClick={() => deleteNotification(notification.id)}
-                                                className="p-1.5 cursor-pointer text-slate-400 hover:text-rose-600 hover:bg-white rounded-md border border-transparent hover:border-rose-100 shadow-sm transition-all"
-                                                title="Delete"
-                                            >
-                                                <Trash2 className="w-3.5 h-3.5" />
-                                            </button>
                                         </div>
                                     </div>
                                 );

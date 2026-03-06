@@ -52,6 +52,8 @@ export const normalized_S3_post = traceAction('normalized_S3_post', async (post)
       is_verified: post.profile?.is_verified || false
     },
 
+    assigned_to: post?.assigned_to || null,
+
     // Review Details (if available)
     review_details: post.review_details || null,
     takedown_info: post.takedown_info || null,
@@ -595,7 +597,7 @@ export const getPostById = traceAction('getPostById', async (project, id) => {
 
 export const submitCaseReview = traceAction('submitCaseReview', async (project, prevState, formData) => {
 
-  console.log("YO EDITING THE REVIEW, ", project)
+  // console.log("YO EDITING THE REVIEW, ", project)
 
   // const supabase = await createClient()
   // const { data: { user } } = await supabase.auth.getUser()
@@ -772,6 +774,82 @@ export const submitCaseReview = traceAction('submitCaseReview', async (project, 
         review_details,
         takedown_info,
         processed: true,
+        processed_at: new Date().toISOString()
+      }
+    }
+  } catch (error) {
+    console.error('MongoDB Update Error:', error)
+    return { success: false, error: error.message }
+  }
+})
+
+export const fetch_clients_in_project = traceAction('fetch_clients_in_project', async (project_name) => {
+
+  const supabase = await createClient()
+  // const { data: { user } } = await supabase.auth.getUser()
+
+  // if (!user) {
+  //   return { success: false, error: 'Authentication required' }
+  // }
+
+  const { data: client_details, error } = await supabase
+    .from('client_details')
+    .select('*')
+    .eq('project_name', project_name)
+    .eq('permission', 'client')
+
+  if (error) {
+    console.error("ERROR: ", error)
+    return null
+  }
+
+  const emails = client_details.map((client) => client.email)
+
+  return emails
+
+})
+
+export const assignCaseTo = traceAction('assignCaseTo', async (project, post_id, assigned_email) => {
+  if (!project?.mongo_db_map) {
+    return { success: false, error: 'Project database configuration missing' }
+  }
+
+  if (!post_id) {
+    return { success: false, error: 'Missing Post ID' }
+  }
+
+  try {
+    const client = await clientPromise
+    const db = client.db(project.mongo_db_map) // Use Correct DB
+    const collection = db.collection('Posts')
+
+    const result = await collection.updateOne(
+      { _id: new ObjectId(post_id) },
+      {
+        $set: {
+          "assigned_to": assigned_email,
+          "metadata.updated_at": new Date().toISOString()
+        }
+      }
+    )
+
+    // FINALY ADD NOTIFICATION MESSAGE TO THE ASSIGNED CLIENT
+    const supabase = await createClient()
+
+    const { error } = await supabase
+      .from('notifications')
+      .insert([
+        {
+          "client_email": assigned_email,
+          "notification_msg": "You are assigned a new case to review visit. ",
+          "notification_action": { "button": { "redirect": `/cases/${post_id}` } }
+        }
+      ])
+
+    return {
+      success: true,
+      updatedFields: {
+        assigned_to: assigned_email,
         processed_at: new Date().toISOString()
       }
     }

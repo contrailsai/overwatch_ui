@@ -11,19 +11,27 @@ import {
     ScanFace, MessageSquareWarning, Fingerprint, AlertCircle, ShieldQuestion,
     FishingHook,
     UserRound,
-    UserRoundX, Pencil
+    UserRoundX, Pencil, UserPlus
 } from 'lucide-react'
 import { Twitter } from '@/utils/icons'
 import ProfilePic from '@/components/ProfilePic'
-import { approveTakedown, updateClientStatus, addReviewNote, trackClientClick } from './actions'
+import { approveTakedown, updateClientStatus, addReviewNote, trackClientClick, assignCaseTo } from './actions'
 import { cn } from '@/lib/utils'
 import { useRouter } from 'next/navigation'
+//  Shadcn imports
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
+
 import { CaseExportButton } from '@/components/pdf/CaseExportButton'
 import SafeDate from '@/components/SafeDate'
-
 import EditForm from "./EditForm"
 
 const getRiskLabel = (score) => {
@@ -33,7 +41,7 @@ const getRiskLabel = (score) => {
     return { label: 'Safe', color: 'text-slate-500 bg-slate-50 border-slate-200' };
 }
 
-export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose, onNavigate, hasPrev, hasNext, onUpdateStatus, onUpdatePost }) {
+export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose, onNavigate, hasPrev, hasNext, onUpdateStatus, onUpdatePost, projectEmails }) {
     const [isProcessing, setIsProcessing] = useState(false)
     const [imgError, setImgError] = useState(false)
     const router = useRouter()
@@ -42,6 +50,10 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
     const [isSubmittingNote, setIsSubmittingNote] = useState(false);
     const [localNotes, setLocalNotes] = useState(post?.client_notes || []);
     const [copied, setCopied] = useState(false);
+
+    const [assignedEmail, setAssignedEmail] = useState(post?.assigned_to || "");
+    const [isAssignEditMode, setIsAssignEditMode] = useState(!post?.assigned_to);
+    const [isAssigning, setIsAssigning] = useState(false);
 
     const [isEditing, setIsEditing] = useState(false);
 
@@ -61,6 +73,11 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
         console.log(e)
         allowDoTakedown = true;
     }
+
+    useEffect(() => {
+        setAssignedEmail(post?.assigned_to || "");
+        setIsAssignEditMode(!post?.assigned_to);
+    }, [post]);
 
     useEffect(() => {
         if (post?._id !== showProcessed) {
@@ -109,6 +126,28 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
         navigator.clipboard.writeText(url);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
+    };
+
+    // Handler function
+    const handleAssign = async () => {
+        if (!assignedEmail) return;
+        setIsAssigning(true);
+        try {
+            // Invoking your action function
+            const result = await assignCaseTo(project, post._id, assignedEmail);
+
+            // Assuming successful assignment
+            setIsAssignEditMode(false);
+
+            // Optional: If you want to update the local UI immediately
+            if (onUpdatePost) {
+                onUpdatePost({ ...post, assigned_to: assignedEmail });
+            }
+        } catch (error) {
+            alert("Failed to assign case");
+        } finally {
+            setIsAssigning(false);
+        }
     };
 
     // --- Data Resolution ---
@@ -545,7 +584,69 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
                                         </div>
                                     </div>
 
-                                    {/* Reviewer Note */}
+                                    {/* ASSIGN THE CASE TO A USER */}
+                                    <div className="space-y-3">
+                                        <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                            <UserPlus className="w-3.5 h-3.5" /> Assignment
+                                        </h4>
+                                        <div className="w-full bg-slate-50 p-4 rounded-xl border border-slate-100 flex items-center gap-3">
+                                            {!isAssignEditMode ? (
+                                                <>
+                                                    <div className="flex-1 flex items-center gap-2">
+                                                        <span className="text-sm text-slate-500 font-medium">Assigned to:</span>
+                                                        <Badge variant="secondary" className="font-bold text-slate-700 bg-white border-slate-200">
+                                                            {assignedEmail}
+                                                        </Badge>
+                                                    </div>
+                                                    <Button variant="ghost" size="sm" onClick={() => setIsAssignEditMode(true)} className="h-8 text-slate-500 hover:text-slate-900">
+                                                        <Pencil className="w-4 h-4 mr-1.5" /> Edit
+                                                    </Button>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <span className="text-sm text-slate-500 font-medium whitespace-nowrap">Assign to:</span>
+                                                    <Select value={assignedEmail} onValueChange={setAssignedEmail}>
+                                                        <SelectTrigger className="w-full bg-white">
+                                                            <SelectValue placeholder="Select an email" />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            {projectEmails?.map((email) => (
+                                                                <SelectItem key={email} value={email}>
+                                                                    {email}
+                                                                </SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+
+                                                    <Button
+                                                        onClick={handleAssign}
+                                                        disabled={!assignedEmail || isAssigning || assignedEmail === post?.assigned_to}
+                                                        size="sm"
+                                                        // variant="ghost"
+                                                        className=" cursor-pointer disabled:cursor-not-allowed shrink-0 bg-blue-600 hover:bg-blue-700 text-white"
+                                                    >
+                                                        {isAssigning ? <Loader2 className="w-4 h-4 animate-spin mr-1.5" /> : <Check className="w-4 h-4 mr-1.5" />}
+                                                        Assign
+                                                    </Button>
+
+                                                    {/* Show a Cancel button only if it was already assigned previously to allow backing out of edit mode */}
+                                                    {post?.assigned_to && (
+                                                        <Button variant="ghost" size="sm"
+
+                                                            className=""
+                                                            onClick={() => {
+                                                                setAssignedEmail(post.assigned_to);
+                                                                setIsAssignEditMode(false);
+                                                            }}>
+                                                            Cancel
+                                                        </Button>
+                                                    )}
+                                                </>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Reviewer Note (MADE THIS REVIEWER ONLY FOR NOW) */}
                                     {/* {reviewerNote && (
                                         <div className="bg-amber-50 border border-amber-100 p-5 rounded-xl">
                                             <h4 className="text-xs font-bold text-amber-700 uppercase tracking-widest mb-2 flex items-center">

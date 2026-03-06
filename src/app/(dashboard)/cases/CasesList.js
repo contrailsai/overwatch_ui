@@ -35,7 +35,7 @@ import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
 // import SafeDate from '@/components/SafeDate'
 
-export function CasesList({ cases, project, clientDetails, initialFilters, initialSort, currentPage, initialCase }) {
+export function CasesList({ cases, project, clientDetails, initialFilters, initialSort, currentPage, initialCase, projectEmails }) {
 
   const router = useRouter()
   const pathname = usePathname()
@@ -875,6 +875,7 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
         hasPrev={mergedPosts.findIndex(p => p._id === selectedPost?._id) > 0}
         hasNext={mergedPosts.findIndex(p => p._id === selectedPost?._id) < mergedPosts.length - 1}
         onUpdatePost={handleUpdatePost}
+        projectEmails={projectEmails}
       />
     </div>
   )
