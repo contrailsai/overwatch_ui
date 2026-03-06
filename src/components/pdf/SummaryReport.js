@@ -230,12 +230,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 5,
     paddingVertical: 2,
     borderRadius: 4,
-    borderWidth: 0.5,
+    borderWidth: 0.3,
     borderColor: Theme.BORDER_LIGHT,
   },
   threatText: {
     fontSize: 7,
-    fontWeight: 'bold',
+    // fontWeight: 'bold',
     color: Theme.PRIMARY_BLUE,
     textTransform: 'capitalize',
   },
@@ -301,14 +301,31 @@ const ViewIcon = () => (
 );
 
 // --- UTILS ---
-const processText = (text, maxLength = 100) => {
-  if (!text) return 'No caption available';
+const processText = (text, maxLength = 500, maxLines = null) => {
+  if (!text) return '';
   let sanitized = Array.from(text).filter(char => {
     const cp = char.codePointAt(0);
     return (cp >= 32 && cp <= 126) || cp === 10 || cp === 13 || cp === 9 ||
       /[\u{1F300}-\u{1F5FF}\u{1F600}-\u{1F64F}\u{1F680}-\u{1F6FF}\u{1F900}-\u{1F9FF}\u{2600}-\u{27BF}\u{1F1E6}-\u{1F1FF}\u{FE00}-\u{FE0F}]/u.test(char);
   }).join('');
-  return sanitized.length > maxLength ? sanitized.substring(0, maxLength) + '...' : sanitized;
+
+  let result = sanitized;
+  let truncated = false;
+
+  if (maxLines) {
+    const lines = result.split(/\r\n|\r|\n/);
+    if (lines.length > maxLines) {
+      result = lines.slice(0, maxLines).join('\n');
+      truncated = true;
+    }
+  }
+
+  if (result.length > maxLength) {
+    result = result.substring(0, maxLength);
+    truncated = true;
+  }
+
+  return truncated ? result.trim() + '...' : result;
 };
 
 // DD/MM/YYYY
@@ -499,7 +516,7 @@ const TableRow = ({ post, project, compressedImage }) => {
             </View>
           )}
           <View style={styles.contentInfo}>
-            <Text style={styles.captionText}>{processText(post.caption || post.content, 85)}</Text>
+            <Text style={styles.captionText}>{processText(post.caption || post.content, 85, 4)}</Text>
             {/* <Text style={styles.captionDate}>Posted: {postedDate}</Text> */}
             <Link src={post.original_url || post.url || '#'} style={styles.linkText} target="_blank" >
               View Source
@@ -533,25 +550,23 @@ const TableRow = ({ post, project, compressedImage }) => {
       {/* Column 3: Threat */}
       <View style={styles.colThreat}>
         <View style={styles.threatContainer}>
-          {resolvedThreats.length > 0 ? (
+          {resolvedThreats.length > 0 && (
             resolvedThreats.map((threat, idx) => {
-              let vColor;
-              if (isLegacyCase) {
-                vColor = Theme.PRIMARY_BLUE;
-              } else {
-                vColor = threat.severity === 'high' ? Theme.RISK_HIGH : threat.severity === 'medium' ? Theme.RISK_MEDIUM : Theme.RISK_LOW;
-              }
+              let vColor = Theme.SECONDARY_GRAY;
+
+              // NO BADGE COLORING FOR NOW (DISTRUPTS WITH RISK SEVERITY)
+              // if (isLegacyCase) {
+              //   vColor = Theme.PRIMARY_BLUE;
+              // } else {
+              //   vColor = threat.severity === 'high' ? Theme.RISK_HIGH : threat.severity === 'medium' ? Theme.RISK_MEDIUM : Theme.RISK_LOW;
+              // }
 
               return (
                 <View key={idx} style={[styles.threatBadge, { borderColor: vColor, backgroundColor: vColor + '15' }]}>
-                  <Text style={[styles.threatText, { color: vColor }]}>{processText(threat.label, 25)}</Text>
+                  <Text style={[styles.threatText, { color: Theme.PRIMARY_BLUE }]}>{processText(threat.label, 25)}</Text>
                 </View>
               );
             })
-          ) : (
-            <View style={styles.threatBadge}>
-              <Text style={styles.threatText}>General</Text>
-            </View>
           )}
         </View>
       </View>
