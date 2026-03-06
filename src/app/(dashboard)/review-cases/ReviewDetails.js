@@ -29,6 +29,7 @@ const initialState = {
 }
 
 export default function ReviewForm({ post, project_details, onClose, onNavigate, hasPrev, hasNext, setPosts }) {
+    // console.log(post)
     const [state, formAction, isPending] = useActionState(submitCaseReview, initialState)
 
     // 1. Maintain a local version of the post so the UI can update immediately

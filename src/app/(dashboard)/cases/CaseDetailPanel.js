@@ -464,7 +464,7 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
                                     <Button
                                         onClick={() => setIsEditing(true)}
                                         variant="ghost"
-                                        className=" absolute top-1 right-4 z-10 w-fit h-fit text-slate-600 hover:text-slate-900 font-bold cursor-pointer border border-white hover:border-slate-200 "
+                                        className=" absolute top-1 right-4 z-10 w-fit h-fit bg-white text-slate-600 hover:text-slate-900 font-bold cursor-pointer border border-slate-200 hover:border-slate-200 "
                                     >
                                         <Pencil className="w-4 h-4 mr-1" />
                                         Edit

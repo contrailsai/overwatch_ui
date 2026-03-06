@@ -30,7 +30,7 @@ export default async function DashboardLayout({ children }) {
         )
       }
       <Sidebar user={user} clientDetails={clientDetails} project={project} />
-      <ClientProvider>
+      <ClientProvider initialClientDetails={clientDetails}>
         <main className="flex-1 relative overflow-y-auto focus:outline-none">
           {children}
         </main>

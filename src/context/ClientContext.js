@@ -1,48 +1,109 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState } from 'react';
-// import { createClient } from '@/utils/supabase/client';
-// import { useRouter } from 'next/navigation';
+import { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react';
+import { createClient } from '@/utils/supabase/client';
 
 const ClientContext = createContext();
 
-export const ClientProvider = ({ children }) => {
-    const [lastAction, setLastAction] = useState(Date.now());
+export const ClientProvider = ({ children, initialClientDetails }) => {
+    const [clientDetails, setClientDetails] = useState(initialClientDetails || null);
+    const [notifications, setNotifications] = useState([]);
 
-    const [clientDetails, setClientDetails] = useState("YO ");
-    // const [projectDetails, setProjectDetails] = useState(null);
+    // 1. Memoize the client so it doesn't recreate on every render
+    const supabase = useMemo(() => createClient(), []);
 
-    // 4. Realtime Notification Listener (Future Feature)
-    /*
+    // Derived state: calculate unread count on the fly
+    const unreadCount = useMemo(() =>
+        notifications.filter(n => !n.has_read).length,
+        [notifications]);
+
+    const fetchNotifications = useCallback(async () => {
+        if (!clientDetails?.email) return;
+
+        const { data, error } = await supabase
+            .from('notifications')
+            .select('*')
+            .eq('client_email', clientDetails.email)
+            .order('created_at', { ascending: false })
+            .limit(50); // 2. Added a limit to prevent massive data loads
+
+        if (!error) setNotifications(data || []);
+    }, [clientDetails?.email, supabase]);
+
+    // Initial load
     useEffect(() => {
-        if (!user) return;
+        fetchNotifications();
+    }, [fetchNotifications]);
+
+    // Realtime Listener
+    useEffect(() => {
+        if (!clientDetails?.email) return;
 
         const channel = supabase
-            .channel('schema-db-changes')
-            .on(
-                'postgres_changes',
-                { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` },
-                (payload) => {
-                    console.log('New notification received!', payload);
-                    // Trigger a toast or update local notification state here
+            .channel(`notifs-${clientDetails.email}`)
+            .on('postgres_changes', {
+                event: '*',
+                schema: 'public',
+                table: 'notifications',
+                filter: `client_email=eq.${clientDetails.email}`
+            }, (payload) => {
+                if (payload.eventType === 'INSERT') {
+                    setNotifications(prev => [payload.new, ...prev]);
+                } else if (payload.eventType === 'UPDATE') {
+                    setNotifications(prev => prev.map(n => n.id === payload.new.id ? payload.new : n));
+                } else if (payload.eventType === 'DELETE') {
+                    setNotifications(prev => prev.filter(n => n.id !== payload.old.id));
                 }
-            )
+            })
             .subscribe();
 
         return () => {
             supabase.removeChannel(channel);
         };
-    }, [user, supabase]);
-    */
+    }, [clientDetails?.email, supabase]);
 
-    // Helper to update activity from any page
-    const trackAction = () => setLastAction(Date.now());
+    const markAsRead = async (id) => {
+        // Optimistic update
+        setNotifications(prev => prev.map(n => n.id === id ? { ...n, has_read: true } : n));
+
+        const { error } = await supabase
+            .from('notifications')
+            .update({ has_read: true })
+            .eq('id', id);
+
+        console.log("marked as read")
+
+        if (error) fetchNotifications(); // Revert on error
+    };
+
+    const deleteNotification = async (id) => {
+        // Optimistic update
+        setNotifications(prev => prev.filter(n => n.id !== id));
+
+        const { error } = await supabase
+            .from('notifications')
+            .delete()
+            .eq('id', id);
+
+        if (error) fetchNotifications(); // Revert on error
+    };
 
     return (
-        <ClientContext.Provider value={{ trackAction, clientDetails, setClientDetails }}>
+        <ClientContext.Provider value={{
+            clientDetails,
+            setClientDetails,
+            notifications,
+            unreadCount,
+            markAsRead,
+            deleteNotification
+        }}>
             {children}
         </ClientContext.Provider>
     );
 };
 
-export const useClient = () => useContext(ClientContext);
+export const useClient = () => {
+    const context = useContext(ClientContext);
+    if (!context) throw new Error("useClient must be used within a ClientProvider");
+    return context;
+};

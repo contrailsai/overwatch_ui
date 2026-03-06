@@ -1,4 +1,7 @@
+'use client';
+
 import { useClient } from "@/context/ClientContext";
+import NotificationsBell from "./NotificationsBell";
 
 const PageHeader = ({ Icon, title, description }) => {
     const { clientDetails } = useClient();
@@ -17,8 +20,8 @@ const PageHeader = ({ Icon, title, description }) => {
                 }
             </div>
 
-            <div>
-                clientDetails = {clientDetails}
+            <div className="flex items-center gap-4">
+                <NotificationsBell />
             </div>
         </header>
     );
