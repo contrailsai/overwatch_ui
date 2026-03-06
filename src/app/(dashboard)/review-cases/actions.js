@@ -469,7 +469,8 @@ export const submitCaseReview = traceAction('submitCaseReview', async (prevState
           review_details,
           takedown_info,
           processed: true,
-          processed_at: new Date()
+          processed_at: new Date(),
+          "metadata.updated_at": new Date().toISOString()
         }
       }
     )

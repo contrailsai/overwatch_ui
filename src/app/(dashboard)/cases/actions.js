@@ -4,10 +4,11 @@ import { createClient, getAuthenticatedUser } from '@/utils/supabase/server'
 import clientPromise from '@/utils/mongodb/client'
 import { getSignedImageUrl } from '@/utils/aws/s3'
 import { sendSlackNotification } from '@/utils/slack'
-import { manageTakedownCase, updateClientReviewedMetrics } from '@/utils/supabase/metrics'
+import { manageTakedownCase, updateClientReviewedMetrics, updateDailyMetrics } from '@/utils/supabase/metrics'
 import { ObjectId } from 'mongodb'
 // import { getClientandProjectDetails } from '@/app/(dashboard)/actions'
 import { traceAction, recordClickMetric } from '@/utils/tracing'
+import { metadata } from '../layout'
 
 export const trackClientClick = traceAction('trackClientClick', async (buttonName, attributes = {}) => {
   recordClickMetric(buttonName, attributes);
@@ -589,5 +590,193 @@ export const getPostById = traceAction('getPostById', async (project, id) => {
   } catch (e) {
     console.error('getPostById Error:', e);
     return null;
+  }
+})
+
+export const submitCaseReview = traceAction('submitCaseReview', async (project, prevState, formData) => {
+
+  console.log("YO EDITING THE REVIEW, ", project)
+
+  // const supabase = await createClient()
+  // const { data: { user } } = await supabase.auth.getUser()
+
+  // if (!user) {
+  //   return { success: false, error: 'Authentication required' }
+  // }
+
+  // // 1. Fetch Client Details & Project Config FIRST
+  // const { data: client_details } = await supabase
+  //   .from('client_details')
+  //   .select('*')
+  //   .eq('id', user.id)
+  //   .single()
+
+  // if (!client_details?.project_name) {
+  //   return { success: false, error: 'User not assigned to a project' }
+  // }
+
+  // const { data: project } = await supabase
+  //   .from('project')
+  //   .select('project_name, mongo_db_map')
+  //   .eq('project_name', client_details.project_name)
+  //   .single()
+
+  if (!project?.mongo_db_map) {
+    return { success: false, error: 'Project database configuration missing' }
+  }
+
+  const mongoId = formData.get('mongo_id')
+
+  if (!mongoId) {
+    return { success: false, error: 'Missing Post ID' }
+  }
+
+  // Handle dynamic flags from project labels
+  const flags = {}
+  const threat_types = []
+
+  // project.mongo_db_map is already fetched, but we might need project_details labels
+  // Currently we use 'flag_' prefix from ReviewDetails.js
+  for (const [key, value] of formData.entries()) {
+    if (key.startsWith('flag_')) {
+      const labelName = key.replace('flag_', '')
+      const isActive = value === 'on'
+      flags[labelName] = isActive
+      if (isActive) {
+        threat_types.push(labelName)
+      }
+    }
+  }
+
+  const review_details = {
+    threat_score: parseInt(formData.get('threat_score') || '0'),
+    threat_types: threat_types.length > 0 ? threat_types : ['safe'],
+    is_aigc: formData.get('is_aigc') === 'on',
+
+    // Flags
+    flags: flags,
+
+    // Text & Lists
+    poi_names: formData.get('poi_names') ? formData.get('poi_names').split(',').map(s => s.trim()).filter(Boolean) : [],
+    reasoning: formData.get('reasoning'),
+    reviewer_comments: formData.get('reviewer_comments'),
+
+    // POI
+    face_present: ["on", "yes", "true"].includes(formData.get('face_present')?.toLowerCase()),
+    name_present: ["on", "yes", "true"].includes(formData.get('name_present')?.toLowerCase()),
+
+    reviewed_at: new Date().toISOString()
+  }
+
+  // Determine Takedown Status
+  // If "is_in_takedown" is checked, default to 'raised' (Reviewer Checked)
+  // This signals the Client to approve/start it.
+  // const isTakedown = formData.get('is_in_takedown') === 'on';
+  const takedown_status = formData.get('takedown_status');
+  const suggest_takedown = ["on", "yes", "true"].includes(formData.get('suggest_takedown')?.toLowerCase());
+  const already_in_takedown = ['raised', 'under_review', 'accepted', 'rejected', 'suspended', 'resolution'].includes(takedown_status);
+
+  let takedown_info = {}
+  if (!already_in_takedown) {
+    // if its not in takedown stage then update it to be None or Requested for a takedown
+    takedown_info = {
+      takedown_status: suggest_takedown ? "requested" : "None"
+    }
+  }
+  else {
+    // if its already raised before and has an ongoing takedown stage dont update it
+    takedown_info = {
+      takedown_status: takedown_status
+    }
+  }
+
+  try {
+    const client = await clientPromise
+    const db = client.db(project.mongo_db_map) // Use Correct DB
+    const collection = db.collection('Posts')
+
+    // 1. Fetch existing post to get previous state
+    const existingPost = await collection.findOne({ _id: new ObjectId(mongoId) })
+    if (!existingPost) {
+      return { success: false, error: 'Post not found' }
+    }
+
+    // Check if it was previously reviewed to handle metrics updates correctly
+    // We only treat it as an update if it has a valid threat_score from a previous session
+    const prevReview = existingPost.review_details;
+    const isPreviouslyReviewed = existingPost.processed && prevReview && prevReview.threat_score !== undefined;
+
+    const previousReviewData = isPreviouslyReviewed ? {
+      threat_score: prevReview.threat_score,
+      threat_types: prevReview.threat_types || [prevReview.primary_threat_type || prevReview.threat_type], // Handle backward compat
+      is_aigc: prevReview.is_aigc,
+      platform: existingPost.platform
+    } : null
+
+    // 2. Update MongoDB
+    const result = await collection.updateOne(
+      { _id: new ObjectId(mongoId) },
+      {
+        $set: {
+          review_details,
+          takedown_info,
+          processed: true,
+          processed_at: new Date(),
+          "metadata.updated_at": new Date().toISOString()
+        }
+      }
+    )
+
+    // 3. Update Supabase Metrics
+    const currentReviewData = {
+      threat_score: review_details.threat_score,
+      threat_types: review_details.threat_types,
+      is_aigc: review_details.is_aigc,
+      // takedown metrics are now handled in cases/actions.js
+      platform: existingPost.platform ? existingPost.platform.toLowerCase() : 'instagram'
+    }
+
+    // Fire and forget metrics update to not block UI
+    updateDailyMetrics(project, currentReviewData, previousReviewData).catch(err =>
+      console.error('Background metrics update failed:', err)
+    )
+
+    // // SEND A NOTIFICATION TO THE CLIENT ON THEIR SUPPORTED FORMAT
+    // if (suggest_takedown && !already_in_takedown) {
+    //   // client_details is already fetched at the top
+
+    //   // GET THE CLIENT'S NOTIFICATION CONFIG CONNECTED TO THIS PROJECT
+    //   const { data: notification_data } = await supabase
+    //     .from('client_details')
+    //     .select('notification_config')
+    //     .eq('project_name', client_details.project_name)
+    //     .eq('permission', 'client')
+    //     .single()
+
+    //   const notification_config = notification_data?.notification_config
+
+    //   // SEND NOTIFICATION TO CLIENT
+    //   const { success, error } = await sendNotification(notification_config, "takedown_request")
+    //   if (!success) {
+    //     console.error('Failed to send notification:', error)
+    //   }
+    //   else {
+    //     console.log('Notification sent successfully')
+    //   }
+
+    // }
+
+    return {
+      success: true,
+      updatedFields: {
+        review_details,
+        takedown_info,
+        processed: true,
+        processed_at: new Date().toISOString()
+      }
+    }
+  } catch (error) {
+    console.error('MongoDB Update Error:', error)
+    return { success: false, error: error.message }
   }
 })

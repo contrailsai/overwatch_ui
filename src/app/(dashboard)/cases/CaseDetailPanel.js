@@ -11,7 +11,7 @@ import {
     ScanFace, MessageSquareWarning, Fingerprint, AlertCircle, ShieldQuestion,
     FishingHook,
     UserRound,
-    UserRoundX
+    UserRoundX, Pencil
 } from 'lucide-react'
 import { Twitter } from '@/utils/icons'
 import ProfilePic from '@/components/ProfilePic'
@@ -23,6 +23,8 @@ import { Badge } from "@/components/ui/badge"
 import { Textarea } from "@/components/ui/textarea"
 import { CaseExportButton } from '@/components/pdf/CaseExportButton'
 import SafeDate from '@/components/SafeDate'
+
+import EditForm from "./EditForm"
 
 const getRiskLabel = (score) => {
     if (score >= 96) return { label: 'High', color: 'text-rose-500 bg-rose-50 border-rose-200' };
@@ -40,6 +42,8 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
     const [isSubmittingNote, setIsSubmittingNote] = useState(false);
     const [localNotes, setLocalNotes] = useState(post?.client_notes || []);
     const [copied, setCopied] = useState(false);
+
+    const [isEditing, setIsEditing] = useState(false);
 
     let allowDoTakedown = false;
     try {
@@ -451,85 +455,100 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
                         </div>
                     </div>
 
-                    {/* Right: Intelligence Panel (Fixed/Scrollable) */}
-                    <div className="w-full lg:w-[480px] bg-white flex flex-col h-full shrink-0">
+                    {
+                        isEditing ? (
+                            <EditForm post={post} project={project} setIsEditing={setIsEditing} />
+                        ) : (
+                            <div className="relative w-full lg:w-[480px] bg-white flex flex-col h-full shrink-0">
 
-                        <div className="flex-1 overflow-y-auto p-4 space-y-8">
+                                {/* EDIT BUTTON HERE */}
+                                <div>
+                                    <Button
+                                        onClick={() => setIsEditing(true)}
+                                        variant="ghost"
+                                        className=" absolute top-1 right-4 z-10 w-fit h-fit text-slate-600 hover:text-slate-900 font-bold cursor-pointer border border-white hover:border-slate-200 "
+                                    >
+                                        <Pencil className="w-4 h-4 mr-1" />
+                                        Edit
+                                    </Button>
+                                </div>
 
-                            {/* Threat Score Card */}
-                            <div>
-                                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Risk Assessment</h4>
-                                <div className={cn(
-                                    "rounded-2xl p-6 border relative overflow-hidden shadow-lg transition-all",
-                                    getRiskLabel(riskScore).color.replace('text-', 'bg-').replace('bg-', 'border-').replace('500', '600').replace('50', '500'),
-                                    riskScore >= 76 ? "text-white" : "text-slate-900",
-                                    riskScore >= 96 ? "bg-rose-600 border-rose-500 text-white" :
-                                        riskScore >= 76 ? "bg-orange-500 border-orange-400 text-white" :
-                                            riskScore >= 41 ? "bg-amber-500 border-amber-400 text-white" :
-                                                "bg-slate-500 border-slate-400 text-white"
-                                )}>
-                                    <div className="absolute top-0 right-0 p-32 bg-white/10 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none" />
+                                <div className="flex-1 overflow-y-auto p-4 space-y-8">
 
-                                    <div className="relative z-10 flex justify-between items-end">
-                                        <div>
-                                            <p className="text-white/80 font-bold text-xs uppercase tracking-wide mb-1">Total Risk Score</p>
-                                            <div className="text-5xl font-black tracking-tighter flex items-baseline gap-2">
-                                                {getRiskLabel(riskScore).label}
-                                            </div>
-                                        </div>
-                                        {/* <div className="text-right">
+                                    {/* Threat Score Card */}
+                                    <div>
+                                        <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Risk Assessment</h4>
+                                        <div className={cn(
+                                            "rounded-2xl p-6 border relative overflow-hidden shadow-lg transition-all",
+                                            getRiskLabel(riskScore).color.replace('text-', 'bg-').replace('bg-', 'border-').replace('500', '600').replace('50', '500'),
+                                            riskScore >= 76 ? "text-white" : "text-slate-900",
+                                            riskScore >= 96 ? "bg-rose-600 border-rose-500 text-white" :
+                                                riskScore >= 76 ? "bg-orange-500 border-orange-400 text-white" :
+                                                    riskScore >= 41 ? "bg-amber-500 border-amber-400 text-white" :
+                                                        "bg-slate-500 border-slate-400 text-white"
+                                        )}>
+                                            <div className="absolute top-0 right-0 p-32 bg-white/10 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none" />
+
+                                            <div className="relative z-10 flex justify-between items-end">
+                                                <div>
+                                                    <p className="text-white/80 font-bold text-xs uppercase tracking-wide mb-1">Total Risk Score</p>
+                                                    <div className="text-5xl font-black tracking-tighter flex items-baseline gap-2">
+                                                        {getRiskLabel(riskScore).label}
+                                                    </div>
+                                                </div>
+                                                {/* <div className="text-right">
                                             <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/20 backdrop-blur-md text-[10px] font-bold uppercase mb-2 border border-white/10">
                                                 <Activity className="w-3 h-3" /> AI Analysis
                                             </div>
                                             <p className="font-bold text-base leading-tight max-w-[120px] capitalize">{category}</p>
                                         </div> */}
+                                            </div>
+                                        </div>
                                     </div>
-                                </div>
-                            </div>
 
-                            {/* Violation Grid */}
-                            <div>
-                                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Violations</h4>
-                                <div className="grid grid-cols-2 gap-3">
-                                    <ViolationCard
-                                        active={isPoiPresent}
-                                        title="POI Detected"
-                                        icon={ScanFace}
-                                        color="indigo"
-                                    />
-                                    <ViolationCard
-                                        active={isAigc}
-                                        title="AI Generated"
-                                        icon={Bot}
-                                        color="purple"
-                                    />
+                                    {/* Violation Grid */}
+                                    <div>
+                                        <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Violations</h4>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <ViolationCard
+                                                active={isPoiPresent}
+                                                title="POI Detected"
+                                                icon={ScanFace}
+                                                color="indigo"
+                                            />
+                                            <ViolationCard
+                                                active={isAigc}
+                                                title="AI Generated"
+                                                icon={Bot}
+                                                color="purple"
+                                            />
 
-                                    {activeLabels.map((label, idx) => (
-                                        <ViolationCard
-                                            key={idx}
-                                            active={true}
-                                            title={label.title}
-                                            icon={label.icon}
-                                            color={label.color}
-                                        />
-                                    ))}
+                                            {activeLabels.map((label, idx) => (
+                                                <ViolationCard
+                                                    key={idx}
+                                                    active={true}
+                                                    title={label.title}
+                                                    icon={label.icon}
+                                                    color={label.color}
+                                                />
+                                            ))}
 
 
-                                </div>
-                            </div>
+                                        </div>
+                                    </div>
 
-                            {/* Reasoning */}
-                            <div className="space-y-3">
-                                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                                    <Eye className="w-3.5 h-3.5" /> Review Analysis
-                                </h4>
-                                <div className="w-full bg-slate-50 p-5 rounded-xl border border-slate-100 text-slate-600 leading-relaxed text-sm font-medium whitespace-pre-wrap">
-                                    {reasoning}
-                                </div>
-                            </div>
+                                    {/* Reasoning */}
+                                    <div className="space-y-3">
+                                        <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                            <Eye className="w-3.5 h-3.5" /> Review Analysis
+                                        </h4>
+                                        <div className="w-full bg-slate-50 p-5 rounded-xl border border-slate-100 text-slate-600 leading-relaxed text-sm font-medium whitespace-pre-wrap">
+                                            {reasoning}
+                                        </div>
+                                    </div>
 
-                            {/* Reviewer Note */}
-                            {/* {reviewerNote && (
+                                    {/* Reviewer Note */}
+                                    {/* {reviewerNote && (
                                 <div className="bg-amber-50 border border-amber-100 p-5 rounded-xl">
                                     <h4 className="text-xs font-bold text-amber-700 uppercase tracking-widest mb-2 flex items-center">
                                         <User className="w-3.5 h-3.5 mr-1.5" /> Analyst Note
@@ -540,151 +559,153 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
                                 </div>
                             )} */}
 
-                            {/* Client Notes Section */}
-                            <div className="space-y-4">
-                                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 flex items-center">
-                                    <MessageCircle className="w-3.5 h-3.5 mr-1.5" /> Review Notes
-                                </h4>
+                                    {/* Client Notes Section */}
+                                    <div className="space-y-4">
+                                        <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 flex items-center">
+                                            <MessageCircle className="w-3.5 h-3.5 mr-1.5" /> Review Notes
+                                        </h4>
 
-                                {localNotes && localNotes.length > 0 ? (
-                                    <div className="space-y-3 max-h-60 overflow-y-auto pr-2">
-                                        {localNotes.map((note, idx) => (
-                                            <div key={idx} className="bg-slate-50 border border-slate-100 p-4 rounded-xl">
-                                                <div className="flex justify-between items-start mb-3">
-                                                    <span className="text-[10px] font-bold text-slate-400">{note.email || 'Unknown User'}</span>
-                                                    <span className="text-[10px] text-slate-400">
-                                                        <SafeDate date={note.created_at} />
-                                                    </span>
-                                                </div>
-                                                <p className="text-sm text-slate-700 font-medium whitespace-pre-wrap">
-                                                    {note.text}
-                                                </p>
+                                        {localNotes && localNotes.length > 0 ? (
+                                            <div className="space-y-3 max-h-60 overflow-y-auto pr-2">
+                                                {localNotes.map((note, idx) => (
+                                                    <div key={idx} className="bg-slate-50 border border-slate-100 p-4 rounded-xl">
+                                                        <div className="flex justify-between items-start mb-3">
+                                                            <span className="text-[10px] font-bold text-slate-400">{note.email || 'Unknown User'}</span>
+                                                            <span className="text-[10px] text-slate-400">
+                                                                <SafeDate date={note.created_at} />
+                                                            </span>
+                                                        </div>
+                                                        <p className="text-sm text-slate-700 font-medium whitespace-pre-wrap">
+                                                            {note.text}
+                                                        </p>
+                                                    </div>
+                                                ))}
                                             </div>
-                                        ))}
-                                    </div>
-                                ) : (
-                                    <p className="text-sm text-slate-400 italic">No notes added yet.</p>
-                                )}
+                                        ) : (
+                                            <p className="text-sm text-slate-400 italic">No notes added yet.</p>
+                                        )}
 
-                                <div className="relative mt-2">
-                                    <Textarea
-                                        placeholder="Add a note..."
-                                        className="min-h-[80px] pr-12 text-sm resize-none bg-white border-slate-200 focus-visible:ring-blue-500"
-                                        value={noteText}
-                                        onChange={(e) => setNoteText(e.target.value)}
-                                        onKeyDown={(e) => {
-                                            if (e.key === 'Enter' && !e.shiftKey) {
-                                                e.preventDefault();
-                                                handleAddNote();
-                                            }
-                                        }}
-                                    />
-                                    <Button
-                                        size="icon"
-                                        variant="ghost"
-                                        className="absolute cursor-pointer bottom-2 right-2 h-8 w-8 hover:text-blue-600 bg-white transition-colors duration-200 disabled:opacity-50"
-                                        onClick={handleAddNote}
-                                        disabled={!noteText.trim() || isSubmittingNote}
-                                    >
-                                        {isSubmittingNote ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                                    </Button>
-                                </div>
-                            </div>
-
-                        </div>
-
-                        {/* Footer Action Area */}
-                        <div className=" border-t border-slate-100 bg-white sticky bottom-0 z-10">
-                            {(isRequested) && (
-                                <div className="flex items-start gap-3 mb-4 p-4 bg-orange-50 rounded-xl border border-orange-100">
-                                    <Info className="w-5 h-5 text-orange-600 mt-0.5 shrink-0" />
-                                    <div>
-                                        <p className="text-sm font-bold text-orange-800">Takedown Suggested</p>
-                                        <p className="text-xs text-orange-700 mt-1">Reviewer flagged this for immediate removal.</p>
-                                    </div>
-                                </div>
-                            )}
-                            {
-                                showProcessed === post._id && (
-                                    <div className="flex items-start gap-3 mb-4 p-4 bg-green-50 rounded-xl border border-green-100">
-                                        <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 shrink-0" />
-                                        <div>
-                                            <p className="text-sm font-bold text-green-800">Case Processed</p>
-                                            <p className="text-xs text-green-700 mt-1">This case has been processed.</p>
+                                        <div className="relative mt-2">
+                                            <Textarea
+                                                placeholder="Add a note..."
+                                                className="min-h-[80px] pr-12 text-sm resize-none bg-white border-slate-200 focus-visible:ring-blue-500"
+                                                value={noteText}
+                                                onChange={(e) => setNoteText(e.target.value)}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter' && !e.shiftKey) {
+                                                        e.preventDefault();
+                                                        handleAddNote();
+                                                    }
+                                                }}
+                                            />
+                                            <Button
+                                                size="icon"
+                                                variant="ghost"
+                                                className="absolute cursor-pointer bottom-2 right-2 h-8 w-8 hover:text-blue-600 bg-white transition-colors duration-200 disabled:opacity-50"
+                                                onClick={handleAddNote}
+                                                disabled={!noteText.trim() || isSubmittingNote}
+                                            >
+                                                {isSubmittingNote ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                                            </Button>
                                         </div>
                                     </div>
-                                )
-                            }
 
-                            <div className="flex flex-col items-center pb-4 pt-1 px-4">
+                                </div>
 
-                                <div className="w-full flex gap-4 py-2" >
-                                    {isRaised &&
-                                        <Button
-                                            onClick={() => router.push(`/takedowns/case/${post.takedown_info.supabase_id}`)}
-                                            variant="outline"
-                                            className="flex-1 h-12 border-slate-200 text-slate-700 font-bold"
-                                        >
-                                            View Takedown Status
-                                        </Button>
-                                    }
-                                    {isRaised ?
-                                        <Button disabled className="flex-1 h-12 bg-slate-100 text-slate-400 border border-slate-200">
-                                            <CheckCircle className="w-4 h-4 mr-2" /> Action in Progress
-                                        </Button>
-                                        : (
-                                            <>
-                                                <Button
-                                                    onClick={() => { if (clientStatus !== 'No Action' && clientStatus !== 'Pass') handleUpdateStatus('No Action') }}
-                                                    disabled={isProcessing === 'No Action'}
-                                                    className={cn(
-                                                        "flex-1 h-12 font-bold text-white transition-all duration-200 shadow-emerald-900/20 bg-emerald-500 opacity-50 hover:opacity-100 ",
-                                                        (clientStatus === 'No Action' || clientStatus === 'Pass') ? "opacity-100 cursor-default hover:bg-emerald-500 ring-2 ring-emerald-600 ring-offset-2" : "cursor-pointer hover:bg-emerald-600",
-                                                        // (clientStatus !== 'To Be Reviewed' && clientStatus !== 'No Action' && clientStatus !== 'Pass') ? "" : ""
-                                                    )}
-                                                >
-                                                    {isProcessing === 'No Action' && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
-                                                    No Action
-                                                </Button>
-                                                <Button
-                                                    onClick={() => { if (clientStatus !== 'Flag for Takedown') handleUpdateStatus('Flag for Takedown') }}
-                                                    disabled={isProcessing === 'Flag for Takedown'}
-                                                    className={cn(
-                                                        "flex-1 h-12 font-bold text-white transition-all duration-200 opacity-50 hover:opacity-100 ",
-                                                        allowDoTakedown ? "shadow-amber-900/20 bg-amber-500" : "shadow-rose-900/20 bg-rose-600",
-                                                        clientStatus === 'Flag for Takedown'
-                                                            ? cn("opacity-100 cursor-default ring-2 ring-offset-2", allowDoTakedown ? "hover:bg-amber-500 ring-amber-600" : "hover:bg-rose-600 ring-rose-700")
-                                                            : cn("cursor-pointer", allowDoTakedown ? "hover:bg-amber-600" : "hover:bg-rose-700"),
-                                                        // (clientStatus !== 'To Be Reviewed' && clientStatus !== 'Flag for Takedown') ? "" : ""
-                                                    )}
-                                                >
-                                                    {isProcessing === 'Flag for Takedown' ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <AlertTriangle className="w-4 h-4 mr-2" />}
-                                                    Flag for Takedown
-                                                </Button>
-                                                {allowDoTakedown && (
-                                                    <Button
-                                                        onClick={handleTakedown}
-                                                        disabled={isProcessing === 'takedown'}
-                                                        className={cn(
-                                                            "flex-1 h-12 font-bold text-white transition-all duration-200 shadow-rose-900/20 bg-rose-600 cursor-pointer hover:bg-rose-700",
-                                                            (clientStatus !== 'To Be Reviewed') ? "opacity-50 hover:opacity-100" : "opacity-100"
-                                                        )}
-                                                    >
-                                                        {isProcessing === 'takedown' ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <ShieldAlert className="w-4 h-4 mr-2" />}
-                                                        Do Takedown
-                                                    </Button>
-                                                )}
-                                            </>
+                                {/* Footer Action Area */}
+                                <div className=" border-t border-slate-100 bg-white sticky bottom-0 z-10">
+                                    {(isRequested) && (
+                                        <div className="flex items-start gap-3 mb-4 p-4 bg-orange-50 rounded-xl border border-orange-100">
+                                            <Info className="w-5 h-5 text-orange-600 mt-0.5 shrink-0" />
+                                            <div>
+                                                <p className="text-sm font-bold text-orange-800">Takedown Suggested</p>
+                                                <p className="text-xs text-orange-700 mt-1">Reviewer flagged this for immediate removal.</p>
+                                            </div>
+                                        </div>
+                                    )}
+                                    {
+                                        showProcessed === post._id && (
+                                            <div className="flex items-start gap-3 mb-4 p-4 bg-green-50 rounded-xl border border-green-100">
+                                                <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 shrink-0" />
+                                                <div>
+                                                    <p className="text-sm font-bold text-green-800">Case Processed</p>
+                                                    <p className="text-xs text-green-700 mt-1">This case has been processed.</p>
+                                                </div>
+                                            </div>
                                         )
                                     }
-                                </div>
-                                <div onClick={() => trackClientClick('download_case_report', { page: 'CaseDetailPanel' })}>
-                                    <CaseExportButton post={post} project={project} />
-                                </div>
-                            </div>
-                        </div>
 
-                    </div>
+                                    <div className="flex flex-col items-center pb-4 pt-1 px-4">
+
+                                        <div className="w-full flex gap-4 py-2" >
+                                            {isRaised &&
+                                                <Button
+                                                    onClick={() => router.push(`/takedowns/case/${post.takedown_info.supabase_id}`)}
+                                                    variant="outline"
+                                                    className="flex-1 h-12 border-slate-200 text-slate-700 font-bold"
+                                                >
+                                                    View Takedown Status
+                                                </Button>
+                                            }
+                                            {isRaised ?
+                                                <Button disabled className="flex-1 h-12 bg-slate-100 text-slate-400 border border-slate-200">
+                                                    <CheckCircle className="w-4 h-4 mr-2" /> Action in Progress
+                                                </Button>
+                                                : (
+                                                    <>
+                                                        <Button
+                                                            onClick={() => { if (clientStatus !== 'No Action' && clientStatus !== 'Pass') handleUpdateStatus('No Action') }}
+                                                            disabled={isProcessing === 'No Action'}
+                                                            className={cn(
+                                                                "flex-1 h-12 font-bold text-white transition-all duration-200 shadow-emerald-900/20 bg-emerald-500 opacity-50 hover:opacity-100 ",
+                                                                (clientStatus === 'No Action' || clientStatus === 'Pass') ? "opacity-100 cursor-default hover:bg-emerald-500 ring-2 ring-emerald-600 ring-offset-2" : "cursor-pointer hover:bg-emerald-600",
+                                                                // (clientStatus !== 'To Be Reviewed' && clientStatus !== 'No Action' && clientStatus !== 'Pass') ? "" : ""
+                                                            )}
+                                                        >
+                                                            {isProcessing === 'No Action' && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
+                                                            No Action
+                                                        </Button>
+                                                        <Button
+                                                            onClick={() => { if (clientStatus !== 'Flag for Takedown') handleUpdateStatus('Flag for Takedown') }}
+                                                            disabled={isProcessing === 'Flag for Takedown'}
+                                                            className={cn(
+                                                                "flex-1 h-12 font-bold text-white transition-all duration-200 opacity-50 hover:opacity-100 ",
+                                                                allowDoTakedown ? "shadow-amber-900/20 bg-amber-500" : "shadow-rose-900/20 bg-rose-600",
+                                                                clientStatus === 'Flag for Takedown'
+                                                                    ? cn("opacity-100 cursor-default ring-2 ring-offset-2", allowDoTakedown ? "hover:bg-amber-500 ring-amber-600" : "hover:bg-rose-600 ring-rose-700")
+                                                                    : cn("cursor-pointer", allowDoTakedown ? "hover:bg-amber-600" : "hover:bg-rose-700"),
+                                                                // (clientStatus !== 'To Be Reviewed' && clientStatus !== 'Flag for Takedown') ? "" : ""
+                                                            )}
+                                                        >
+                                                            {isProcessing === 'Flag for Takedown' ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <AlertTriangle className="w-4 h-4 mr-2" />}
+                                                            Flag for Takedown
+                                                        </Button>
+                                                        {allowDoTakedown && (
+                                                            <Button
+                                                                onClick={handleTakedown}
+                                                                disabled={isProcessing === 'takedown'}
+                                                                className={cn(
+                                                                    "flex-1 h-12 font-bold text-white transition-all duration-200 shadow-rose-900/20 bg-rose-600 cursor-pointer hover:bg-rose-700",
+                                                                    (clientStatus !== 'To Be Reviewed') ? "opacity-50 hover:opacity-100" : "opacity-100"
+                                                                )}
+                                                            >
+                                                                {isProcessing === 'takedown' ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <ShieldAlert className="w-4 h-4 mr-2" />}
+                                                                Do Takedown
+                                                            </Button>
+                                                        )}
+                                                    </>
+                                                )
+                                            }
+                                        </div>
+                                        <div onClick={() => trackClientClick('download_case_report', { page: 'CaseDetailPanel' })}>
+                                            <CaseExportButton post={post} project={project} />
+                                        </div>
+                                    </div>
+                                </div>
+
+                            </div>
+                        )
+                    }
                 </div>
             </div>
         </div >

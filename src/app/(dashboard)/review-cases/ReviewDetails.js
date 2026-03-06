@@ -32,8 +32,8 @@ const initialState = {
 }
 
 export default function ReviewForm({ post, project_details, onClose, onNavigate, hasPrev, hasNext, setPosts }) {
-    console.log("project_details", project_details)
-    console.log("post", post)
+    // console.log("project_details", project_details)
+    // console.log("post", post)
     const [state, formAction, isPending] = useActionState(submitCaseReview, initialState)
 
     // Update local state when submission succeeds
