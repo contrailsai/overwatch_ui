@@ -726,7 +726,7 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
                                                         Audit Log
                                                     </span>
                                                     <p className="text-sm text-slate-600 font-medium">
-                                                        Content previously reviewed by <span className="text-slate-900 font-bold py-1 px-2 rounded-full bg-slate-100 ">{post.content_reviewed_by}</span>
+                                                        Content last reviewed by <span className="text-slate-900 font-bold py-1 px-2 rounded-full bg-slate-100 ">{post.content_reviewed_by}</span>
                                                     </p>
                                                 </div>
                                             </div>
