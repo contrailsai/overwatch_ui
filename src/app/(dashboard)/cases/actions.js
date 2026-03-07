@@ -53,6 +53,7 @@ export const normalized_S3_post = traceAction('normalized_S3_post', async (post)
     },
 
     assigned_to: post?.assigned_to || null,
+    content_reviewed_by: post?.content_reviewed_by || null,
 
     // Review Details (if available)
     review_details: post.review_details || null,
@@ -326,13 +327,14 @@ export const getProjectDetails = traceAction('getProjectDetails_cases', async ()
   const supabase = await createClient()
   const { data: clientDetails } = await supabase
     .from('client_details')
-    .select('project_name, project:project_name(mongo_db_map, project_details)')
+    .select('email, project_name, project:project_name(mongo_db_map, project_details)')
     .eq('id', user.id)
     .single()
 
   if (!clientDetails?.project_name) return null
 
   return {
+    client_email: clientDetails.email,
     projectName: clientDetails.project_name,
     dbName: clientDetails.project?.mongo_db_map
   }
@@ -512,7 +514,14 @@ export const updateClientStatus = traceAction('updateClientStatus', async (caseI
 
     const result = await collection.updateOne(
       { _id: new ObjectId(caseId) },
-      { $set: { client_status: status, "metadata.updated_at": new Date().toISOString() } }
+
+      {
+        $set: {
+          client_status: status,
+          "content_reviewed_by": projectDetails.client_email,
+          "metadata.updated_at": new Date().toISOString(),
+        }
+      }
     )
 
     if (result.matchedCount > 0) {

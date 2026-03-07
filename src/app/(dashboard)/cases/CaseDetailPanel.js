@@ -713,6 +713,26 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
 
                                 {/* Footer Action Area */}
                                 <div className=" border-t border-slate-100 bg-white sticky bottom-0 z-10">
+
+                                    {/* SHOW WHO REVIEWED IT BEFORE */}
+                                    {post.content_reviewed_by && (
+                                        <div className="mt-4 p-4 border-t border-slate-100">
+                                            <div className="flex items-center gap-3 px-1">
+                                                <div className="h-8 w-8 rounded-full bg-blue-50 flex items-center justify-center border border-blue-100 shrink-0">
+                                                    <BadgeCheck className="w-4 h-4 text-blue-600" />
+                                                </div>
+                                                <div className="flex flex-col">
+                                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">
+                                                        Audit Log
+                                                    </span>
+                                                    <p className="text-sm text-slate-600 font-medium">
+                                                        Content previously reviewed by <span className="text-slate-900 font-bold py-1 px-2 rounded-full bg-slate-100 ">{post.content_reviewed_by}</span>
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+
                                     {(isRequested) && (
                                         <div className="flex items-start gap-3 mb-4 p-4 bg-orange-50 rounded-xl border border-orange-100">
                                             <Info className="w-5 h-5 text-orange-600 mt-0.5 shrink-0" />
