@@ -3,6 +3,7 @@
 import React from 'react';
 import dynamic from 'next/dynamic';
 import { FileDown, Loader2 } from 'lucide-react';
+import { sendGAEvent } from '@next/third-parties/google';
 
 // Dynamic import for PDFDownloadLink to avoid server-side rendering issues
 const PDFDownloadLink = dynamic(
@@ -112,6 +113,12 @@ export function ReportButton({ posts, project, className }) {
       {({ blob, url, loading, error }) => (
         <button
           disabled={loading || imgState.loading || fetchingData}
+          onClick={() => {
+            sendGAEvent('event', 'download_summary_report', {
+              event_id: 'summary_report',
+              status: 'downloaded'
+            })
+          }}
           className={className || "flex cursor-pointer items-center gap-2 px-3 py-2 bg-white border border-slate-200 text-slate-700 font-medium rounded-lg hover:bg-slate-50 transition-colors text-sm shadow-sm"}
         >
           {(loading || imgState.loading || fetchingData) ? (

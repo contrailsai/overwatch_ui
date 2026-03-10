@@ -1,5 +1,6 @@
 import { Outfit } from "next/font/google";
 import "@/app/globals.css";
+import { GoogleAnalytics } from '@next/third-parties/google'
 
 const outfit = Outfit({
     subsets: ["latin"],
@@ -28,18 +29,7 @@ export default async function RootLayout({ children }) {
                 <link rel="icon" href="/logo.png" />
                 {/* Google tag (gtag.js) */}
                 {isProd && gaId && (
-                    <>
-                        <script async src={`https://www.googletagmanager.com/gtag/js?id=${gaId}`}></script>
-                        <script>
-                            {`
-                                window.dataLayer = window.dataLayer || [];
-                                function gtag(){dataLayer.push(arguments);}
-                                gtag('js', new Date());
-
-                                gtag('config', ${gaId});
-                            `}
-                        </script>
-                    </>
+                    <GoogleAnalytics id={gaId} />
                 )}
             </head>
             <body className={`${outfit.className} antialiased bg-slate-50 text-slate-900 h-full`}>

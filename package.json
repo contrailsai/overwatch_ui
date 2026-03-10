@@ -12,6 +12,7 @@
     "@aws-sdk/client-s3": "^3.980.0",
     "@aws-sdk/s3-request-presigner": "^3.980.0",
     "@floating-ui/dom": "^1.7.5",
+    "@next/third-parties": "^16.1.6",
     "@opentelemetry/api": "^1.9.0",
     "@opentelemetry/instrumentation-aws-sdk": "^0.67.0",
     "@opentelemetry/instrumentation-mongodb": "^0.65.0",

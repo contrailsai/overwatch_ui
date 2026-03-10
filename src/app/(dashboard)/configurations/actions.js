@@ -146,8 +146,10 @@ export async function updateLabels(prevState, formData) {
   // 3. Extract inputs from formData
   const projectDescription = formData.get('project_description')
   const labelsString = formData.get('labels') // Grab the JSON string we sent from the frontend
+  const legalCodesString = formData.get('legal_codes')
 
   let labels = []
+  let legalCodes = []
 
   try {
     if (labelsString) {
@@ -162,16 +164,29 @@ export async function updateLabels(prevState, formData) {
           severity: label.severity || 'low'
         }))
     }
+
+    if (legalCodesString) {
+      const parsedCodes = JSON.parse(legalCodesString)
+      legalCodes = parsedCodes
+        .filter(code => (code.actName?.trim() !== '' || code.codeName?.trim() !== ''))
+        .map(code => ({
+          ...code,
+          name: `${code.actName || ''} - ${code.codeName || ''}`.trim().replace(/^-|-$/g, '').trim(),
+          severity: code.severity || 'low'
+        }))
+    }
   } catch (e) {
-    console.error("Error parsing labels JSON:", e)
-    return { error: 'Invalid label data provided' }
+    console.error("Error parsing JSON:", e)
+    return { error: 'Invalid data provided' }
   }
 
   console.log("Parsed labels = ", labels)
+  console.log("Parsed legal codes = ", legalCodes)
 
   // 4. Update project_details structure
   projectDetails.description = projectDescription
   projectDetails.labels = labels
+  projectDetails.legal_codes = legalCodes
 
   const { error } = await supabase
     .from('project')

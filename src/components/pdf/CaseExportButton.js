@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import { FileDown, Loader2 } from 'lucide-react';
 import { Button } from "@/components/ui/button"
+import { sendGAEvent } from '@next/third-parties/google';
 
 // Dynamic import for PDFDownloadLink to avoid server-side rendering issues
 const PDFDownloadLink = dynamic(
@@ -101,6 +102,12 @@ export function CaseExportButton({ post, project }) {
                     variant="outline"
                     size="sm"
                     disabled={loading || imgState.loading}
+                    onClick={() => {
+                        sendGAEvent('event', 'download_single_case_report', {
+                            event_id: 'single_case_report',
+                            status: 'downloaded'
+                        })
+                    }}
                     className="gap-2 cursor-pointer disabled:cursor-not-allowed border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-100 transition-all font-semibold shadow-sm h-8"
                 >
                     {(loading || imgState.loading) ? (

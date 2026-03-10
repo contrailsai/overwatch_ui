@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import { FileDown, Loader2 } from 'lucide-react';
+import { sendGAEvent } from '@next/third-parties/google'
 
 const PDFDownloadLink = dynamic(
     () => import('@react-pdf/renderer').then((mod) => mod.PDFDownloadLink),
@@ -107,6 +108,13 @@ export function DetailedReportButton({ posts, project, className }) {
         <PDFDownloadLink
             document={<DetailedCasesReportDocument posts={fullyLoadedPosts} project={project} compressedImages={imgState.compressedImages} />}
             fileName={fileName}
+
+            onClick={() => {
+                sendGAEvent('event', 'download_detailed_report', {
+                    event_id: 'detailed_report',
+                    status: 'downloaded'
+                })
+            }}
         >
             {({ blob, url, loading, error }) => (
                 <button

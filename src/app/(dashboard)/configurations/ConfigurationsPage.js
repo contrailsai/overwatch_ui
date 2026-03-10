@@ -75,6 +75,12 @@ export default function ConfigurationsPage({ clientDetails, project }) {
         ]
         return initialLabels.map(l => ({ ...l, severity: l.severity || 'low' }))
     })
+
+    const [legalCodes, setLegalCodes] = useState(() => {
+        const initialCodes = project?.project_details?.legal_codes || []
+        return initialCodes.map(c => ({ ...c, severity: c.severity || 'low' }))
+    })
+
     const isEditable = project?.editable
     console.log("editable settings = ", isEditable)
 
@@ -89,6 +95,20 @@ export default function ConfigurationsPage({ clientDetails, project }) {
             const newLabels = [...prev]
             newLabels[index][field] = value
             return newLabels
+        })
+    }
+
+    const handleAddLegalCode = () => setLegalCodes([{ actName: '', codeName: '', description: '', severity: 'low' }, ...legalCodes])
+
+    const handleRemoveLegalCode = (index) => {
+        setLegalCodes(prev => prev.filter((_, i) => i !== index))
+    }
+
+    const handleLegalCodeChange = (index, field, value) => {
+        setLegalCodes(prev => {
+            const newCodes = [...prev]
+            newCodes[index][field] = value
+            return newCodes
         })
     }
 
@@ -371,6 +391,7 @@ export default function ConfigurationsPage({ clientDetails, project }) {
                                 <input type="hidden" name="project_description" value={projectDescription} />
                                 {/* Send the labels as a proper JSON string to avoid duplicate array keys in FormData */}
                                 <input type="hidden" name="labels" value={JSON.stringify(projectLabels)} />
+                                <input type="hidden" name="legal_codes" value={JSON.stringify(legalCodes)} />
 
                                 <Card className="border-slate-200 shadow-sm rounded-xl overflow-hidden p-0">
                                     <CardHeader className="bg-slate-50/50 border-b border-slate-100 pt-10">
@@ -483,6 +504,130 @@ export default function ConfigurationsPage({ clientDetails, project }) {
                                             </div>
                                         )}
 
+                                    </CardContent>
+                                </Card>
+
+                                <Card className="border-slate-200 shadow-sm rounded-xl overflow-hidden p-0 mt-8">
+                                    <CardHeader className="bg-slate-50/50 border-b border-slate-100 pt-10">
+                                        <div className="flex justify-between items-center">
+                                            <div>
+                                                <CardTitle className="text-lg font-bold text-slate-800">Legal Framework Codes</CardTitle>
+                                                <CardDescription className="text-slate-500">
+                                                    Define legal acts and codes to be used for classifying project assets.
+                                                </CardDescription>
+                                            </div>
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={handleAddLegalCode}
+                                                disabled={!isEditable}
+                                                className="h-9 px-3 border-slate-200 hover:bg-slate-50 text-slate-600 font-bold"
+                                            >
+                                                <Plus className="w-4 h-4 mr-1.5" />
+                                                Add New Code
+                                            </Button>
+                                        </div>
+                                    </CardHeader>
+                                    <CardContent className="p-0">
+                                        <Table>
+                                            <TableHeader className="bg-slate-50/30">
+                                                <TableRow className="border-slate-100 hover:bg-transparent">
+                                                    <TableHead className="w-[20%] pl-6">Act Name</TableHead>
+                                                    <TableHead className="w-[20%]">Code Name</TableHead>
+                                                    <TableHead className="w-[30%]">Definition & Context</TableHead>
+                                                    <TableHead className="w-[15%]">Severity Level</TableHead>
+                                                    <TableHead className="w-[80px] text-right pr-6">Action</TableHead>
+                                                </TableRow>
+                                            </TableHeader>
+                                            <TableBody>
+                                                {legalCodes.map((code, index) => (
+                                                    <TableRow key={index} className="group border-slate-100 selection:bg-blue-50">
+                                                        <TableCell className="align-top pt-5 pl-6">
+                                                            <Input
+                                                                value={code.actName || ''}
+                                                                onChange={(e) => handleLegalCodeChange(index, 'actName', e.target.value)}
+                                                                placeholder="e.g. DSA"
+                                                                disabled={!isEditable}
+                                                                className="bg-white border-slate-200 h-10 font-bold text-slate-800 focus:ring-blue-500/20"
+                                                                required
+                                                            />
+                                                        </TableCell>
+                                                        <TableCell className="align-top pt-5">
+                                                            <Input
+                                                                value={code.codeName || ''}
+                                                                onChange={(e) => handleLegalCodeChange(index, 'codeName', e.target.value)}
+                                                                placeholder="e.g. Article 14"
+                                                                disabled={!isEditable}
+                                                                className="bg-white border-slate-200 h-10 font-bold text-slate-800 focus:ring-blue-500/20"
+                                                                required
+                                                            />
+                                                        </TableCell>
+                                                        <TableCell className="align-top pt-5">
+                                                            <Textarea
+                                                                value={code.description || ''}
+                                                                onChange={(e) => handleLegalCodeChange(index, 'description', e.target.value)}
+                                                                placeholder="Detailed classification criteria..."
+                                                                disabled={!isEditable}
+                                                                className="bg-white border-slate-200 min-h-[40px] text-sm resize-none focus:ring-blue-500/20 py-2.5"
+                                                            />
+                                                        </TableCell>
+                                                        <TableCell className="align-top pt-5">
+                                                            <Select
+                                                                value={code.severity || 'low'}
+                                                                onValueChange={(val) => handleLegalCodeChange(index, 'severity', val)}
+                                                                disabled={!isEditable}
+                                                            >
+                                                                <SelectTrigger className={cn(
+                                                                    "w-full bg-white border-slate-200 h-10 font-bold uppercase",
+                                                                    code.severity === 'high' ? "text-rose-600" :
+                                                                        code.severity === 'medium' ? "text-amber-600" :
+                                                                            "text-emerald-600"
+                                                                )}>
+                                                                    <SelectValue />
+                                                                </SelectTrigger>
+                                                                <SelectContent>
+                                                                    <SelectItem value="low" className="font-bold uppercase text-emerald-600">Low</SelectItem>
+                                                                    <SelectItem value="medium" className="font-bold uppercase text-amber-600">Medium</SelectItem>
+                                                                    <SelectItem value="high" className="font-bold uppercase text-rose-600">High</SelectItem>
+                                                                </SelectContent>
+                                                            </Select>
+                                                        </TableCell>
+                                                        <TableCell className="align-top pt-5 text-right pr-6">
+                                                            <Button
+                                                                type="button"
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                onClick={() => handleRemoveLegalCode(index)}
+                                                                disabled={!isEditable}
+                                                                className="text-slate-300 hover:text-rose-600 hover:bg-rose-50 transition-colors disabled:opacity-30"
+                                                            >
+                                                                <Trash2 className="w-4.5 h-4.5" />
+                                                            </Button>
+                                                        </TableCell>
+                                                    </TableRow>
+                                                ))}
+                                            </TableBody>
+                                        </Table>
+
+                                        {legalCodes.length === 0 && (
+                                            <div className="text-center py-16">
+                                                <div className="inline-flex p-4 bg-slate-50 rounded-full mb-4">
+                                                    <FileText className="w-8 h-8 text-slate-300" />
+                                                </div>
+                                                <p className="text-slate-500 font-bold">No legal codes configured</p>
+                                                <p className="text-sm text-slate-400 mb-6">Legal framework codes help in regulatory asset processing.</p>
+                                                <Button
+                                                    type="button"
+                                                    variant="secondary"
+                                                    onClick={handleAddLegalCode}
+                                                    className="font-bold border-slate-200"
+                                                >
+                                                    Add your first code
+                                                </Button>
+                                            </div>
+                                        )}
+
                                         <div className="px-6 py-8 space-y-4">
                                             {labelState?.error && (
                                                 <div className="flex items-center gap-3 p-4 bg-rose-50 text-rose-700 rounded-xl border border-rose-100 animate-in zoom-in-95 duration-200">
@@ -505,8 +650,8 @@ export default function ConfigurationsPage({ clientDetails, project }) {
                                             className="cursor-pointer bg-blue-600 hover:bg-blue-700 text-white font-bold px-8 h-11 shadow-lg shadow-blue-600/20 transition-all active:scale-95 disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed"
                                         >
                                             {labelPending ? (
-                                                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Updating Labels...</>
-                                            ) : 'Update Project Labels'}
+                                                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Updating Settings...</>
+                                            ) : 'Update Project Settings'}
                                         </Button>
                                     </CardFooter>
                                 </Card>

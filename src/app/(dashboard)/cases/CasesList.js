@@ -40,7 +40,7 @@ import { ViolationsFilter } from './ViolationsFilter'
 
 export function CasesList({ cases, project, clientDetails, initialFilters, initialSort, currentPage, initialCase, projectEmails }) {
 
-  console.log(project)
+  // console.log(project)
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()

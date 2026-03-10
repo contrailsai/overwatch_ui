@@ -45,7 +45,7 @@ const getRiskLabel = (score) => {
 }
 
 export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose, onNavigate, hasPrev, hasNext, onUpdateStatus, onUpdatePost, projectEmails }) {
-    console.log(post);
+    // console.log(post);
     const [isProcessing, setIsProcessing] = useState(false)
     const [imgError, setImgError] = useState(false)
     const router = useRouter()
