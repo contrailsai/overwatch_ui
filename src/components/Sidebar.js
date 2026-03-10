@@ -13,7 +13,7 @@ export function Sidebar({ user, clientDetails, project }) {
 
   // All nav items.
   const allNavItems = [
-    { name: 'Home', href: '/', icon: LayoutDashboard, show: true },
+    { name: 'Analytics', href: '/', icon: LayoutDashboard, show: true },
     { name: 'Review Cases', href: '/review-cases', icon: ShieldCheck, show: clientDetails?.permission === 'reviewer' },
     { name: 'Content List', href: '/cases', icon: List, show: true },
     { name: 'Review Profiles', href: '/review-profiles', icon: ShieldCheck, show: clientDetails?.permission === 'reviewer' },

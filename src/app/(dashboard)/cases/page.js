@@ -20,9 +20,11 @@ export default async function CasesPage({ searchParams }) {
     platform: resolvedParams.platform || 'all',
     client_status: resolvedParams.status || 'all',
     risk_priority: resolvedParams.risk_priority || 'all',
-    // posted_after: resolvedParams.posted_after || null,
-    original_date: resolvedParams.original_date || null,
-    processed_after: resolvedParams.processed_after || null
+    violations: resolvedParams.violations || 'all',
+    original_date_from: resolvedParams.original_date_from || null,
+    original_date_to: resolvedParams.original_date_to || null,
+    processed_from: resolvedParams.processed_from || null,
+    processed_to: resolvedParams.processed_to || null
   }
 
   const sort = {
@@ -43,7 +45,7 @@ export default async function CasesPage({ searchParams }) {
 
   return (
     <main className="flex-1 flex flex-col h-full overflow-hidden bg-slate-50">
-      <PageHeader title="Content Review" description="Detailed investigation and execution" />
+      <PageHeader title="Content Review" />
 
       <div className="flex-1 overflow-hidden relative">
         <CasesList

@@ -142,6 +142,20 @@ export const getPosts = traceAction('getPosts', async (project, page = 1, limit 
       }
     }
 
+    // Violations filter
+    if (filters.violations && filters.violations !== 'all') {
+      const violationsArray = filters.violations.split(',');
+      if (violationsArray.length > 0) {
+        const flagConditions = violationsArray.map(v => ({ [`review_details.flags.${v}`]: true }));
+        andConditions.push({
+          $or: [
+            { 'review_details.threat_types': { $in: violationsArray } },
+            ...flagConditions
+          ]
+        });
+      }
+    }
+
     if (andConditions.length > 0) {
       query.$and = andConditions
     }
@@ -182,12 +196,28 @@ export const getPosts = traceAction('getPosts', async (project, page = 1, limit 
     // "Original Date (posted_date)" filter (requires computed field)
     const matchStage = { ...query };
     const dateFilterStage = {};
-    if (filters.original_date) {
-      dateFilterStage.sort_original_date = { $gte: new Date(filters.original_date) };
+    
+    if (filters.original_date_from || filters.original_date_to) {
+      dateFilterStage.sort_original_date = {};
+      if (filters.original_date_from) {
+        dateFilterStage.sort_original_date.$gte = new Date(filters.original_date_from);
+      }
+      if (filters.original_date_to) {
+        dateFilterStage.sort_original_date.$lte = new Date(filters.original_date_to);
+      }
     }
-    if (filters.processed_after) {
-      dateFilterStage.sort_processed_after = { $gte: new Date(filters.processed_after) };
+    
+    if (filters.processed_from || filters.processed_to) {
+      dateFilterStage.sort_processed_after = {};
+      if (filters.processed_from) {
+        dateFilterStage.sort_processed_after.$gte = new Date(filters.processed_from);
+      }
+      if (filters.processed_to) {
+        dateFilterStage.sort_processed_after.$lte = new Date(filters.processed_to);
+      }
     }
+
+    const hasDateFilters = Object.keys(dateFilterStage).length > 0;
 
     const posts = await collection.aggregate([
       { $match: matchStage },
@@ -207,7 +237,7 @@ export const getPosts = traceAction('getPosts', async (project, page = 1, limit 
           }
         }
       },
-      ...((filters.original_date || filters.processed_after) ? [{ $match: dateFilterStage }] : []),
+      ...(hasDateFilters ? [{ $match: dateFilterStage }] : []),
       { $sort: sortPipeline },
       { $skip: skip },
       { $limit: limit }
@@ -216,9 +246,9 @@ export const getPosts = traceAction('getPosts', async (project, page = 1, limit 
     // Serialize and Sign URLs
     const processedPosts = await Promise.all(posts.map(normalized_S3_post));
 
-    // For count, we need to respect the posted_after filter if present
+    // For count, we need to respect the date filters if present
     let totalCount;
-    if (filters.original_date || filters.processed_after) {
+    if (hasDateFilters) {
       const countResult = await collection.aggregate([
         { $match: matchStage },
         {
@@ -323,21 +353,57 @@ export const getAllPostIds = traceAction('getAllPostIds', async (project, filter
       }
     }
 
+    // Violations filter
+    if (filters.violations && filters.violations !== 'all') {
+      const violationsArray = filters.violations.split(',');
+      if (violationsArray.length > 0) {
+        const flagConditions = violationsArray.map(v => ({ [`review_details.flags.${v}`]: true }));
+        andConditions.push({
+          $or: [
+            { 'review_details.threat_types': { $in: violationsArray } },
+            ...flagConditions
+          ]
+        });
+      }
+    }
+
     if (andConditions.length > 0) query.$and = andConditions
 
     const matchStage = { ...query }
     const dateFilterStage = {}
-    if (filters.posted_after) {
-      dateFilterStage.sort_posted_at = { $gte: new Date(filters.posted_after) }
+    
+    if (filters.original_date_from || filters.original_date_to) {
+      dateFilterStage.sort_posted_at = {};
+      if (filters.original_date_from) {
+        dateFilterStage.sort_posted_at.$gte = new Date(filters.original_date_from);
+      }
+      if (filters.original_date_to) {
+        dateFilterStage.sort_posted_at.$lte = new Date(filters.original_date_to);
+      }
     }
+
+    if (filters.processed_from || filters.processed_to) {
+      dateFilterStage.sort_processed_after = {};
+      if (filters.processed_from) {
+        dateFilterStage.sort_processed_after.$gte = new Date(filters.processed_from);
+      }
+      if (filters.processed_to) {
+        dateFilterStage.sort_processed_after.$lte = new Date(filters.processed_to);
+      }
+    }
+
+    const hasDateFilters = Object.keys(dateFilterStage).length > 0;
 
     const pipeline = [
       { $match: matchStage },
-      ...(filters.posted_after ? [
+      ...(hasDateFilters ? [
         {
           $addFields: {
             sort_posted_at: {
               $toDate: { $ifNull: ['$engagement.posted_at', '$metadata.posted_date'] }
+            },
+            sort_processed_after: {
+              $toDate: { $ifNull: ["$review_details.reviewed_at", "$metadata.updated_at"] }
             }
           }
         },

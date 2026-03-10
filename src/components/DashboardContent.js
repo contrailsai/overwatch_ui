@@ -236,7 +236,7 @@ export function DashboardContent({ data }) {
 
             {/* ── Header ────────────────────────────────────────────── */}
 
-            <PageHeader Icon={LayoutDashboard} title="Home" />
+            <PageHeader Icon={LayoutDashboard} title="Analytics" />
             {/* <header className="bg-white border-b border-slate-200 py-5 px-8 shrink-0 flex justify-between items-center z-10"> */}
             {/* <div>
                     <h1 className="text-2xl flex items-center gap-2 font-bold text-slate-900 tracking-tight">

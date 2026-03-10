@@ -11,7 +11,7 @@ import {
   AlertTriangle, ShieldAlert, CheckCircle, ExternalLink,
   Info, Eye, LayoutGrid, List, Facebook, Instagram,
   Activity, User, Siren, FileSignature, ArrowRight, Quote, X, Download, FileDown,
-  ArrowUp, ArrowDown, Calendar, ClockFading, ChevronLeft, ChevronRight,
+  ArrowUp, ArrowDown, CalendarIcon, Clock2Icon, ClockFading, ChevronLeft, ChevronRight,
   ShieldCheck,
   Smile,
   TrendingDown,
@@ -21,8 +21,7 @@ import {
 } from 'lucide-react'
 
 import { Twitter } from '@/utils/icons'
-
-import { format } from "date-fns"
+import { format, addDays, addHours, addMinutes, subDays, formatDate } from "date-fns"
 
 import getPostLink from '@/components/GetPostLink'
 // import Link from 'next/link'
@@ -35,10 +34,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator"
 import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
+import { DateFilterPopover } from './DateFilterPopover'
+import { ViolationsFilter } from './ViolationsFilter'
 // import SafeDate from '@/components/SafeDate'
 
 export function CasesList({ cases, project, clientDetails, initialFilters, initialSort, currentPage, initialCase, projectEmails }) {
 
+  console.log(project)
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -270,16 +272,16 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
               <Separator orientation="vertical" className="h-8 bg-slate-100 hidden sm:block" />
 
               {/* FILTERS */}
-              <div className="flex flex-wrap items-center gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-x-4 gap-y-4 w-full items-end">
 
                 {/* RISK LEVEL */}
-                <div className="space-y-1">
+                <div className="space-y-1.5 w-full">
                   <Label className="text-[10px] uppercase font-bold text-slate-400">Risk Severity</Label>
                   <Select
                     value={initialFilters.risk_priority || 'all'}
                     onValueChange={(val) => handleFilterChange('risk_priority', val)}
                   >
-                    <SelectTrigger className="w-[140px] bg-white border-slate-200 h-9 text-xs font-semibold">
+                    <SelectTrigger className="w-full bg-white border-slate-200 h-9 text-xs font-semibold">
                       <SelectValue placeholder="All Risks" />
                     </SelectTrigger>
                     <SelectContent>
@@ -293,13 +295,13 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                 </div>
 
                 {/* PLATFORM */}
-                <div className="space-y-1">
+                <div className="space-y-1.5 w-full">
                   <Label className="text-[10px] uppercase font-bold text-slate-400">Platform</Label>
                   <Select
                     value={initialFilters.platform}
                     onValueChange={(val) => handleFilterChange('platform', val)}
                   >
-                    <SelectTrigger className="w-[140px] bg-white border-slate-200 h-9 text-xs font-semibold">
+                    <SelectTrigger className="w-full bg-white border-slate-200 h-9 text-xs font-semibold">
                       <SelectValue placeholder="All Platforms" />
                     </SelectTrigger>
                     <SelectContent>
@@ -314,13 +316,13 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                 </div>
 
                 {/* STATUS */}
-                <div className="space-y-1">
+                <div className="space-y-1.5 w-full">
                   <Label className="text-[10px] uppercase font-bold text-slate-400">Status</Label>
                   <Select
                     value={initialFilters.client_status}
                     onValueChange={(val) => handleFilterChange('client_status', val)}
                   >
-                    <SelectTrigger className="w-[160px] bg-white border-slate-200 h-9 text-xs font-semibold">
+                    <SelectTrigger className="w-full bg-white border-slate-200 h-9 text-xs font-semibold">
                       <SelectValue placeholder="Status" />
                     </SelectTrigger>
                     <SelectContent>
@@ -332,51 +334,47 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                   </Select>
                 </div>
 
+                {/* violations */}
+                <div className="space-y-1.5 w-full">
+                  <ViolationsFilter
+                    projectLabels={project?.project_details?.labels || []}
+                    initialViolations={initialFilters.violations}
+                    onChange={(val) => handleFilterChange('violations', val)}
+                  />
+                </div>
+
                 {/* processed date  */}
-                <div className="space-y-1">
+                <div className="space-y-1.5 w-full min-w-32">
                   <Label className="text-[10px] uppercase font-bold text-slate-400">Processed Date</Label>
-                  <input
-                    type="date"
-                    value={initialFilters.processed_after || ''}
-                    onChange={(e) => handleFilterChange('processed_after', e.target.value)}
-                    className="w-[150px] bg-white border border-slate-200 rounded-md h-9 px-3 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  <DateFilterPopover
+                    title="Processed Date"
+                    initialFrom={initialFilters.processed_from}
+                    initialTo={initialFilters.processed_to}
+                    onApply={(range) => updateQueryParams({
+                      processed_from: range?.from ? range.from.toISOString() : null,
+                      processed_to: range?.to ? range.to.toISOString() : null
+                    })}
                   />
                 </div>
 
                 {/* original date  */}
-                <div className="space-y-1">
+                <div className="space-y-1.5 w-full min-w-32">
                   <Label className="text-[10px] uppercase font-bold text-slate-400">Original Date</Label>
-                  <input
-                    type="date"
-                    value={initialFilters.original_date || ''}
-                    onChange={(e) => handleFilterChange('original_date', e.target.value)}
-                    className="w-[150px] bg-white border border-slate-200 rounded-md h-9 px-3 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  <DateFilterPopover
+                    title="Original Date"
+                    initialFrom={initialFilters.original_date_from}
+                    initialTo={initialFilters.original_date_to}
+                    onApply={(range) => updateQueryParams({
+                      original_date_from: range?.from ? range.from.toISOString() : null,
+                      original_date_to: range?.to ? range.to.toISOString() : null
+                    })}
                   />
                 </div>
 
-                {/* <div className="space-y-1">
-                  <Label className="text-[10px] uppercase font-bold text-slate-400">Threat Type</Label>
-                  <Select
-                    value={initialFilters.threat_type}
-                    onValueChange={(val) => handleFilterChange('threat_type', val)}
-                  >
-                    <SelectTrigger className="w-[160px] bg-white border-slate-200 h-9 text-xs font-semibold">
-                      <SelectValue placeholder="All Threats" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Threat Types</SelectItem>
-                      <SelectItem value="impersonation">Impersonation</SelectItem>
-                      <SelectItem value="deepfake_video">Deepfake Video</SelectItem>
-                      <SelectItem value="scam_ad">Scam Ad</SelectItem>
-                      <SelectItem value="hate_speech">Hate Speech</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div> */}
-
-                {(initialFilters.platform !== 'all' || initialFilters.risk_priority !== 'all' || initialFilters.client_status !== 'To Be Reviewed' || initialFilters.original_date || initialFilters.processed_after) && (
-                  <div className="pt-4">
+                {(initialFilters.platform !== 'all' || initialFilters.risk_priority !== 'all' || initialFilters.client_status !== 'To Be Reviewed' || (initialFilters.violations && initialFilters.violations !== 'all') || initialFilters.original_date_from || initialFilters.original_date_to || initialFilters.processed_from || initialFilters.processed_to) && (
+                  <div className=" mt-1">
                     <Button variant="ghost" size="sm" onClick={clearFilters} className="h-9 px-2 text-rose-600 hover:text-rose-700 hover:bg-rose-50 font-bold text-xs">
-                      <X className="w-3.5 h-3.5 mr-1" /> Clear
+                      <X className="w-3.5 h-3.5 mr-1" /> Clear Filters
                     </Button>
                   </div>
                 )}
