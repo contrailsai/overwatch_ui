@@ -1,9 +1,11 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { getPosts, approveTakedown, getPriorityTakedowns, getRaisedCount, trackClientClick, getAllPostIds } from './actions'
+import { trackClientClick, getAllPostIds } from './actions'
 import { CaseDetailPanel } from './CaseDetailPanel'
+
+// IMPORT UI THINGS 
 import { Skeleton } from "@/components/ui/skeleton"
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import {
   Filter, ChevronDown, Search, ArrowUpDown, Loader2,
   AlertTriangle, ShieldAlert, CheckCircle, ExternalLink,
@@ -330,13 +332,24 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                   </Select>
                 </div>
 
-                {/* POSTED AFTER */}
+                {/* processed date  */}
                 <div className="space-y-1">
-                  <Label className="text-[10px] uppercase font-bold text-slate-400">Posted After</Label>
+                  <Label className="text-[10px] uppercase font-bold text-slate-400">Processed Date</Label>
                   <input
                     type="date"
-                    value={initialFilters.posted_after || ''}
-                    onChange={(e) => handleFilterChange('posted_after', e.target.value)}
+                    value={initialFilters.processed_after || ''}
+                    onChange={(e) => handleFilterChange('processed_after', e.target.value)}
+                    className="w-[150px] bg-white border border-slate-200 rounded-md h-9 px-3 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  />
+                </div>
+
+                {/* original date  */}
+                <div className="space-y-1">
+                  <Label className="text-[10px] uppercase font-bold text-slate-400">Original Date</Label>
+                  <input
+                    type="date"
+                    value={initialFilters.original_date || ''}
+                    onChange={(e) => handleFilterChange('original_date', e.target.value)}
                     className="w-[150px] bg-white border border-slate-200 rounded-md h-9 px-3 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                   />
                 </div>
@@ -360,7 +373,7 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                   </Select>
                 </div> */}
 
-                {(initialFilters.platform !== 'all' || initialFilters.risk_priority !== 'all' || initialFilters.client_status !== 'To Be Reviewed' || initialFilters.posted_after) && (
+                {(initialFilters.platform !== 'all' || initialFilters.risk_priority !== 'all' || initialFilters.client_status !== 'To Be Reviewed' || initialFilters.original_date || initialFilters.processed_after) && (
                   <div className="pt-4">
                     <Button variant="ghost" size="sm" onClick={clearFilters} className="h-9 px-2 text-rose-600 hover:text-rose-700 hover:bg-rose-50 font-bold text-xs">
                       <X className="w-3.5 h-3.5 mr-1" /> Clear
@@ -478,8 +491,8 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
 
       {/* Main Table */}
       <div className="flex-1 overflow-y-auto px-6 pb-4">
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-          <table className="min-w-full table-fixed divide-y divide-slate-100">
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 ">
+          <table className="min-w-full table-fixed overflow-y-hidden divide-y divide-slate-100">
             <thead className="bg-slate-50/80 sticky top-0 z-10 backdrop-blur-sm">
               <tr>
                 {/* ---  Checkbox Header --- */}
@@ -516,23 +529,34 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                     Content
                   </div>
                 </th>
-                <th scope="col" className="w-[120px] px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Platform</th>
+                {/* <th scope="col" className="w-[120px] px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Platform</th> */}
                 <th scope="col" className="w-[170px] px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Violations</th>
                 <th
                   scope="col"
                   className="w-[120px] px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100 transition-colors group select-none"
-                  onClick={() => handleSortChange('posted_at')}
+                  onClick={() => handleSortChange('processed_date')}
                 >
                   <div className="flex items-center">
-                    Post Date
-                    <SortIcon field="posted_at" />
+                    Processed Date
+                    <SortIcon field="processed_date" />
+                  </div>
+                </th>
+
+                <th
+                  scope="col"
+                  className="w-[120px] px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100 transition-colors group select-none"
+                  onClick={() => handleSortChange('original_date')}
+                >
+                  <div className="flex items-center">
+                    Original Date
+                    <SortIcon field="original_date" />
                   </div>
                 </th>
                 <th scope="col" className="w-[110px] px-4 py-3 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
 
-            <tbody className="bg-white divide-y divide-slate-100">
+            <tbody className="bg-white divide-y divide-slate-100 overflow-x-scroll">
               {mergedPosts.map((post, index) => {
                 const currentPost = { ...post, client_status: updatedCases[post._id] || post.client_status };
                 const riskScore = currentPost.review_details?.threat_score;
@@ -585,20 +609,29 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
 
                 let posted_date = ""
                 let sourced_date = ""
+                let processed_date = ""
 
+                // POSTED AT ---> ORIGINAL DATE FILTER ( WHEN IT WAS POSTED ON THE SOCIAL MEDIA PLATFORM)
                 if (post.posted_date)
-                  posted_date = format(new Date(post.posted_date), "dd/MM/yyyy");
+                  posted_date = format(new Date(post.posted_date), "dd/MM/yyyy hh:mm a");
                 else if (post.metadata?.posted_date)
-                  posted_date = format(new Date(post.metadata.posted_date), "dd/MM/yyyy");
+                  posted_date = format(new Date(post.metadata.posted_date), "dd/MM/yyyy hh:mm a");
                 else if (post.timestamp)
-                  posted_date = format(new Date(post.timestamp), "dd/MM/yyyy");
+                  posted_date = format(new Date(post.timestamp), "dd/MM/yyyy hh:mm a");
                 else if (post.sourcing_date)
-                  posted_date = format(new Date(post.sourcing_date), "dd/MM/yyyy");
+                  posted_date = format(new Date(post.sourcing_date), "dd/MM/yyyy hh:mm a");
 
+                // SOURCED AT ---> (NOT BEING USED WELL BUT ITS WHEN WE GOT THE POST)
                 if (post.metadata?.created_at)
-                  sourced_date = format(new Date(post.metadata.created_at), "dd/MM/yyyy");
+                  sourced_date = format(new Date(post.metadata.created_at), "dd/MM/yyyy hh:mm a");
                 else if (post.created_at)
-                  sourced_date = format(new Date(post.created_at), "dd/MM/yyyy");
+                  sourced_date = format(new Date(post.created_at), "dd/MM/yyyy hh:mm a");
+
+                // REVIEWED AT. --> PROCESSED DATE FILTER
+                if (post?.reviewed_at)
+                  processed_date = format(new Date(post.reviewed_at), "dd/MM/yyyy hh:mm a");
+                else if (post.review_details?.reviewed_at)
+                  processed_date = format(new Date(post.review_details.reviewed_at), "dd/MM/yyyy hh:mm a");
 
                 const isSelectedRow = !!selectedCases[currentPost._id];
                 const isPanelOpen = selectedPost?._id === currentPost._id;
@@ -675,6 +708,18 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                         </div>
                         <div className="flex flex-col min-w-0 gap-1">
                           <div className="flex items-center gap-2">
+                            <div
+                              className="font-semibold text-slate-600 rounded-full bg-slate-50 max-w-5 flex items-center justify-center p-1 "
+                              title={post.platform.charAt(0).toUpperCase() + post.platform.slice(1)}
+                            >
+                              {post.platform === 'instagram' ? <Instagram className="size-5 text-pink-500" />
+                                : post.platform === 'facebook' ? <Facebook className="size-5 shrink-0 text-blue-600" />
+                                  : post.platform === 'x' ? <Twitter className=" size-5 text-slate-900" />
+                                    : post.platform === 'youtube' ? <Youtube className=" size-5 text-red-600" />
+                                      : post.platform
+                              }
+                            </div>
+                            <span className="text-xs text-slate-400">•</span>
                             <span className="font-bold text-slate-900 text-sm truncate transition-colors">
                               {post.user?.username ? `@${post.user.username}` : 'Unknown User'}
                             </span>
@@ -699,7 +744,7 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                     </td>
 
                     {/* Platform */}
-                    <td className="px-4 py-3 whitespace-nowrap align-middle">
+                    {/* <td className="px-4 py-3 whitespace-nowrap align-middle">
                       <Badge variant="outline" className="capitalize font-semibold text-slate-600 border-slate-300 gap-1.5 pl-2 h-7">
                         {post.platform === 'instagram' && <Instagram className="w-3.5 h-3.5 text-pink-500" />}
                         {post.platform === 'facebook' && <Facebook className="w-3.5 h-3.5 text-blue-600" />}
@@ -707,7 +752,7 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                         {post.platform === 'youtube' && <Youtube className="w-3.5 h-3.5 text-red-600" />}
                         {post.platform}
                       </Badge>
-                    </td>
+                    </td> */}
 
                     {/* Threat Type */}
                     <td className="px-4 py-3 whitespace-nowrap align-middle">
@@ -726,9 +771,24 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                       </div>
                     </td>
 
-                    {/* Posted At */}
-                    <td className="px-4 py-3 whitespace-nowrap align-middle text-sm font-semibold text-slate-500">
-                      {posted_date}
+                    {/* Processed Date */}
+                    <td className="px-4 py-3 whitespace-nowrap align-middle">
+                      <div className="flex flex-col gap-1 justify-center items-center text-sm font-semibold text-slate-500">
+                        <span>{processed_date.split(' ')[0]}</span>
+                        <span className="text-xs text-slate-400">
+                          {processed_date.split(' ')[1] + ' ' + processed_date.split(' ')[2]}
+                        </span>
+                      </div>
+                    </td>
+
+                    {/* Original Date */}
+                    <td className="px-4 py-3 whitespace-nowrap align-middle">
+                      <div className="flex flex-col gap-1 justify-center items-center text-sm font-semibold text-slate-500">
+                        <span>{posted_date.split(' ')[0]}</span>
+                        <span className="text-xs text-slate-400">
+                          {posted_date.split(' ')[1] + ' ' + posted_date.split(' ')[2]}
+                        </span>
+                      </div>
                     </td>
 
                     {/* Actions */}

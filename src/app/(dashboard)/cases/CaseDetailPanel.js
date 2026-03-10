@@ -1,5 +1,11 @@
 'use client'
 
+import { updateClientStatus, trackClientClick } from './actions'
+import { addReviewNote, assignCaseTo } from './feature_actions'
+import { approveTakedown, } from './takedown_actions'
+import EditForm from "./EditForm"
+
+// UI IMPORTS BELOW
 import { format } from "date-fns"
 import { useEffect, useState } from 'react'
 import {
@@ -15,7 +21,6 @@ import {
 } from 'lucide-react'
 import { Twitter } from '@/utils/icons'
 import ProfilePic from '@/components/ProfilePic'
-import { approveTakedown, updateClientStatus, addReviewNote, trackClientClick, assignCaseTo } from './actions'
 import { cn } from '@/lib/utils'
 import { useRouter } from 'next/navigation'
 //  Shadcn imports
@@ -29,10 +34,8 @@ import {
     SelectValue,
 } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-
 import { CaseExportButton } from '@/components/pdf/CaseExportButton'
 import SafeDate from '@/components/SafeDate'
-import EditForm from "./EditForm"
 
 const getRiskLabel = (score) => {
     if (score >= 96) return { label: 'High', color: 'text-rose-500 bg-rose-50 border-rose-200' };
@@ -42,6 +45,7 @@ const getRiskLabel = (score) => {
 }
 
 export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose, onNavigate, hasPrev, hasNext, onUpdateStatus, onUpdatePost, projectEmails }) {
+    console.log(post);
     const [isProcessing, setIsProcessing] = useState(false)
     const [imgError, setImgError] = useState(false)
     const router = useRouter()

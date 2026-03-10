@@ -3,7 +3,7 @@
 
 import * as React from "react"
 import { useState, useActionState } from 'react'
-import { submitCaseReview } from './actions'
+import { submitCaseReview } from './feature_actions'
 import {
     Loader2, X, Plus, Bot
 } from 'lucide-react'

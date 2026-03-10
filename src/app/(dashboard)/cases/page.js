@@ -1,5 +1,6 @@
 import { CasesList } from './CasesList'
-import { getPosts, getPostById, fetch_clients_in_project } from './actions'
+import { getPosts, getPostById } from './actions'
+import { fetch_clients_in_project } from './feature_actions'
 import { getClientandProjectDetails } from '@/app/(dashboard)/actions'
 import PageHeader from '@/components/PageHeader'
 
@@ -17,9 +18,11 @@ export default async function CasesPage({ searchParams }) {
 
   const filters = {
     platform: resolvedParams.platform || 'all',
-    client_status: resolvedParams.status || 'To Be Reviewed',
+    client_status: resolvedParams.status || 'all',
     risk_priority: resolvedParams.risk_priority || 'all',
-    posted_after: resolvedParams.posted_after || null
+    // posted_after: resolvedParams.posted_after || null,
+    original_date: resolvedParams.original_date || null,
+    processed_after: resolvedParams.processed_after || null
   }
 
   const sort = {

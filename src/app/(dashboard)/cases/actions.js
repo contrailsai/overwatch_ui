@@ -34,6 +34,14 @@ export const normalized_S3_post = traceAction('normalized_S3_post', async (post)
     sourcing_date: post.metadata?.sourcing_date ? new Date(post.metadata.sourcing_date).toISOString() : null,
     posted_date: post.engagement?.posted_at ? new Date(post.engagement.posted_at).toISOString() : post.metadata?.posted_date ? new Date(post.metadata.posted_date).toISOString() : null,
     taken_at: post.post_content?.taken_at || post.taken_at || null,
+    updated_at: post.metadata?.updated_at ? new Date(post.metadata.updated_at).toISOString() : null,
+    reviewed_at: post.review_details?.reviewed_at ? new Date(post.review_details.reviewed_at).toISOString() : null,
+
+    update_history: post.metadata?.update_history ? post.metadata.update_history.map(update => ({
+      ...update,
+      updated_at: update.updated_at ? new Date(update.updated_at).toISOString() : null,
+    })) : [],
+
     platform: post.platform ? post.platform.toLowerCase() : 'instagram',
     processed: post.processed || false,
     client_status: post.client_status || 'To Be Reviewed',
@@ -73,7 +81,7 @@ export const normalized_S3_post = traceAction('normalized_S3_post', async (post)
   return normalized;
 })
 
-
+// GET POSTS WITH PAGINATIONS AND FILTERS
 export const getPosts = traceAction('getPosts', async (project, page = 1, limit = 20, filters = {}, sort = { field: 'created_at', direction: 'desc' }) => {
   try {
     if (!project?.mongo_db_map) {
@@ -104,6 +112,7 @@ export const getPosts = traceAction('getPosts', async (project, page = 1, limit 
 
     // Client Status filter
     if (filters.client_status && filters.client_status !== 'all') {
+      // To Be Reviewed cases might not even have the key "client_status"
       if (filters.client_status === 'To Be Reviewed') {
         andConditions.push({
           $or: [
@@ -142,44 +151,63 @@ export const getPosts = traceAction('getPosts', async (project, page = 1, limit 
     if (sort.field === 'threat_score') {
       sortPipeline = {
         'review_details.threat_score': sort.direction === 'asc' ? 1 : -1,
-        'sort_posted_at': -1,
+        'sort_processed_after': -1,
+        'sort_original_date': -1,
         '_id': 1
       };
-    } else if (sort.field === 'posted_at') {
+    } else if (sort.field === 'original_date') {
       sortPipeline = {
-        'sort_posted_at': sort.direction === 'asc' ? 1 : -1,
+        'sort_original_date': sort.direction === 'asc' ? 1 : -1,
         'review_details.threat_score': -1,
+        'sort_processed_after': -1,
+        '_id': 1
+      };
+    } else if (sort.field === 'processed_date') {
+      sortPipeline = {
+        'sort_processed_after': sort.direction === 'asc' ? 1 : -1,
+        'review_details.threat_score': -1,
+        'sort_original_date': -1,
         '_id': 1
       };
     } else {
       // Default sort: Risk Priority (desc) -> Post Date (desc) -> _id (asc)
       sortPipeline = {
         'review_details.threat_score': -1,
-        'sort_posted_at': -1,
+        'sort_processed_after': -1,
+        'sort_original_date': -1,
         '_id': 1
       };
     }
 
-    // "Posted After" filter (requires computed field)
+    // "Original Date (posted_date)" filter (requires computed field)
     const matchStage = { ...query };
     const dateFilterStage = {};
-    if (filters.posted_after) {
-      dateFilterStage.sort_posted_at = { $gte: new Date(filters.posted_after) };
+    if (filters.original_date) {
+      dateFilterStage.sort_original_date = { $gte: new Date(filters.original_date) };
+    }
+    if (filters.processed_after) {
+      dateFilterStage.sort_processed_after = { $gte: new Date(filters.processed_after) };
     }
 
     const posts = await collection.aggregate([
       { $match: matchStage },
       {
         $addFields: {
-          sort_posted_at: {
+          sort_original_date: {
             // $toDate standardizes the field so comparisons and sorting work flawlessly
             $toDate: {
               $ifNull: ["$engagement.posted_at", "$metadata.posted_date"]
             }
+          },
+          sort_processed_after: {
+            // $toDate standardizes the field so comparisons and sorting work flawlessly
+            $toDate: {
+              $ifNull: ["$review_details.reviewed_at", "$metadata.updated_at"]
+            }
           }
         }
       },
-      ...(filters.posted_after ? [{ $match: dateFilterStage }] : []),
+      ...((filters.original_date || filters.processed_after) ? [{ $match: dateFilterStage }] : []),
       { $sort: sortPipeline },
       { $skip: skip },
       { $limit: limit }
@@ -190,13 +218,22 @@ export const getPosts = traceAction('getPosts', async (project, page = 1, limit 
 
     // For count, we need to respect the posted_after filter if present
     let totalCount;
-    if (filters.posted_after) {
+    if (filters.original_date || filters.processed_after) {
       const countResult = await collection.aggregate([
         { $match: matchStage },
         {
           $addFields: {
-            sort_posted_at: {
-              $ifNull: ["$engagement.posted_at", "$metadata.posted_date"]
+            sort_original_date: {
+              // $toDate standardizes the field so comparisons and sorting work flawlessly
+              $toDate: {
+                $ifNull: ["$engagement.posted_at", "$metadata.posted_date"]
+              }
+            },
+            sort_processed_after: {
+              // $toDate standardizes the field so comparisons and sorting work flawlessly
+              $toDate: {
+                $ifNull: ["$review_details.reviewed_at", "$metadata.updated_at"]
+              }
             }
           }
         },
@@ -220,6 +257,28 @@ export const getPosts = traceAction('getPosts', async (project, page = 1, limit 
   }
 })
 
+// For opening using specific case links
+export const getPostById = traceAction('getPostById', async (project, id) => {
+  try {
+    if (!project?.mongo_db_map || !id) return null;
+
+    const client = await clientPromise;
+    const db = client.db(project.mongo_db_map);
+    const collection = db.collection('Posts');
+
+    const post = await collection.findOne({ _id: new ObjectId(id) });
+    if (!post) return null;
+
+    // get normalized post
+    return await normalized_S3_post(post);
+
+  } catch (e) {
+    console.error('getPostById Error:', e);
+    return null;
+  }
+})
+
+// USEFUL FOR PDFs
 export const getAllPostIds = traceAction('getAllPostIds', async (project, filters = {}) => {
   try {
     if (!project?.mongo_db_map) return []
@@ -295,6 +354,7 @@ export const getAllPostIds = traceAction('getAllPostIds', async (project, filter
   }
 })
 
+// USEFUL FOR PDFs
 export const getPostsByIds = traceAction('getPostsByIds', async (project, ids) => {
   try {
     if (!project?.mongo_db_map || !ids || ids.length === 0) {
@@ -337,161 +397,6 @@ export const getProjectDetails = traceAction('getProjectDetails_cases', async ()
     client_email: clientDetails.email,
     projectName: clientDetails.project_name,
     dbName: clientDetails.project?.mongo_db_map
-  }
-})
-
-export const approveTakedown = traceAction('approveTakedown', async (caseId) => {
-  try {
-    const projectDetails = await getProjectDetails()
-    if (!projectDetails?.dbName) {
-      return { success: false, error: "Project configuration not found" }
-    }
-
-    const client = await clientPromise
-    const db = client.db(projectDetails.dbName)
-    const collection = db.collection('Posts')
-
-    // 1. Fetch current post data for metrics/Supabase
-    const post = await collection.findOne({ _id: new ObjectId(caseId) })
-    if (!post) {
-      return { success: false, error: "Case not found" }
-    }
-
-    // 2. Trigger Supabase Takedown Case Management
-    // This creates/updates the record in the 'takedown_cases' table
-    const supabaseCase = await manageTakedownCase({
-      mongo_post_id: caseId,
-      post_platform_id: post.post_id || post.code,
-      platform: post.platform ? post.platform.toLowerCase() : 'instagram',
-      is_in_takedown: true,
-      risk_score: post.review_details?.threat_score || 0,
-      threat_type: post.review_details?.primary_threat_type || 'safe'
-    }).catch(err => {
-      console.error('Takedown management failed:', err)
-      return null
-    })
-
-    // Track takedown event metric
-    const currentReviewData = {
-      risk_score: post.review_details?.threat_score || 0,
-      client_status: 'Takedown',
-      platform: post.platform ? post.platform.toLowerCase() : 'instagram'
-    }
-
-    const previousReviewData = post.client_status && post.client_status !== 'To Be Reviewed' ? {
-      risk_score: post.review_details?.threat_score || 0,
-      client_status: post.client_status,
-      platform: post.platform ? post.platform.toLowerCase() : 'instagram'
-    } : null
-
-    updateClientReviewedMetrics({ project_name: projectDetails.projectName }, currentReviewData, previousReviewData).catch(err => {
-      console.error('Failed to track takedown metric:', err)
-    })
-
-    // 3. Update MongoDB Status
-    const result = await collection.updateOne(
-      { _id: new ObjectId(caseId) },
-      {
-        $set: {
-          "takedown_info.takedown_status": "raised",
-          "takedown_info.client_approval_date": new Date().toISOString(),
-          "takedown_info.supabase_id": supabaseCase?.id || null,
-          "client_status": "Flag for Takedown"
-        }
-      }
-    )
-
-    if (result.modifiedCount === 1) {
-      // 4. Trigger Slack Alert
-      await sendSlackNotification().catch(e => console.error("Slack alert failed", e));
-      return { success: true, supabase_id: supabaseCase?.id }
-    } else {
-      return { success: false, error: "Case not found or already updated" }
-    }
-
-  } catch (e) {
-    console.error("Approve Takedown Error:", e)
-    return { success: false, error: e.message }
-  }
-})
-
-export const getPriorityTakedowns = traceAction('getPriorityTakedowns', async () => {
-  try {
-    const projectDetails = await getProjectDetails()
-    if (!projectDetails?.dbName) {
-      return []
-    }
-
-    const client = await clientPromise
-    const db = client.db(projectDetails.dbName)
-    const collection = db.collection('Posts')
-
-    // Fetch all requested takedowns (priority)
-    const posts = await collection.find({
-      'takedown_info.takedown_status': 'requested'
-    })
-      .sort({ 'metadata.created_at': -1 })
-      .toArray()
-
-    // Serialize and Sign URLs (reuse logic)
-    const processedPosts = await Promise.all(posts.map(async (post) => {
-      let s3UrlToSign = null;
-      if (post.post_content?.media_urls && post.post_content.media_urls.length > 0) {
-        const firstMedia = post.post_content.media_urls[0];
-        s3UrlToSign = firstMedia.thumbnail_url || firstMedia.s3_url;
-      } else if (post.s3_url) {
-        s3UrlToSign = post.s3_url;
-      }
-
-      const signedUrl = s3UrlToSign ? await getSignedImageUrl(s3UrlToSign) : null;
-
-      const normalized = {
-        _id: post._id.toString(),
-        created_at: post.metadata?.created_at ? new Date(post.metadata.created_at).toISOString() : null,
-        taken_at: post.post_content?.taken_at || post.taken_at || null,
-        platform: post.platform ? post.platform.toLowerCase() : 'instagram',
-        processed: post.processed || false,
-        client_status: post.client_status || 'To Be Reviewed',
-        caption: post.post_content?.caption || post.caption || '',
-        signedImageUrl: signedUrl,
-        user: {
-          username: post.profile?.username || post.user?.username || 'Unknown',
-          full_name: post.profile?.display_name || '',
-          profile_pic_url: post.profile?.profile_pic_url || post.profile?.profile_url || '',
-          is_verified: post.profile?.is_verified || false
-        },
-        review_details: post.review_details || null,
-        takedown_info: post.takedown_info || null,
-        analysis_results: post.analysis_results || null,
-        stats: {
-          like_count: post.engagement?.likes || 0,
-          comment_count: post.engagement?.comments || 0,
-          share_count: post.engagement?.shares || 0
-        }
-      };
-      return normalized;
-    }));
-
-    return processedPosts;
-  } catch (e) {
-    console.error('getPriorityTakedowns Error:', e)
-    return []
-  }
-})
-
-export const getRaisedCount = traceAction('getRaisedCount', async () => {
-  try {
-    const projectDetails = await getProjectDetails()
-    if (!projectDetails?.dbName) {
-      return 0
-    }
-    const client = await clientPromise
-    const db = client.db(projectDetails.dbName)
-    const collection = db.collection('Posts')
-    return await collection.countDocuments({ 'takedown_info.takedown_status': 'raised' })
-  } catch (e) {
-    console.error('getRaisedCount Error:', e)
-    return 0
   }
 })
 
@@ -538,7 +443,11 @@ export const updateClientStatus = traceAction('updateClientStatus', async (caseI
         platform: post.platform ? post.platform.toLowerCase() : 'instagram'
       } : null
 
-      updateClientReviewedMetrics({ project_name: projectDetails.projectName }, currentReviewData, previousReviewData).catch(err =>
+      updateClientReviewedMetrics(
+        { project_name: projectDetails.projectName },
+        currentReviewData,
+        previousReviewData
+      ).catch(err =>
         console.error('Failed to update client metrics:', err)
       )
 
@@ -549,321 +458,5 @@ export const updateClientStatus = traceAction('updateClientStatus', async (caseI
   } catch (e) {
     console.error("updateClientStatus Error:", e)
     return { success: false, error: e.message }
-  }
-})
-
-export const addReviewNote = traceAction('addReviewNote', async (caseId, noteText, project, clientDetails) => {
-  try {
-    if (!project?.mongo_db_map) {
-      return { success: false, error: "Project configuration not found" }
-    }
-
-    const client = await clientPromise
-    const db = client.db(project.mongo_db_map)
-    const collection = db.collection('Posts')
-
-    const newNote = {
-      text: noteText,
-      email: clientDetails.email,
-      created_at: new Date().toISOString()
-    }
-
-    const result = await collection.updateOne(
-      { _id: new ObjectId(caseId) },
-      { $push: { client_notes: newNote }, $set: { "metadata.updated_at": new Date().toISOString() } }
-    )
-
-    if (result.matchedCount > 0) {
-      return { success: true, note: newNote }
-    } else {
-      return { success: false, error: "Case not found" }
-    }
-  } catch (e) {
-    console.error("addReviewNote Error:", e)
-    return { success: false, error: e.message }
-  }
-})
-
-export const getPostById = traceAction('getPostById', async (project, id) => {
-  try {
-    if (!project?.mongo_db_map || !id) return null;
-
-    const client = await clientPromise;
-    const db = client.db(project.mongo_db_map);
-    const collection = db.collection('Posts');
-
-    const post = await collection.findOne({ _id: new ObjectId(id) });
-    if (!post) return null;
-
-    // get normalized post
-    return await normalized_S3_post(post);
-
-  } catch (e) {
-    console.error('getPostById Error:', e);
-    return null;
-  }
-})
-
-export const submitCaseReview = traceAction('submitCaseReview', async (project, prevState, formData) => {
-
-  // console.log("YO EDITING THE REVIEW, ", project)
-
-  // const supabase = await createClient()
-  // const { data: { user } } = await supabase.auth.getUser()
-
-  // if (!user) {
-  //   return { success: false, error: 'Authentication required' }
-  // }
-
-  // // 1. Fetch Client Details & Project Config FIRST
-  // const { data: client_details } = await supabase
-  //   .from('client_details')
-  //   .select('*')
-  //   .eq('id', user.id)
-  //   .single()
-
-  // if (!client_details?.project_name) {
-  //   return { success: false, error: 'User not assigned to a project' }
-  // }
-
-  // const { data: project } = await supabase
-  //   .from('project')
-  //   .select('project_name, mongo_db_map')
-  //   .eq('project_name', client_details.project_name)
-  //   .single()
-
-  if (!project?.mongo_db_map) {
-    return { success: false, error: 'Project database configuration missing' }
-  }
-
-  const mongoId = formData.get('mongo_id')
-
-  if (!mongoId) {
-    return { success: false, error: 'Missing Post ID' }
-  }
-
-  // Handle dynamic flags from project labels
-  const flags = {}
-  const threat_types = []
-
-  // project.mongo_db_map is already fetched, but we might need project_details labels
-  // Currently we use 'flag_' prefix from ReviewDetails.js
-  for (const [key, value] of formData.entries()) {
-    if (key.startsWith('flag_')) {
-      const labelName = key.replace('flag_', '')
-      const isActive = value === 'on'
-      flags[labelName] = isActive
-      if (isActive) {
-        threat_types.push(labelName)
-      }
-    }
-  }
-
-  const review_details = {
-    threat_score: parseInt(formData.get('threat_score') || '0'),
-    threat_types: threat_types.length > 0 ? threat_types : ['safe'],
-    is_aigc: formData.get('is_aigc') === 'on',
-
-    // Flags
-    flags: flags,
-
-    // Text & Lists
-    poi_names: formData.get('poi_names') ? formData.get('poi_names').split(',').map(s => s.trim()).filter(Boolean) : [],
-    reasoning: formData.get('reasoning'),
-    reviewer_comments: formData.get('reviewer_comments'),
-
-    // POI
-    face_present: ["on", "yes", "true"].includes(formData.get('face_present')?.toLowerCase()),
-    name_present: ["on", "yes", "true"].includes(formData.get('name_present')?.toLowerCase()),
-
-    reviewed_at: new Date().toISOString()
-  }
-
-  // Determine Takedown Status
-  // If "is_in_takedown" is checked, default to 'raised' (Reviewer Checked)
-  // This signals the Client to approve/start it.
-  // const isTakedown = formData.get('is_in_takedown') === 'on';
-  const takedown_status = formData.get('takedown_status');
-  const suggest_takedown = ["on", "yes", "true"].includes(formData.get('suggest_takedown')?.toLowerCase());
-  const already_in_takedown = ['raised', 'under_review', 'accepted', 'rejected', 'suspended', 'resolution'].includes(takedown_status);
-
-  let takedown_info = {}
-  if (!already_in_takedown) {
-    // if its not in takedown stage then update it to be None or Requested for a takedown
-    takedown_info = {
-      takedown_status: suggest_takedown ? "requested" : "None"
-    }
-  }
-  else {
-    // if its already raised before and has an ongoing takedown stage dont update it
-    takedown_info = {
-      takedown_status: takedown_status
-    }
-  }
-
-  try {
-    const client = await clientPromise
-    const db = client.db(project.mongo_db_map) // Use Correct DB
-    const collection = db.collection('Posts')
-
-    // 1. Fetch existing post to get previous state
-    const existingPost = await collection.findOne({ _id: new ObjectId(mongoId) })
-    if (!existingPost) {
-      return { success: false, error: 'Post not found' }
-    }
-
-    // Check if it was previously reviewed to handle metrics updates correctly
-    // We only treat it as an update if it has a valid threat_score from a previous session
-    const prevReview = existingPost.review_details;
-    const isPreviouslyReviewed = existingPost.processed && prevReview && prevReview.threat_score !== undefined;
-
-    const previousReviewData = isPreviouslyReviewed ? {
-      threat_score: prevReview.threat_score,
-      threat_types: prevReview.threat_types || [prevReview.primary_threat_type || prevReview.threat_type], // Handle backward compat
-      is_aigc: prevReview.is_aigc,
-      platform: existingPost.platform
-    } : null
-
-    // 2. Update MongoDB
-    const result = await collection.updateOne(
-      { _id: new ObjectId(mongoId) },
-      {
-        $set: {
-          review_details,
-          takedown_info,
-          processed: true,
-          processed_at: new Date(),
-          "metadata.updated_at": new Date().toISOString()
-        }
-      }
-    )
-
-    // 3. Update Supabase Metrics
-    const currentReviewData = {
-      threat_score: review_details.threat_score,
-      threat_types: review_details.threat_types,
-      is_aigc: review_details.is_aigc,
-      // takedown metrics are now handled in cases/actions.js
-      platform: existingPost.platform ? existingPost.platform.toLowerCase() : 'instagram'
-    }
-
-    // Fire and forget metrics update to not block UI
-    updateDailyMetrics(project, currentReviewData, previousReviewData).catch(err =>
-      console.error('Background metrics update failed:', err)
-    )
-
-    // // SEND A NOTIFICATION TO THE CLIENT ON THEIR SUPPORTED FORMAT
-    // if (suggest_takedown && !already_in_takedown) {
-    //   // client_details is already fetched at the top
-
-    //   // GET THE CLIENT'S NOTIFICATION CONFIG CONNECTED TO THIS PROJECT
-    //   const { data: notification_data } = await supabase
-    //     .from('client_details')
-    //     .select('notification_config')
-    //     .eq('project_name', client_details.project_name)
-    //     .eq('permission', 'client')
-    //     .single()
-
-    //   const notification_config = notification_data?.notification_config
-
-    //   // SEND NOTIFICATION TO CLIENT
-    //   const { success, error } = await sendNotification(notification_config, "takedown_request")
-    //   if (!success) {
-    //     console.error('Failed to send notification:', error)
-    //   }
-    //   else {
-    //     console.log('Notification sent successfully')
-    //   }
-
-    // }
-
-    return {
-      success: true,
-      updatedFields: {
-        review_details,
-        takedown_info,
-        processed: true,
-        processed_at: new Date().toISOString()
-      }
-    }
-  } catch (error) {
-    console.error('MongoDB Update Error:', error)
-    return { success: false, error: error.message }
-  }
-})
-
-export const fetch_clients_in_project = traceAction('fetch_clients_in_project', async (project_name) => {
-
-  const supabase = await createClient()
-  // const { data: { user } } = await supabase.auth.getUser()
-
-  // if (!user) {
-  //   return { success: false, error: 'Authentication required' }
-  // }
-
-  const { data: client_details, error } = await supabase
-    .from('client_details')
-    .select('*')
-    .eq('project_name', project_name)
-    .eq('permission', 'client')
-
-  if (error) {
-    console.error("ERROR: ", error)
-    return null
-  }
-
-  const emails = client_details.map((client) => client.email)
-
-  return emails
-
-})
-
-export const assignCaseTo = traceAction('assignCaseTo', async (project, post_id, assigned_email) => {
-  if (!project?.mongo_db_map) {
-    return { success: false, error: 'Project database configuration missing' }
-  }
-
-  if (!post_id) {
-    return { success: false, error: 'Missing Post ID' }
-  }
-
-  try {
-    const client = await clientPromise
-    const db = client.db(project.mongo_db_map) // Use Correct DB
-    const collection = db.collection('Posts')
-
-    const result = await collection.updateOne(
-      { _id: new ObjectId(post_id) },
-      {
-        $set: {
-          "assigned_to": assigned_email,
-          "metadata.updated_at": new Date().toISOString()
-        }
-      }
-    )
-
-    // FINALY ADD NOTIFICATION MESSAGE TO THE ASSIGNED CLIENT
-    const supabase = await createClient()
-
-    const { error } = await supabase
-      .from('notifications')
-      .insert([
-        {
-          "client_email": assigned_email,
-          "notification_msg": "You are assigned a new case to review visit. ",
-          "notification_action": { "button": { "redirect": `/cases/${post_id}` } }
-        }
-      ])
-
-    return {
-      success: true,
-      updatedFields: {
-        assigned_to: assigned_email,
-        processed_at: new Date().toISOString()
-      }
-    }
-  } catch (error) {
-    console.error('MongoDB Update Error:', error)
-    return { success: false, error: error.message }
   }
 })
