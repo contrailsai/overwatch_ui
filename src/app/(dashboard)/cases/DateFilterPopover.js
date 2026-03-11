@@ -1,19 +1,122 @@
-import { useState } from 'react';
-import { format, subDays } from 'date-fns';
-import { CalendarIcon, Clock2Icon } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { format } from 'date-fns';
+import { CalendarIcon, Clock2Icon, ChevronDown } from 'lucide-react';
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardAction, CardFooter } from '@/components/ui/card'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
-import {
-    InputGroup,
-    InputGroupAddon,
-    InputGroupInput,
-} from "@/components/ui/input-group"
-
-// import { format, addDays, addHours, addMinutes, subDays, formatDate } from "date-fns"
-import { Calendar } from '@/components/ui/calendar'
+import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Calendar } from '@/components/ui/calendar';
 import { Button } from '@/components/ui/button';
+import { cn } from "@/lib/utils"; // Assuming you have standard shadcn cn utility
+
+// Generate ["12:00", "12:30", "01:00", "01:30" ... "11:30"]
+const halfHourOptions = Array.from({ length: 24 }).map((_, i) => {
+    const totalMinutes = i * 30;
+    const hours = Math.floor(totalMinutes / 60);
+    const mins = totalMinutes % 60;
+    const hour12 = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
+    return `${String(hour12).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
+});
+
+// Helper to extract 12-hour time (e.g., "01:30")
+const get12HourString = (date) => {
+    if (!date) return "12:00";
+    const d = new Date(date);
+    d.setMinutes(d.getMinutes() < 30 ? 0 : 30);
+    return format(d, "hh:mm");
+};
+
+// Helper to extract AM/PM
+const getAMPMString = (date) => {
+    if (!date) return "AM";
+    return format(date, "aa");
+};
+
+// --- NEW CUSTOM DROPDOWN COMPONENT ---
+function CustomTimePicker({ date, onChange, disabled }) {
+    const time12 = get12HourString(date);
+    const ampm = getAMPMString(date);
+
+    const updateDate = (newTime12, newAMPM) => {
+        if (!date) return;
+        let [h, m] = newTime12.split(':').map(Number);
+
+        if (newAMPM === "PM" && h !== 12) h += 12;
+        if (newAMPM === "AM" && h === 12) h = 0;
+
+        const updated = new Date(date);
+        updated.setHours(h, m, 0);
+        onChange(updated);
+    };
+
+    return (
+        <Popover>
+            <PopoverTrigger asChild>
+                <Button
+                    variant="outline"
+                    role="combobox"
+                    disabled={disabled}
+                    className={cn(
+                        "w-full justify-between bg-transparent border-slate-200 font-normal",
+                        !date && "text-muted-foreground"
+                    )}
+                >
+                    <div className="flex items-center gap-2">
+                        <Clock2Icon className="h-4 w-4 opacity-50" />
+                        {date ? `${time12} ${ampm}` : "Select time"}
+                    </div>
+                    <ChevronDown className="h-4 w-4 opacity-50" />
+                </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0 flex h-[200px]" align="start">
+                {/* Left Side: Scrollable Times */}
+                <div className="flex flex-col w-24 overflow-y-auto p-1 custom-scrollbar">
+                    {halfHourOptions.map((t) => (
+                        <Button
+                            key={t}
+                            variant="ghost"
+                            className={cn(
+                                "justify-center font-normal px-2 py-1 h-8 shrink-0",
+                                time12 === t && "bg-blue-600 text-white" // Matches your image active state
+                            )}
+                            onClick={() => updateDate(t, ampm)}
+                        >
+                            {t}
+                        </Button>
+                    ))}
+                </div>
+
+                {/* Divider */}
+                <div className="w-px bg-slate-200 my-2" />
+
+                {/* Right Side: AM/PM */}
+                <div className="flex flex-col gap-1 p-2 w-16">
+                    <Button
+                        variant="ghost"
+                        className={cn(
+                            "px-2 py-1 h-8 font-medium",
+                            ampm === "AM" ? "bg-blue-600 text-white " : "text-slate-500"
+                        )}
+                        onClick={() => updateDate(time12, "AM")}
+                    >
+                        AM
+                    </Button>
+                    <Button
+                        variant="ghost"
+                        className={cn(
+                            "px-2 py-1 h-8 font-medium",
+                            ampm === "PM" ? "bg-blue-600 text-white" : "text-slate-500"
+                        )}
+                        onClick={() => updateDate(time12, "PM")}
+                    >
+                        PM
+                    </Button>
+                </div>
+            </PopoverContent>
+        </Popover>
+    );
+}
+// -------------------------------------
 
 export function DateFilterPopover({ title, onApply, initialFrom, initialTo }) {
     const [dateRange, setDateRange] = useState({
@@ -21,23 +124,12 @@ export function DateFilterPopover({ title, onApply, initialFrom, initialTo }) {
         to: initialTo ? new Date(initialTo) : undefined,
     });
 
-    // Helper to extract HH:mm:ss for the input values
-    const getTimeString = (date) => {
-        if (!date) return "00:00:00";
-        return format(date, "HH:mm:ss");
-    };
-
-    // Updates the time portion of the date state
-    const handleTimeChange = (type, e) => {
-        const timeValue = e.target.value;
-        if (!timeValue || !dateRange?.[type]) return;
-
-        const [hours, minutes, seconds] = timeValue.split(':').map(Number);
-        const updatedDate = new Date(dateRange[type]);
-        updatedDate.setHours(hours || 0, minutes || 0, seconds || 0);
-
-        setDateRange((prev) => ({ ...prev, [type]: updatedDate }));
-    };
+    useEffect(() => {
+        setDateRange({
+            from: initialFrom ? new Date(initialFrom) : undefined,
+            to: initialTo ? new Date(initialTo) : undefined,
+        });
+    }, [initialFrom, initialTo]);
 
     // Intercept calendar selection to preserve the currently selected times
     const handleDateSelect = (newRange) => {
@@ -46,33 +138,60 @@ export function DateFilterPopover({ title, onApply, initialFrom, initialTo }) {
             return;
         }
 
-        const updatedRange = { ...newRange };
+        // Deep clone the dates to ensure 'from' and 'to' don't share a reference
+        const updatedRange = {
+            from: newRange.from ? new Date(newRange.from) : undefined,
+            to: newRange.to ? new Date(newRange.to) : undefined,
+        };
 
-        if (updatedRange.from && dateRange.from) {
-            updatedRange.from.setHours(
-                dateRange.from.getHours(),
-                dateRange.from.getMinutes(),
-                dateRange.from.getSeconds()
-            );
+        if (updatedRange.from) {
+            if (dateRange?.from) {
+                // Preserve existing time if the user already tweaked it
+                updatedRange.from.setHours(dateRange.from.getHours(), dateRange.from.getMinutes(), 0, 0);
+            } else {
+                // Default to 12:00 AM
+                updatedRange.from.setHours(0, 0, 0, 0);
+            }
         }
 
-        if (updatedRange.to && dateRange.to) {
-            updatedRange.to.setHours(
-                dateRange.to.getHours(),
-                dateRange.to.getMinutes(),
-                dateRange.to.getSeconds()
-            );
+        if (updatedRange.to) {
+            if (dateRange?.to) {
+                // Preserve existing time if the user already tweaked it
+                updatedRange.to.setHours(dateRange.to.getHours(), dateRange.to.getMinutes(), 0, 0);
+            } else {
+                // Default to 11:30 PM
+                updatedRange.to.setHours(23, 30, 0, 0);
+            }
         }
 
         setDateRange(updatedRange);
     };
 
-    return (
 
+    // const handleDateSelect = (newRange) => {
+    //     if (!newRange) {
+    //         setDateRange({ from: undefined, to: undefined });
+    //         return;
+    //     }
+
+    //     const updatedRange = { ...newRange };
+
+    //     if (updatedRange.from && dateRange.from) {
+    //         updatedRange.from.setHours(dateRange.from.getHours(), dateRange.from.getMinutes(), dateRange.from.getSeconds());
+    //     }
+
+    //     if (updatedRange.to && dateRange.to) {
+    //         updatedRange.to.setHours(dateRange.to.getHours(), dateRange.to.getMinutes(), dateRange.to.getSeconds());
+    //     }
+
+    //     setDateRange(updatedRange);
+    // };
+
+    return (
         <Popover>
             <PopoverTrigger asChild>
                 <Button variant="outline" className="w-full justify-start text-left font-normal bg-white border-slate-200 h-9 text-xs">
-                    <CalendarIcon className=" h-3.5 w-3.5" />
+                    <CalendarIcon className="h-3.5 w-3.5 mr-2" />
                     {dateRange?.from ? (
                         dateRange.to ? (
                             <span className="truncate">
@@ -89,12 +208,11 @@ export function DateFilterPopover({ title, onApply, initialFrom, initialTo }) {
 
             <PopoverContent className="w-auto p-0" align="start">
                 <Card className="w-fit shadow-none border-0 pt-0">
-
-                    <CardHeader className="border pt-4 px-4 ">
+                    <CardHeader className="border-b mb-4 pt-4 px-4 pb-3">
                         <CardTitle className="text-sm font-semibold">Select Dates Range</CardTitle>
                     </CardHeader>
 
-                    <CardContent className="flex gap-4 py-0">
+                    <CardContent className="flex gap-4 py-0 pr-4">
                         {/* Calendar Section */}
                         <Calendar
                             mode="range"
@@ -107,60 +225,42 @@ export function DateFilterPopover({ title, onApply, initialFrom, initialTo }) {
                         />
 
                         {/* Time Section */}
-                        <div className="flex flex-col gap-2 border-l pl-4 min-w-[200px] justify-center">
-                            <FieldGroup>
+                        <div className="flex flex-col gap-4 border-l pl-4 min-w-[200px] justify-center">
+                            <FieldGroup className="gap-4">
                                 <Field>
-                                    <FieldLabel htmlFor="time-from" className="text-xs text-muted-foreground">From Time</FieldLabel>
-                                    <InputGroup>
-                                        <InputGroupInput
-                                            id="time-from"
-                                            type="time"
-                                            step="1"
-                                            value={getTimeString(dateRange?.from)}
-                                            onChange={(e) => handleTimeChange('from', e)}
-                                            disabled={!dateRange?.from}
-                                            className="appearance-none [&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-calendar-picker-indicator]:appearance-none"
-                                        />
-                                        <InputGroupAddon>
-                                            <Clock2Icon className="h-4 w-4 text-muted-foreground" />
-                                        </InputGroupAddon>
-                                    </InputGroup>
+                                    <FieldLabel className="text-xs text-muted-foreground mb-1 block">From Time</FieldLabel>
+                                    <CustomTimePicker
+                                        date={dateRange.from}
+                                        disabled={!dateRange.from}
+                                        onChange={(d) => setDateRange(prev => ({ ...prev, from: d }))}
+                                    />
                                 </Field>
 
                                 <Field>
-                                    <FieldLabel htmlFor="time-to" className="text-xs text-muted-foreground">To Time</FieldLabel>
-                                    <InputGroup>
-                                        <InputGroupInput
-                                            id="time-to"
-                                            type="time"
-                                            step="1"
-                                            value={getTimeString(dateRange?.to)}
-                                            onChange={(e) => handleTimeChange('to', e)}
-                                            disabled={!dateRange?.to}
-                                            className="appearance-none [&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-calendar-picker-indicator]:appearance-none"
-                                        />
-                                        <InputGroupAddon>
-                                            <Clock2Icon className="h-4 w-4 text-muted-foreground" />
-                                        </InputGroupAddon>
-                                    </InputGroup>
+                                    <FieldLabel className="text-xs text-muted-foreground mb-1 block">To Time</FieldLabel>
+                                    <CustomTimePicker
+                                        date={dateRange.to}
+                                        disabled={!dateRange.to}
+                                        onChange={(d) => setDateRange(prev => ({ ...prev, to: d }))}
+                                    />
                                 </Field>
                             </FieldGroup>
                         </div>
                     </CardContent>
 
                     {/* Action / Summary Footer */}
-                    <CardFooter className="flex flex-col items-stretch gap-3 border-t bg-slate-50/50 px-4 py-3">
+                    <CardFooter className="flex flex-col items-stretch gap-3 border-t mt-4 bg-slate-50/50 px-4 py-3">
                         <div className="flex flex-col gap-1 text-sm">
                             <div className="flex justify-between items-center">
                                 <span className="font-medium text-slate-500">From:</span>
                                 <span className="px-2 py-0.5 bg-slate-100 rounded-md font-mono text-xs">
-                                    {dateRange?.from ? format(dateRange.from, "dd-MM-yyyy HH:mm:ss a") : "—"}
+                                    {dateRange?.from ? format(dateRange.from, "dd-MM-yyyy hh:mm a") : "—"}
                                 </span>
                             </div>
                             <div className="flex justify-between items-center">
                                 <span className="font-medium text-slate-500">To:</span>
                                 <span className="px-2 py-0.5 bg-slate-100 rounded-md font-mono text-xs">
-                                    {dateRange?.to ? format(dateRange.to, "dd-MM-yyyy HH:mm:ss a") : "—"}
+                                    {dateRange?.to ? format(dateRange.to, "dd-MM-yyyy hh:mm a") : "—"}
                                 </span>
                             </div>
                         </div>

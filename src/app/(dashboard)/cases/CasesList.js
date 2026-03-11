@@ -21,7 +21,7 @@ import {
 } from 'lucide-react'
 
 import { Twitter } from '@/utils/icons'
-import { format, addDays, addHours, addMinutes, subDays, formatDate } from "date-fns"
+import { format } from "date-fns"
 
 import getPostLink from '@/components/GetPostLink'
 // import Link from 'next/link'
@@ -371,7 +371,7 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                   />
                 </div>
 
-                {(initialFilters.platform !== 'all' || initialFilters.risk_priority !== 'all' || initialFilters.client_status !== 'To Be Reviewed' || (initialFilters.violations && initialFilters.violations !== 'all') || initialFilters.original_date_from || initialFilters.original_date_to || initialFilters.processed_from || initialFilters.processed_to) && (
+                {(initialFilters.platform !== 'all' || initialFilters.risk_priority !== 'all' || initialFilters.client_status !== 'all' || (initialFilters.violations && initialFilters.violations !== 'all') || initialFilters.original_date_from || initialFilters.original_date_to || initialFilters.processed_from || initialFilters.processed_to) && (
                   <div className=" mt-1">
                     <Button variant="ghost" size="sm" onClick={clearFilters} className="h-9 px-2 text-rose-600 hover:text-rose-700 hover:bg-rose-50 font-bold text-xs">
                       <X className="w-3.5 h-3.5 mr-1" /> Clear Filters
