@@ -81,7 +81,7 @@ export const approveTakedown = traceAction('approveTakedown', async (caseId) => 
             platform: post.platform ? post.platform.toLowerCase() : 'instagram'
         } : null
 
-        updateClientReviewedMetrics({ project_name: projectDetails.projectName }, currentReviewData, previousReviewData).catch(err => {
+        await updateClientReviewedMetrics({ project_name: projectDetails.projectName }, currentReviewData, previousReviewData).catch(err => {
             console.error('Failed to track takedown metric:', err)
         })
 

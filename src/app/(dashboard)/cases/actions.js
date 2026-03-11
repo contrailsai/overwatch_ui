@@ -196,7 +196,7 @@ export const getPosts = traceAction('getPosts', async (project, page = 1, limit 
     // "Original Date (posted_date)" filter (requires computed field)
     const matchStage = { ...query };
     const dateFilterStage = {};
-    
+
     if (filters.original_date_from || filters.original_date_to) {
       dateFilterStage.sort_original_date = {};
       if (filters.original_date_from) {
@@ -206,7 +206,7 @@ export const getPosts = traceAction('getPosts', async (project, page = 1, limit 
         dateFilterStage.sort_original_date.$lte = new Date(filters.original_date_to);
       }
     }
-    
+
     if (filters.processed_from || filters.processed_to) {
       dateFilterStage.sort_processed_after = {};
       if (filters.processed_from) {
@@ -371,7 +371,7 @@ export const getAllPostIds = traceAction('getAllPostIds', async (project, filter
 
     const matchStage = { ...query }
     const dateFilterStage = {}
-    
+
     if (filters.original_date_from || filters.original_date_to) {
       dateFilterStage.sort_posted_at = {};
       if (filters.original_date_from) {
@@ -509,7 +509,7 @@ export const updateClientStatus = traceAction('updateClientStatus', async (caseI
         platform: post.platform ? post.platform.toLowerCase() : 'instagram'
       } : null
 
-      updateClientReviewedMetrics(
+      await updateClientReviewedMetrics(
         { project_name: projectDetails.projectName },
         currentReviewData,
         previousReviewData

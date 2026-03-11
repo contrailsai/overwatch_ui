@@ -177,8 +177,7 @@ export const submitCaseReview = traceAction('submitCaseReview', async (project, 
             platform: existingPost.platform ? existingPost.platform.toLowerCase() : 'instagram'
         }
 
-        // Fire and forget metrics update to not block UI
-        updateDailyMetrics(project, currentReviewData, previousReviewData).catch(err =>
+        await updateDailyMetrics(project, currentReviewData, previousReviewData).catch(err =>
             console.error('Background metrics update failed:', err)
         )
 
