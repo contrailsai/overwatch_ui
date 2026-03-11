@@ -75,6 +75,10 @@ export default function ReviewForm({ post, project_details, onClose, onNavigate,
             : [])
     ]))
 
+    const initialLegalCodes = Array.from(new Set([
+        ...(review.legal_codes || [])
+    ]))
+
     // State
     const [facePresent, setFacePresent] = useState(hasReview ? !!review.face_present : !!analysisPoi.face_present)
     const [namePresent, setNamePresent] = useState(hasReview ? !!review.name_present : !!analysisPoi.poi_name_found)
@@ -82,6 +86,7 @@ export default function ReviewForm({ post, project_details, onClose, onNavigate,
     const [newPoiInput, setNewPoiInput] = useState('')
     const [threatScore, setThreatScore] = useState(review.threat_score ?? 0)
     const [threatTypes, setThreatTypes] = useState(initialThreatTypes)
+    const [selectedLegalCodes, setSelectedLegalCodes] = useState(initialLegalCodes)
     const [isAIGC, setIsAIGC] = useState(!!review.is_aigc)
 
     const poiPresent = facePresent || namePresent
@@ -115,6 +120,10 @@ export default function ReviewForm({ post, project_details, onClose, onNavigate,
 
     const toggleThreatType = (type) => {
         setThreatTypes(prev => prev.includes(type) ? prev.filter(t => t !== type) : [...prev, type])
+    }
+
+    const toggleLegalCode = (code) => {
+        setSelectedLegalCodes(prev => prev.includes(code) ? prev.filter(c => c !== code) : [...prev, code])
     }
 
     const PlatformIcon = () => {
@@ -247,6 +256,9 @@ export default function ReviewForm({ post, project_details, onClose, onNavigate,
                         {project_details.labels.map((label) => (
                             <input key={label.name} type="hidden" name={`flag_${label.name}`} value={threatTypes.includes(label.name) ? 'on' : 'off'} />
                         ))}
+                        {(project_details.legal_codes || []).map((code) => (
+                            <input key={code.name} type="hidden" name={`legal_code_${code.name}`} value={selectedLegalCodes.includes(code.name) ? 'on' : 'off'} />
+                        ))}
                         <input type="hidden" name="mongo_id" value={localPost._id || ''} />
                         <input type="hidden" name="platform" value={localPost.platform || 'Instagram'} />
                         <input type="hidden" name="poi_names" value={poiNames.join(',')} />
@@ -346,6 +358,33 @@ export default function ReviewForm({ post, project_details, onClose, onNavigate,
                                         </label>
                                     ))}
                                 </div>
+
+                                {/* Legal Framework Codes */}
+                                {(project_details.legal_codes || []).length > 0 && (
+                                    <div className="pt-2">
+                                        <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Legal Framework Codes</h4>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                            {project_details.legal_codes.map((item) => (
+                                                <label
+                                                    key={item.name}
+                                                    className={cn(
+                                                        "flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all hover:shadow-sm",
+                                                        selectedLegalCodes.includes(item.name) ? "bg-purple-50 border-purple-200 ring-1 ring-purple-200" : "bg-white border-slate-200 hover:border-purple-200"
+                                                    )}
+                                                >
+                                                    <Checkbox
+                                                        checked={selectedLegalCodes.includes(item.name)}
+                                                        onCheckedChange={() => toggleLegalCode(item.name)}
+                                                        className="border-slate-300 data-[state=checked]:bg-purple-600 data-[state=checked]:border-purple-600"
+                                                    />
+                                                    <span className={cn("text-xs font-bold uppercase", selectedLegalCodes.includes(item.name) ? "text-purple-700" : "text-slate-600")}>
+                                                        {item.name}
+                                                    </span>
+                                                </label>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
                             </section>
 
                             {/* 3. POI IDENTIFICATION */}

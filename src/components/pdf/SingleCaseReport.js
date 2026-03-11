@@ -434,6 +434,7 @@ export const SingleCasePage = ({ post, project, compressedImage }) => {
 
     const stats = post.stats || {};
     const imageUrl = compressedImage || post.signedImageUrl || post.image_url || null;
+    const legalCodes = review.legal_codes || [];
 
     // Safely parse client notes/comments
     let parsedComments = [];
@@ -581,6 +582,21 @@ export const SingleCasePage = ({ post, project, compressedImage }) => {
                             )}
                         </View>
                     </View>
+
+                    {legalCodes.length > 0 && (
+                        <View>
+                            <Text style={styles.sectionLabel}>Legal Framework</Text>
+                            <View style={styles.analysisBox}>
+                                <View style={styles.violationGrid}>
+                                    {legalCodes.map((code, i) => (
+                                        <View key={i} style={[styles.violationBadge, { borderColor: '#8B5CF6', backgroundColor: '#8B5CF615' }]}>
+                                            <Text style={[styles.violationText, { color: '#8B5CF6' }]}>{code}</Text>
+                                        </View>
+                                    ))}
+                                </View>
+                            </View>
+                        </View>
+                    )}
 
                     <View>
                         <Text style={styles.sectionLabel}>Analysis & Complete Reasoning</Text>

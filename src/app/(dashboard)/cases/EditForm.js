@@ -54,6 +54,7 @@ export default function EditForm({ post, project, setIsEditing, onUpdatePost }) 
 
     const savedAigc = review.is_aigc === true
     const savedScore = review.threat_score ?? 0
+    const savedLegalCodes = review.legal_codes || []
 
     let savedTypes = review.threat_types || []
 
@@ -72,6 +73,7 @@ export default function EditForm({ post, project, setIsEditing, onUpdatePost }) 
     // const [newPoiInput, setNewPoiInput] = useState('')
     const [threatScore, setThreatScore] = useState(savedScore)
     const [threatTypes, setThreatTypes] = useState(savedTypes)
+    const [selectedLegalCodes, setSelectedLegalCodes] = useState(savedLegalCodes)
     const [isAIGC, setIsAIGC] = useState(savedAigc)
     // const [suggestTakedown, setSuggestTakedown] = useState(savedTakedown)
 
@@ -97,6 +99,10 @@ export default function EditForm({ post, project, setIsEditing, onUpdatePost }) 
         setThreatTypes(prev => prev.includes(type) ? prev.filter(t => t !== type) : [...prev, type])
     }
 
+    const toggleLegalCode = (code) => {
+        setSelectedLegalCodes(prev => prev.includes(code) ? prev.filter(c => c !== code) : [...prev, code])
+    }
+
 
     return (
         <div className="w-[500px] shrink-0 overflow-y-auto bg-white relative">
@@ -108,6 +114,11 @@ export default function EditForm({ post, project, setIsEditing, onUpdatePost }) 
                 {
                     project_details.labels.map((label, index) => (
                         <input key={index} type="hidden" name={`flag_${label.name}`} value={threatTypes.includes(label.name) ? 'on' : 'off'} />
+                    ))
+                }
+                {
+                    (project_details.legal_codes || []).map((code, index) => (
+                        <input key={index} type="hidden" name={`legal_code_${code.name}`} value={selectedLegalCodes.includes(code.name) ? 'on' : 'off'} />
                     ))
                 }
                 <input type="hidden" name="mongo_id" value={post._id || ''} />
@@ -241,6 +252,36 @@ export default function EditForm({ post, project, setIsEditing, onUpdatePost }) 
                                 </div>
                             ))}
                         </div>
+
+                        {/* Legal Framework Codes */}
+                        {(project_details.legal_codes || []).length > 0 && (
+                            <div className="pt-4 space-y-3">
+                                <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Legal Framework Codes</h4>
+                                <div className="grid grid-cols-2 gap-3">
+                                    {project_details.legal_codes.map((item) => (
+                                        <div
+                                            key={item.name}
+                                            onClick={() => toggleLegalCode(item.name)}
+                                            className={cn(
+                                                "flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all hover:shadow-sm",
+                                                selectedLegalCodes.includes(item.name)
+                                                    ? "bg-purple-50 border-purple-200 ring-1 ring-purple-200"
+                                                    : "bg-white border-slate-200 hover:border-purple-200"
+                                            )}
+                                        >
+                                            <Checkbox
+                                                checked={selectedLegalCodes.includes(item.name)}
+                                                onCheckedChange={() => { }}
+                                                className="border-slate-300 data-[state=checked]:bg-purple-600 data-[state=checked]:border-purple-600"
+                                            />
+                                            <span className={cn("text-xs font-bold uppercase", selectedLegalCodes.includes(item.name) ? "text-purple-700" : "text-slate-600")}>
+                                                {item.name}
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
 
                         <div className="space-y-2 pt-2">
                             <Label className="text-xs font-bold text-slate-500 uppercase">Analysis Notes</Label>

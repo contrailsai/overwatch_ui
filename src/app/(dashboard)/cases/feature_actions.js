@@ -63,6 +63,7 @@ export const submitCaseReview = traceAction('submitCaseReview', async (project, 
     // Handle dynamic flags from project labels
     const flags = {}
     const threat_types = []
+    const legal_codes = []
 
     // project.mongo_db_map is already fetched, but we might need project_details labels
     // Currently we use 'flag_' prefix (check EditForm hidden inputs)
@@ -74,12 +75,19 @@ export const submitCaseReview = traceAction('submitCaseReview', async (project, 
             if (isActive) {
                 threat_types.push(labelName)
             }
+        } else if (key.startsWith('legal_code_')) {
+            const codeName = key.replace('legal_code_', '')
+            const isActive = value === 'on'
+            if (isActive) {
+                legal_codes.push(codeName)
+            }
         }
     }
 
     const review_details = {
         threat_score: parseInt(formData.get('threat_score') || '0'),
         threat_types: threat_types.length > 0 ? threat_types : ['safe'],
+        legal_codes: legal_codes,
         is_aigc: formData.get('is_aigc') === 'on',
 
         // Flags

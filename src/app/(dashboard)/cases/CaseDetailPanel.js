@@ -17,7 +17,7 @@ import {
     ScanFace, MessageSquareWarning, Fingerprint, AlertCircle, ShieldQuestion,
     FishingHook,
     UserRound,
-    UserRoundX, Pencil, UserPlus
+    UserRoundX, Pencil, UserPlus, Scale
 } from 'lucide-react'
 import { Twitter } from '@/utils/icons'
 import ProfilePic from '@/components/ProfilePic'
@@ -168,6 +168,7 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
     const reasoning = review.reasoning || analysis.categorization_reason || 'No detailed reasoning provided.';
     const reviewerNote = review.reviewer_comments || null;
     const poiNames = review.poi_names || analysis.poi_check?.poi_names || [];
+    const legalCodes = review.legal_codes || [];
 
     // Flags
     const isPoiPresent = review.face_present ?? review.flags?.poi_confirmed ?? (analysis.poi_check?.poi_name_found || analysis.poi_check?.face_present) ?? false;
@@ -577,6 +578,26 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
 
                                         </div>
                                     </div>
+
+                                    {/* Legal Framework Section */}
+                                    {legalCodes.length > 0 && (
+                                        <div className="space-y-4">
+                                            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                                <Scale className="w-3.5 h-3.5" /> Legal Framework
+                                            </h4>
+                                            <div className="flex gap-2 flex-wrap">
+                                                {legalCodes.map((code, idx) => (
+                                                    <ViolationCard
+                                                        key={idx}
+                                                        active={true}
+                                                        title={code}
+                                                        icon={Scale}
+                                                        color="purple"
+                                                    />
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
 
                                     {/* Reasoning */}
                                     <div className="space-y-3">
