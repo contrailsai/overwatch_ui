@@ -22,7 +22,11 @@ const PlatformIcon = ({ platform, className }) => {
     const p = platform?.toLowerCase()
     if (p === 'instagram') return <Instagram className={cn('w-3.5 h-3.5 text-pink-500', className)} />
     if (p === 'facebook') return <Facebook className={cn('w-3.5 h-3.5 text-blue-600', className)} />
-    if (p === 'x') return <Twitter className={cn('w-3.5 h-3.5 text-slate-900', className)} />
+    if (p === 'x') return (
+        <span className='w-3.5 h-3.5'>
+            <Twitter className={cn('max-w-3.5 max-h-3.5 text-slate-900', className)} />
+        </span>
+    )
     if (p === 'youtube') return <Youtube className={cn('w-3.5 h-3.5 text-red-500', className)} />
     return <Globe className={cn('w-3.5 h-3.5 text-slate-400', className)} />
 }
@@ -163,7 +167,7 @@ export function ProfilesList({ profiles, project, initialFilters, currentPage })
                                 <th scope="col" className="px-6 py-4 text-left w-[150px]">Status</th>
                                 <th scope="col" className="px-6 py-4 text-left w-[240px]">Display Name</th>
                                 <th scope="col" className="px-6 py-4 text-left w-[140px]">Platform</th>
-                                <th scope="col" className="px-6 py-4 text-left w-[110px]">Verified</th>
+                                {/* <th scope="col" className="px-6 py-4 text-left w-[110px]">Verified</th> */}
                                 <th scope="col" className="px-6 py-4 text-left w-[100px]">Cases</th>
                                 <th scope="col" className="px-6 py-4 text-left w-[100px]">Source</th>
                                 <th scope="col" className="px-6 py-4 text-right">Actions</th>
@@ -232,11 +236,24 @@ export function ProfilesList({ profiles, project, initialFilters, currentPage })
                                                 })()}
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap align-middle">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-9 h-9 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center shrink-0">
-                                                        <User className="w-4 h-4 text-slate-400" />
+                                                <div className="flex items-center gap-2.5">
+                                                    <div className="w-9 h-9 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center shrink-0 overflow-hidden">
+                                                        {profile.metadata?.profile_pic ? (
+                                                            <img src={profile.metadata.profile_pic} alt="" className="w-full h-full object-cover" />
+                                                        ) : (
+                                                            <User className="w-4 h-4 text-slate-400" />
+                                                        )}
                                                     </div>
-                                                    <span className="font-bold text-slate-800 text-sm tracking-tight">{profile.display_name}</span>
+                                                    <div className="flex flex-col gap-0.5">
+                                                        <span className="font-bold text-slate-800 text-sm tracking-tight truncate max-w-[180px]">
+                                                            {profile.display_name}
+                                                        </span>
+                                                        {profile.username && (
+                                                            <span className="text-[10px] text-slate-400 truncate max-w-[180px]">
+                                                                @{profile.username}
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap align-middle">
@@ -245,13 +262,13 @@ export function ProfilesList({ profiles, project, initialFilters, currentPage })
                                                     {profile.platform}
                                                 </Badge>
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap align-middle">
+                                            {/* <td className="px-6 py-4 whitespace-nowrap align-middle">
                                                 {profile.is_verified ? (
                                                     <BadgeCheck className="w-5 h-5 text-blue-500 fill-blue-50" />
                                                 ) : (
                                                     <ShieldOff className="w-5 h-5 text-slate-300" />
                                                 )}
-                                            </td>
+                                            </td> */}
                                             <td className="px-6 py-4 whitespace-nowrap align-middle font-bold text-slate-700 text-sm">
                                                 {profile.posts.length}
                                             </td>

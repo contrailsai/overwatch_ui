@@ -65,6 +65,11 @@ export default async function ReviewCasesPage({ searchParams }) {
 
   const { posts, totalPages, totalCount } = await getPosts(project.mongo_db_map, page, 20, initialFilters)
 
+  let initialCase = null;
+  if (resolvedParams.case_id) {
+    initialCase = await getPostById(project, resolvedParams.case_id);
+  }
+
   return (
     <main className="flex-1 flex flex-col h-full overflow-hidden bg-slate-50">
 
@@ -90,6 +95,7 @@ export default async function ReviewCasesPage({ searchParams }) {
           project={project}
           initialFilters={initialFilters}
           totalCount={totalCount}
+          initialCase={initialCase}
         />
       </div>
     </main>

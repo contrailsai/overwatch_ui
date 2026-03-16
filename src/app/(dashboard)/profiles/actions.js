@@ -52,16 +52,28 @@ export const getProfiles = traceAction('getProfiles', async (project, page = 1, 
 
         const totalCount = await collection.countDocuments(query)
 
-        const serialized = profiles.map(p => ({
-            _id: p._id.toString(),
-            display_name: p.display_name || p.username || 'Unknown',
-            platform: p.platform || 'unknown',
-            is_verified: p.is_verified || false,
-            posts: (p.posts || []).map(id => id.toString()),
-            profile_url: p.profile_url || null,
-            review_details: p.review_details || {},
-            client_status: p.client_status || 'To Be Reviewed',
-            client_notes: p.client_notes || [],
+        const serialized = await Promise.all(profiles.map(async (p) => {
+            let signedProfilePic = null
+            if (p.metadata?.s3_url) {
+                signedProfilePic = await getSignedImageUrl(p.metadata.s3_url)
+            }
+
+            return {
+                _id: p._id.toString(),
+                display_name: p.metadata?.display_name || p.display_name || p.username || 'Unknown',
+                username: p.metadata?.username || p.username || null,
+                platform: p.platform || 'unknown',
+                is_verified: p.metadata?.is_verified ?? p.is_verified ?? false,
+                posts: (p.posts || []).map(id => id.toString()),
+                profile_url: p.metadata?.profile_url || p.profile_url || null,
+                review_details: p.review_details || {},
+                client_status: p.client_status || 'To Be Reviewed',
+                client_notes: p.client_notes || [],
+                metadata: p.metadata ? {
+                    ...p.metadata,
+                    profile_pic: signedProfilePic
+                } : null
+            }
         }))
 
         return {
