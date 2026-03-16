@@ -35,6 +35,7 @@ import {
 } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { CaseExportButton } from '@/components/pdf/CaseExportButton'
+import { CaseExportDocxButton } from '@/components/pdf/CaseExportDocxButton'
 import SafeDate from '@/components/SafeDate'
 
 const getRiskLabel = (score) => {
@@ -841,8 +842,9 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
                                                 )
                                             }
                                         </div>
-                                        <div onClick={() => trackClientClick('download_case_report', { page: 'CaseDetailPanel' })}>
+                                        <div onClick={() => trackClientClick('download_case_report', { page: 'CaseDetailPanel' })} className="flex gap-2">
                                             <CaseExportButton post={post} project={project} />
+                                            <CaseExportDocxButton post={post} project={project} />
                                         </div>
                                     </div>
                                 </div>
