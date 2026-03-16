@@ -26,22 +26,55 @@ export const getProfiles = traceAction('getProfiles', async (project, page = 1, 
             query.is_verified = filters.is_verified === 'true'
         }
 
-        const profiles = await collection.find(query)
-            .sort({ display_name: 1 })
-            .skip(skip)
-            .limit(limit)
-            .toArray()
+        query.metadata = { $exists: true }
+
+        const profiles = await collection.aggregate([
+            { $match: query },
+            {
+                $addFields: {
+                    posts_count: { $size: { $ifNull: ["$posts", []] } }
+                }
+            },
+            { $sort: { posts_count: -1, _id: 1 } }, // -1 for descending (most posts first)
+            { $skip: skip },
+            { $limit: limit }
+        ]).toArray()
+
+
+
+        // const profiles = await collection.find(query)
+        //     .sort({ display_name: 1, _id: 1 })
+        //     .skip(skip)
+        //     .limit(limit)
+        //     .toArray()
 
         const totalCount = await collection.countDocuments(query)
 
-        const serialized = profiles.map(p => ({
-            _id: p._id.toString(),
-            display_name: p.display_name || p.username || 'Unknown',
-            platform: p.platform || 'unknown',
-            is_verified: p.is_verified || false,
-            posts: (p.posts || []).map(id => id.toString()),
-            profile_url: p.profile_url || null,
-            review_details: p.review_details || {},
+        const serialized = await Promise.all(profiles.map(async (p) => {
+            let signedProfilePic = null
+            if (p.metadata?.s3_url) {
+                signedProfilePic = await getSignedImageUrl(p.metadata.s3_url)
+            }
+            // else if (p.metadata?.profile_pic) {
+            //     // If it's already a URL, we might want to sign it if it's an S3 URL
+            //     // But usually we prefer s3_url if available
+            //     signedProfilePic = p.metadata.profile_pic
+            // }
+
+            return {
+                _id: p._id.toString(),
+                display_name: p.metadata?.display_name || p.display_name || p.username || 'Unknown',
+                username: p.metadata?.username || p.username || null,
+                platform: p.platform || 'unknown',
+                is_verified: p.metadata?.is_verified ?? p.is_verified ?? false,
+                posts: (p.posts || []).map(id => id.toString()),
+                profile_url: p.metadata?.profile_url || p.profile_url || null,
+                review_details: p.review_details || {},
+                metadata: p.metadata ? {
+                    ...p.metadata,
+                    profile_pic: signedProfilePic
+                } : null
+            }
         }))
 
         return {

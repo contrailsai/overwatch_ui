@@ -8,7 +8,8 @@ import {
     Facebook, Instagram, Youtube, CheckCircle, ShieldOff,
     User, ArrowRight, FileText, Siren, ClockFading, Info, Globe,
     BadgeCheck, ShieldAlert, TriangleAlert, TrendingDown, Smile,
-    Loader2, AlertCircle, UserX, UserCheck, CheckCheck
+    Loader2, AlertCircle, UserX, UserCheck, CheckCheck,
+    MapPin, Calendar, Link2, Briefcase, Hash
 } from 'lucide-react'
 import { Twitter } from '@/utils/icons'
 import { Button } from '@/components/ui/button'
@@ -26,7 +27,11 @@ const PlatformIcon = ({ platform, className }) => {
     const p = platform?.toLowerCase()
     if (p === 'instagram') return <Instagram className={cn('w-3.5 h-3.5 text-pink-500', className)} />
     if (p === 'facebook') return <Facebook className={cn('w-3.5 h-3.5 text-blue-600', className)} />
-    if (p === 'x') return <Twitter className={cn('w-3.5 h-3.5 text-slate-900', className)} />
+    if (p === 'x') return (
+        <span className='w-3.5 h-3.5'>
+            <Twitter className={cn('max-w-3.5 max-h-3.5 text-slate-900', className)} />
+        </span>
+    )
     if (p === 'youtube') return <Youtube className={cn('w-3.5 h-3.5 text-red-500', className)} />
     return <Globe className={cn('w-3.5 h-3.5 text-slate-400', className)} />
 }
@@ -337,6 +342,7 @@ function ProfileReviewForm({ profile, project, onReviewSaved }) {
 function ProfileDetailPanel({ profile, profiles = [], project, isOpen, onClose, onReviewSaved, onSelectProfile }) {
     const [cases, setCases] = useState(null)
     const [loading, setLoading] = useState(false)
+    const [isBioExpanded, setIsBioExpanded] = useState(false)
 
     const currentIndex = profiles.findIndex(p => p._id === profile?._id)
     const hasPrev = currentIndex > 0
@@ -346,6 +352,7 @@ function ProfileDetailPanel({ profile, profiles = [], project, isOpen, onClose, 
         if (!isOpen || !profile) return
         let cancelled = false
         setCases(null)
+        setIsBioExpanded(false)
         if (profile.posts.length === 0) {
             setCases([])
             return
@@ -444,49 +451,132 @@ function ProfileDetailPanel({ profile, profiles = [], project, isOpen, onClose, 
                             </Button>
                         </div>
                     </div>
-                    {/* Header */}
-                    <div className="px-6 py-5 border-b border-slate-100 bg-linear-to-r from-slate-50 to-white shrink-0">
-                        <div className="flex items-start justify-between gap-3">
-                            <div className="flex items-center gap-3 min-w-0">
-                                <div className="w-10 h-10 rounded-full bg-blue-50 border border-blue-100 flex items-center justify-center shrink-0">
-                                    <User className="w-5 h-5 text-blue-600" />
-                                </div>
-                                <div className="min-w-0">
-                                    <div className="flex items-center gap-2">
-                                        <h2 className="text-base font-bold text-slate-900 truncate">{profile.display_name}</h2>
-                                        {profile.is_verified && (
-                                            <BadgeCheck className="w-4 h-4 text-blue-500 shrink-0" />
-                                        )}
-                                    </div>
-                                    <div className="flex items-center gap-2 mt-0.5">
-                                        <Badge variant="outline" className="capitalize font-semibold text-slate-600 border-slate-300 gap-1 pl-1.5 h-5 text-[10px]">
-                                            <PlatformIcon platform={profile.platform} />
-                                            {profile.platform}
-                                        </Badge>
-                                        <span className="text-xs text-slate-400">{profile.posts.length} post{profile.posts.length !== 1 ? 's' : ''}</span>
-                                    </div>
-                                </div>
-                            </div>
+                    <div className="flex-1 overflow-y-auto flex flex-col">
+                    {/* Profile & Metadata Section */}
+                    <div className="px-6 py-6 border-b border-slate-100 bg-linear-to-b from-slate-50/80 to-white shrink-0 relative">
+                        {/* Close Button */}
+                        <div className="absolute top-4 right-4">
                             <button
                                 onClick={onClose}
-                                className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors shrink-0"
+                                className="p-1.5 rounded-lg hover:bg-slate-200/50 text-slate-400 hover:text-slate-700 transition-colors bg-white/50 backdrop-blur-sm"
                             >
                                 <X className="w-4 h-4" />
                             </button>
                         </div>
 
-                        {/* Profile URL */}
-                        {profile.profile_url && (
-                            <a
-                                href={profile.profile_url}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="mt-3 flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 hover:underline font-medium truncate"
-                            >
-                                <ExternalLink className="w-3 h-3 shrink-0" />
-                                <span className="truncate">{profile.profile_url}</span>
-                            </a>
-                        )}
+                        <div className="flex flex-col gap-5">
+                            {/* Profile Info Row */}
+                            <div className="flex items-start gap-4 pr-8">
+                                <div className="w-16 h-16 rounded-full bg-white shadow-sm ring-1 ring-slate-200/60 flex items-center justify-center shrink-0 overflow-hidden relative">
+                                    {profile.metadata?.profile_pic ? (
+                                        <img src={profile.metadata.profile_pic} alt="" className="w-full h-full object-cover" />
+                                    ) : (
+                                        <User className="w-7 h-7 text-slate-300" />
+                                    )}
+                                </div>
+                                <div className="flex flex-col min-w-0 pt-0.5">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        <h2 className="text-lg font-bold text-slate-900 truncate tracking-tight">{profile.display_name}</h2>
+                                        {profile.is_verified && (
+                                            <BadgeCheck className="w-4 h-4 text-blue-500 shrink-0" />
+                                        )}
+                                        {profile.metadata?.is_business && (
+                                            <Badge variant="secondary" className="h-5 px-1.5 text-[9px] font-bold bg-slate-800 text-white hover:bg-slate-700 border-none uppercase tracking-wider">
+                                                Business
+                                            </Badge>
+                                        )}
+                                    </div>
+                                    <div className="flex items-center gap-2 mt-0.5 text-sm">
+                                        {profile.username && (
+                                            <span className="font-medium text-slate-500">@{profile.username}</span>
+                                        )}
+                                        {profile.username && <span className="text-slate-300">•</span>}
+                                        <div className="flex items-center gap-1.5 text-slate-600 font-medium">
+                                            <PlatformIcon platform={profile.platform} className="w-3.5 h-3.5" />
+                                            <span className="capitalize">
+                                                {profile.platform === 'x' ? 'Twitter/X' : profile.platform}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    {(profile.metadata?.full_name && profile.metadata.full_name !== profile.display_name) && (
+                                        <span className="text-xs text-slate-400 mt-0.5">
+                                            {profile.metadata.full_name}
+                                        </span>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Biography */}
+                            {profile.metadata?.biography && (
+                                <div className="flex flex-col gap-1 items-start">
+                                    <div className={cn(
+                                        "text-sm text-slate-700 leading-relaxed whitespace-pre-wrap font-medium transition-all",
+                                        !isBioExpanded && "line-clamp-3"
+                                    )}>
+                                        {profile.metadata.biography}
+                                    </div>
+                                    {profile.metadata.biography.length > 120 && (
+                                        <button 
+                                            onClick={() => setIsBioExpanded(!isBioExpanded)}
+                                            className="text-[10px] font-bold text-blue-600 hover:text-blue-800 uppercase tracking-wider mt-0.5 transition-colors"
+                                        >
+                                            {isBioExpanded ? 'Show less' : 'Show more'}
+                                        </button>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Badges/Tags */}
+                            <div className="flex flex-wrap gap-2">
+                                {profile.metadata?.location && (
+                                    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-100 text-slate-600 text-xs font-medium border border-slate-200/60">
+                                        <MapPin className="w-3 h-3 text-slate-400" />
+                                        {profile.metadata.location}
+                                    </div>
+                                )}
+                                {profile.metadata?.category && (
+                                    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-100 text-slate-600 text-xs font-medium border border-slate-200/60">
+                                        <Hash className="w-3 h-3 text-slate-400" />
+                                        {profile.metadata.category}
+                                    </div>
+                                )}
+                                {profile.metadata?.account_creation_date && (
+                                    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-100 text-slate-600 text-xs font-medium border border-slate-200/60">
+                                        <Calendar className="w-3 h-3 text-slate-400" />
+                                        Joined {format(new Date(profile.metadata.account_creation_date), 'MMM yyyy')}
+                                    </div>
+                                )}
+                                {profile.profile_url && (
+                                    <a href={profile.profile_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-blue-50 text-blue-700 hover:bg-blue-100 hover:text-blue-800 text-xs font-semibold transition-colors border border-blue-100">
+                                        <Link2 className="w-3 h-3 text-blue-500" />
+                                        View Profile
+                                    </a>
+                                )}
+                            </div>
+
+                            {/* Stats Grid */}
+                            <div className="grid grid-cols-3 gap-4 pt-4 border-t border-slate-100/80">
+                                <div className="flex flex-col">
+                                    <span className="text-lg font-bold text-slate-900 tracking-tight">
+                                        {profile.metadata?.follower_count?.toLocaleString() || 0}
+                                    </span>
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Followers</span>
+                                </div>
+                                <div className="flex flex-col">
+                                    <span className="text-lg font-bold text-slate-900 tracking-tight">
+                                        {profile.metadata?.following_count?.toLocaleString() || 0}
+                                    </span>
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Following</span>
+                                </div>
+                                <div className="flex flex-col">
+                                    <span className="text-lg font-bold text-slate-900 tracking-tight">
+                                        {profile.metadata?.media_count?.toLocaleString() || profile.posts?.length || 0}
+                                    </span>
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Posts</span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                     {/* Stats bar */}
                     {cases && cases.length > 0 && (
@@ -516,7 +606,7 @@ function ProfileDetailPanel({ profile, profiles = [], project, isOpen, onClose, 
                         </div>
                     )}
                     {/* Cases */}
-                    <div className="flex-1 overflow-y-auto">
+                    <div className="shrink-0 pb-8">
                         <div className="px-6 py-4">
                             <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Associated Cases</h3>
 
@@ -626,6 +716,7 @@ function ProfileDetailPanel({ profile, profiles = [], project, isOpen, onClose, 
                                 </div>
                             )}
                         </div>
+                    </div>
                     </div>
                 </div>
 
@@ -794,13 +885,22 @@ export function ProfilesList({ profiles, project, initialFilters, currentPage })
                                         {/* Display Name */}
                                         <td className="px-4 py-3 whitespace-nowrap align-middle">
                                             <div className="flex items-center gap-2.5">
-                                                <div className="w-8 h-8 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center shrink-0">
-                                                    <User className="w-4 h-4 text-slate-400" />
+                                                <div className="w-8 h-8 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center shrink-0 overflow-hidden">
+                                                    {profile.metadata?.profile_pic ? (
+                                                        <img src={profile.metadata.profile_pic} alt="" className="w-full h-full object-cover" />
+                                                    ) : (
+                                                        <User className="w-4 h-4 text-slate-400" />
+                                                    )}
                                                 </div>
                                                 <div className="flex flex-col gap-0.5">
                                                     <span className="font-semibold text-slate-900 text-sm truncate max-w-[150px]">
                                                         {profile.display_name}
                                                     </span>
+                                                    {profile.username && (
+                                                        <span className="text-[10px] text-slate-400 truncate max-w-[150px]">
+                                                            @{profile.username}
+                                                        </span>
+                                                    )}
                                                     {hasReview && (
                                                         <span className="text-[10px] text-emerald-600 font-bold flex items-center gap-1">
                                                             <CheckCircle className="w-2.5 h-2.5" /> Reviewed
