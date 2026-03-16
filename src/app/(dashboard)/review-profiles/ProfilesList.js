@@ -516,7 +516,7 @@ function ProfileDetailPanel({ profile, profiles = [], project, isOpen, onClose, 
                                     )}>
                                         {profile.metadata.biography}
                                     </div>
-                                    {profile.metadata.biography.length > 120 && (
+                                    {(profile.metadata.biography.length > 80 || profile.metadata.biography.includes('\n')) && (
                                         <button 
                                             onClick={() => setIsBioExpanded(!isBioExpanded)}
                                             className="text-[10px] font-bold text-blue-600 hover:text-blue-800 uppercase tracking-wider mt-0.5 transition-colors"
