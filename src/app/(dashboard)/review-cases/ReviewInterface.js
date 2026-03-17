@@ -10,7 +10,7 @@ import {
   Loader2, X, Filter, Download, ChevronLeft, ChevronRight,
   Search, Sparkles, Calendar, Database,
   Instagram, Facebook, Youtube, AlertCircle, Quote,
-  Globe
+  Globe,
 } from 'lucide-react'
 import { Twitter } from "@/utils/icons"
 
@@ -25,6 +25,7 @@ import { cn } from "@/lib/utils"
 import { DatePicker } from "@/components/ui/date-picker"
 
 import ReviewForm from "./ReviewDetails"
+import { DateFilterPopover } from "./DateFilterPopover"
 
 export function ReviewInterface({
   initialPosts,
@@ -32,14 +33,15 @@ export function ReviewInterface({
   currentPage,
   project,
   initialFilters,
-  totalCount
+  totalCount,
+  initialCase
 }) {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
 
   // UI States
-  const [selectedPost, setSelectedPost] = useState(null)
+  const [selectedPost, setSelectedPost] = useState(initialCase || null)
   const [posts, setPosts] = useState(initialPosts)
   const [isExporting, setIsExporting] = useState(false) // Renamed for clarity
 
@@ -193,19 +195,38 @@ export function ReviewInterface({
           <div className="space-y-6">
 
             {/* Header Row */}
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between border-b pb-4">
               <div className="flex items-center gap-2.5">
                 <div className="bg-blue-50 p-2 rounded-lg text-blue-600">
                   <Filter className="h-4 w-4" />
                 </div>
                 <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">Filters</h3>
+
+                {/* RESET, NUMBERS */}
+                <div className="flex items-center gap-3">
+                  {(currentFilters.status !== 'pending' || currentFilters.platform !== 'all' || !currentFilters.aiAnalyzed || currentFilters.poiDetected || currentFilters.sourcingDateStart || currentFilters.dbDateStart) && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={clearFilters}
+                      className="h-9 text-xs font-bold text-rose-600 hover:bg-rose-50 hover:text-rose-700 transition-colors"
+                    >
+                      <X className="h-3.5 w-3.5 mr-1.5" />
+                      Reset
+                    </Button>
+                  )}
+                  <Badge variant="secondary" className="px-3 py-1 bg-slate-100 text-slate-600 border-slate-200">
+                    {totalCount.toLocaleString()} Results Found
+                  </Badge>
+
+                  {/* ITEMS VISIBLE ON THE PAGE ? */}
+                  {/* <Badge variant="secondary" className="px-3 py-1 bg-slate-100 text-slate-600 border-slate-200">
+                    {posts.length} Results Found
+                  </Badge> */}
+                </div>
+
               </div>
-
               <div className="flex items-center gap-3">
-                <Badge variant="secondary" className="px-3 py-1 bg-slate-100 text-slate-600 border-slate-200">
-                  {totalCount.toLocaleString()} Reviews Pending
-                </Badge>
-
                 <Button
                   variant="outline"
                   size="sm"
@@ -216,25 +237,13 @@ export function ReviewInterface({
                   {isExporting ? <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" /> : <Download className="h-3.5 w-3.5 mr-2" />}
                   Export CSV
                 </Button>
-
-                {(currentFilters.status !== 'pending' || currentFilters.platform !== 'all' || !currentFilters.aiAnalyzed || currentFilters.poiDetected || currentFilters.sourcingDateStart || currentFilters.dbDateStart) && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={clearFilters}
-                    className="h-9 text-xs font-bold text-rose-600 hover:bg-rose-50 hover:text-rose-700 transition-colors"
-                  >
-                    <X className="h-3.5 w-3.5 mr-1.5" />
-                    Reset
-                  </Button>
-                )}
               </div>
             </div>
 
-            <Separator className="bg-slate-100" />
+            {/* <Separator className="bg-slate-100" /> */}
 
             {/* Controls Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
+            <div className="grid grid-cols-1 md:grid-cols-6 gap-5">
               <div className="space-y-2">
                 <Label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Status</Label>
                 <Select
@@ -271,7 +280,7 @@ export function ReviewInterface({
                   </SelectContent>
                 </Select>
               </div>
-
+              {/* 
               <div className="space-y-2">
                 <Label className="text-xs font-bold text-slate-500 uppercase tracking-wide flex items-center gap-1.5">
                   <Calendar className="w-3.5 h-3.5" /> Sourced After
@@ -294,55 +303,65 @@ export function ReviewInterface({
                   placeholder="Select Date"
                   className="w-full"
                 />
-              </div>
-            </div>
+              </div> */}
 
-            {/* Toggles & Count */}
-            <div className="flex items-center justify-between pt-2">
-              <div className="flex items-center gap-6">
-                <div className="flex items-center space-x-2.5 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200/50">
-                  <Checkbox
-                    id="aiAnalyzed"
-                    checked={currentFilters.aiAnalyzed !== 'false' && currentFilters.aiAnalyzed !== false}
-                    onCheckedChange={(checked) => handleFilterChange('aiAnalyzed', checked.toString())}
-                    className="border-slate-300 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
-                  />
-                  <label
-                    htmlFor="aiAnalyzed"
-                    className="text-sm font-medium leading-none cursor-pointer text-slate-700 flex items-center gap-2"
-                  >
-                    <Sparkles className="w-3.5 h-3.5 text-blue-500" />
-                    AI Analyzed Only
-                  </label>
-                </div>
-
-                <div className="flex items-center space-x-2.5 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200/50">
-                  <Checkbox
-                    id="poiDetected"
-                    checked={currentFilters.poiDetected !== 'false' && currentFilters.poiDetected !== false}
-                    onCheckedChange={(checked) => handleFilterChange('poiDetected', checked.toString())}
-                    className="border-slate-300 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
-                  />
-                  <label
-                    htmlFor="poiDetected"
-                    className="text-sm font-medium leading-none cursor-pointer text-slate-700 flex items-center gap-2"
-                  >
-                    <Search className="w-3.5 h-3.5 text-blue-500" />
-                    POI Detected
-                  </label>
-                </div>
+              {/* sourcing date  */}
+              <div className="space-y-1.5 w-full min-w-32">
+                <Label className="text-[10px] uppercase font-bold text-slate-400">Sourcing Date</Label>
+                <DateFilterPopover
+                  title="Sourcing Date"
+                  initialFrom={currentFilters.sourcingDateStart}
+                  initialTo={currentFilters.sourcingDateEnd}
+                  onApply={(range) => updateQueryParams({
+                    sourcingDateStart: range?.from ? range.from.toISOString() : null,
+                    sourcingDateEnd: range?.to ? range.to.toISOString() : null
+                  })}
+                />
               </div>
 
-              <div className="flex items-center gap-3">
-                {isPending && (
-                  <div className="flex items-center gap-2 text-blue-600 text-xs font-medium animate-pulse">
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    Updating...
-                  </div>
-                )}
-                <Badge variant="secondary" className="px-3 py-1 bg-slate-100 text-slate-600 border-slate-200">
-                  {posts.length} Results Found
-                </Badge>
+              {/* posting date  */}
+              <div className="space-y-1.5 w-full min-w-32">
+                <Label className="text-[10px] uppercase font-bold text-slate-400">Posting Date</Label>
+                <DateFilterPopover
+                  title="Posting Date"
+                  initialFrom={currentFilters.postingDateStart}
+                  initialTo={currentFilters.postingDateEnd}
+                  onApply={(range) => updateQueryParams({
+                    postingDateStart: range?.from ? range.from.toISOString() : null,
+                    postingDateEnd: range?.to ? range.to.toISOString() : null
+                  })}
+                />
+              </div>
+              <div className="flex items-center space-x-2.5 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200/50">
+                <Checkbox
+                  id="aiAnalyzed"
+                  checked={currentFilters.aiAnalyzed !== 'false' && currentFilters.aiAnalyzed !== false}
+                  onCheckedChange={(checked) => handleFilterChange('aiAnalyzed', checked.toString())}
+                  className="border-slate-300 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
+                />
+                <label
+                  htmlFor="aiAnalyzed"
+                  className="text-sm font-medium leading-none cursor-pointer text-slate-700 flex items-center gap-2"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-blue-500" />
+                  AI Analyzed Only
+                </label>
+              </div>
+
+              <div className="flex items-center space-x-2.5 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200/50">
+                <Checkbox
+                  id="poiDetected"
+                  checked={currentFilters.poiDetected !== 'false' && currentFilters.poiDetected !== false}
+                  onCheckedChange={(checked) => handleFilterChange('poiDetected', checked.toString())}
+                  className="border-slate-300 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
+                />
+                <label
+                  htmlFor="poiDetected"
+                  className="text-sm font-medium leading-none cursor-pointer text-slate-700 flex items-center gap-2"
+                >
+                  <Search className="w-3.5 h-3.5 text-blue-500" />
+                  POI Detected
+                </label>
               </div>
             </div>
           </div>
@@ -354,10 +373,12 @@ export function ReviewInterface({
             <table className="min-w-full divide-y divide-slate-100">
               <thead className="bg-slate-50/80">
                 <tr>
-                  <th scope="col" className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Risk Level</th>
+                  {/* <th scope="col" className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Risk Level</th> */}
                   <th scope="col" className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Content</th>
                   <th scope="col" className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Platform</th>
-                  <th scope="col" className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Threat Type</th>
+                  <th scope="col" className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Sourcing Date</th>
+                  <th scope="col" className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Posting Date</th>
+                  {/* <th scope="col" className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Threat Type</th> */}
                   <th scope="col" className="px-6 py-4 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
@@ -398,6 +419,12 @@ export function ReviewInterface({
                     const risk = getRiskLabel(riskScore)
                     const threatType = post.review_details?.threat_types?.join(', ').replace(/_/g, ' ') || post.review_details?.threat_type?.replace(/_/g, ' ') || post.analysis_results?.category || 'Unknown'
 
+                    // Dates
+                    const rawPostedDate = post.posted_date || post.metadata?.posted_date || post.timestamp || post.sourcing_date
+                    const rawSourcedDate = post.metadata?.created_at || post.created_at
+                    const posted_date = rawPostedDate ? format(new Date(rawPostedDate), "dd/MM/yyyy HH:mm a") : "N/A"
+                    const sourced_date = rawSourcedDate ? format(new Date(rawSourcedDate), "dd/MM/yyyy HH:mm a") : "N/A"
+
                     return (
                       <tr
                         key={post._id}
@@ -409,12 +436,12 @@ export function ReviewInterface({
                         onClick={() => setSelectedPost(post)}
                       >
                         {/* Risk Level */}
-                        <td className="px-6 py-4 whitespace-nowrap align-top">
+                        {/* <td className="px-6 py-4 whitespace-nowrap align-top">
                           <span className={cn("inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold border", risk.color)}>
                             <AlertCircle className="w-3.5 h-3.5 mr-1.5" />
                             {risk.label}
                           </span>
-                        </td>
+                        </td> */}
 
                         {/* Content */}
                         <td className="px-6 py-4 max-w-lg align-top">
@@ -465,12 +492,30 @@ export function ReviewInterface({
                           </Badge>
                         </td>
 
-                        {/* Threat Type */}
+                        {/* Ingestion Date */}
                         <td className="px-6 py-4 whitespace-nowrap align-top">
+                          <span className="text-sm font-semibold text-slate-700 capitalize">
+                            {sourced_date.split(' ')[0]}
+                            <br />
+                            {sourced_date.split(' ').slice(1).join(' ')}
+                          </span>
+                        </td>
+
+                        {/* Upload Date */}
+                        <td className="px-6 py-4 whitespace-nowrap align-top">
+                          <span className="text-sm font-semibold text-slate-700 capitalize">
+                            {posted_date.split(' ')[0]}
+                            <br />
+                            {posted_date.split(' ').slice(1).join(' ')}
+                          </span>
+                        </td>
+
+                        {/* Threat Type */}
+                        {/* <td className="px-6 py-4 whitespace-nowrap align-top">
                           <span className="text-sm font-semibold text-slate-700 capitalize">
                             {threatType}
                           </span>
-                        </td>
+                        </td> */}
 
                         {/* Actions */}
                         <td className="px-6 py-4 whitespace-nowrap text-right align-top">
@@ -496,8 +541,8 @@ export function ReviewInterface({
 
         {/* Pagination Controls */}
         {totalPages > 1 && (
-          <div className="pt-4">
-            <div className="bg-white rounded-xl shadow-sm border border-slate-200 px-6 py-4 flex items-center justify-between">
+          <div className="pb-2 pt-4">
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 px-4 py-3 flex items-center justify-between">
               <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">
                 Page <span className="text-slate-900">{currentPage}</span> of <span className="text-slate-900">{totalPages}</span>
               </div>
@@ -505,20 +550,77 @@ export function ReviewInterface({
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => handlePageChange(currentPage - 1)}
-                  disabled={currentPage === 1 || isPending}
-                  className="h-9 px-3 text-xs font-bold border-slate-200 hover:bg-slate-50 disabled:opacity-50"
+                  onClick={() => handlePageChange(1)}
+                  disabled={currentPage === 1}
+                  className="h-9 px-2 text-xs font-bold border-slate-200 hover:bg-slate-50 disabled:opacity-50"
+                  title="First Page"
                 >
-                  <ChevronLeft className="w-4 h-4 mr-1" /> Previous
+                  &lt;&lt;
                 </Button>
                 <Button
                   variant="outline"
                   size="sm"
+                  onClick={() => handlePageChange(currentPage - 1)}
+                  disabled={currentPage === 1}
+                  className="h-9 px-3 text-xs font-bold border-slate-200 hover:bg-slate-50 disabled:opacity-50"
+                >
+                  <ChevronLeft className="w-4 h-4 mr-1" /> Previous
+                </Button>
+
+                <div className="flex items-center gap-1 mx-1">
+                  {(() => {
+                    const pages = [];
+                    let start = Math.max(1, currentPage - 2);
+                    let end = Math.min(totalPages, currentPage + 2);
+
+                    if (currentPage <= 2) {
+                      end = Math.min(totalPages, 5);
+                    }
+                    if (currentPage >= totalPages - 1) {
+                      start = Math.max(1, totalPages - 4);
+                    }
+
+                    for (let i = start; i <= end; i++) {
+                      pages.push(i);
+                    }
+
+                    return pages.map(pageNum => (
+                      <Button
+                        key={pageNum}
+                        variant={currentPage === pageNum ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => handlePageChange(pageNum)}
+                        className={cn(
+                          "h-9 w-9 p-0 text-xs font-bold",
+                          currentPage === pageNum
+                            ? "bg-slate-800 hover:bg-slate-900 text-white shadow-sm"
+                            : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                        )}
+                      >
+                        {pageNum}
+                      </Button>
+                    ));
+                  })()}
+                </div>
+
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={() => handlePageChange(currentPage + 1)}
-                  disabled={currentPage === totalPages || isPending}
+                  disabled={currentPage === totalPages}
                   className="h-9 px-3 text-xs font-bold border-slate-200 hover:bg-slate-50 disabled:opacity-50"
                 >
                   Next <ChevronRight className="w-4 h-4 ml-1" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handlePageChange(totalPages)}
+                  disabled={currentPage === totalPages}
+                  className="h-9 px-2 text-xs font-bold border-slate-200 hover:bg-slate-50 disabled:opacity-50"
+                  title="Last Page"
+                >
+                  &gt;&gt;
                 </Button>
               </div>
             </div>
@@ -536,7 +638,7 @@ export function ReviewInterface({
 
       <div
         className={cn(
-          "fixed inset-y-0 right-0 w-[1150px] bg-white shadow-2xl transform transition-transform duration-300 ease-out border-l border-slate-200 z-50 flex flex-col",
+          "fixed inset-y-0 right-0 w-[1200px] bg-white shadow-2xl transform transition-transform duration-300 ease-out border-l border-slate-200 z-50 flex flex-col",
           selectedPost ? "translate-x-0" : "translate-x-full"
         )}
       >

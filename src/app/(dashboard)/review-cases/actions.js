@@ -63,6 +63,12 @@ export const normalized_S3_post = traceAction('normalized_S3_post', async (post)
     review_details: post.review_details || {},
     takedown_info: post.takedown_info || {},
 
+    // Metadata
+    created_at: post.metadata?.created_at ? new Date(post.metadata.created_at).toISOString() : null,
+    sourcing_date: post.metadata?.sourcing_date ? new Date(post.metadata.sourcing_date).toISOString() : null,
+    posted_date: post.engagement?.posted_at ? new Date(post.engagement.posted_at).toISOString() : post.metadata?.posted_date ? new Date(post.metadata.posted_date).toISOString() : null,
+    updated_at: post.metadata?.updated_at ? new Date(post.metadata.updated_at).toISOString() : null,
+
     // Platform
     platform: post.platform ? post.platform.toLowerCase() : 'instagram'
   };
@@ -94,95 +100,161 @@ export const getPosts = traceAction('getPosts_review', async (project_mongo_db_m
     const skip = (page - 1) * limit
 
     // Build query with filters
-    const query = { $and: [] }
+    const query = {}
+    const andConditions = []
 
     // Filter by Review Status
     if (filters.status === 'pending') {
-      query.$and.push({
+      andConditions.push({
         "review_details.threat_score": { $exists: false }
       })
     } else if (filters.status === 'reviewed') {
-      query.$and.push({
+      andConditions.push({
         "review_details.threat_score": { $exists: true }
       })
     }
 
     // AI Analyzed Filter
     if (filters.aiAnalyzed) {
-      query.$and.push({
+      andConditions.push({
         "analysis_results.risk_score": { $exists: true }
       })
     }
-
     // POI Detected Filter
     if (filters.poiDetected) {
-      query.$and.push({
+      andConditions.push({
         $or: [
           { "analysis_results.poi_check.poi_name_found": true },
           { "analysis_results.poi_check.face_present": true }
         ]
       })
     }
-
-    // Platform filter - handle both explicit platform field and default to instagram
+    // Platform filter
     if (filters.platform && filters.platform !== 'all') {
-      query.$and.push({ platform: { $regex: new RegExp(`^${filters.platform}\$`, 'i') } })
+      query.platform = { $regex: new RegExp(`^${filters.platform}\$`, 'i') }
     }
 
-    // Sourcing Date Filter (metadata.sourcing_date)
-    // Stored as BSON Date objects in MongoDB
+    if (andConditions.length > 0) {
+      query.$and = andConditions
+    }
+
+    // SOURCED (INGESTED) AND POSTED (ORIGINAL) DATE FILTERS
+    const matchStage = { ...query };
+    const dateFilterStage = {};
+
+    // Sourcing Date Filter (Ingested) -> metadata.created_at
     if (filters.sourcingDateStart || filters.sourcingDateEnd) {
-      const sourcingQuery = {}
+      dateFilterStage.sort_sourced_at = {};
       if (filters.sourcingDateStart) {
-        const start = new Date(`${filters.sourcingDateStart}T00:00:00.000Z`)
-        if (!isNaN(start)) sourcingQuery.$gte = start
+        dateFilterStage.sort_sourced_at.$gte = new Date(filters.sourcingDateStart);
       }
       if (filters.sourcingDateEnd) {
-        const end = new Date(`${filters.sourcingDateEnd}T23:59:59.999Z`)
-        if (!isNaN(end)) sourcingQuery.$lte = end
-      }
-
-      if (Object.keys(sourcingQuery).length > 0) {
-        query.$and.push({ 'metadata.sourcing_date': sourcingQuery })
+        dateFilterStage.sort_sourced_at.$lte = new Date(filters.sourcingDateEnd);
       }
     }
 
-    // DB Ingest Date Filter (metadata.created_at)
-    // Stored as BSON Date objects in MongoDB
-    if (filters.dbDateStart || filters.dbDateEnd) {
-      const dbDateQuery = {}
-      if (filters.dbDateStart) {
-        const start = new Date(`${filters.dbDateStart}T00:00:00.000Z`)
-        if (!isNaN(start)) dbDateQuery.$gte = start
+    // Posting Date Filter (Original Date) -> engagement.posted_at / metadata.posted_date
+    if (filters.postingDateStart || filters.postingDateEnd) {
+      dateFilterStage.sort_posted_at = {};
+      if (filters.postingDateStart) {
+        dateFilterStage.sort_posted_at.$gte = new Date(filters.postingDateStart);
       }
-      if (filters.dbDateEnd) {
-        const end = new Date(`${filters.dbDateEnd}T23:59:59.999Z`)
-        if (!isNaN(end)) dbDateQuery.$lte = end
-      }
-
-      if (Object.keys(dbDateQuery).length > 0) {
-        query.$and.push({ 'metadata.created_at': dbDateQuery })
+      if (filters.postingDateEnd) {
+        dateFilterStage.sort_posted_at.$lte = new Date(filters.postingDateEnd);
       }
     }
 
-    // Ensure we don't have an empty $and
-    const finalQuery = query.$and.length > 0 ? query : {}
+    const hasDateFilters = Object.keys(dateFilterStage).length > 0;
 
-    const posts = await collection.find(finalQuery)
-      .sort({ 'metadata.created_at': -1 })
-      .skip(skip)
-      .limit(limit)
-      .toArray()
+    const posts = await collection.aggregate([
+      { $match: matchStage },
+      {
+        $addFields: {
+          sort_posted_at: {
+            $convert: {
+              input: { $ifNull: ["$engagement.posted_at", "$metadata.posted_date"] },
+              to: "date",
+              onError: {
+                $toDate: { $toLong: { $ifNull: ["$engagement.posted_at", "$metadata.posted_date"] } }
+              },
+              onNull: null
+            }
+          },
+          sort_sourced_at: {
+            $convert: {
+              input: "$metadata.created_at",
+              to: "date",
+              onError: { $toDate: { $toLong: "$metadata.created_at" } },
+              onNull: null
+            }
+          }
+        }
+      },
+      ...(hasDateFilters ? [{ $match: dateFilterStage }] : []),
+      { $sort: { sort_sourced_at: -1 } },
+      { $skip: skip },
+      { $limit: limit }
+    ]).toArray();
 
-    // Serialize and Sign URLs - use new unified schema
+    // Serialize and Sign URLs
     const processedPosts = await Promise.all(posts.map(normalized_S3_post));
 
-    const totalCount = await collection.countDocuments(finalQuery)
+    let totalCount;
+    if (hasDateFilters) {
+      const countResult = await collection.aggregate([
+        { $match: matchStage },
+        {
+          $addFields: {
+            sort_posted_at: {
+              $convert: {
+                input: { $ifNull: ["$engagement.posted_at", "$metadata.posted_date"] },
+                to: "date",
+                onError: {
+                  $toDate: { $toLong: { $ifNull: ["$engagement.posted_at", "$metadata.posted_date"] } }
+                },
+                onNull: null
+              }
+            },
+            sort_sourced_at: {
+              $convert: {
+                input: "$metadata.created_at",
+                to: "date",
+                onError: { $toDate: { $toLong: "$metadata.created_at" } },
+                onNull: null
+              }
+            }
+          }
+        },
+        { $match: dateFilterStage },
+        { $count: "total" }
+      ]).toArray();
+      totalCount = countResult[0]?.total || 0;
+    } else {
+      totalCount = await collection.countDocuments(query)
+    }
 
     return { posts: processedPosts, totalCount, page, totalPages: Math.ceil(totalCount / limit) }
   } catch (e) {
     console.error('MongoDB Error:', e)
     return { posts: [], totalCount: 0, page: 1, totalPages: 0 }
+  }
+})
+
+export const getPostById = traceAction('getPostById', async (project, case_id) => {
+  try {
+    const client = await clientPromise
+    const db = client.db(project.mongo_db_map)
+    const collection = db.collection('Posts')
+
+    const post = await collection.findOne({ _id: new ObjectId(case_id) })
+
+    // Serialize and Sign URLs - use new unified schema
+    const processedPost = await normalized_S3_post(post);
+
+    return processedPost
+  } catch (e) {
+    console.error('MongoDB Error:', e)
+    return null
   }
 })
 
@@ -203,21 +275,21 @@ export const getAllPostsForExport = traceAction('getAllPostsForExport', async (p
     const db = client.db(project_mongo_db_map)
     const collection = db.collection('Posts')
 
-    // Build query with filters (same logic as getPosts)
-    const query = { $and: [] }
+    const query = {}
+    const andConditions = []
 
     if (filters.status === 'pending') {
-      query.$and.push({ "review_details.threat_score": { $exists: false } })
+      andConditions.push({ "review_details.threat_score": { $exists: false } })
     } else if (filters.status === 'reviewed') {
-      query.$and.push({ "review_details.threat_score": { $exists: true } })
+      andConditions.push({ "review_details.threat_score": { $exists: true } })
     }
 
     if (filters.aiAnalyzed) {
-      query.$and.push({ "analysis_results.risk_score": { $exists: true } })
+      andConditions.push({ "analysis_results.risk_score": { $exists: true } })
     }
 
     if (filters.poiDetected) {
-      query.$and.push({
+      andConditions.push({
         $or: [
           { "analysis_results.poi_check.poi_name_found": true },
           { "analysis_results.poi_check.face_present": true }
@@ -226,44 +298,65 @@ export const getAllPostsForExport = traceAction('getAllPostsForExport', async (p
     }
 
     if (filters.platform && filters.platform !== 'all') {
-      query.$and.push({ platform: { $regex: new RegExp(`^${filters.platform}\$`, 'i') } })
+      query.platform = { $regex: new RegExp(`^${filters.platform}\$`, 'i') }
     }
 
+    if (andConditions.length > 0) {
+      query.$and = andConditions
+    }
+
+    const matchStage = { ...query }
+    const dateFilterStage = {}
+
+    // Sourcing Date Filter (Ingested) -> metadata.created_at
     if (filters.sourcingDateStart || filters.sourcingDateEnd) {
-      const sourcingQuery = {}
+      dateFilterStage.sort_sourced_at = {};
       if (filters.sourcingDateStart) {
-        const start = new Date(`${filters.sourcingDateStart}T00:00:00.000Z`)
-        if (!isNaN(start)) sourcingQuery.$gte = start
+        dateFilterStage.sort_sourced_at.$gte = new Date(filters.sourcingDateStart);
       }
       if (filters.sourcingDateEnd) {
-        const end = new Date(`${filters.sourcingDateEnd}T23:59:59.999Z`)
-        if (!isNaN(end)) sourcingQuery.$lte = end
-      }
-      if (Object.keys(sourcingQuery).length > 0) {
-        query.$and.push({ 'metadata.sourcing_date': sourcingQuery })
+        dateFilterStage.sort_sourced_at.$lte = new Date(filters.sourcingDateEnd);
       }
     }
 
-    if (filters.dbDateStart || filters.dbDateEnd) {
-      const dbDateQuery = {}
-      if (filters.dbDateStart) {
-        const start = new Date(`${filters.dbDateStart}T00:00:00.000Z`)
-        if (!isNaN(start)) dbDateQuery.$gte = start
+    // Posting Date Filter (Original Date) -> engagement.posted_at / metadata.posted_date
+    if (filters.postingDateStart || filters.postingDateEnd) {
+      dateFilterStage.sort_posted_at = {};
+      if (filters.postingDateStart) {
+        dateFilterStage.sort_posted_at.$gte = new Date(filters.postingDateStart);
       }
-      if (filters.dbDateEnd) {
-        const end = new Date(`${filters.dbDateEnd}T23:59:59.999Z`)
-        if (!isNaN(end)) dbDateQuery.$lte = end
-      }
-      if (Object.keys(dbDateQuery).length > 0) {
-        query.$and.push({ 'metadata.created_at': dbDateQuery })
+      if (filters.postingDateEnd) {
+        dateFilterStage.sort_posted_at.$lte = new Date(filters.postingDateEnd);
       }
     }
 
-    const finalQuery = query.$and.length > 0 ? query : {}
+    const hasDateFilters = Object.keys(dateFilterStage).length > 0;
 
-    const posts = await collection.find(finalQuery)
-      .sort({ 'metadata.created_at': -1 })
-      .toArray()
+    const pipeline = [
+      { $match: matchStage },
+      {
+        $addFields: {
+          sort_posted_at: {
+            $convert: {
+              input: { $ifNull: ['$engagement.posted_at', '$metadata.posted_date'] },
+              to: "date",
+              onError: { $toDate: { $toLong: { $ifNull: ['$engagement.posted_at', '$metadata.posted_date'] } } }
+            }
+          },
+          sort_sourced_at: {
+            $convert: {
+              input: "$metadata.created_at",
+              to: "date",
+              onError: { $toDate: { $toLong: "$metadata.created_at" } }
+            }
+          }
+        }
+      },
+      ...(hasDateFilters ? [{ $match: dateFilterStage }] : []),
+      { $sort: { sort_sourced_at: -1 } }
+    ]
+
+    const posts = await collection.aggregate(pipeline).toArray()
 
     const processedPosts = posts.map(post => ({
       _id: post._id.toString(),

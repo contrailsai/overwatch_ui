@@ -1,4 +1,4 @@
-import { getPosts } from './actions'
+import { getPosts, getPostById } from './actions'
 import { getClientandProjectDetails } from '@/app/(dashboard)/actions'
 import { ReviewInterface } from './ReviewInterface'
 import PageHeader from '@/components/PageHeader'
@@ -48,27 +48,27 @@ export default async function ReviewCasesPage({ searchParams }) {
   }
 
   // Fetch Data
-  const resolvedSearchParams = await searchParams // Next.js 15+ await searchParams
-  const page = parseInt(resolvedSearchParams?.page || '1')
+  const resolvedParams = await searchParams // Next.js 15+ await searchParams
+  const page = parseInt(resolvedParams?.page || '1')
 
   // Initial load filters
   const initialFilters = {
-    platform: resolvedSearchParams?.platform || 'all',
-    status: resolvedSearchParams?.status || 'pending',
-    aiAnalyzed: resolvedSearchParams?.aiAnalyzed === 'false', // Default false
-    poiDetected: resolvedSearchParams?.poiDetected === 'false', // Default false
-    sourcingDateStart: resolvedSearchParams?.sourcingDateStart || undefined,
-    sourcingDateEnd: resolvedSearchParams?.sourcingDateEnd || undefined,
-    dbDateStart: resolvedSearchParams?.dbDateStart || undefined,
-    dbDateEnd: resolvedSearchParams?.dbDateEnd || undefined,
+    platform: resolvedParams?.platform || 'all',
+    status: resolvedParams?.status || 'pending',
+    aiAnalyzed: resolvedParams?.aiAnalyzed === 'false', // Default false
+    poiDetected: resolvedParams?.poiDetected === 'false', // Default false
+    sourcingDateStart: resolvedParams?.sourcingDateStart || undefined,
+    sourcingDateEnd: resolvedParams?.sourcingDateEnd || undefined,
+    postingDateStart: resolvedParams?.postingDateStart || undefined,
+    postingDateEnd: resolvedParams?.postingDateEnd || undefined,
   }
 
   const { posts, totalPages, totalCount } = await getPosts(project.mongo_db_map, page, 20, initialFilters)
 
-  // let initialCase = null;
-  // if (resolvedParams.case_id) {
-  //   initialCase = await getPostById(project, resolvedParams.case_id);
-  // }
+  let initialCase = null;
+  if (resolvedParams.case_id) {
+    initialCase = await getPostById(project, resolvedParams.case_id);
+  }
 
   return (
     <main className="flex-1 flex flex-col h-full overflow-hidden bg-slate-50">
@@ -95,7 +95,7 @@ export default async function ReviewCasesPage({ searchParams }) {
           project={project}
           initialFilters={initialFilters}
           totalCount={totalCount}
-        // initialCase={initialCase}
+          initialCase={initialCase}
         />
       </div>
     </main>
