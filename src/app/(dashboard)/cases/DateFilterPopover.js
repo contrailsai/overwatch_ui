@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import { CalendarIcon, Clock2Icon, ChevronDown } from 'lucide-react';
 
-import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardFooter, CardDescription } from '@/components/ui/card';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Calendar } from '@/components/ui/calendar';
@@ -170,11 +170,33 @@ export function DateFilterPopover({ title, onApply, initialFrom, initialTo }) {
 
             <PopoverContent className="w-auto p-0" align="start">
                 <Card className="w-fit shadow-none border-0 pt-0">
-                    <CardHeader className="border-b mb-4 pt-4 px-4 pb-3">
-                        <CardTitle className="text-sm font-semibold">Select Dates Range</CardTitle>
+                    <CardHeader className="border-b pt-4 px-4 m-0 flex">
+                        <div className=" w-full text-sm">
+                            Select Ranges for
+                            <br />
+                            <span className='font-bold text-xl py-3 rounded-full'>
+                                {title}
+                            </span>
+                        </div>
+                        <div className={"flex w-full justify-center pt-2"}>
+                            <div className="flex flex-col gap-1 text-sm w-fit ">
+                                <div className="flex justify-between items-center">
+                                    <span className="font-medium text-slate-500 pr-2">From:</span>
+                                    <span className="px-2 py-0.5 rounded-md text-black font-extrabold text-sm">
+                                        {dateRange?.from ? format(dateRange.from, "do MMM yyyy - HH:mm") : "—"}
+                                    </span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <span className="font-medium text-slate-500 pr-2">To:</span>
+                                    <span className="px-2 py-0.5 rounded-md text-black font-extrabold text-sm">
+                                        {dateRange?.to ? format(dateRange.to, "do MMM yyyy -  HH:mm") : "—"}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
                     </CardHeader>
 
-                    <CardContent className="flex gap-4 py-0 pr-4">
+                    <CardContent className="flex gap-4 py-0 m-0 ">
                         {/* Calendar Section */}
                         <Calendar
                             mode="range"
@@ -183,11 +205,11 @@ export function DateFilterPopover({ title, onApply, initialFrom, initialTo }) {
                             selected={dateRange}
                             onSelect={handleDateSelect}
                             disabled={{ after: new Date() }}
-                            className="rounded-md border-none p-0"
+                            className="rounded-md border-none p-0 w-full flex-1 md:[--cell-size:--spacing(12)]"
                         />
 
                         {/* Time Section */}
-                        <div className="flex flex-col gap-4 border-l pl-4 min-w-[200px] justify-center">
+                        <div className="flex flex-col gap-4 border-l pl-4 min-w-[160px] justify-start">
                             <FieldGroup className="gap-4">
                                 <Field>
                                     <FieldLabel className="text-xs text-muted-foreground mb-1 block">From Time</FieldLabel>
@@ -211,21 +233,8 @@ export function DateFilterPopover({ title, onApply, initialFrom, initialTo }) {
                     </CardContent>
 
                     {/* Action / Summary Footer */}
-                    <CardFooter className="flex flex-col items-stretch gap-3 border-t mt-4 bg-slate-50/50 px-4 py-3">
-                        <div className="flex flex-col gap-1 text-sm">
-                            <div className="flex justify-between items-center">
-                                <span className="font-medium text-slate-500">From:</span>
-                                <span className="px-2 py-0.5 bg-slate-100 rounded-md font-mono text-xs">
-                                    {dateRange?.from ? format(dateRange.from, "dd-MM-yyyy HH:mm") : "—"}
-                                </span>
-                            </div>
-                            <div className="flex justify-between items-center">
-                                <span className="font-medium text-slate-500">To:</span>
-                                <span className="px-2 py-0.5 bg-slate-100 rounded-md font-mono text-xs">
-                                    {dateRange?.to ? format(dateRange.to, "dd-MM-yyyy HH:mm") : "—"}
-                                </span>
-                            </div>
-                        </div>
+                    <CardFooter className="flex flex-col items-stretch gap-3 border-t m-0 bg-slate-50/50 px-4 py-3">
+
 
                         <div className="flex items-center gap-2 mt-2">
                             <Button
