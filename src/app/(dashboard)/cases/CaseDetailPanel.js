@@ -35,7 +35,7 @@ import {
 } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { CaseExportButton } from '@/components/pdf/CaseExportButton'
-import { CaseExportDocxButton } from '@/components/pdf/CaseExportDocxButton'
+import { CaseExportDocxButton } from '@/components/docx/CaseExportDocxButton'
 import SafeDate from '@/components/SafeDate'
 
 const getRiskLabel = (score) => {

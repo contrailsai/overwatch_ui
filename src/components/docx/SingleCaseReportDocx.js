@@ -4,14 +4,14 @@ import {
     WidthType, BorderStyle, AlignmentType,
     Header, Footer, PageNumber,
     VerticalAlign, ShadingType,
-    HeadingLevel,
+    HeadingLevel, ExternalHyperlink,
 } from "docx";
 import { saveAs } from "file-saver";
 import { format, isValid, parseISO } from 'date-fns';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const formatCompleteDate = (dateInput) => {
+export const formatCompleteDate = (dateInput) => {
     if (!dateInput) return "N/A";
     try {
         const dateObj = typeof dateInput === 'string' ? parseISO(dateInput) : new Date(dateInput);
@@ -27,7 +27,7 @@ const getRiskLabel = (score) => {
     return { label: 'SAFE CONTENT', color: '059669', bg: 'ECFDF5' };
 };
 
-const processText = (text, maxLength = 500, maxLines = null) => {
+export const processText = (text, maxLength = 500, maxLines = null) => {
     if (!text) return '';
     let result = text;
     let truncated = false;
@@ -39,16 +39,25 @@ const processText = (text, maxLength = 500, maxLines = null) => {
     return truncated ? result.trim() + '…' : result;
 };
 
-const base64ToUint8Array = (base64) => {
+export const base64ToUint8Array = (base64) => {
     const raw = window.atob(base64);
     const array = new Uint8Array(new ArrayBuffer(raw.length));
     for (let i = 0; i < raw.length; i++) array[i] = raw.charCodeAt(i);
     return array;
 };
 
+export const getImageDimensions = (base64Src) => {
+    return new Promise((resolve) => {
+        const img = new window.Image();
+        img.onload = () => resolve({ width: img.width, height: img.height });
+        img.onerror = () => resolve({ width: 400, height: 400 }); // fallback
+        img.src = base64Src;
+    });
+};
+
 // ─── Border / Shading presets ─────────────────────────────────────────────────
 
-const noBorders = {
+export const noBorders = {
     top: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
     bottom: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
     left: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
@@ -60,67 +69,77 @@ const noBorders = {
 // Page geometry (US Letter, margins 1080 TWIPs each side)
 // 1 inch = 1440 TWIPs, Letter = 12240 TWIPs wide
 // Available body width: 12240 - 1080*2 = 10080 TWIPs
-const PAGE_WIDTH = 10080;
+export const PAGE_WIDTH = 10080;
 
-// A thin horizontal rule rendered as a 1-row table with a bottom border
-const sectionDivider = () =>
-    new Table({
-        width: { size: PAGE_WIDTH, type: WidthType.DXA },
-        columnWidths: [PAGE_WIDTH],
-        borders: noBorders,
-        rows: [
-            new TableRow({
-                height: { value: 20, rule: "exact" },
-                children: [
-                    new TableCell({
-                        width: { size: PAGE_WIDTH, type: WidthType.DXA },
-                        borders: {
-                            ...noBorders,
-                            bottom: { style: BorderStyle.SINGLE, size: 6, color: "E2E8F0" },
-                        },
-                        children: [new Paragraph({ children: [] })],
-                    }),
-                ],
-            }),
-        ],
+// A simple spacing paragraph
+export const sectionDivider = (space = 300) =>
+    new Paragraph({
+        spacing: { before: 0, after: space },
     });
 
 // Section heading paragraph
-const sectionHeading = (text) =>
+export const sectionHeading = (text) =>
     new Paragraph({
         children: [
             new TextRun({
                 text: text.toUpperCase(),
                 bold: true,
-                color: "334155",
-                size: 22,
-                allCaps: false,
+                color: "1E293B",
+                size: 24,
             }),
         ],
-        spacing: { before: 480, after: 160 },
+        spacing: { before: 200, after: 100 },
     });
 
 // Body text paragraph
-const bodyPara = (text, opts = {}) =>
+export const bodyPara = (text, opts = {}) =>
     new Paragraph({
         children: [
             new TextRun({
                 text,
-                color: opts.color || "1E293B",
+                color: opts.color || "374151",
                 size: opts.size || 20,
                 bold: opts.bold || false,
             }),
         ],
-        spacing: { before: opts.spaceBefore || 0, after: opts.spaceAfter || 200 },
+        spacing: { before: opts.spaceBefore || 0, after: opts.spaceAfter || 100 },
     });
 
-// ─── Main export ──────────────────────────────────────────────────────────────
+export const metaPara = (label, value, isUrl = false, linkOverride = null) => {
+    const children = [
+        new TextRun({ text: `${label}: `, bold: true, color: "1E293B", size: 22 }),
+    ];
 
-export const generateSingleCaseDocx = async (post, project, compressedImage) => {
+    if (isUrl && value && value !== "N/A") {
+        children.push(
+            new ExternalHyperlink({
+                children: [
+                    new TextRun({
+                        text: value,
+                        color: "2563EB",
+                        size: 22,
+                        underline: { color: "2563EB" },
+                    }),
+                ],
+                link: linkOverride || value,
+            })
+        );
+    } else {
+        children.push(
+            new TextRun({ text: value, color: "374151", size: 22 })
+        );
+    }
+
+    return new Paragraph({
+        children: children,
+        spacing: { after: 60 },
+    });
+};
+
+export const getCaseData = (post, project) => {
     const review = post.review_details || {};
     const analysis = post.analysis_results || {};
     const riskScore = review.threat_score ?? analysis.risk_score ?? 0;
-    const riskInfo = getRiskLabel(riskScore);
 
     const reasoning = review.reasoning
         || analysis.categorization_reason
@@ -173,140 +192,86 @@ export const generateSingleCaseDocx = async (post, project, compressedImage) => 
         catch (_) { if (rawComments.trim().length > 0 && rawComments !== '[]') parsedComments = [{ text: rawComments }]; }
     }
 
-    // ─── Document body ────────────────────────────────────────────────────────
+    return {
+        review, analysis, riskScore, reasoning, activeViolations,
+        posted_date, sourced_date, reviewedDate, stats, legalCodes, parsedComments
+    };
+};
+
+export const generateCaseSections = async (post, project, compressedImage, caseNumber = null) => {
+    const {
+        posted_date, sourced_date, reviewedDate, stats, legalCodes,
+        activeViolations, reasoning, parsedComments
+    } = getCaseData(post, project);
 
     const docChildren = [];
 
-    // ── 1. BANNER TABLE ──────────────────────────────────────────────────────
-    //   Available width = PAGE_WIDTH (10080 TWIPs, defined above)
-    const LEFT_COL_TWIPS = Math.round(PAGE_WIDTH * 0.65); // 6552
-    const RIGHT_COL_TWIPS = PAGE_WIDTH - LEFT_COL_TWIPS;   // 3528
-
-    const bannerTable = new Table({
-        width: { size: PAGE_WIDTH, type: WidthType.DXA },
-        columnWidths: [LEFT_COL_TWIPS, RIGHT_COL_TWIPS],
-        borders: noBorders,
-        rows: [
-            new TableRow({
-                height: { value: 1200, rule: "atLeast" },
+    // ── CASE NUMBER (Optional) ──
+    if (caseNumber !== null) {
+        docChildren.push(
+            new Paragraph({
                 children: [
-                    // Left cell – metadata
-                    new TableCell({
-                        width: { size: LEFT_COL_TWIPS, type: WidthType.DXA },
-                        shading: { type: ShadingType.SOLID, color: "F8FAFC" },
-                        borders: noBorders,
-                        margins: { top: 220, bottom: 220, left: 280, right: 280 },
-                        verticalAlign: VerticalAlign.CENTER,
-                        children: [
-                            new Paragraph({
-                                children: [
-                                    new TextRun({ text: "Account: ", bold: true, color: "64748B", size: 18 }),
-                                    new TextRun({ text: `@${post.user?.username || 'unknown'}`, color: "1E293B", size: 20, bold: true }),
-                                ],
-                                spacing: { after: 80 },
-                            }),
-                            new Paragraph({
-                                children: [
-                                    new TextRun({ text: "Platform: ", bold: true, color: "64748B", size: 18 }),
-                                    new TextRun({ text: (post.platform || 'Unknown').toUpperCase(), color: "1E293B", size: 20 }),
-                                ],
-                                spacing: { after: 80 },
-                            }),
-                            new Paragraph({
-                                children: [
-                                    new TextRun({ text: "URL: ", bold: true, color: "64748B", size: 18 }),
-                                    new TextRun({ text: processText(post.original_url || post.url || "N/A", 70), color: "2563EB", size: 18 }),
-                                ],
-                                spacing: { after: 80 },
-                            }),
-                            new Paragraph({
-                                children: [
-                                    new TextRun({ text: "Posted: ", bold: true, color: "64748B", size: 18 }),
-                                    new TextRun({ text: posted_date, color: "1E293B", size: 18 }),
-                                ],
-                                spacing: { after: 80 },
-                            }),
-                            new Paragraph({
-                                children: [
-                                    new TextRun({ text: "Sourced: ", bold: true, color: "64748B", size: 18 }),
-                                    new TextRun({ text: sourced_date, color: "1E293B", size: 18 }),
-                                ],
-                                spacing: { after: 80 },
-                            }),
-                            new Paragraph({
-                                children: [
-                                    new TextRun({ text: "Reviewed: ", bold: true, color: "64748B", size: 18 }),
-                                    new TextRun({ text: reviewedDate, color: "1E293B", size: 18 }),
-                                ],
-                                spacing: { after: 0 },
-                            }),
-                        ],
-                    }),
-                    // Right cell – risk badge, CENTERED both axes
-                    new TableCell({
-                        width: { size: RIGHT_COL_TWIPS, type: WidthType.DXA },
-                        shading: { type: ShadingType.SOLID, color: riskInfo.bg },
-                        borders: noBorders,
-                        margins: { top: 220, bottom: 220, left: 200, right: 200 },
-                        verticalAlign: VerticalAlign.CENTER,
-                        children: [
-                            new Paragraph({
-                                alignment: AlignmentType.CENTER,
-                                spacing: { before: 0, after: 60 },
-                                children: [
-                                    new TextRun({ text: riskInfo.label, bold: true, color: riskInfo.color, size: 32 }),
-                                ],
-                            }),
-                            // new Paragraph({
-                            //     alignment: AlignmentType.CENTER,
-                            //     spacing: { before: 0, after: 0 },
-                            //     children: [
-                            //         new TextRun({ text: `Score: ${riskScore}`, color: riskInfo.color, size: 22, bold: false }),
-                            //     ],
-                            // }),
-                        ],
-                    }),
+                    new TextRun({ text: `CASE #${caseNumber}`, bold: true, size: 28, color: "2563EB" }),
                 ],
-            }),
-        ],
-    });
+                spacing: { before: 400, after: 200 },
+            })
+        );
+    }
 
-    docChildren.push(bannerTable);
-    docChildren.push(new Paragraph({ spacing: { after: 280 } }));
+    // ── 1. BASIC META INFORMATION ──────────────────────────────────────────
+    docChildren.push(metaPara("Account", `@${post.user?.username || 'unknown'}`));
+    docChildren.push(metaPara("Platform", (post.platform || 'Unknown').toUpperCase()));
+    const fullUrl = post.original_url || post.url;
+    docChildren.push(metaPara("URL", processText(fullUrl || "N/A", 100), !!fullUrl, fullUrl));
+    docChildren.push(metaPara("Posted", posted_date));
+    docChildren.push(metaPara("Sourced", sourced_date));
+    docChildren.push(metaPara("Reviewed", reviewedDate));
+
+    docChildren.push(sectionDivider(200));
 
     // ── 2. VISUAL EVIDENCE ────────────────────────────────────────────────────
-
     let imageRun = null;
     if (compressedImage?.startsWith('data:image/')) {
         try {
+            const dimensions = await getImageDimensions(compressedImage);
+
+            const MAX_SIZE = 400;
+            let { width, height } = dimensions;
+
+            if (width > MAX_SIZE || height > MAX_SIZE) {
+                if (width > height) {
+                    height = Math.round((height * MAX_SIZE) / width);
+                    width = MAX_SIZE;
+                } else {
+                    width = Math.round((width * MAX_SIZE) / height);
+                    height = MAX_SIZE;
+                }
+            }
+
             const base64Data = compressedImage.split(',')[1];
             const uint8Arr = base64ToUint8Array(base64Data);
-            imageRun = new ImageRun({ data: uint8Arr, transformation: { width: 480, height: 300 } });
+            imageRun = new ImageRun({ data: uint8Arr, transformation: { width, height } });
         } catch (err) {
             console.error("Failed to include image in DOCX", err);
         }
     }
 
-    docChildren.push(sectionDivider());
     docChildren.push(sectionHeading("Visual Evidence"));
 
     if (imageRun) {
         docChildren.push(
-            new Paragraph({ children: [imageRun], alignment: AlignmentType.CENTER, spacing: { after: 200 } })
+            new Paragraph({ children: [imageRun], alignment: AlignmentType.CENTER })
         );
     } else {
         docChildren.push(
             new Paragraph({
                 children: [new TextRun({ text: "No image available for this case.", color: "94A3B8", size: 20 })],
-                alignment: AlignmentType.CENTER,
-                spacing: { after: 200 },
             })
         );
     }
+    docChildren.push(sectionDivider(200));
 
     // ── 3. ENGAGEMENT STATS ───────────────────────────────────────────────────
-
-    docChildren.push(sectionDivider());
     docChildren.push(sectionHeading("Engagement Stats"));
 
     const statsParts = [];
@@ -317,109 +282,81 @@ export const generateSingleCaseDocx = async (post, project, compressedImage) => 
 
     docChildren.push(
         new Paragraph({
-            children: [new TextRun({ text: statsParts.join("   |   "), color: "1E293B", bold: true, size: 21 })],
-            spacing: { after: 240 },
+            children: [new TextRun({ text: statsParts.join("   |   "), color: "374151", size: 20 })],
         })
     );
+    docChildren.push(sectionDivider(200));
 
     // ── 4. CAPTION / CONTENT ──────────────────────────────────────────────────
-
-    docChildren.push(sectionDivider());
     docChildren.push(sectionHeading("Caption / Content"));
     docChildren.push(
         new Paragraph({
             children: [new TextRun({ text: processText(post.caption || post.content || "Empty content field.", 800, 20), color: "374151", size: 20 })],
-            spacing: { after: 240 },
         })
     );
+    docChildren.push(sectionDivider(200));
 
     // ── 5. VIOLATIONS ─────────────────────────────────────────────────────────
-
-    docChildren.push(sectionDivider());
     docChildren.push(sectionHeading("Violations"));
 
     if (activeViolations.length > 0) {
-        const severityColor = { high: "E11D48", medium: "EA580C", low: "D97706" };
         activeViolations.forEach(v => {
             docChildren.push(
                 new Paragraph({
                     children: [
-                        new TextRun({ text: "▸  ", color: severityColor[v.severity] || "EA580C", size: 24, bold: true }),
-                        new TextRun({ text: v.title, color: "1E293B", bold: true, size: 20 }),
-                        // new TextRun({ text: `   [${v.severity.toUpperCase()}]`, color: severityColor[v.severity] || "EA580C", size: 17 }),
+                        new TextRun({ text: `• ${v.title}`, color: "374151", size: 20 }),
                     ],
-                    spacing: { before: 80, after: 80 },
+                    spacing: { after: 40 },
                 })
             );
         });
-        docChildren.push(new Paragraph({ spacing: { after: 200 } }));
     } else {
         docChildren.push(
             new Paragraph({
                 children: [new TextRun({ text: "No specific violations flagged by the system.", color: "94A3B8", size: 20 })],
-                spacing: { after: 240 },
             })
         );
     }
+    docChildren.push(sectionDivider(200));
 
     // ── 6. LEGAL FRAMEWORK (conditional) ─────────────────────────────────────
-
     if (legalCodes.length > 0) {
-        docChildren.push(sectionDivider());
         docChildren.push(sectionHeading("Legal Framework"));
         docChildren.push(
             new Paragraph({
-                children: [new TextRun({ text: legalCodes.join("  ·  "), color: "7C3AED", bold: true, size: 20 })],
-                spacing: { after: 240 },
+                children: [new TextRun({ text: legalCodes.join("  ·  "), color: "374151", size: 20 })],
             })
         );
+        docChildren.push(sectionDivider(200));
     }
 
     // ── 7. ANALYSIS & COMPLETE REASONING ─────────────────────────────────────
-
-    docChildren.push(sectionDivider());
     docChildren.push(sectionHeading("Analysis & Complete Reasoning"));
 
-    // Split reasoning into paragraphs if it contains newlines
     const reasoningParagraphs = reasoning.split(/\n+/).filter(p => p.trim().length > 0);
-    reasoningParagraphs.forEach((para, idx) => {
+    reasoningParagraphs.forEach((para) => {
         docChildren.push(
             new Paragraph({
                 children: [new TextRun({ text: para.trim(), color: "374151", size: 20 })],
-                spacing: { before: idx === 0 ? 0 : 120, after: 120 },
+                spacing: { after: 80 },
             })
         );
     });
-    docChildren.push(new Paragraph({ spacing: { after: 240 } }));
+    docChildren.push(sectionDivider(200));
 
-    // ── 8. CLIENT NOTES & COMMENTS (conditional) ──────────────────────────────
+    return docChildren;
+};
 
-    if (parsedComments && parsedComments.length > 0) {
-        docChildren.push(sectionDivider());
-        docChildren.push(sectionHeading("Client Notes & Comments"));
+// ─── Main export ──────────────────────────────────────────────────────────────
 
-        parsedComments.forEach((comment) => {
-            const commentParts = [
-                new TextRun({ text: `"${comment.text}"`, color: "92400E", size: 20, italics: true }),
-            ];
-            if (comment.email || comment.created_at) {
-                const meta = [comment.email, comment.created_at ? formatCompleteDate(comment.created_at) : null].filter(Boolean).join(" · ");
-                commentParts.push(new TextRun({ text: `\n— ${meta}`, color: "B45309", size: 16 }));
-            }
-            docChildren.push(new Paragraph({ children: commentParts, spacing: { before: 80, after: 200 } }));
-        });
-    }
-
-    // ── Trailing space before footer
-    docChildren.push(new Paragraph({ spacing: { after: 400 } }));
-
-    // ─── Document config ──────────────────────────────────────────────────────
+export const generateSingleCaseDocx = async (post, project, compressedImage) => {
+    const docChildren = await generateCaseSections(post, project, compressedImage);
 
     const doc = new Document({
         styles: {
             default: {
                 document: {
-                    run: { font: "Calibri" },
+                    run: { font: "Outfit" },
                 },
             },
         },
@@ -465,7 +402,7 @@ export const generateSingleCaseDocx = async (post, project, compressedImage) => 
                                     }),
                                 ],
                             }),
-                            new Paragraph({ spacing: { after: 320 } }),
+                            // new Paragraph({ spacing: { after: 320 } }),
                         ],
                     }),
                 },

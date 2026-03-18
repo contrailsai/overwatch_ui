@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { getProfileCases, addProfileClientNote, updateProfileClientStatus } from './actions'
 import { ProfileExportButton } from '@/components/pdf/ProfileExportButton'
+import { ProfileExportDocxButton } from '@/components/docx/ProfileExportDocxButton'
 import {
     ExternalLink, X, Facebook, Instagram, Youtube, CheckCircle,
     User, ArrowRight, FileText, Siren, ClockFading, Info, Globe,
@@ -595,11 +596,18 @@ export default function ProfileDetailPanel({ profile, project, isOpen, onClose, 
                             </Button>
                         </div>
 
-                        <ProfileExportButton 
-                            profile={profile} 
-                            project={project} 
-                            className="w-full cursor-pointer rounded-xl border-2 border-slate-200 text-slate-500 hover:border-blue-500 hover:text-blue-600 flex items-center justify-center gap-2 font-bold transition-all bg-white py-2"
-                        />
+                        <div className="flex flex-col gap-2">
+                            <ProfileExportButton 
+                                profile={profile} 
+                                project={project} 
+                                className="w-full cursor-pointer rounded-xl border-2 border-slate-200 text-slate-500 hover:border-blue-500 hover:text-blue-600 flex items-center justify-center gap-2 font-bold transition-all bg-white py-2"
+                            />
+                            <ProfileExportDocxButton 
+                                profile={profile} 
+                                project={project} 
+                                className="w-full cursor-pointer rounded-xl border-2 border-slate-200 text-slate-500 hover:border-blue-500 hover:text-blue-600 flex items-center justify-center gap-2 font-bold transition-all bg-white py-2"
+                            />
+                        </div>
                     </div>
                 </div>
             </div>

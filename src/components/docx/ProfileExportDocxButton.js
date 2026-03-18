@@ -1,32 +1,24 @@
 'use client'
 
 import React, { useState, useEffect } from 'react';
-import dynamic from 'next/dynamic';
-import { Download, Loader2 } from 'lucide-react';
+import { Download, Loader2, FileText } from 'lucide-react';
+import { Button } from "@/components/ui/button"
 import { sendGAEvent } from '@next/third-parties/google';
-
-const PDFDownloadLink = dynamic(
-    () => import('@react-pdf/renderer').then((mod) => mod.PDFDownloadLink),
-    {
-        ssr: false,
-        loading: () => <button className="w-full cursor-not-allowed rounded-xl border-2 border-slate-200 text-slate-400 flex items-center justify-center gap-2 font-bold transition-all bg-slate-50 py-2.5" disabled><Loader2 className="w-4 h-4 animate-spin" /> Preparing Report...</button>
-    }
-);
-
-import { ProfileReportDocument } from './ProfileReport';
-import { fetchAndCompressImage } from './CaseExportButton';
+import { generateProfileDocx } from './ProfileReportDocx';
+import { fetchAndCompressImage } from './CaseExportDocxButton';
 import { getPostsByIds } from '@/app/(dashboard)/cases/actions';
 
-export function ProfileExportButton({ profile, project, className }) {
+export function ProfileExportDocxButton({ profile, project, className }) {
     const [imgState, setImgState] = useState({ compressedImages: [], compressedProfilePic: null, loading: true });
     const [fetchingData, setFetchingData] = useState(false);
     const [fullyLoadedPosts, setFullyLoadedPosts] = useState([]);
+    const [isGenerating, setIsGenerating] = useState(false);
 
     useEffect(() => {
         let isMounted = true;
 
         const processImages = async (postsToProcess) => {
-            setImgState(prev => ({ ...prev, loading: true }));
+            if (isMounted) setImgState(prev => ({ ...prev, loading: true }));
 
             try {
                 // Compress profile pic
@@ -104,42 +96,53 @@ export function ProfileExportButton({ profile, project, className }) {
         return () => { isMounted = false; };
     }, [profile, project]);
 
-    const fileName = `Profile_Report_${profile?.username || profile?._id}.pdf`;
+    const handleDownload = async () => {
+        setIsGenerating(true);
+        try {
+            sendGAEvent('event', 'download_profile_report_docx', {
+                event_id: 'profile_report_docx',
+                status: 'downloading',
+                profile_id: profile?._id
+            });
+
+            await generateProfileDocx(
+                profile,
+                fullyLoadedPosts,
+                project,
+                imgState.compressedImages,
+                imgState.compressedProfilePic
+            );
+
+            sendGAEvent('event', 'download_profile_report_docx', {
+                event_id: 'profile_report_docx',
+                status: 'downloaded',
+                profile_id: profile?._id
+            });
+        } catch (error) {
+            console.error("Profile DOCX generation failed:", error);
+            alert("Failed to generate profile DOCX report.");
+        } finally {
+            setIsGenerating(false);
+        }
+    };
+
+    const isLoading = imgState.loading || fetchingData || isGenerating;
 
     return (
-        <PDFDownloadLink
-            document={
-                <ProfileReportDocument
-                    profile={profile}
-                    cases={fullyLoadedPosts}
-                    project={project}
-                    compressedImages={imgState.compressedImages}
-                    compressedProfilePic={imgState.compressedProfilePic}
-                />
-            }
-            fileName={fileName}
+        <Button
+            variant="outline"
+            disabled={isLoading}
+            onClick={handleDownload}
+            className={className || "w-full cursor-pointer rounded-xl border-2 border-slate-200 text-slate-500 hover:border-blue-500 hover:text-blue-600 flex items-center justify-center gap-2 font-bold transition-all bg-white py-2"}
         >
-            {({ blob, url, loading, error }) => (
-                <button
-                    disabled={loading || imgState.loading || fetchingData}
-                    className={className || "w-full cursor-pointer rounded-xl border-2 border-slate-200 text-slate-500 hover:border-blue-500 hover:text-blue-600 flex items-center justify-center gap-2 font-bold transition-all bg-white py-2"}
-                    onClick={() => {
-                        sendGAEvent('event', 'download_profile_report_pdf', {
-                            event_id: 'profile_report_pdf',
-                            status: 'downloading'
-                        })
-                    }}
-                >
-                    {(loading || imgState.loading || fetchingData) ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                        <Download className="w-4 h-4" />
-                    )}
-                    {(loading || imgState.loading || fetchingData) ? 'Preparing Report...' : 'Download PDF Report'}
-                </button>
+            {isLoading ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+                <FileText className="w-4 h-4" />
             )}
-        </PDFDownloadLink>
+            {isLoading ? 'Preparing Report...' : 'Download DOCX Report'}
+        </Button>
     );
 }
 
-export default ProfileExportButton;
+export default ProfileExportDocxButton;
