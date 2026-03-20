@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/utils/supabase/server'
+import clientPromise from '@/utils/mongodb/client'
 import { revalidatePath } from 'next/cache'
 
 export async function getConfiguration() {
@@ -203,4 +204,154 @@ export async function updateLabels(prevState, formData) {
   revalidatePath('/configurations')
 
   return { success: true, message: 'Labels updated successfully' }
+}
+
+export async function get_keywords(project_db, text = "") {
+  const client = await clientPromise
+  const db = client.db(project_db)
+  const collection = db.collection('Keywords')
+
+  const sort = { importance: -1, last_used: -1, keyword: 1 }
+
+  let docs
+  if (text !== "") {
+    docs = await collection.find({ keyword: { $regex: text, $options: 'i' } }).sort(sort).limit(50).toArray()
+  } else {
+    docs = await collection.find({}).sort(sort).limit(50).toArray()
+  }
+
+  // Serialize MongoDB-specific types so they can be safely passed to Client Components
+  return docs.map((doc) => ({
+    _id: doc._id.toString(),
+    keyword: doc.keyword ?? '',
+    usage_count: doc.usage_count ?? 0,
+    last_used: doc.last_used ? new Date(doc.last_used).toISOString() : null,
+    importance: doc.importance ?? 0,
+  }))
+}
+
+export async function add_keyword(project_db, keyword) {
+  if (!keyword || !keyword.trim()) {
+    return { error: 'Keyword cannot be empty' }
+  }
+
+  const trimmed = keyword.trim().toLowerCase()
+  const client = await clientPromise
+  const db = client.db(project_db)
+  const collection = db.collection('Keywords')
+
+  const existing = await collection.findOne({ keyword: trimmed })
+  if (existing) {
+    return { error: 'Keyword already exists' }
+  }
+
+  await collection.insertOne({
+    keyword: trimmed,
+    usage_count: 0,
+    last_used: null,
+  })
+
+  return { success: true }
+}
+
+export async function delete_keyword(project_db, keywordId) {
+  const { ObjectId } = await import('mongodb')
+  const client = await clientPromise
+  const db = client.db(project_db)
+  const collection = db.collection('Keywords')
+
+  await collection.deleteOne({ _id: new ObjectId(keywordId) })
+
+  return { success: true }
+}
+
+export async function get_watchlist(project_name, search = "") {
+  if (!project_name) return { error: 'Project name is required' }
+
+  const supabase = await createClient()
+  // const { data: { user } } = await supabase.auth.getUser()
+  // if (!user) return { error: 'Not authenticated' }
+
+  let query = supabase
+    .from('watchlist')
+    .select('*')
+    .eq('project_name', project_name)
+    .order('created_at', { ascending: false })
+
+  if (search) {
+    query = query.ilike('link', `%${search}%`)
+  }
+
+  const { data, error } = await query
+
+  if (error) {
+    console.error('Error fetching watchlist:', error)
+    return { error: 'Failed to fetch watchlist' }
+  }
+  return data
+}
+
+export async function add_to_watchlist(project_name, link) {
+  if (!project_name) return { error: 'Project name is required' }
+  if (!link || !link.trim()) {
+    return { error: 'Link cannot be empty' }
+  }
+
+  const trimmedLink = link.trim()
+  try {
+    new URL(trimmedLink) // Basic URL validation
+  } catch (_) {
+    return { error: 'Please provide a valid URL starting with http:// or https://' }
+  }
+
+  const supabase = await createClient()
+  // const { data: { user } } = await supabase.auth.getUser()
+  // if (!user) return { error: 'Not authenticated' }
+
+  // Check if already exists for this project
+  const { data: existing } = await supabase
+    .from('watchlist')
+    .select('id')
+    .eq('project_name', project_name)
+    .eq('link', trimmedLink)
+    .single()
+
+  if (existing) {
+    return { error: 'This profile is already in the watchlist' }
+  }
+
+  const { error } = await supabase
+    .from('watchlist')
+    .insert([{
+      project_name,
+      link: trimmedLink,
+      type: 'profile'
+    }])
+
+  if (error) {
+    console.error('Error adding to watchlist:', error)
+    return { error: 'Failed to add to watchlist' }
+  }
+
+  return { success: true }
+}
+
+export async function delete_from_watchlist(id) {
+  if (!id) return { error: 'Invalid item ID' }
+
+  const supabase = await createClient()
+  // const { data: { user } } = await supabase.auth.getUser()
+  // if (!user) return { error: 'Not authenticated' }
+
+  const { error } = await supabase
+    .from('watchlist')
+    .delete()
+    .eq('id', id)
+
+  if (error) {
+    console.error('Error deleting from watchlist:', error)
+    return { error: 'Failed to delete item' }
+  }
+
+  return { success: true }
 }

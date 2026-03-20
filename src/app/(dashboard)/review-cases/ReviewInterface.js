@@ -58,7 +58,7 @@ export function ReviewInterface({
   const updateQueryParams = useCallback((newParams) => {
     const params = new URLSearchParams(searchParams.toString())
     Object.entries(newParams).forEach(([key, value]) => {
-      if (value === 'all' || value === null || value === undefined || value === '') {
+      if (value === null || value === undefined || value === '') {
         params.delete(key)
       } else {
         params.set(key, value)
@@ -204,7 +204,14 @@ export function ReviewInterface({
 
                 {/* RESET, NUMBERS */}
                 <div className="flex items-center gap-3">
-                  {(currentFilters.status !== 'pending' || currentFilters.platform !== 'all' || !currentFilters.aiAnalyzed || currentFilters.poiDetected || currentFilters.sourcingDateStart || currentFilters.dbDateStart) && (
+                  {(currentFilters.status !== 'pending' || 
+                    currentFilters.platform !== 'all' || 
+                    currentFilters.aiAnalyzed || 
+                    currentFilters.poiDetected || 
+                    currentFilters.sourcingDateStart || 
+                    currentFilters.sourcingDateEnd || 
+                    currentFilters.postingDateStart || 
+                    currentFilters.postingDateEnd) && (
                     <Button
                       variant="ghost"
                       size="sm"
@@ -214,6 +221,12 @@ export function ReviewInterface({
                       <X className="h-3.5 w-3.5 mr-1.5" />
                       Reset
                     </Button>
+                  )}
+                  {isPending && (
+                    <div className="flex items-center gap-2 px-2 py-1 bg-blue-50 text-blue-600 rounded-md border border-blue-100 animate-pulse">
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                      <span className="text-[10px] font-bold uppercase tracking-wider">Updating...</span>
+                    </div>
                   )}
                   <Badge variant="secondary" className="px-3 py-1 bg-slate-100 text-slate-600 border-slate-200">
                     {totalCount.toLocaleString()} Results Found
@@ -335,7 +348,7 @@ export function ReviewInterface({
               <div className="flex items-center space-x-2.5 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200/50">
                 <Checkbox
                   id="aiAnalyzed"
-                  checked={currentFilters.aiAnalyzed !== 'false' && currentFilters.aiAnalyzed !== false}
+                  checked={currentFilters.aiAnalyzed === 'true' || currentFilters.aiAnalyzed === true}
                   onCheckedChange={(checked) => handleFilterChange('aiAnalyzed', checked.toString())}
                   className="border-slate-300 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
                 />

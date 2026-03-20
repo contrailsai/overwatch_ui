@@ -5,10 +5,10 @@ import { CaseDetailPanel } from './CaseDetailPanel'
 
 // IMPORT UI THINGS 
 // import { Skeleton } from "@/components/ui/skeleton"
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo, useTransition } from 'react'
 import {
   Filter, Search, ArrowUpDown, Loader2, CheckCircle,
-  ExternalLink, Info, Siren, ArrowRight, Quote, X,
+  ExternalLink, Info, Siren, ArrowRight, Quote, X, FlagTriangleLeft,
   FileDown, ArrowUp, ArrowDown, ClockFading,
   ChevronLeft, ChevronRight, Smile, TrendingDown, TriangleAlert,
   Youtube, Instagram, Facebook
@@ -41,6 +41,7 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
 
   const totalCount = cases?.totalCount || 0
   const totalPages = cases?.totalPages || 0
+  const [isPending, startTransition] = useTransition()
 
   const [selectedPost, setSelectedPost] = useState(initialCase || null)
   const [updatedCases, setUpdatedCases] = useState({})
@@ -60,7 +61,7 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
   const updateQueryParams = useCallback((newParams) => {
     const params = new URLSearchParams(searchParams.toString())
     Object.entries(newParams).forEach(([key, value]) => {
-      if (value === null || value === undefined || (value === 'all' && key !== 'status')) {
+      if (value === null || value === undefined || (value === 'all' && key !== 'status' && key !== 'platform')) {
         params.delete(key)
       } else {
         params.set(key, value)
@@ -70,7 +71,9 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
     if (!newParams.page) {
       params.delete('page')
     }
-    router.push(`${pathname}?${params.toString()}`)
+    startTransition(() => {
+      router.push(`${pathname}?${params.toString()}`)
+    })
   }, [router, pathname, searchParams])
 
   const handleFilterChange = (key, value) => {
@@ -214,13 +217,13 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
   const getStatusConfig = (post) => {
     const status = post.client_status || 'To Be Reviewed';
     if (status === 'To Be Reviewed') {
-      return { label: 'To Be Reviewed', icon: ClockFading, color: 'text-slate-700 bg-slate-50 border-slate-200' };
+      return { label: 'To Be Reviewed', icon: ClockFading, color: 'text-slate-500 bg-slate-50 border-slate-200' };
     }
     if (status === 'No Action' || status === 'Pass') {
-      return { label: 'No Action', icon: CheckCircle, color: 'text-emerald-700 bg-emerald-50 border-emerald-200' };
+      return { label: 'No Action', icon: CheckCircle, color: 'text-emerald-500 bg-emerald-50 border-emerald-200' };
     }
     if (status === 'Flag for Takedown') {
-      return { label: 'Flag for Takedown', icon: Siren, color: 'text-rose-700 bg-rose-50 border-rose-200' };
+      return { label: 'Flag for Takedown', icon: FlagTriangleLeft, color: 'text-rose-500 bg-rose-50 border-rose-200' };
     }
     return { label: status, icon: Info, color: 'text-slate-600 bg-slate-50 border-slate-200' };
   }
@@ -261,6 +264,13 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                 <div className="text-xs font-medium text-slate-500 whitespace-nowrap">
                   <span className="font-bold text-slate-900 text-base  px-1">{totalCount}</span> cases found
                 </div>
+
+                {isPending && (
+                  <div className="flex items-center gap-2 px-2 py-1 bg-blue-50 text-blue-600 rounded-md border border-blue-100 animate-pulse mt-1">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    <span className="text-[10px] font-bold uppercase tracking-wider">Updating...</span>
+                  </div>
+                )}
               </div>
 
               <Separator orientation="vertical" className="h-8 bg-slate-100 hidden sm:block" />

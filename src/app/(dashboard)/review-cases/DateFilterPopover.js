@@ -119,6 +119,7 @@ function CustomTimePicker({ date, onChange, disabled }) {
 // -------------------------------------
 
 export function DateFilterPopover({ title, onApply, initialFrom, initialTo }) {
+    const [open, setOpen] = useState(false);
     const [dateRange, setDateRange] = useState({
         from: initialFrom ? new Date(initialFrom) : undefined,
         to: initialTo ? new Date(initialTo) : undefined,
@@ -188,7 +189,7 @@ export function DateFilterPopover({ title, onApply, initialFrom, initialTo }) {
     // };
 
     return (
-        <Popover>
+        <Popover open={open} onOpenChange={setOpen}>
             <PopoverTrigger asChild>
                 <Button variant="outline" className="w-full justify-start text-left font-normal bg-white border-slate-200 h-9 text-xs">
                     <CalendarIcon className="h-3.5 w-3.5 mr-2" />
@@ -276,7 +277,10 @@ export function DateFilterPopover({ title, onApply, initialFrom, initialTo }) {
                             >
                                 Clear
                             </Button>
-                            <Button className="w-2/3" onClick={() => onApply(dateRange)}>
+                            <Button className="w-2/3" onClick={() => {
+                                onApply(dateRange);
+                                setOpen(false);
+                            }}>
                                 Apply Filter
                             </Button>
                         </div>
