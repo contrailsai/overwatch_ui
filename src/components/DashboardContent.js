@@ -29,6 +29,7 @@ const PLATFORM_COLORS = {
     website: '#8b5cf6',
     tiktok: '#010101',
     unknown: '#94a3b8',
+    reddit: '#ff4500',
 }
 
 // ─── Date Filter ─────────────────────────────────────────────────────────────

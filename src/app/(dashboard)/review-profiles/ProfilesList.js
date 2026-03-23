@@ -11,7 +11,7 @@ import {
     Loader2, AlertCircle, UserX, UserCheck, CheckCheck,
     MapPin, Calendar, Link2, Briefcase, Hash
 } from 'lucide-react'
-import { Twitter } from '@/utils/icons'
+import { Twitter, Reddit } from '@/utils/icons'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -30,6 +30,11 @@ const PlatformIcon = ({ platform, className }) => {
     if (p === 'x') return (
         <span className='w-3.5 h-3.5'>
             <Twitter className={cn('max-w-3.5 max-h-3.5 text-slate-900', className)} />
+        </span>
+    )
+    if (p === 'reddit') return (
+        <span className='w-3.5 h-3.5'>
+            <Reddit className={cn('max-w-3.5 max-h-3.5 text-slate-900', className)} />
         </span>
     )
     if (p === 'youtube') return <Youtube className={cn('w-3.5 h-3.5 text-red-500', className)} />
@@ -452,271 +457,271 @@ function ProfileDetailPanel({ profile, profiles = [], project, isOpen, onClose, 
                         </div>
                     </div>
                     <div className="flex-1 overflow-y-auto flex flex-col">
-                    {/* Profile & Metadata Section */}
-                    <div className="px-6 py-6 border-b border-slate-100 bg-linear-to-b from-slate-50/80 to-white shrink-0 relative">
-                        {/* Close Button */}
-                        <div className="absolute top-4 right-4">
-                            <button
-                                onClick={onClose}
-                                className="p-1.5 rounded-lg hover:bg-slate-200/50 text-slate-400 hover:text-slate-700 transition-colors bg-white/50 backdrop-blur-sm"
-                            >
-                                <X className="w-4 h-4" />
-                            </button>
-                        </div>
+                        {/* Profile & Metadata Section */}
+                        <div className="px-6 py-6 border-b border-slate-100 bg-linear-to-b from-slate-50/80 to-white shrink-0 relative">
+                            {/* Close Button */}
+                            <div className="absolute top-4 right-4">
+                                <button
+                                    onClick={onClose}
+                                    className="p-1.5 rounded-lg hover:bg-slate-200/50 text-slate-400 hover:text-slate-700 transition-colors bg-white/50 backdrop-blur-sm"
+                                >
+                                    <X className="w-4 h-4" />
+                                </button>
+                            </div>
 
-                        <div className="flex flex-col gap-5">
-                            {/* Profile Info Row */}
-                            <div className="flex items-start gap-4 pr-8">
-                                <div className="w-16 h-16 rounded-full bg-white shadow-sm ring-1 ring-slate-200/60 flex items-center justify-center shrink-0 overflow-hidden relative">
-                                    {profile.metadata?.profile_pic ? (
-                                        <img src={profile.metadata.profile_pic} alt="" className="w-full h-full object-cover" />
-                                    ) : (
-                                        <User className="w-7 h-7 text-slate-300" />
-                                    )}
-                                </div>
-                                <div className="flex flex-col min-w-0 pt-0.5">
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                        <h2 className="text-lg font-bold text-slate-900 truncate tracking-tight">{profile.display_name}</h2>
-                                        {profile.is_verified && (
-                                            <BadgeCheck className="w-4 h-4 text-blue-500 shrink-0" />
-                                        )}
-                                        {profile.metadata?.is_business && (
-                                            <Badge variant="secondary" className="h-5 px-1.5 text-[9px] font-bold bg-slate-800 text-white hover:bg-slate-700 border-none uppercase tracking-wider">
-                                                Business
-                                            </Badge>
+                            <div className="flex flex-col gap-5">
+                                {/* Profile Info Row */}
+                                <div className="flex items-start gap-4 pr-8">
+                                    <div className="w-16 h-16 rounded-full bg-white shadow-sm ring-1 ring-slate-200/60 flex items-center justify-center shrink-0 overflow-hidden relative">
+                                        {profile.metadata?.profile_pic ? (
+                                            <img src={profile.metadata.profile_pic} alt="" className="w-full h-full object-cover" />
+                                        ) : (
+                                            <User className="w-7 h-7 text-slate-300" />
                                         )}
                                     </div>
-                                    <div className="flex items-center gap-2 mt-0.5 text-sm">
-                                        {profile.username && (
-                                            <span className="font-medium text-slate-500">@{profile.username}</span>
-                                        )}
-                                        {profile.username && <span className="text-slate-300">•</span>}
-                                        <div className="flex items-center gap-1.5 text-slate-600 font-medium">
-                                            <PlatformIcon platform={profile.platform} className="w-3.5 h-3.5" />
-                                            <span className="capitalize">
-                                                {profile.platform === 'x' ? 'Twitter/X' : profile.platform}
-                                            </span>
+                                    <div className="flex flex-col min-w-0 pt-0.5">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                            <h2 className="text-lg font-bold text-slate-900 truncate tracking-tight">{profile.display_name}</h2>
+                                            {profile.is_verified && (
+                                                <BadgeCheck className="w-4 h-4 text-blue-500 shrink-0" />
+                                            )}
+                                            {profile.metadata?.is_business && (
+                                                <Badge variant="secondary" className="h-5 px-1.5 text-[9px] font-bold bg-slate-800 text-white hover:bg-slate-700 border-none uppercase tracking-wider">
+                                                    Business
+                                                </Badge>
+                                            )}
                                         </div>
+                                        <div className="flex items-center gap-2 mt-0.5 text-sm">
+                                            {profile.username && (
+                                                <span className="font-medium text-slate-500">@{profile.username}</span>
+                                            )}
+                                            {profile.username && <span className="text-slate-300">•</span>}
+                                            <div className="flex items-center gap-1.5 text-slate-600 font-medium">
+                                                <PlatformIcon platform={profile.platform} className="w-3.5 h-3.5" />
+                                                <span className="capitalize">
+                                                    {profile.platform === 'x' ? 'Twitter/X' : profile.platform}
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        {(profile.metadata?.full_name && profile.metadata.full_name !== profile.display_name) && (
+                                            <span className="text-xs text-slate-400 mt-0.5">
+                                                {profile.metadata.full_name}
+                                            </span>
+                                        )}
                                     </div>
+                                </div>
 
-                                    {(profile.metadata?.full_name && profile.metadata.full_name !== profile.display_name) && (
-                                        <span className="text-xs text-slate-400 mt-0.5">
-                                            {profile.metadata.full_name}
-                                        </span>
-                                    )}
-                                </div>
-                            </div>
-
-                            {/* Biography */}
-                            {profile.metadata?.biography && (
-                                <div className="flex flex-col gap-1 items-start">
-                                    <div className={cn(
-                                        "text-sm text-slate-700 leading-relaxed whitespace-pre-wrap font-medium transition-all",
-                                        !isBioExpanded && "line-clamp-3"
-                                    )}>
-                                        {profile.metadata.biography}
-                                    </div>
-                                    {(profile.metadata.biography.length > 80 || profile.metadata.biography.includes('\n')) && (
-                                        <button 
-                                            onClick={() => setIsBioExpanded(!isBioExpanded)}
-                                            className="text-[10px] font-bold text-blue-600 hover:text-blue-800 uppercase tracking-wider mt-0.5 transition-colors"
-                                        >
-                                            {isBioExpanded ? 'Show less' : 'Show more'}
-                                        </button>
-                                    )}
-                                </div>
-                            )}
-
-                            {/* Badges/Tags */}
-                            <div className="flex flex-wrap gap-2">
-                                {profile.metadata?.location && (
-                                    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-100 text-slate-600 text-xs font-medium border border-slate-200/60">
-                                        <MapPin className="w-3 h-3 text-slate-400" />
-                                        {profile.metadata.location}
-                                    </div>
-                                )}
-                                {profile.metadata?.category && (
-                                    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-100 text-slate-600 text-xs font-medium border border-slate-200/60">
-                                        <Hash className="w-3 h-3 text-slate-400" />
-                                        {profile.metadata.category}
-                                    </div>
-                                )}
-                                {profile.metadata?.account_creation_date && (
-                                    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-100 text-slate-600 text-xs font-medium border border-slate-200/60">
-                                        <Calendar className="w-3 h-3 text-slate-400" />
-                                        Joined {format(new Date(profile.metadata.account_creation_date), 'MMM yyyy')}
-                                    </div>
-                                )}
-                                {profile.profile_url && (
-                                    <a href={profile.profile_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-blue-50 text-blue-700 hover:bg-blue-100 hover:text-blue-800 text-xs font-semibold transition-colors border border-blue-100">
-                                        <Link2 className="w-3 h-3 text-blue-500" />
-                                        View Profile
-                                    </a>
-                                )}
-                            </div>
-
-                            {/* Stats Grid */}
-                            <div className="grid grid-cols-3 gap-4 pt-4 border-t border-slate-100/80">
-                                <div className="flex flex-col">
-                                    <span className="text-lg font-bold text-slate-900 tracking-tight">
-                                        {profile.metadata?.follower_count?.toLocaleString() || 0}
-                                    </span>
-                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Followers</span>
-                                </div>
-                                <div className="flex flex-col">
-                                    <span className="text-lg font-bold text-slate-900 tracking-tight">
-                                        {profile.metadata?.following_count?.toLocaleString() || 0}
-                                    </span>
-                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Following</span>
-                                </div>
-                                <div className="flex flex-col">
-                                    <span className="text-lg font-bold text-slate-900 tracking-tight">
-                                        {profile.metadata?.media_count?.toLocaleString() || profile.posts?.length || 0}
-                                    </span>
-                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Posts</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    {/* Stats bar */}
-                    {cases && cases.length > 0 && (
-                        <div className="px-6 py-3 bg-slate-50 border-b border-slate-100 flex items-center gap-6 shrink-0">
-                            <div className="text-center">
-                                <p className="text-lg font-bold text-slate-900">{cases.length}</p>
-                                <p className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold">Cases</p>
-                            </div>
-                            {highCount > 0 && (
-                                <div className="text-center">
-                                    <p className="text-lg font-bold text-rose-600">{highCount}</p>
-                                    <p className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold">High Risk</p>
-                                </div>
-                            )}
-                            {medCount > 0 && (
-                                <div className="text-center">
-                                    <p className="text-lg font-bold text-orange-500">{medCount}</p>
-                                    <p className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold">Medium</p>
-                                </div>
-                            )}
-                            {lowCount > 0 && (
-                                <div className="text-center">
-                                    <p className="text-lg font-bold text-amber-500">{lowCount}</p>
-                                    <p className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold">Low</p>
-                                </div>
-                            )}
-                        </div>
-                    )}
-                    {/* Cases */}
-                    <div className="shrink-0 pb-8">
-                        <div className="px-6 py-4">
-                            <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Associated Cases</h3>
-
-                            {loading && (
-                                <div className="space-y-3">
-                                    {Array.from({ length: 4 }).map((_, i) => (
-                                        <div key={i} className="h-16 bg-slate-50 rounded-lg animate-pulse border border-slate-100" />
-                                    ))}
-                                </div>
-                            )}
-
-                            {!loading && cases && cases.length === 0 && (
-                                <div className="flex flex-col items-center justify-center py-12 text-slate-400">
-                                    <div className="w-14 h-14 bg-slate-50 rounded-full flex items-center justify-center mb-3 border border-slate-100">
-                                        <FileText className="w-6 h-6 opacity-30" />
-                                    </div>
-                                    <p className="text-sm font-semibold text-slate-600">No cases found</p>
-                                    <p className="text-xs text-slate-400 mt-1">No posts are linked to this profile.</p>
-                                </div>
-                            )}
-
-                            {!loading && cases && cases.length > 0 && (
-                                <div className="space-y-2.5">
-                                    {cases.map(c => {
-                                        const risk = getRiskLabel(c.threat_score)
-                                        const statusCfg = getStatusConfig(c.client_status)
-                                        const StatusIcon = statusCfg.icon
-                                        return (
-                                            <div
-                                                key={c._id}
-                                                className="group flex flex-col gap-2 bg-white border border-slate-100 rounded-xl px-4 py-3 hover:border-slate-200 hover:shadow-sm transition-all"
+                                {/* Biography */}
+                                {profile.metadata?.biography && (
+                                    <div className="flex flex-col gap-1 items-start">
+                                        <div className={cn(
+                                            "text-sm text-slate-700 leading-relaxed whitespace-pre-wrap font-medium transition-all",
+                                            !isBioExpanded && "line-clamp-3"
+                                        )}>
+                                            {profile.metadata.biography}
+                                        </div>
+                                        {(profile.metadata.biography.length > 80 || profile.metadata.biography.includes('\n')) && (
+                                            <button
+                                                onClick={() => setIsBioExpanded(!isBioExpanded)}
+                                                className="text-[10px] font-bold text-blue-600 hover:text-blue-800 uppercase tracking-wider mt-0.5 transition-colors"
                                             >
-                                                {/* Top row: badge + status + platform + external link */}
-                                                <div className="flex items-center gap-2 flex-wrap">
-                                                    {risk ? (
-                                                        <span className={cn('inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border', risk.color)}>
-                                                            <RiskIcon label={risk.label} />
-                                                            {risk.label}
-                                                        </span>
-                                                    ) :
-                                                        (
-                                                            <span className={cn('inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border', statusCfg.color)}>
-                                                                <StatusIcon className="w-2.5 h-2.5" />
-                                                                {statusCfg.label}
+                                                {isBioExpanded ? 'Show less' : 'Show more'}
+                                            </button>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* Badges/Tags */}
+                                <div className="flex flex-wrap gap-2">
+                                    {profile.metadata?.location && (
+                                        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-100 text-slate-600 text-xs font-medium border border-slate-200/60">
+                                            <MapPin className="w-3 h-3 text-slate-400" />
+                                            {profile.metadata.location}
+                                        </div>
+                                    )}
+                                    {profile.metadata?.category && (
+                                        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-100 text-slate-600 text-xs font-medium border border-slate-200/60">
+                                            <Hash className="w-3 h-3 text-slate-400" />
+                                            {profile.metadata.category}
+                                        </div>
+                                    )}
+                                    {profile.metadata?.account_creation_date && (
+                                        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-100 text-slate-600 text-xs font-medium border border-slate-200/60">
+                                            <Calendar className="w-3 h-3 text-slate-400" />
+                                            Joined {format(new Date(profile.metadata.account_creation_date), 'MMM yyyy')}
+                                        </div>
+                                    )}
+                                    {profile.profile_url && (
+                                        <a href={profile.profile_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-blue-50 text-blue-700 hover:bg-blue-100 hover:text-blue-800 text-xs font-semibold transition-colors border border-blue-100">
+                                            <Link2 className="w-3 h-3 text-blue-500" />
+                                            View Profile
+                                        </a>
+                                    )}
+                                </div>
+
+                                {/* Stats Grid */}
+                                <div className="grid grid-cols-3 gap-4 pt-4 border-t border-slate-100/80">
+                                    <div className="flex flex-col">
+                                        <span className="text-lg font-bold text-slate-900 tracking-tight">
+                                            {profile.metadata?.follower_count?.toLocaleString() || 0}
+                                        </span>
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Followers</span>
+                                    </div>
+                                    <div className="flex flex-col">
+                                        <span className="text-lg font-bold text-slate-900 tracking-tight">
+                                            {profile.metadata?.following_count?.toLocaleString() || 0}
+                                        </span>
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Following</span>
+                                    </div>
+                                    <div className="flex flex-col">
+                                        <span className="text-lg font-bold text-slate-900 tracking-tight">
+                                            {profile.metadata?.media_count?.toLocaleString() || profile.posts?.length || 0}
+                                        </span>
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Posts</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {/* Stats bar */}
+                        {cases && cases.length > 0 && (
+                            <div className="px-6 py-3 bg-slate-50 border-b border-slate-100 flex items-center gap-6 shrink-0">
+                                <div className="text-center">
+                                    <p className="text-lg font-bold text-slate-900">{cases.length}</p>
+                                    <p className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold">Cases</p>
+                                </div>
+                                {highCount > 0 && (
+                                    <div className="text-center">
+                                        <p className="text-lg font-bold text-rose-600">{highCount}</p>
+                                        <p className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold">High Risk</p>
+                                    </div>
+                                )}
+                                {medCount > 0 && (
+                                    <div className="text-center">
+                                        <p className="text-lg font-bold text-orange-500">{medCount}</p>
+                                        <p className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold">Medium</p>
+                                    </div>
+                                )}
+                                {lowCount > 0 && (
+                                    <div className="text-center">
+                                        <p className="text-lg font-bold text-amber-500">{lowCount}</p>
+                                        <p className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold">Low</p>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                        {/* Cases */}
+                        <div className="shrink-0 pb-8">
+                            <div className="px-6 py-4">
+                                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Associated Cases</h3>
+
+                                {loading && (
+                                    <div className="space-y-3">
+                                        {Array.from({ length: 4 }).map((_, i) => (
+                                            <div key={i} className="h-16 bg-slate-50 rounded-lg animate-pulse border border-slate-100" />
+                                        ))}
+                                    </div>
+                                )}
+
+                                {!loading && cases && cases.length === 0 && (
+                                    <div className="flex flex-col items-center justify-center py-12 text-slate-400">
+                                        <div className="w-14 h-14 bg-slate-50 rounded-full flex items-center justify-center mb-3 border border-slate-100">
+                                            <FileText className="w-6 h-6 opacity-30" />
+                                        </div>
+                                        <p className="text-sm font-semibold text-slate-600">No cases found</p>
+                                        <p className="text-xs text-slate-400 mt-1">No posts are linked to this profile.</p>
+                                    </div>
+                                )}
+
+                                {!loading && cases && cases.length > 0 && (
+                                    <div className="space-y-2.5">
+                                        {cases.map(c => {
+                                            const risk = getRiskLabel(c.threat_score)
+                                            const statusCfg = getStatusConfig(c.client_status)
+                                            const StatusIcon = statusCfg.icon
+                                            return (
+                                                <div
+                                                    key={c._id}
+                                                    className="group flex flex-col gap-2 bg-white border border-slate-100 rounded-xl px-4 py-3 hover:border-slate-200 hover:shadow-sm transition-all"
+                                                >
+                                                    {/* Top row: badge + status + platform + external link */}
+                                                    <div className="flex items-center gap-2 flex-wrap">
+                                                        {risk ? (
+                                                            <span className={cn('inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border', risk.color)}>
+                                                                <RiskIcon label={risk.label} />
+                                                                {risk.label}
                                                             </span>
-                                                        )
-                                                    }
-                                                    <Badge variant="outline" className="capitalize font-semibold text-slate-500 border-slate-200 gap-1 pl-1.5 h-5 text-[10px]">
-                                                        <PlatformIcon platform={c.platform} />
-                                                        {c.platform}
-                                                    </Badge>
-                                                    {c.primary_threat_type && (
-                                                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold border uppercase tracking-wide text-slate-500 bg-slate-50 border-slate-200">
-                                                            {c.primary_threat_type.replace(/[-_]/g, ' ')}
-                                                        </span>
-                                                    )}
-                                                    <div className="ml-auto">
-                                                        {c.original_url && (
-                                                            <a
-                                                                href={c.original_url}
-                                                                target="_blank"
-                                                                rel="noreferrer"
-                                                                className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-600 hover:text-blue-800 hover:underline bg-blue-50 px-2 py-0.5 rounded-md"
-                                                            >
-                                                                Source <ExternalLink className="w-2.5 h-2.5" />
-                                                            </a>
+                                                        ) :
+                                                            (
+                                                                <span className={cn('inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border', statusCfg.color)}>
+                                                                    <StatusIcon className="w-2.5 h-2.5" />
+                                                                    {statusCfg.label}
+                                                                </span>
+                                                            )
+                                                        }
+                                                        <Badge variant="outline" className="capitalize font-semibold text-slate-500 border-slate-200 gap-1 pl-1.5 h-5 text-[10px]">
+                                                            <PlatformIcon platform={c.platform} />
+                                                            {c.platform}
+                                                        </Badge>
+                                                        {c.primary_threat_type && (
+                                                            <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold border uppercase tracking-wide text-slate-500 bg-slate-50 border-slate-200">
+                                                                {c.primary_threat_type.replace(/[-_]/g, ' ')}
+                                                            </span>
                                                         )}
-                                                    </div>
-                                                </div>
-
-                                                {/* Image and Caption */}
-                                                <div className="flex gap-3">
-                                                    {c.signedImageUrl && (
-                                                        <div className="shrink-0 w-16 h-16 rounded-lg overflow-hidden border border-slate-100 bg-slate-50">
-                                                            <img src={c.signedImageUrl} alt="" className="w-full h-full object-cover" />
+                                                        <div className="ml-auto">
+                                                            {c.original_url && (
+                                                                <a
+                                                                    href={c.original_url}
+                                                                    target="_blank"
+                                                                    rel="noreferrer"
+                                                                    className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-600 hover:text-blue-800 hover:underline bg-blue-50 px-2 py-0.5 rounded-md"
+                                                                >
+                                                                    Source <ExternalLink className="w-2.5 h-2.5" />
+                                                                </a>
+                                                            )}
                                                         </div>
-                                                    )}
-                                                    {c.caption && (
-                                                        <p className="text-xs text-slate-600 line-clamp-3 leading-relaxed flex-1">
-                                                            {c.caption}
-                                                        </p>
-                                                    )}
-                                                </div>
+                                                    </div>
 
-                                                {/* Footer: Date + Inspect Action */}
-                                                <div className="flex items-center justify-between mt-0.5 pt-2 border-t border-slate-50">
-                                                    <div className="flex items-center gap-2">
-                                                        {c.created_at && (
-                                                            <p className="text-[10px] text-slate-400 font-medium whitespace-nowrap">
-                                                                {format(new Date(c.created_at), 'dd MMM yyyy')}
+                                                    {/* Image and Caption */}
+                                                    <div className="flex gap-3">
+                                                        {c.signedImageUrl && (
+                                                            <div className="shrink-0 w-16 h-16 rounded-lg overflow-hidden border border-slate-100 bg-slate-50">
+                                                                <img src={c.signedImageUrl} alt="" className="w-full h-full object-cover" />
+                                                            </div>
+                                                        )}
+                                                        {c.caption && (
+                                                            <p className="text-xs text-slate-600 line-clamp-3 leading-relaxed flex-1">
+                                                                {c.caption}
                                                             </p>
                                                         )}
                                                     </div>
-                                                    <a
-                                                        href={`/cases/${c._id}`}
-                                                        target="_blank"
-                                                        rel="noreferrer"
-                                                        className="inline-flex items-center gap-1.5 text-[10px] font-bold text-slate-600 hover:text-blue-600 hover:bg-white hover:border-blue-200 px-2 py-1 rounded-md border border-slate-100 transition-all group/link"
-                                                    >
-                                                        Inspect Case
-                                                        <ArrowRight className="w-2.5 h-2.5 opacity-40 group-hover/link:opacity-100 group-hover/link:translate-x-0.5 transition-all" />
-                                                    </a>
+
+                                                    {/* Footer: Date + Inspect Action */}
+                                                    <div className="flex items-center justify-between mt-0.5 pt-2 border-t border-slate-50">
+                                                        <div className="flex items-center gap-2">
+                                                            {c.created_at && (
+                                                                <p className="text-[10px] text-slate-400 font-medium whitespace-nowrap">
+                                                                    {format(new Date(c.created_at), 'dd MMM yyyy')}
+                                                                </p>
+                                                            )}
+                                                        </div>
+                                                        <a
+                                                            href={`/cases/${c._id}`}
+                                                            target="_blank"
+                                                            rel="noreferrer"
+                                                            className="inline-flex items-center gap-1.5 text-[10px] font-bold text-slate-600 hover:text-blue-600 hover:bg-white hover:border-blue-200 px-2 py-1 rounded-md border border-slate-100 transition-all group/link"
+                                                        >
+                                                            Inspect Case
+                                                            <ArrowRight className="w-2.5 h-2.5 opacity-40 group-hover/link:opacity-100 group-hover/link:translate-x-0.5 transition-all" />
+                                                        </a>
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        )
-                                    })}
-                                </div>
-                            )}
+                                            )
+                                        })}
+                                    </div>
+                                )}
+                            </div>
                         </div>
-                    </div>
                     </div>
                 </div>
 
@@ -815,6 +820,7 @@ export function ProfilesList({ profiles, project, initialFilters, currentPage })
                                             <SelectItem value="instagram">Instagram</SelectItem>
                                             <SelectItem value="facebook">Facebook</SelectItem>
                                             <SelectItem value="x">X (Twitter)</SelectItem>
+                                            <SelectItem value="reddit">Reddit</SelectItem>
                                             <SelectItem value="youtube">YouTube</SelectItem>
                                         </SelectContent>
                                     </Select>

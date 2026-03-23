@@ -14,7 +14,7 @@ import {
   Youtube, Instagram, Facebook
 } from 'lucide-react'
 
-import { Twitter } from '@/utils/icons'
+import { Twitter, Reddit } from '@/utils/icons'
 import { format } from "date-fns"
 
 import getPostLink from '@/components/GetPostLink'
@@ -312,6 +312,7 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                       <SelectItem value="all">All Platforms</SelectItem>
                       <SelectItem value="instagram">Instagram</SelectItem>
                       <SelectItem value="facebook">Facebook</SelectItem>
+                      <SelectItem value="reddit">Reddit</SelectItem>
                       <SelectItem value="x">X (Twitter)</SelectItem>
                       <SelectItem value="youtube">Youtube</SelectItem>
                       <SelectItem value="website">Websites</SelectItem>
@@ -718,7 +719,8 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                                 : post.platform === 'facebook' ? <Facebook className="size-5 shrink-0 text-blue-600" />
                                   : post.platform === 'x' ? <Twitter className=" size-5 text-slate-900" />
                                     : post.platform === 'youtube' ? <Youtube className=" size-5 text-red-600" />
-                                      : post.platform
+                                      : post.platform === 'reddit' ? <Reddit className=" size-5 text-red-600" />
+                                        : post.platform
                               }
                             </div>
                             <span className="text-xs text-slate-400">•</span>

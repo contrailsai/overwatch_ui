@@ -13,7 +13,7 @@ import {
     MessageCircle, Send, Loader2, CheckCircle2, Download, AlertTriangle,
     MapPin, Calendar, Link2, Hash
 } from 'lucide-react'
-import { Twitter } from '@/utils/icons'
+import { Twitter, Reddit } from '@/utils/icons'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Textarea } from '@/components/ui/textarea'
@@ -27,6 +27,11 @@ const PlatformIcon = ({ platform, className }) => {
     if (p === 'x') return (
         <span className='w-3.5 h-3.5'>
             <Twitter className={cn('max-w-3.5 max-h-3.5 text-slate-900', className)} />
+        </span>
+    )
+    if (p === 'reddit') return (
+        <span className='w-3.5 h-3.5'>
+            <Reddit className={cn('max-w-3.5 max-h-3.5 text-slate-900', className)} />
         </span>
     )
     if (p === 'youtube') return <Youtube className={cn('w-3.5 h-3.5 text-red-500', className)} />
@@ -597,14 +602,14 @@ export default function ProfileDetailPanel({ profile, project, isOpen, onClose, 
                         </div>
 
                         <div className="flex flex-col gap-2">
-                            <ProfileExportButton 
-                                profile={profile} 
-                                project={project} 
+                            <ProfileExportButton
+                                profile={profile}
+                                project={project}
                                 className="w-full cursor-pointer rounded-xl border-2 border-slate-200 text-slate-500 hover:border-blue-500 hover:text-blue-600 flex items-center justify-center gap-2 font-bold transition-all bg-white py-2"
                             />
-                            <ProfileExportDocxButton 
-                                profile={profile} 
-                                project={project} 
+                            <ProfileExportDocxButton
+                                profile={profile}
+                                project={project}
                                 className="w-full cursor-pointer rounded-xl border-2 border-slate-200 text-slate-500 hover:border-blue-500 hover:text-blue-600 flex items-center justify-center gap-2 font-bold transition-all bg-white py-2"
                             />
                         </div>

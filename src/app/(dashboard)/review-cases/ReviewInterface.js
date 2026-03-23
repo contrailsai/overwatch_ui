@@ -9,10 +9,10 @@ import { Skeleton } from "@/components/ui/skeleton"
 import {
   Loader2, X, Filter, Download, ChevronLeft, ChevronRight,
   Search, Sparkles, Calendar, Database,
-  Instagram, Facebook, Youtube, AlertCircle, Quote,
-  Globe,
+  Instagram, Facebook, Youtube,
+  AlertCircle, Quote, Globe,
 } from 'lucide-react'
-import { Twitter } from "@/utils/icons"
+import { Twitter, Reddit } from "@/utils/icons"
 
 import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -204,24 +204,24 @@ export function ReviewInterface({
 
                 {/* RESET, NUMBERS */}
                 <div className="flex items-center gap-3">
-                  {(currentFilters.status !== 'pending' || 
-                    currentFilters.platform !== 'all' || 
-                    currentFilters.aiAnalyzed || 
-                    currentFilters.poiDetected || 
-                    currentFilters.sourcingDateStart || 
-                    currentFilters.sourcingDateEnd || 
-                    currentFilters.postingDateStart || 
+                  {(currentFilters.status !== 'pending' ||
+                    currentFilters.platform !== 'all' ||
+                    currentFilters.aiAnalyzed ||
+                    currentFilters.poiDetected ||
+                    currentFilters.sourcingDateStart ||
+                    currentFilters.sourcingDateEnd ||
+                    currentFilters.postingDateStart ||
                     currentFilters.postingDateEnd) && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={clearFilters}
-                      className="h-9 text-xs font-bold text-rose-600 hover:bg-rose-50 hover:text-rose-700 transition-colors"
-                    >
-                      <X className="h-3.5 w-3.5 mr-1.5" />
-                      Reset
-                    </Button>
-                  )}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={clearFilters}
+                        className="h-9 text-xs font-bold text-rose-600 hover:bg-rose-50 hover:text-rose-700 transition-colors"
+                      >
+                        <X className="h-3.5 w-3.5 mr-1.5" />
+                        Reset
+                      </Button>
+                    )}
                   {isPending && (
                     <div className="flex items-center gap-2 px-2 py-1 bg-blue-50 text-blue-600 rounded-md border border-blue-100 animate-pulse">
                       <Loader2 className="h-3 w-3 animate-spin" />
@@ -287,6 +287,7 @@ export function ReviewInterface({
                     <SelectItem value="all">All Platforms</SelectItem>
                     <SelectItem value="instagram">Instagram</SelectItem>
                     <SelectItem value="facebook">Facebook</SelectItem>
+                    <SelectItem value="reddit">Reddit</SelectItem>
                     <SelectItem value="x">X (Twitter)</SelectItem>
                     <SelectItem value="youtube">YouTube</SelectItem>
                     <SelectItem value="website">Websites</SelectItem>
@@ -476,7 +477,8 @@ export function ReviewInterface({
                               )}
                               {post.platform.toLowerCase() === 'instagram' && <div className="absolute -bottom-1 -right-1 bg-white rounded-full p-0.5 shadow-sm"><Instagram className="w-4 h-4 text-pink-500 fill-pink-50" /></div>}
                               {post.platform.toLowerCase() === 'facebook' && <div className="absolute -bottom-1 -right-1 bg-white rounded-full p-0.5 shadow-sm"><Facebook className="w-4 h-4 text-blue-600 fill-blue-50" /></div>}
-                              {post.platform.toLowerCase() === 'x' && <div className="absolute -bottom-1 -right-1 bg-white rounded-full p-0.5 shadow-sm"> <span className="inline-block size-4 text-black"><Twitter /></span> </div>}
+                              {post.platform.toLowerCase() === 'x' && <div className="absolute -bottom-1 -right-1 bg-white rounded-full p-1 shadow-sm"> <span className="block size-4 text-black"><Twitter /></span> </div>}
+                              {post.platform.toLowerCase() === 'reddit' && <div className="absolute -bottom-1 -right-1 bg-white rounded-full p-0.5 shadow-sm"> <span className="block size-6 text-black"><Reddit /></span> </div>}
                               {post.platform.toLowerCase() === 'youtube' && <div className="absolute -bottom-1 -right-1 bg-white rounded-full p-0.5 shadow-sm"><Youtube className="w-4 h-4 text-red-600 fill-red-50" /></div>}
                               {post.platform.toLowerCase() === 'website' && <div className="absolute -bottom-1 -right-1 bg-white rounded-full p-0.5 shadow-sm"><Globe className="w-4 h-4 text-slate-500" /></div>}
                             </div>

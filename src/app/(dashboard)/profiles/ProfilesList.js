@@ -7,7 +7,7 @@ import {
     User, ArrowRight, Siren, ClockFading, Info, Globe, TriangleAlert,
     TrendingDown, Smile, BadgeCheck, ExternalLink
 } from 'lucide-react'
-import { Twitter } from '@/utils/icons'
+import { Twitter, Reddit } from '@/utils/icons'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -25,6 +25,11 @@ const PlatformIcon = ({ platform, className }) => {
     if (p === 'x') return (
         <span className='w-3.5 h-3.5'>
             <Twitter className={cn('max-w-3.5 max-h-3.5 text-slate-900', className)} />
+        </span>
+    )
+    if (p === 'reddit') return (
+        <span className='w-3.5 h-3.5'>
+            <Reddit className={cn('max-w-3.5 max-h-3.5 text-slate-900', className)} />
         </span>
     )
     if (p === 'youtube') return <Youtube className={cn('w-3.5 h-3.5 text-red-500', className)} />
@@ -107,6 +112,7 @@ export function ProfilesList({ profiles, project, initialFilters, currentPage })
                                             <SelectItem value="instagram">Instagram</SelectItem>
                                             <SelectItem value="facebook">Facebook</SelectItem>
                                             <SelectItem value="x">X (Twitter)</SelectItem>
+                                            <SelectItem value="reddit">Reddit</SelectItem>
                                             <SelectItem value="youtube">YouTube</SelectItem>
                                         </SelectContent>
                                     </Select>

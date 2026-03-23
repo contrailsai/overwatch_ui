@@ -114,6 +114,8 @@ export default function TakedownsPage() {
                       <SelectItem value="instagram">Instagram</SelectItem>
                       <SelectItem value="facebook">Facebook</SelectItem>
                       <SelectItem value="x">X (Twitter)</SelectItem>
+                      <SelectItem value="reddit">Reddit</SelectItem>
+                      <SelectItem value="youtube">YouTube</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

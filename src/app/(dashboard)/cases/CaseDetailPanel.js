@@ -19,7 +19,7 @@ import {
     UserRound,
     UserRoundX, Pencil, UserPlus, Scale
 } from 'lucide-react'
-import { Twitter } from '@/utils/icons'
+import { Twitter, Reddit } from '@/utils/icons'
 import ProfilePic from '@/components/ProfilePic'
 import { cn } from '@/lib/utils'
 import { useRouter } from 'next/navigation'
@@ -413,6 +413,10 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
                                                         post.platform === "x" || post.platform === "twitter" ? (
                                                             <span className="inline-block size-4 text-black">
                                                                 <Twitter className="w-3.5 h-3.5 text-slate-900" />
+                                                            </span>
+                                                        ) : post.platform === "reddit" ? (
+                                                            <span className="inline-block size-4 text-black">
+                                                                <Reddit className="w-3.5 h-3.5 text-slate-900" />
                                                             </span>
                                                         ) : post.platform?.toLowerCase() === "instagram" ? (
                                                             <Instagram className="w-6 h-6 text-pink-500" />

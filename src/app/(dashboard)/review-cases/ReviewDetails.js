@@ -7,10 +7,11 @@ import { submitCaseReview } from './actions'
 import {
     Loader2, X, CheckCircle, ExternalLink,
     ChevronLeft, ChevronRight, Calendar, Plus,
-    Instagram, Facebook, Youtube, Globe, MessageCircle, Quote,
+    Instagram, Facebook, Youtube,
+    Globe, MessageCircle, Quote,
     BadgeCheck, History, Bot, Siren, LinkIcon, Heart, Share2, Eye, Check
 } from 'lucide-react'
-import { Twitter } from '@/utils/icons'
+import { Twitter, Reddit } from '@/utils/icons'
 import ProfilePic from '@/components/ProfilePic'
 
 import { Input } from "@/components/ui/input"
@@ -139,6 +140,7 @@ export default function ReviewForm({ post, project_details, onClose, onNavigate,
     const PlatformIcon = () => {
         const platform = localPost.platform?.toLowerCase()
         if (["twitter", "x"].includes(platform)) return <span className="inline-block size-4 text-black"><Twitter /></span>
+        if (platform === "reddit") return <Reddit className="w-6 h-6 text-pink-500" />
         if (platform === "instagram") return <Instagram className="w-6 h-6 text-pink-500" />
         if (platform === "facebook") return <Facebook className="w-6 h-6 text-blue-500" />
         if (platform === "youtube") return <Youtube className="w-6 h-6 text-red-500 fill-red-500 stroke-white stroke-[1px]" />
@@ -250,6 +252,10 @@ export default function ReviewForm({ post, project_details, onClose, onNavigate,
                                                     post.platform === "x" || post.platform === "twitter" ? (
                                                         <span className="inline-block size-4 text-black">
                                                             <Twitter className="w-3.5 h-3.5 text-slate-900" />
+                                                        </span>
+                                                    ) : post.platform?.toLowerCase() === "reddit" ? (
+                                                        <span className="inline-block size-7 text-black">
+                                                            <Reddit className="w-3.5 h-3.5" />
                                                         </span>
                                                     ) : post.platform?.toLowerCase() === "instagram" ? (
                                                         <Instagram className="w-6 h-6 text-pink-500" />
