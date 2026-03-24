@@ -97,20 +97,36 @@ export function ReviewInterface({
       const headers = [
         "MongoDB ID", "Post ID", "Original URL", "Caption", "Platform",
         "Author URL", "Author Username", "Author Full Name", "Timestamp",
-        "Likes", "Comments", "Views", "Shares", "Retweets", "Quotes", "Replies"
+        "Likes", "Comments", "Views", "Shares", "Retweets", "Quotes", "Replies",
+        "reviewer-reasoning"
       ]
 
       const csvRows = [
         headers.join(','),
         ...allPosts.map(post => {
-          const row = [
-            `"${post._id}"`, `"${post.post_id}"`, `"${post.url}"`,
-            `"${(post.caption || '').replace(/"/g, '""').replace(/\n/g, ' ')}"`,
-            `"${post.platform}"`, `"${post.author_url}"`, `"${post.author_username}"`,
-            `"${post.author_name}"`, `"${post.posted_at}"`,
-            post.likes, post.comments, post.views, post.shares, post.retweets, post.quotes, post.replies
+          const rowData = [
+            post._id,
+            post.post_id,
+            post.url,
+            post.caption || '',
+            post.platform,
+            post.author_url,
+            post.author_username,
+            post.author_name,
+            post.posted_at,
+            post.likes,
+            post.comments,
+            post.views,
+            post.shares,
+            post.retweets,
+            post.quotes,
+            post.replies,
+            post.review_details?.reasoning || ''
           ]
-          return row.join(',')
+          // Sanitize each field: escape quotes, replace newlines, and wrap in double quotes
+          return rowData
+            .map(val => `"${String(val ?? '').replace(/"/g, '""').replace(/\n/g, ' ')}"`)
+            .join(',')
         })
       ]
 

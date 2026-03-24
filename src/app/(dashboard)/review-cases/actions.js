@@ -374,7 +374,8 @@ export const getAllPostsForExport = traceAction('getAllPostsForExport', async (p
       shares: post.engagement?.shares || 0,
       retweets: post.engagement?.retweets || 0,
       quotes: post.engagement?.quotes || 0,
-      replies: post.engagement?.replies || 0
+      replies: post.engagement?.replies || 0,
+      review_details: post.review_details || {}
     }))
 
     return { posts: processedPosts }
