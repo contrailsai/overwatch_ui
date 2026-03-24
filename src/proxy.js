@@ -1,7 +1,6 @@
 import { updateSession } from './utils/supabase/middleware'
 
 export async function proxy(request) {
-  // console.log('Middleware (proxy) running for:', request.nextUrl.pathname)
   return await updateSession(request)
 }
 

@@ -502,7 +502,7 @@ export default function TakedownCasePage() {
   const { takedown, post, history } = data
   const review = post?.review_details || {}
   const analysis = post?.analysis_results || {}
-  console.log(post)
+  // console.log(post)
 
   const getStatusColorClass = (s) => {
     switch (s) {

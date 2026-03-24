@@ -181,8 +181,8 @@ export async function updateLabels(prevState, formData) {
     return { error: 'Invalid data provided' }
   }
 
-  console.log("Parsed labels = ", labels)
-  console.log("Parsed legal codes = ", legalCodes)
+  // console.log("Parsed labels = ", labels)
+  // console.log("Parsed legal codes = ", legalCodes)
 
   // 4. Update project_details structure
   projectDetails.description = projectDescription

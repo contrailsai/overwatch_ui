@@ -44,7 +44,7 @@ const getStatusConfig = (status) => {
     return { label: status, color: 'text-slate-600 bg-slate-50 border-slate-200', icon: Info }
 }
 
-export function ProfilesList({ profiles, project, initialFilters, currentPage }) {
+export function ProfilesList({ profiles, project, initialFilters, currentPage, clientDetails }) {
     const router = useRouter()
     const pathname = usePathname()
     const searchParams = useSearchParams()
@@ -337,6 +337,7 @@ export function ProfilesList({ profiles, project, initialFilters, currentPage })
                 isOpen={!!selectedProfile}
                 onClose={() => setSelectedProfile(null)}
                 onUpdate={handleProfileUpdate}
+                clientDetails={clientDetails}
             />
         </div>
     )

@@ -128,7 +128,7 @@ const SafeDate = ({ date }) => {
     return <span>{formatted || '...'}</span>
 }
 
-export default function ProfileDetailPanel({ profile, project, isOpen, onClose, onUpdate }) {
+export default function ProfileDetailPanel({ profile, project, isOpen, onClose, onUpdate, clientDetails }) {
     const [cases, setCases] = useState(null)
     const [loading, setLoading] = useState(false)
     const [localNotes, setLocalNotes] = useState([])
@@ -177,7 +177,7 @@ export default function ProfileDetailPanel({ profile, project, isOpen, onClose, 
     const handleUpdateStatus = async (newStatus) => {
         if (isUpdatingStatus) return
         setIsUpdatingStatus(true)
-        const res = await updateProfileClientStatus(project, profile._id, newStatus)
+        const res = await updateProfileClientStatus(project, profile._id, newStatus, clientDetails.email)
         if (res.success) {
             setClientStatus(newStatus)
             setCases(prev => prev?.map(c => ({ ...c, client_status: newStatus })))

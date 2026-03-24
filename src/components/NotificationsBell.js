@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 
 export default function NotificationsBell() {
     const { notifications, unreadCount, markAsRead, deleteNotification } = useClient();
-    console.log(notifications)
+    // console.log(notifications)
 
     return (
         <Popover>

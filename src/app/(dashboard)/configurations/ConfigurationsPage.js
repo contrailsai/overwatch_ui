@@ -85,7 +85,7 @@ export default function ConfigurationsPage({ clientDetails, project }) {
     })
 
     const isEditable = project?.editable
-    console.log("editable settings = ", isEditable)
+    // console.log("editable settings = ", isEditable)
 
     const handleAddLabel = () => setProjectLabels([{ name: '', description: '', severity: 'low' }, ...projectLabels])
 

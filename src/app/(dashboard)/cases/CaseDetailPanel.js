@@ -75,7 +75,7 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
             allowDoTakedown = true;
         }
     } catch (e) {
-        console.log(e)
+        console.error(e)
         allowDoTakedown = true;
     }
 
@@ -284,7 +284,7 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
         setIsProcessing(status);
         trackClientClick(status === 'No Action' ? 'no_action_case' : 'flag_for_takedown', { page: 'CaseDetailPanel' });
         try {
-            const result = await updateClientStatus(post._id, status);
+            const result = await updateClientStatus(post._id, status, clientDetails.email);
             if (result.success) {
                 if (onUpdateStatus) onUpdateStatus(post._id, status);
                 setShowProcessed(post._id);

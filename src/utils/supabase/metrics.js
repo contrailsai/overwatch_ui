@@ -255,6 +255,54 @@ export async function updateClientReviewedMetrics(project, reviewData, previousR
   }
 }
 
+export async function updateClientMetaStats(project_name, client_email, action) {
+  const supabase = await createClient()
+
+  if (!project_name || !client_email) {
+    console.error('Project name or client email is missing in updateClientMetaStats')
+    return
+  }
+
+  try {
+    // 1. Fetch existing client data
+    const { data: clientData, error: fetchError } = await supabase
+      .from('client_details')
+      .select('id, meta_stats')
+      .eq('project_name', project_name)
+      .eq('email', client_email)
+      .maybeSingle()
+
+    if (fetchError) throw fetchError
+    if (!clientData) {
+      console.warn(`No client found with project: ${project_name} and email: ${client_email}`)
+      return
+    }
+
+    // 2. Initialize or update meta_stats
+    const metaStats = clientData.meta_stats || { reviewed_cases: 0, reviewed_profiles: 0 }
+
+    // 3. Handle action increment
+    if (action === 'reviewed_case') {
+      metaStats.reviewed_cases = (metaStats.reviewed_cases || 0) + 1
+      trackClientActivity(clientData.id, project_name, 'reviewed_case').catch(console.error)
+    }
+    else if (action === 'reviewed_profile') {
+      metaStats.reviewed_profiles = (metaStats.reviewed_profiles || 0) + 1
+      trackClientActivity(clientData.id, project_name, 'reviewed_profile').catch(console.error)
+    }
+
+    // 4. Update the client row
+    const { error: updateError } = await supabase
+      .from('client_details')
+      .update({ meta_stats: metaStats })
+      .eq('id', clientData.id)
+
+    if (updateError) throw updateError
+  } catch (err) {
+    console.error('Failed to update client meta stats:', err)
+  }
+}
+
 export async function manageTakedownCase(data) {
   const supabase = await createClient()
   const {
@@ -296,3 +344,77 @@ export async function manageTakedownCase(data) {
     return null
   }
 }
+
+/**
+ * Tracks the daily login/activity of a client in a project.
+ * If the entry for today doesn't exist, it inserts one.
+ */
+export async function trackClientActivity(client_id, project_name, actionType = 'login') {
+  const supabase = await createClient()
+
+  if (!client_id || !project_name) {
+    console.error('Missing client_id or project_name in trackClientActivity')
+    return
+  }
+
+  try {
+    const now = new Date()
+    const date = now.toISOString().split('T')[0] // YYYY-MM-DD
+    const time = now.toISOString().split('T')[1].split('.')[0] + 'Z' // HH:MM:SSZ
+
+    // Check if the record for today already exists
+    const { data: existing, error: fetchError } = await supabase
+      .from('client_logs')
+      .select('*')
+      .eq('client_id', client_id)
+      .eq('project_name', project_name)
+      .eq('date', date)
+      .maybeSingle()
+
+    if (fetchError) throw fetchError
+
+    if (!existing) {
+      // First activity of the day, insert new record
+      const newData = {
+        client_id,
+        project_name,
+        date,
+        login_time: actionType === 'login' ? time : null,
+        last_activity: time,
+        reviewed_cases: actionType === 'reviewed_case' ? 1 : 0,
+        reviewed_profiles: actionType === 'reviewed_profile' ? 1 : 0
+      }
+
+      const { error: insertError } = await supabase
+        .from('client_logs')
+        .insert(newData) // Using insert. Upsert without unique constraint acts like insert anyway.
+
+      // Ignore unique violation (e.g. race condition if added in future)
+      if (insertError && insertError.code !== '23505') {
+        throw insertError
+      }
+    } else {
+      // Already active today, just update last_activity and metrics
+      const updates = { last_activity: time }
+
+      if (actionType === 'login' && !existing.login_time) {
+        updates.login_time = time
+      } else if (actionType === 'reviewed_case') {
+        updates.reviewed_cases = (existing.reviewed_cases || 0) + 1
+      } else if (actionType === 'reviewed_profile') {
+        updates.reviewed_profiles = (existing.reviewed_profiles || 0) + 1
+      }
+
+      const { error: updateError } = await supabase
+        .from('client_logs')
+        .update(updates)
+        .eq('id', existing.id)
+
+      if (updateError) throw updateError
+    }
+  } catch (err) {
+    console.error('Failed to track daily activity in client_logs:', err)
+  }
+}
+
+

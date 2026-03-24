@@ -71,7 +71,7 @@ export const ClientProvider = ({ children, initialClientDetails }) => {
             .update({ has_read: true })
             .eq('id', id);
 
-        console.log("marked as read")
+        // console.log("marked as read")
 
         if (error) fetchNotifications(); // Revert on error
     };

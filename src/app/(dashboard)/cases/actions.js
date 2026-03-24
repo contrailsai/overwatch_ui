@@ -4,7 +4,7 @@ import { createClient, getAuthenticatedUser } from '@/utils/supabase/server'
 import clientPromise from '@/utils/mongodb/client'
 import { getSignedImageUrl } from '@/utils/aws/s3'
 import { sendSlackNotification } from '@/utils/slack'
-import { manageTakedownCase, updateClientReviewedMetrics, updateDailyMetrics } from '@/utils/supabase/metrics'
+import { manageTakedownCase, updateClientReviewedMetrics, updateDailyMetrics, updateClientMetaStats } from '@/utils/supabase/metrics'
 import { ObjectId } from 'mongodb'
 // import { getClientandProjectDetails } from '@/app/(dashboard)/actions'
 import { traceAction, recordClickMetric } from '@/utils/tracing'
@@ -467,7 +467,7 @@ export const getProjectDetails = traceAction('getProjectDetails_cases', async ()
 })
 
 // FLAG FOR TAKEDOWN / NO ACTION
-export const updateClientStatus = traceAction('updateClientStatus', async (caseId, status) => {
+export const updateClientStatus = traceAction('updateClientStatus', async (caseId, status, client_email) => {
   try {
     const projectDetails = await getProjectDetails()
     if (!projectDetails?.dbName) {
@@ -497,6 +497,8 @@ export const updateClientStatus = traceAction('updateClientStatus', async (caseI
 
     if (result.matchedCount > 0) {
       // Track metrics
+
+      // 1. DAILY REVIEW METRICS UPDATES
       const currentReviewData = {
         risk_score: post.review_details?.threat_score || 0,
         client_status: status,
@@ -515,6 +517,13 @@ export const updateClientStatus = traceAction('updateClientStatus', async (caseI
         previousReviewData
       ).catch(err =>
         console.error('Failed to update client metrics:', err)
+      )
+
+      // 2. CLIENT's META STATS UPDATE
+      await updateClientMetaStats(
+        projectDetails.projectName,
+        client_email,
+        "reviewed_case"
       )
 
       return { success: true }

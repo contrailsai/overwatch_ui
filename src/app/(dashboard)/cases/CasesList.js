@@ -23,7 +23,7 @@ import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { ReportButton } from '@/components/pdf/ReportButton'
 import { DetailedReportButton } from '@/components/pdf/DetailedReportButton'
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
+// import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
 import { Label } from "@/components/ui/label"

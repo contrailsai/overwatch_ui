@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient, getAuthenticatedUser } from '@/utils/supabase/server'
+import { updateClientMetaStats } from '@/utils/supabase/metrics'
 import clientPromise from '@/utils/mongodb/client'
 import { ObjectId } from 'mongodb'
 import { traceAction } from '@/utils/tracing'
@@ -148,7 +149,7 @@ export const getProfileCases = traceAction('getProfileCases', async (project, po
     }
 })
 
-export const updateProfileClientStatus = traceAction('updateProfileClientStatus', async (project, profileId, status) => {
+export const updateProfileClientStatus = traceAction('updateProfileClientStatus', async (project, profileId, status, client_email) => {
     try {
         if (!project?.mongo_db_map || !profileId) {
             return { success: false, error: "Project configuration not found" }
@@ -164,6 +165,12 @@ export const updateProfileClientStatus = traceAction('updateProfileClientStatus'
         )
 
         if (result.matchedCount > 0) {
+            // 2. CLIENT's META STATS UPDATE
+            await updateClientMetaStats(
+                project.project_name,
+                client_email,
+                "reviewed_profile"
+            )
             return { success: true }
         } else {
             return { success: false, error: "Profile not found" }

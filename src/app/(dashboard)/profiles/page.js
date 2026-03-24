@@ -42,6 +42,7 @@ export default async function ProfilesPage({ searchParams }) {
                     project={project}
                     initialFilters={filters}
                     currentPage={currentPage}
+                    clientDetails={clientDetails}
                 />
             </div>
         </main>

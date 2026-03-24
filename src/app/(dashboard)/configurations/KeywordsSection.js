@@ -187,7 +187,7 @@ export default function KeywordsSection({ project }) {
 }
 
 function KeywordChip({ keyword }) {
-    console.log(keyword)
+    // console.log(keyword)
     return (
         <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-sm font-semibold bg-white border-slate-200 text-slate-700 shadow-sm">
             {/* <Hash className="w-3 h-3 text-slate-400 shrink-0" /> */}

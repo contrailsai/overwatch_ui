@@ -4,6 +4,7 @@ import { Sidebar } from '@/components/Sidebar'
 import { redirect } from 'next/navigation'
 import { GoogleAnalyticsConfig } from '@/components/GoogleAnalyticsConfig'
 import { ClientProvider } from '@/context/ClientContext'
+import { trackClientActivity } from '@/utils/supabase/metrics'
 
 export const metadata = {
   title: {
@@ -19,6 +20,11 @@ export default async function DashboardLayout({ children }) {
     redirect('/login')
   }
   const { user, clientDetails, project } = result
+
+  if (user?.id && project?.project_name) {
+    // Fire and forget tracking logic for daily logins
+    trackClientActivity(user.id, project.project_name, 'login').catch(console.error)
+  }
 
   const isProd = process.env.NODE_ENV === 'production';
 

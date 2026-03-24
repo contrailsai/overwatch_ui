@@ -7,7 +7,7 @@ import { List, ShieldAlert, Settings, LogOut, LayoutDashboard, ShieldCheck, GitP
 import { cn } from '@/lib/utils'
 
 export function Sidebar({ user, clientDetails, project }) {
-  console.log(user, clientDetails, project)
+  // console.log(user, clientDetails, project)
   const pathname = usePathname()
   // const { user, clientDetails, isLoading } = useClient()
 
@@ -21,6 +21,7 @@ export function Sidebar({ user, clientDetails, project }) {
     { name: 'Takedowns', href: '/takedowns', icon: ShieldAlert, show: true },
     { name: 'Upload Content', href: '/upload-content', icon: GitPullRequestCreateArrow, show: true },
     { name: 'Configurations', href: '/configurations', icon: Settings, show: true },
+    { name: 'Admin', href: '/admin', icon: Settings, show: clientDetails?.permission === 'client-admin' },
   ]
 
   // Filter and map navigation items

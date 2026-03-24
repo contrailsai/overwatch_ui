@@ -202,30 +202,25 @@ export const submitCaseReview = traceAction('submitCaseReview', async (project, 
 
 // fetch other clients emails in the same project
 export const fetch_clients_in_project = traceAction('fetch_clients_in_project', async (project_name) => {
+    const supabase = await createClient();
 
-    const supabase = await createClient()
-    // const { data: { user } } = await supabase.auth.getUser()
-
-    // if (!user) {
-    //   return { success: false, error: 'Authentication required' }
-    // }
-
-    const { data: client_details, error } = await supabase
+    // Fetch
+    const { data: client_details, error: dbError } = await supabase
         .from('client_details')
-        .select('*')
+        .select('email')
         .eq('project_name', project_name)
-        .eq('permission', 'client')
+        .eq('permission', 'client');
 
-    if (error) {
-        console.error("ERROR: ", error)
-        return null
+    if (dbError) {
+        console.error(`[fetch_clients_in_project] Database Error:`, dbError.message);
+        return { data: null, error: 'Failed to fetch project clients' };
     }
 
-    const emails = client_details.map((client) => client.email)
+    const emails = client_details?.map((client) => client.email) || [];
+    // console.log("CLEINT EMAILS = ", emails)
 
-    return emails
-
-})
+    return emails;
+});
 
 // ASSIGN TO OTHER CLIENTS (emails)
 export const assignCaseTo = traceAction('assignCaseTo', async (project, post_id, assigned_email) => {
