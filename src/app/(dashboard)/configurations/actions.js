@@ -43,11 +43,8 @@ export async function updateConfiguration(prevState, formData) {
 
   const currentConfig = currentData?.notification_config || { methods: {} }
 
-  const activeMethod = formData.get('active_method')
-
-  if (!['email', 'slack', 'telegram'].includes(activeMethod)) {
-    return { error: 'Invalid notification method selected' }
-  }
+  let activeMethod = formData.get('active_method')
+  const notificationConfigStr = formData.get('notification_config')
 
   // Initialize methods structure if it doesn't exist
   const methods = currentConfig.methods || {
@@ -56,31 +53,69 @@ export async function updateConfiguration(prevState, formData) {
     telegram: { telegram_token: '', telegram_chat_id: '' }
   }
 
-  // Update the specific method's config based on form data
-  if (activeMethod === 'email') {
-    const receivingEmail = formData.get('receiving_email')
-    if (!receivingEmail || !receivingEmail.includes('@')) {
-      return { error: 'Please enter a valid email address' }
+  if (notificationConfigStr) {
+    try {
+      const parsedConfig = JSON.parse(notificationConfigStr)
+      activeMethod = parsedConfig.active_method
+
+      if (parsedConfig.methods) {
+        if (activeMethod === 'email') {
+          const receivingEmail = parsedConfig.methods.email?.receiving_email
+          if (!receivingEmail || !receivingEmail.includes('@')) {
+            return { error: 'Please enter a valid email address' }
+          }
+          methods.email = { receiving_email: receivingEmail }
+        }
+        else if (activeMethod === 'slack') {
+          const slackToken = parsedConfig.methods.slack?.slack_token
+          const slackChannel = parsedConfig.methods.slack?.slack_channel
+          if (!slackToken) return { error: 'Slack Bot Token is required' }
+          if (!slackChannel) return { error: 'Slack Channel ID is required' }
+          methods.slack = { slack_token: slackToken, slack_channel: slackChannel }
+        }
+        else if (activeMethod === 'telegram') {
+          const telegramToken = parsedConfig.methods.telegram?.telegram_token
+          const telegramChatId = parsedConfig.methods.telegram?.telegram_chat_id
+          if (!telegramToken) return { error: 'Telegram Bot Token is required' }
+          if (!telegramChatId) return { error: 'Telegram Chat ID is required' }
+          methods.telegram = { telegram_token: telegramToken, telegram_chat_id: telegramChatId }
+        }
+      }
+    } catch (e) {
+      console.error('Error parsing notification_config:', e)
+      return { error: 'Invalid configuration data' }
     }
-    methods.email = { receiving_email: receivingEmail }
+  } else {
+    // Update the specific method's config based on form data
+    if (activeMethod === 'email') {
+      const receivingEmail = formData.get('receiving_email')
+      if (!receivingEmail || !receivingEmail.includes('@')) {
+        return { error: 'Please enter a valid email address' }
+      }
+      methods.email = { receiving_email: receivingEmail }
+    }
+    else if (activeMethod === 'slack') {
+      const slackToken = formData.get('slack_token')
+      const slackChannel = formData.get('slack_channel')
+
+      if (!slackToken) return { error: 'Slack Bot Token is required' }
+      if (!slackChannel) return { error: 'Slack Channel ID is required' }
+
+      methods.slack = { slack_token: slackToken, slack_channel: slackChannel }
+    }
+    else if (activeMethod === 'telegram') {
+      const telegramToken = formData.get('telegram_token')
+      const telegramChatId = formData.get('telegram_chat_id')
+
+      if (!telegramToken) return { error: 'Telegram Bot Token is required' }
+      if (!telegramChatId) return { error: 'Telegram Chat ID is required' }
+
+      methods.telegram = { telegram_token: telegramToken, telegram_chat_id: telegramChatId }
+    }
   }
-  else if (activeMethod === 'slack') {
-    const slackToken = formData.get('slack_token')
-    const slackChannel = formData.get('slack_channel')
 
-    if (!slackToken) return { error: 'Slack Bot Token is required' }
-    if (!slackChannel) return { error: 'Slack Channel ID is required' }
-
-    methods.slack = { slack_token: slackToken, slack_channel: slackChannel }
-  }
-  else if (activeMethod === 'telegram') {
-    const telegramToken = formData.get('telegram_token')
-    const telegramChatId = formData.get('telegram_chat_id')
-
-    if (!telegramToken) return { error: 'Telegram Bot Token is required' }
-    if (!telegramChatId) return { error: 'Telegram Chat ID is required' }
-
-    methods.telegram = { telegram_token: telegramToken, telegram_chat_id: telegramChatId }
+  if (!['email', 'slack', 'telegram'].includes(activeMethod)) {
+    return { error: 'Invalid notification method selected' }
   }
 
   // Construct the new notification config
@@ -151,6 +186,8 @@ export async function updateLabels(prevState, formData) {
 
   let labels = []
   let legalCodes = []
+  let renamedLabels = []
+  let renamedLegalCodes = []
 
   try {
     if (labelsString) {
@@ -160,21 +197,35 @@ export async function updateLabels(prevState, formData) {
       // Filter out any labels where the name is completely empty and ensure they have a severity
       labels = parsedLabels
         .filter(label => label.name?.trim() !== '')
-        .map(label => ({
-          ...label,
-          severity: label.severity || 'low'
-        }))
+        .map(label => {
+          if (label.originalName && label.name !== label.originalName) {
+            renamedLabels.push({ oldName: label.originalName, newName: label.name })
+          }
+          return {
+            name: label.name,
+            description: label.description,
+            severity: label.severity || 'low'
+          }
+        })
     }
 
     if (legalCodesString) {
       const parsedCodes = JSON.parse(legalCodesString)
       legalCodes = parsedCodes
         .filter(code => (code.actName?.trim() !== '' || code.codeName?.trim() !== ''))
-        .map(code => ({
-          ...code,
-          name: `${code.actName || ''} - ${code.codeName || ''}`.trim().replace(/^-|-$/g, '').trim(),
-          severity: code.severity || 'low'
-        }))
+        .map(code => {
+          const generatedName = `${code.actName || ''} - ${code.codeName || ''}`.trim().replace(/^-|-$/g, '').trim()
+          if (code.originalName && generatedName !== code.originalName) {
+            renamedLegalCodes.push({ oldName: code.originalName, newName: generatedName })
+          }
+          return {
+            actName: code.actName,
+            codeName: code.codeName,
+            description: code.description,
+            name: generatedName,
+            severity: code.severity || 'low'
+          }
+        })
     }
   } catch (e) {
     console.error("Error parsing JSON:", e)
@@ -197,6 +248,43 @@ export async function updateLabels(prevState, formData) {
   if (error) {
     console.error('Error updating project labels:', error)
     return { error: 'Failed to update labels' }
+  }
+
+  // 5. Cascade updates to MongoDB
+  if (renamedLabels.length > 0 || renamedLegalCodes.length > 0) {
+    try {
+      const client = await clientPromise
+      // Use mongo_db_map if available, otherwise fallback to project_name
+      const dbName = projectData.mongo_db_map
+      const db = client.db(dbName)
+      const postsCollection = db.collection('Posts')
+
+      for (const { oldName, newName } of renamedLabels) {
+        // Update threat_types array
+        await postsCollection.updateMany(
+          { "review_details.threat_types": oldName },
+          { $set: { "review_details.threat_types.$": newName } }
+        )
+
+        // Update flags object key
+        const renameOp = {}
+        renameOp[`review_details.flags.${oldName}`] = `review_details.flags.${newName}`
+        await postsCollection.updateMany(
+          { [`review_details.flags.${oldName}`]: { $exists: true } },
+          { $rename: renameOp }
+        )
+      }
+
+      for (const { oldName, newName } of renamedLegalCodes) {
+        // Update legal_codes array
+        await postsCollection.updateMany(
+          { "review_details.legal_codes": oldName },
+          { $set: { "review_details.legal_codes.$": newName } }
+        )
+      }
+    } catch (err) {
+      console.error('Error cascading label updates to MongoDB:', err)
+    }
   }
 
   // Make sure to import revalidatePath at the top of your file!

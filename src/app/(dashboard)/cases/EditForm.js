@@ -112,13 +112,19 @@ export default function EditForm({ post, project, setIsEditing, onUpdatePost }) 
             <form action={formAction} className="flex flex-col min-h-full">
                 {/* Hidden Inputs */}
                 {
-                    project_details.labels.map((label, index) => (
-                        <input key={index} type="hidden" name={`flag_${label.name}`} value={threatTypes.includes(label.name) ? 'on' : 'off'} />
+                    Array.from(new Set([
+                        ...project_details.labels.map(l => l.name),
+                        ...threatTypes
+                    ])).map((labelName, index) => (
+                        <input key={`flag_${index}`} type="hidden" name={`flag_${labelName}`} value={threatTypes.includes(labelName) ? 'on' : 'off'} />
                     ))
                 }
                 {
-                    (project_details.legal_codes || []).map((code, index) => (
-                        <input key={index} type="hidden" name={`legal_code_${code.name}`} value={selectedLegalCodes.includes(code.name) ? 'on' : 'off'} />
+                    Array.from(new Set([
+                        ...(project_details.legal_codes || []).map(c => c.name),
+                        ...selectedLegalCodes
+                    ])).map((codeName, index) => (
+                        <input key={`legal_${index}`} type="hidden" name={`legal_code_${codeName}`} value={selectedLegalCodes.includes(codeName) ? 'on' : 'off'} />
                     ))
                 }
                 <input type="hidden" name="mongo_id" value={post._id || ''} />
