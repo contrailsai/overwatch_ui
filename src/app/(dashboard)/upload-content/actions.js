@@ -1,8 +1,14 @@
 'use server'
 
 import { createClient } from '@/utils/supabase/server'
+import { sendSqsMessage } from '@/utils/aws/sqs'
+import { traceAction } from '@/utils/tracing'
 
-export async function requestLink(prevState, formData) {
+export const bulkRequestLinks = traceAction('bulkRequestLinks', async (links, project_name) => {
+
+  console.log("LINKS LIST= ", links)
+  console.log("PROJECT_NAME= ", project_name)
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
@@ -10,56 +16,88 @@ export async function requestLink(prevState, formData) {
     return { error: 'Not authenticated' }
   }
 
-  const link = formData.get('link')
-  if (!link) {
-    return { error: 'Please enter a link' }
+  if (!links || links.length === 0) {
+    return { error: 'No links provided' }
   }
 
-  // Basic URL validation
-  try {
-    new URL(link)
-  } catch (e) {
-    return { error: 'Please enter a valid URL' }
+  // Validate each URL
+  const validLinks = []
+  const invalidLinks = []
+  for (const raw of links) {
+    const trimmed = raw.trim()
+    if (!trimmed) continue
+    try {
+      new URL(trimmed)
+      validLinks.push(trimmed)
+    } catch {
+      invalidLinks.push(trimmed)
+    }
   }
 
-  // 1. Insert into client_requested_links
-  const { error: dbError } = await supabase
+  if (validLinks.length === 0) {
+    return { error: 'None of the provided links are valid URLs' }
+  }
+
+  const rows = validLinks.map((link) => ({
+    requested_by: user.id,
+    link,
+    ingested: false,
+    project: project_name
+  }))
+
+  const { data: insertedData, error: dbError } = await supabase
     .from('client_requested_links')
-    .insert({
-      requested_by: user.id,
-      link: link,
-      ingested: false
-    })
+    .insert(rows)
+    .select()
 
   if (dbError) {
-    console.error('Error inserting request:', dbError)
-    return { error: 'Failed to submit request' }
+    console.error('Error bulk inserting requests:', dbError)
+    return { error: 'Failed to submit bulk request' }
   }
 
-  // 2. Notify Slack (Dummy Webhook)
-  try {
-    // Dummy webhook URL as requested
-    const SLACK_WEBHOOK_URL = process.env.SLACK_WEBHOOK_URL_NEW_LINK_REQUEST
+  // Send each link to SQS
+  const sqsResults = await Promise.allSettled(
+    insertedData.map((row) =>
+      sendSqsMessage({
+        id: row.id,
+        link: row.link,
+        project: row.project,
+        requested_by: row.requested_by
+      })
+    )
+  )
 
+  const sqsFailures = sqsResults.filter((r) => r.status === 'rejected')
+  if (sqsFailures.length > 0) {
+    console.error(`${sqsFailures.length} SQS messages failed to send`)
+  }
+
+  // Notify Slack
+  try {
+    const SLACK_WEBHOOK_URL = process.env.SLACK_WEBHOOK_URL_NEW_LINK_REQUEST
     await fetch(SLACK_WEBHOOK_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        text: `New content ingestion request from user ${user.id}:\nLink: ${link}`
+        text: `Bulk content ingestion request from user ${user.id}: ${validLinks.length} link(s) queued.
+        ${invalidLinks.length > 0 ? `${invalidLinks.length} invalid link(s) were skipped.` : ''}
+        ${sqsFailures.length > 0 ? `${sqsFailures.length} link(s) failed to queue for ingestion.` : ''}
+        `
       })
     })
   } catch (slackError) {
-    // We don't want to fail the whole request if Slack fails, so just log it
     console.error('Slack notification failed:', slackError)
   }
 
   return {
     success: true,
-    message: 'Data will be ingested in a few hours. Thank you for your request!'
+    count: validLinks.length,
+    invalidCount: invalidLinks.length,
+    message: `${validLinks.length} link(s) queued for ingestion successfully!`
   }
-}
+})
 
-export async function getRequestedLinks() {
+export const getRequestedLinks = traceAction('getRequestedLinks', async () => {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
@@ -79,4 +117,4 @@ export async function getRequestedLinks() {
   }
 
   return { data }
-}
+})

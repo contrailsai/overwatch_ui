@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.980.0",
+    "@aws-sdk/client-sqs": "^3.1018.0",
     "@aws-sdk/s3-request-presigner": "^3.980.0",
     "@floating-ui/dom": "^1.7.5",
     "@next/third-parties": "^16.1.6",

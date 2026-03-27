@@ -362,19 +362,21 @@ export async function trackClientActivity(client_id, project_name, actionType = 
     const date = now.toISOString().split('T')[0] // YYYY-MM-DD
     const time = now.toISOString().split('T')[1].split('.')[0] + 'Z' // HH:MM:SSZ
 
-    // Check if the record for today already exists
-    const { data: existing, error: fetchError } = await supabase
+    // We use a single query approach to avoid race conditions.
+    // First, check if the record for today already exists
+    const { data: existingArray, error: fetchError } = await supabase
       .from('client_logs')
       .select('*')
       .eq('client_id', client_id)
       .eq('project_name', project_name)
       .eq('date', date)
-      .maybeSingle()
+      .limit(1)
 
     if (fetchError) throw fetchError
+    const existing = existingArray && existingArray.length > 0 ? existingArray[0] : null
 
     if (!existing) {
-      // First activity of the day, insert new record
+      // First activity of the day, attempt insert
       const newData = {
         client_id,
         project_name,
@@ -385,16 +387,22 @@ export async function trackClientActivity(client_id, project_name, actionType = 
         reviewed_profiles: actionType === 'reviewed_profile' ? 1 : 0
       }
 
-      const { error: insertError } = await supabase
+      // Use upsert to handle race conditions where two processes try to insert at the same time
+      const { error: upsertError } = await supabase
         .from('client_logs')
-        .insert(newData) // Using insert. Upsert without unique constraint acts like insert anyway.
+        .upsert(newData, { 
+          onConflict: 'client_id,project_name,date',
+          ignoreDuplicates: false // We want to update if it exists now
+        })
 
-      // Ignore unique violation (e.g. race condition if added in future)
-      if (insertError && insertError.code !== '23505') {
-        throw insertError
+      if (upsertError) {
+        // If it was a race condition and it now exists, we should probably retry the update logic,
+        // but for simplicity and because it's "fire and forget", we can just log it or 
+        // rely on the next activity to update the stats.
+        throw upsertError
       }
     } else {
-      // Already active today, just update last_activity and metrics
+      // Already active today, update metrics
       const updates = { last_activity: time }
 
       if (actionType === 'login' && !existing.login_time) {
