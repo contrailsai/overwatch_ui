@@ -387,9 +387,9 @@ function ProfileDetailPanel({ profile, profiles = [], project, isOpen, onClose, 
     const handlePrev = () => hasPrev && onSelectProfile(profiles[currentIndex - 1])
     const handleNext = () => hasNext && onSelectProfile(profiles[currentIndex + 1])
 
-    const highCount = cases?.filter(c => (c.threat_score ?? 0) >= 96).length || 0
-    const medCount = cases?.filter(c => { const s = c.threat_score ?? 0; return s >= 76 && s < 96 }).length || 0
-    const lowCount = cases?.filter(c => { const s = c.threat_score ?? 0; return s >= 41 && s < 76 }).length || 0
+    const highCount = cases?.filter(c => (c.review_details?.threat_score ?? 0) >= 96).length || 0
+    const medCount = cases?.filter(c => { const s = c.review_details?.threat_score ?? 0; return s >= 76 && s < 96 }).length || 0
+    const lowCount = cases?.filter(c => { const s = c.review_details?.threat_score ?? 0; return s >= 41 && s < 76 }).length || 0
 
     return (
         <>
@@ -636,9 +636,39 @@ function ProfileDetailPanel({ profile, profiles = [], project, isOpen, onClose, 
                                 {!loading && cases && cases.length > 0 && (
                                     <div className="space-y-2.5">
                                         {cases.map(c => {
-                                            const risk = getRiskLabel(c.threat_score)
+                                            const risk = getRiskLabel(c.review_details?.threat_score)
                                             const statusCfg = getStatusConfig(c.client_status)
                                             const StatusIcon = statusCfg.icon
+                                            console.log(c)
+
+                                            let posted_date = ""
+                                            let sourced_date = ""
+                                            let processed_date = ""
+
+                                            // POSTED AT ---> ORIGINAL DATE FILTER ( WHEN IT WAS POSTED ON THE SOCIAL MEDIA PLATFORM)
+                                            if (c.posted_date)
+                                                posted_date = format(new Date(c.posted_date), "dd/MM/yyyy hh:mm a");
+                                            else if (c.metadata?.posted_date)
+                                                posted_date = format(new Date(c.metadata.posted_date), "dd/MM/yyyy hh:mm a");
+                                            else if (c.timestamp)
+                                                posted_date = format(new Date(c.timestamp), "dd/MM/yyyy hh:mm a");
+                                            else if (c.sourcing_date)
+                                                posted_date = format(new Date(c.sourcing_date), "dd/MM/yyyy hh:mm a");
+
+                                            // SOURCED AT ---> (NOT BEING USED WELL BUT ITS WHEN WE GOT THE POST)
+                                            if (c.metadata?.created_at)
+                                                sourced_date = format(new Date(c.metadata.created_at), "dd/MM/yyyy hh:mm a");
+                                            else if (c.created_at)
+                                                sourced_date = format(new Date(c.created_at), "dd/MM/yyyy hh:mm a");
+                                            
+                                            // REVIEWED AT. --> PROCESSED DATE FILTER
+                                            if (c?.reviewed_at)
+                                                processed_date = format(new Date(c.reviewed_at), "dd/MM/yyyy hh:mm a");
+                                            else if (c.review_details?.reviewed_at)
+                                                processed_date = format(new Date(c.review_details.reviewed_at), "dd/MM/yyyy hh:mm a");
+                                            
+                                            console.log("posted date = ", posted_date, "sourced date = ", sourced_date, "processed date = ", processed_date)
+
                                             return (
                                                 <div
                                                     key={c._id}
@@ -663,9 +693,9 @@ function ProfileDetailPanel({ profile, profiles = [], project, isOpen, onClose, 
                                                             <PlatformIcon platform={c.platform} />
                                                             {c.platform}
                                                         </Badge>
-                                                        {c.primary_threat_type && (
+                                                        {c.review_details?.primary_threat_type && (
                                                             <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold border uppercase tracking-wide text-slate-500 bg-slate-50 border-slate-200">
-                                                                {c.primary_threat_type.replace(/[-_]/g, ' ')}
+                                                                {c.review_details.primary_threat_type.replace(/[-_]/g, ' ')}
                                                             </span>
                                                         )}
                                                         <div className="ml-auto">
@@ -698,13 +728,9 @@ function ProfileDetailPanel({ profile, profiles = [], project, isOpen, onClose, 
 
                                                     {/* Footer: Date + Inspect Action */}
                                                     <div className="flex items-center justify-between mt-0.5 pt-2 border-t border-slate-50">
-                                                        <div className="flex items-center gap-2">
-                                                            {c.created_at && (
-                                                                <p className="text-[10px] text-slate-400 font-medium whitespace-nowrap">
-                                                                    {format(new Date(c.created_at), 'dd MMM yyyy')}
-                                                                </p>
-                                                            )}
-                                                        </div>
+                                                        {c.created_at && (
+                                                            <p className="text-[10px] text-slate-400 font-medium">{posted_date}</p>
+                                                        )}
                                                         <a
                                                             href={`/cases/${c._id}`}
                                                             target="_blank"

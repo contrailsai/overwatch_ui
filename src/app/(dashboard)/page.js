@@ -32,13 +32,23 @@ export default async function Home({ searchParams }) {
     )
   }
 
-  // 4. Parse date filter (1, 7, or 30 days — default 30)
+  // 4. Parse date filter
   const resolvedSearchParams = await searchParams
+  const from = resolvedSearchParams?.from
+  const to = resolvedSearchParams?.to
   const rawDays = parseInt(resolvedSearchParams?.days)
-  const days = [1, 7, 30].includes(rawDays) ? rawDays : 30
+
+  let queryParams = {}
+  if (from && to) {
+    queryParams = { from, to, days: 'custom' }
+  } else {
+    // defaults to 7 days if not 1 or 7
+    const days = [1, 7].includes(rawDays) ? rawDays : 7
+    queryParams = { days }
+  }
 
   // 5. Fetch dashboard data for this specific project + date window
-  const data = await getDashboardData(project, days)
+  const data = await getDashboardData(project, queryParams)
 
   return <DashboardContent data={data} />
 }

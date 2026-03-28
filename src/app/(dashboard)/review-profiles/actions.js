@@ -4,6 +4,7 @@ import clientPromise from '@/utils/mongodb/client'
 import { ObjectId } from 'mongodb'
 import { traceAction } from '@/utils/tracing'
 import { getSignedImageUrl } from '@/utils/aws/s3'
+import { normalized_S3_post } from '@/app/(dashboard)/profiles/actions'
 
 export const getProfiles = traceAction('getProfiles', async (project, page = 1, limit = 20, filters = {}) => {
     try {
@@ -105,44 +106,9 @@ export const getProfileCases = traceAction('getProfileCases', async (project, po
 
         const posts = await collection
             .find({ _id: { $in: objectIds } })
-            .project({
-                _id: 1,
-                platform: 1,
-                'post_content.caption': 1,
-                caption: 1,
-                original_url: 1,
-                'review_details.threat_score': 1,
-                'review_details.primary_threat_type': 1,
-                client_status: 1,
-                'metadata.created_at': 1,
-                'post_content.media_urls': 1,
-                's3_url': 1,
-            })
             .toArray()
 
-        return Promise.all(posts.map(async (p) => {
-            let s3UrlToSign = null
-            if (p.post_content?.media_urls && p.post_content.media_urls.length > 0) {
-                const firstMedia = p.post_content.media_urls[0]
-                s3UrlToSign = firstMedia.s3_url || firstMedia.thumbnail_url
-            } else if (p.s3_url) {
-                s3UrlToSign = p.s3_url
-            }
-
-            const signedUrl = s3UrlToSign ? await getSignedImageUrl(s3UrlToSign) : null
-
-            return {
-                _id: p._id.toString(),
-                platform: p.platform || 'unknown',
-                caption: p.post_content?.caption || p.caption || '',
-                signedImageUrl: signedUrl,
-                original_url: p.original_url || null,
-                client_status: p.client_status || 'To Be Reviewed',
-                threat_score: p.review_details?.threat_score ?? null,
-                primary_threat_type: p.review_details?.primary_threat_type || null,
-                created_at: p.metadata?.created_at ? new Date(p.metadata.created_at).toISOString() : null,
-            }
-        }))
+        return Promise.all(posts.map(normalized_S3_post))
     } catch (e) {
         console.error('getProfileCases MongoDB Error:', e)
         return []

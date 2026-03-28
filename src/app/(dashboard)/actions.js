@@ -6,21 +6,34 @@ import clientPromise from '@/utils/mongodb/client'
 import { getSignedImageUrl } from '@/utils/aws/s3'
 import { traceAction } from '@/utils/tracing'
 
-export const getDashboardData = traceAction('getDashboardData', async (project, days = 30) => {
+export const getDashboardData = traceAction('getDashboardData', async (project, queryParams) => {
   const supabase = await createClient()
   const projectName = typeof project === 'string' ? project : project?.project_name
 
+  const { days, from, to } = queryParams || {}
+  
   // Compute date range
   const now = new Date()
-  const startDate = new Date(now)
-  startDate.setDate(startDate.getDate() - days)
+  let startDate = new Date(now)
+  let endDate = new Date(now)
+  
+  if (from && to) {
+    startDate = new Date(from)
+    endDate = new Date(to)
+  } else {
+    const defaultDays = [1, 7].includes(days) ? days : 7
+    startDate.setDate(startDate.getDate() - defaultDays)
+  }
+  
   const startDateStr = startDate.toISOString().split('T')[0] // YYYY-MM-DD
+  const endDateStr = endDate.toISOString().split('T')[0]
 
   // 1. Fetch daily_cases_metrics (total cases discovered, risk & category breakdowns)
   let casesQuery = supabase
     .from('daily_case_metrics')
     .select('*')
     .gte('date', startDateStr)
+    .lte('date', endDateStr)
     .order('date', { ascending: true })
 
   if (projectName) {
@@ -38,6 +51,7 @@ export const getDashboardData = traceAction('getDashboardData', async (project, 
     .from('daily_reviewed_metrics')
     .select('*')
     .gte('date', startDateStr)
+    .lte('date', endDateStr)
     .order('date', { ascending: true })
 
   if (projectName) {
@@ -68,7 +82,7 @@ export const getDashboardData = traceAction('getDashboardData', async (project, 
 
   // Aggregate review stats
   let totalReviewed = 0
-  let totalPass = 0
+  let totalSafe = 0
   let totalFlagForTakedown = 0
   let totalTakedown = 0
   // Risk breakdown from reviewed_metrics
@@ -77,7 +91,8 @@ export const getDashboardData = traceAction('getDashboardData', async (project, 
   reviewedData.forEach(row => {
     totalReviewed += row.total_reviewed || 0
     const reviewed = parseJsonField(row.reviewed)
-    totalPass += reviewed.pass || 0
+    // console.log("Reviewed breakdown for", row.date, reviewed)
+    totalSafe += reviewed['no-action'] || 0
     totalFlagForTakedown += reviewed['Flag for Takedown'] || 0
     totalTakedown += reviewed.Takedown || 0
     const risk = parseJsonField(row.risk)
@@ -151,13 +166,13 @@ export const getDashboardData = traceAction('getDashboardData', async (project, 
   })
   const platforms = Array.from(platformsSet)
 
-  // 2. Generate all dates in the range [startDate, now]
+  // 2. Generate all dates in the range [startDate, endDate]
   const platformLineData = []
   const dateCursor = new Date(startDate)
-  const today = new Date()
-  today.setHours(23, 59, 59, 999) // include today fully
+  const endLimit = new Date(endDate)
+  endLimit.setHours(23, 59, 59, 999) // include endDate fully
 
-  while (dateCursor <= today) {
+  while (dateCursor <= endLimit) {
     const dateLabel = dateCursor.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
     const entry = { date: dateLabel, rawDate: dateCursor.toISOString().split('T')[0] }
 
@@ -197,12 +212,14 @@ export const getDashboardData = traceAction('getDashboardData', async (project, 
 
   return {
     // Date filter context
-    days,
+    days: days || 'custom',
+    from: startDateStr,
+    to: endDateStr,
 
     // ---- Section 1: Client Action Tracker ----
     clientTracker: {
       totalReviewed,
-      totalPass,
+      totalSafe,
       totalFlagForTakedown,
       totalTakedown,
       totalPending,

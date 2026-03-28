@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useState, useMemo } from 'react'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import {
     PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
@@ -11,14 +11,11 @@ import { Clock, Eye, Activity, TrendingUp, ShieldCheck, Filter, ChevronDown, Lay
 import { cn } from '@/lib/utils'
 import PageHeader from '@/components/PageHeader'
 
+import { DatePickerWithRange } from '@/components/ui/date-range-picker'
+import { format } from 'date-fns'
+
 // ─── Helpers ────────────────────────────────────────────────────────────────
 const fmt = (n) => (n ?? 0).toLocaleString()
-
-const CATEGORY_COLORS = [
-    '#6366f1', '#f472b6', '#fb923c', '#fbbf24',
-    '#34d399', '#38bdf8', '#a78bfa', '#4ade80',
-    '#f87171', '#2dd4bf',
-]
 
 const PLATFORM_COLORS = {
     instagram: '#e1306c',
@@ -33,44 +30,98 @@ const PLATFORM_COLORS = {
 }
 
 // ─── Date Filter ─────────────────────────────────────────────────────────────
-function DateFilter({ active }) {
+function DateFilter({ active, from, to }) {
     const router = useRouter()
     const pathname = usePathname()
     const searchParams = useSearchParams()
+    const [isPickerOpen, setIsPickerOpen] = useState(false)
 
     const opts = [
-        { label: 'Today', value: 1 },
+        { label: 'Past 24 Hours', value: 1 },
         { label: '7 Days', value: 7 },
-        { label: '30 Days', value: 30 },
     ]
 
     const go = (days) => {
         const p = new URLSearchParams(searchParams.toString())
+        p.delete('from')
+        p.delete('to')
         p.set('days', days.toString())
         router.push(`${pathname}?${p.toString()}`)
     }
 
+    const setDateRange = (range) => {
+        const p = new URLSearchParams(searchParams.toString())
+        if (range?.from && range?.to) {
+            p.set('from', format(range.from, 'yyyy-MM-dd'))
+            p.set('to', format(range.to, 'yyyy-MM-dd'))
+            p.set('days', 'custom')
+            router.push(`${pathname}?${p.toString()}`)
+        } else if (range?.from) {
+            // Keep waiting for 'to'
+            p.set('from', format(range.from, 'yyyy-MM-dd'))
+            p.delete('to')
+            p.set('days', 'custom')
+            router.push(`${pathname}?${p.toString()}`)
+        } else {
+            p.delete('from')
+            p.delete('to')
+            p.set('days', '7')
+            router.push(`${pathname}?${p.toString()}`)
+        }
+    }
+
+    const date = (from) ? { from: new Date(from), to: to ? new Date(to) : undefined } : undefined
+
     return (
-        <div
-            className="flex rounded-3xl items-center gap-1 bg-white backdrop-blur-md p-2 border w-full shadow-sm"
-            role="group"
-            aria-label="Filter by date range"
-        >
-            {opts.map(o => (
+        <div className="flex flex-col gap-3">
+            <div
+                className="flex rounded-3xl items-center gap-1 bg-white backdrop-blur-md p-2 border w-full shadow-sm"
+                role="group"
+                aria-label="Filter by date range"
+            >
+                {opts.map(o => (
+                    <button
+                        key={o.value}
+                        onClick={() => go(o.value)}
+                        aria-pressed={active === o.value}
+                        className={cn(
+                            'px-5 py-2 rounded-2xl text-sm font-bold transition-all duration-300 w-full',
+                            active === o.value
+                                ? 'bg-blue-600 text-white shadow-lg shadow-blue-200/50 scale-[1.02]'
+                                : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50 cursor-pointer'
+                        )}
+                    >
+                        {o.label}
+                    </button>
+                ))}
+                
                 <button
-                    key={o.value}
-                    onClick={() => go(o.value)}
-                    aria-pressed={active === o.value}
+                    onClick={() => setIsPickerOpen(true)}
+                    aria-pressed={active === 'custom'}
                     className={cn(
-                        'px-5 py-2 rounded-2xl text-sm font-bold transition-all duration-300 w-full',
-                        active === o.value
-                            ? 'bg-blue-600 text-white shadow-lg shadow-slate-200 scale-[1.02]'
-                            : 'text-slate-500 hover:text-slate-900 hover:bg-white/50 cursor-pointer'
+                        'px-5 py-2 rounded-2xl text-sm font-bold transition-all duration-300 w-full flex justify-center',
+                        active === 'custom'
+                            ? 'bg-blue-600 text-white shadow-lg shadow-blue-200/50 scale-[1.02]'
+                            : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50 cursor-pointer'
                     )}
                 >
-                    {o.label}
+                    Custom
                 </button>
-            ))}
+            </div>
+
+            <div className="bg-white rounded-2xl border shadow-sm overflow-hidden">
+                <DatePickerWithRange 
+                    date={date} 
+                    setDate={setDateRange} 
+                    open={isPickerOpen}
+                    onOpenChange={setIsPickerOpen}
+                    className={cn(
+                        "w-full [&>div>button]:border-none [&>div>button]:shadow-none [&>div>button]:bg-transparent  hover:[&>div>button]:bg-slate-50",
+                        active === 'custom' && "[&>div>button]:text-blue-600 [&>div>button]:bg-blue-50/50"
+                    )}
+                    placeholder="Set custom range..."
+                />
+            </div>
         </div>
     )
 }
@@ -184,6 +235,8 @@ function Empty({ h = 200 }) {
 export function DashboardContent({ data }) {
     const {
         days = 1,
+        from,
+        to,
         clientTracker = {},
         riskDistribution = [],
         categoryDistribution = [],
@@ -195,7 +248,7 @@ export function DashboardContent({ data }) {
 
     const {
         totalReviewed = 0,
-        totalPass = 0,
+        totalSafe = 0,
         totalFlagForTakedown = 0,
         totalTakedown = 0,
         totalPending = 0,
@@ -203,18 +256,13 @@ export function DashboardContent({ data }) {
         totalCasesDiscovered = 0,
     } = clientTracker
 
-    const daysLabel = days === 1 ? 'Today' : `Last ${days} Days`
-
-    const reviewPct = useMemo(() => {
-        if (totalCasesDiscovered === 0) return 0
-        return Math.round((totalReviewed / totalCasesDiscovered) * 100)
-    }, [totalReviewed, totalCasesDiscovered])
+    const daysLabel = days === 1 ? 'Past 24 Hours' : days === 'custom' ? (from && to ? `${format(new Date(from), 'MMM d, yyyy')} - ${format(new Date(to), 'MMM d, yyyy')}` : 'Custom Range') : `Last ${days} Days`
 
     const decisionData = useMemo(() => [
-        { name: 'Safe', value: totalPass, color: '#10b981' },
+        { name: 'No Action', value: totalSafe, color: '#10b981' },
         { name: 'Flagged', value: totalFlagForTakedown, color: '#f43f5e' },
         { name: 'Takedown', value: totalTakedown, color: '#f97316' },
-    ], [totalPass, totalFlagForTakedown, totalTakedown])
+    ], [totalSafe, totalFlagForTakedown, totalTakedown])
 
     const pendingRiskSegments = useMemo(() => [
         { label: 'High', value: pendingRisk?.high ?? 0, color: '#f43f5e' },
@@ -225,12 +273,28 @@ export function DashboardContent({ data }) {
 
     const mergedPlatformColors = useMemo(() => ({ ...PLATFORM_COLORS, ...dbPlatformColors }), [dbPlatformColors])
 
-    const categoryDataWithColors = useMemo(() =>
-        categoryDistribution.map((c, i) => ({
-            ...c,
-            fill: CATEGORY_COLORS[i % CATEGORY_COLORS.length]
-        })),
-        [categoryDistribution])
+    const BLUE_SHADES = [
+        '#1d4ed8', // blue-700
+        '#2563eb', // blue-600
+        '#3b82f6', // blue-500
+        '#60a5fa', // blue-400
+        '#93c5fd', // blue-300
+        '#bfdbfe', // blue-200
+        '#dbeafe', // blue-100
+        '#eff6ff', // blue-50
+    ];
+
+    const categoryDataWithColors = useMemo(() => {
+        const topCategories = categoryDistribution.slice(0, 8);
+        const count = topCategories.length;
+        return topCategories.map((c, i) => {
+            const shadeIndex = count <= 1 ? 0 : Math.round((i / (count - 1)) * 7);
+            return {
+                ...c,
+                fill: BLUE_SHADES[shadeIndex] || '#1d4ed8'
+            };
+        });
+    }, [categoryDistribution]);
 
     return (
         <div className="min-h-full bg-[#f8f9fa]">
@@ -254,7 +318,7 @@ export function DashboardContent({ data }) {
                 <section>
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                         {/* Card 1: Main Review Progress */}
-                        <div className="lg:col-span-7 bg-white border border-slate-200/60 rounded-3xl p-6 shadow-sm flex flex-col md:flex-row gap-8">
+                        <div className="lg:col-span-6 bg-white border border-slate-200/60 rounded-3xl p-6 shadow-sm flex flex-col md:flex-row gap-8">
 
                             {/* Left Side: Main Stats & Progress */}
                             <div className="flex-1 flex flex-col justify-center">
@@ -263,36 +327,35 @@ export function DashboardContent({ data }) {
                                         <div className="p-1.5 bg-slate-900/5 rounded-lg">
                                             <ShieldCheck className="w-3.5 h-3.5 text-slate-900" />
                                         </div>
-                                        <span className="text-[11px] font-black uppercase tracking-widest text-slate-800">Review Progress</span>
+                                        <span className="text-[11px] font-black uppercase tracking-widest text-slate-800">Review Activity</span>
                                     </div>
-                                    <div className='flex flex-col gap-3'>
-                                        <div className="flex items-baseline gap-3">
-                                            <span className="text-7xl font-black text-slate-900 tracking-tighter tabular-nums leading-none">
-                                                {fmt(totalReviewed)}
-                                            </span>
-                                            <span className="text-3xl font-black text-slate-200">/</span>
-                                            <span className="text-3xl font-black text-slate-400 tabular-nums">
-                                                {fmt(totalCasesDiscovered)}
-                                            </span>
+                                    <div className='flex flex-col gap-8 flex-1 justify-center py-4'>
+                                        <div>
+                                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Cases Reviewed</span>
+                                            <div className="flex items-baseline gap-3">
+                                                <span className="text-7xl font-black text-slate-900 tracking-tighter tabular-nums leading-none">
+                                                    {fmt(totalReviewed)}
+                                                </span>
+                                            </div>
                                         </div>
-                                        <p className="text-slate-500 font-bold italic mt-2">
-                                            Total cases identified {daysLabel.toLowerCase()}
-                                        </p>
+                                        <div className="w-full h-px bg-slate-100" />
+                                        <div>
+                                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">New Cases Discovered</span>
+                                            <div className="flex items-baseline gap-3">
+                                                <span className="text-5xl font-black text-slate-400 tracking-tighter tabular-nums leading-none">
+                                                    {fmt(totalCasesDiscovered)}
+                                                </span>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
 
-                                {/* Progress Section - Moved closer to the stats */}
-                                <div className="mt-10 pt-8 border-t border-slate-100">
-                                    <div className="flex items-center justify-between mb-3">
-                                        <span className="text-xs font-black uppercase tracking-wider text-slate-400">Review Coverage</span>
-                                        <span className="text-xs font-black text-slate-900 bg-slate-100 px-2 py-0.5 rounded-md">{reviewPct}%</span>
-                                    </div>
-                                    <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
-                                        <div
-                                            className="h-full rounded-full bg-slate-900 transition-all duration-1000"
-                                            style={{ width: `${reviewPct}%` }}
-                                        />
-                                    </div>
+                                {/* Bottom Info Section */}
+                                <div className="mt-6 pt-6 border-t border-slate-100">
+                                    <p className="text-[11px] font-bold text-slate-500 flex items-center gap-1.5">
+                                        <Activity className="w-3.5 h-3.5 text-blue-500" /> 
+                                        Activity recorded for {daysLabel.toLowerCase()}
+                                    </p>
                                 </div>
                             </div>
 
@@ -333,9 +396,9 @@ export function DashboardContent({ data }) {
                         </div>
 
                         {/* Right Column: Date Filter + Queue Status */}
-                        <div className="lg:col-span-5 flex flex-col gap-6">
+                        <div className="lg:col-span-6 flex flex-col gap-6">
                             {/* Date Filter Card */}
-                            <DateFilter active={days} />
+                            <DateFilter active={days} from={from} to={to} />
 
                             {/* Queue Status Card */}
                             <div className="bg-white border border-slate-200/60 rounded-3xl p-8 shadow-sm flex-1 flex flex-col">
@@ -448,7 +511,7 @@ export function DashboardContent({ data }) {
                                     <ResponsiveContainer width="100%" height="100%">
                                         <BarChart
                                             layout="vertical"
-                                            data={categoryDataWithColors.slice(0, 8)}
+                                            data={categoryDataWithColors}
                                             margin={{ top: 10, right: 30, left: 20, bottom: 10 }}
                                         >
                                             <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
@@ -472,7 +535,7 @@ export function DashboardContent({ data }) {
                                                 radius={[0, 6, 6, 0]}
                                                 barSize={20}
                                             >
-                                                {categoryDataWithColors.slice(0, 8).map((entry, index) => (
+                                                {categoryDataWithColors.map((entry, index) => (
                                                     <Cell key={`cell-${index}`} fill={entry.fill} />
                                                 ))}
                                             </Bar>

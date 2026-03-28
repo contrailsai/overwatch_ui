@@ -13,6 +13,11 @@ export const fetchAndCompressImage = async (imageUrl, maxWidth = 800) => {
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
         const blob = await response.blob();
 
+        if (!blob.type.startsWith('image/')) {
+            console.warn(`Fetched resource is not an image (type: ${blob.type}), returning null`);
+            return null;
+        }
+
         return await new Promise((resolve, reject) => {
             const img = new window.Image();
             img.onload = () => {
@@ -40,7 +45,7 @@ export const fetchAndCompressImage = async (imageUrl, maxWidth = 800) => {
             img.src = URL.createObjectURL(blob);
         });
     } catch (error) {
-        console.error("Failed to load/compress image for PDF:", error);
+        console.warn("Failed to load/compress image for DOCX:", error.message);
         return null;
     }
 };

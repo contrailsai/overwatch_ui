@@ -22,6 +22,7 @@ import getPostLink from '@/components/GetPostLink'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { ReportButton } from '@/components/pdf/ReportButton'
 import { DetailedReportButton } from '@/components/pdf/DetailedReportButton'
+import { DetailedReportDocxButton } from '@/components/docx/DetailedReportDocxButton'
 import { Button } from "@/components/ui/button"
 // import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -246,37 +247,74 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
     <div className="flex flex-col h-full bg-slate-50">
 
       {/* Filters & Controls */}
-      <div className="px-6 py-4 shrink-0">
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
-          <div className="flex flex-col lg:flex-row items-center justify-between gap-6">
+      <div className="px-6 py-2 shrink-0">
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 px-4 py-3">
+          <div className="flex flex-col lg:flex-row items-center justify-between gap-4">
 
             {/* Left: Filters */}
-            <div className="flex items-center gap-6 w-full lg:w-auto">
+            <div className="flex gap-4 w-full">
 
-              <div className='flex flex-col gap-2 items-center justify-center'>
-                <div className="flex items-center gap-2.5 shrink-0">
-                  <div className="bg-blue-50 p-1 rounded-lg text-blue-600">
-                    <Filter className="w-4 h-4" />
+              {/* Header Row: Title & Loading State */}
+              <div className="flex flex-col justify-center items-center w-full max-w-40 gap-3 rounded-lg ">
+                <div className="flex items-center justify-center">
+                  <div className="flex items-center justify-center gap-2 shrink-0">
+                    <div className="bg-blue-50 p-1.5 rounded-md text-blue-600">
+                      <Filter className="w-4 h-4" />
+                    </div>
+                    <span className="text-xs font-bold text-slate-600 uppercase tracking-wider">
+                      Filters
+                    </span>
                   </div>
-                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Filters</span>
+
+                  {/* Loading Indicator */}
+                  {isPending && (
+                    <div className="flex items-center gap-1.5 px-2 py-1 bg-blue-50 text-blue-600 rounded border border-blue-100 animate-pulse">
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                      <span className="text-[10px] font-bold uppercase tracking-wider">
+                        Updating
+                      </span>
+                    </div>
+                  )}
                 </div>
 
-                <div className="text-xs font-medium text-slate-500 whitespace-nowrap">
-                  <span className="font-bold text-slate-900 text-base  px-1">{totalCount}</span> cases found
+                {/* Total Count */}
+                <div className="text-sm font-medium text-slate-500">
+                  <span className="font-bold text-slate-900 text-base mr-1">
+                    {totalCount}
+                  </span>
+                  cases found
                 </div>
 
-                {isPending && (
-                  <div className="flex items-center gap-2 px-2 py-1 bg-blue-50 text-blue-600 rounded-md border border-blue-100 animate-pulse mt-1">
-                    <Loader2 className="h-3 w-3 animate-spin" />
-                    <span className="text-[10px] font-bold uppercase tracking-wider">Updating...</span>
+                {/* Active Filters / Clear All Actions (Animated) */}
+                <div
+                  className={`grid transition-all duration-300 ease-in-out w-full ${selectedCount > 0
+                      ? "grid-rows-[1fr] opacity-100 mt-1"
+                      : "grid-rows-[0fr] opacity-0 mt-0"
+                    }`}
+                >
+                  {/* overflow-hidden is crucial here to clip the content while height is 0 */}
+                  <div className="overflow-hidden">
+                    <div className="flex items-center justify-between pt-3 border-t border-slate-100">
+                      <span className="inline-flex items-center text-xs font-bold text-blue-700 bg-blue-50 px-2 py-1 rounded-md border border-blue-200">
+                        {selectedCount} Selected
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleClearAllSelected}
+                        className="h-7 px-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 font-semibold text-xs transition-colors cursor-pointer"
+                      >
+                        Clear All
+                      </Button>
+                    </div>
                   </div>
-                )}
+                </div>
               </div>
 
               <Separator orientation="vertical" className="h-8 bg-slate-100 hidden sm:block" />
 
               {/* FILTERS */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-x-4 gap-y-4 w-full items-end">
+              <div className=" grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-x-4 gap-y-4 w-full items-end">
 
                 {/* RISK LEVEL */}
                 <div className="space-y-1.5 w-full">
@@ -348,11 +386,11 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                   />
                 </div>
 
-                {/* processed date  */}
+                {/* Alert date  */}
                 <div className="space-y-1.5 w-full min-w-32">
-                  <Label className="text-[10px] uppercase font-bold text-slate-400">Processed Date</Label>
+                  <Label className="text-[10px] uppercase font-bold text-slate-400">Alert Date</Label>
                   <DateFilterPopover
-                    title="Processed Date"
+                    title="Alert Date"
                     initialFrom={initialFilters.processed_from}
                     initialTo={initialFilters.processed_to}
                     onApply={(range) => updateQueryParams({
@@ -362,11 +400,11 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                   />
                 </div>
 
-                {/* original date  */}
+                {/* Publishing date  */}
                 <div className="space-y-1.5 w-full min-w-32">
-                  <Label className="text-[10px] uppercase font-bold text-slate-400">Original Date</Label>
+                  <Label className="text-[10px] uppercase font-bold text-slate-400">Publishing Date</Label>
                   <DateFilterPopover
-                    title="Original Date"
+                    title="Publishing Date"
                     initialFrom={initialFilters.original_date_from}
                     initialTo={initialFilters.original_date_to}
                     onApply={(range) => updateQueryParams({
@@ -387,24 +425,9 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
             </div>
 
             {/* Right: Actions & Counts */}
-            <div className="flex items-center gap-5 w-full lg:w-auto justify-end">
+            <div className="flex items-center gap-5 w-full max-w-50 justify-end ">
 
-              {selectedCount > 0 && (
-                <div className="flex flex-col items-center gap-2">
-                  <span className="text-xs font-bold text-blue-600 bg-blue-50 px-1 py-1 rounded-md border border-blue-100">
-                    {selectedCount} Selected
-                  </span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleClearAllSelected}
-                    className="h-8 px-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 font-bold text-xs cursor-pointer"
-                  >
-                    Clear All
-                  </Button>
-                </div>
-              )}
-
+              {/* REPORT DOWNLOAD BUTTONS */}
               <div className="flex flex-col gap-2 shrink-0 ml-auto">
                 <div onClick={() => {
                   if (selectedCount === 0) alert("Select some cases before exporting");
@@ -436,10 +459,29 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                   ) : (
                     <button className="flex w-full cursor-pointer items-center justify-start gap-2 px-2.5 py-1.5 bg-white border border-slate-200 text-slate-700 font-bold rounded-md hover:bg-slate-50 transition-colors text-xs shadow-sm">
                       <FileDown className="w-3.5 h-3.5" />
-                      Export Detailed Report
+                      Export Detailed PDF
                     </button>
                   )}
                 </div>
+                <div onClick={() => {
+                  if (selectedCount === 0) alert("Select some cases before exporting");
+                  trackClientClick('export_detailed_report_docx', { page: 'CasesList' });
+                }}>
+                  {selectedCount > 0 ? (
+                    <DetailedReportDocxButton
+                      posts={selectedPostsArray}
+                      project={project}
+                      className="flex w-full cursor-pointer items-center justify-start gap-2 px-2.5 py-1.5 bg-white border border-slate-200 text-slate-700 font-bold rounded-md hover:bg-slate-50 transition-colors text-xs shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
+                    />
+                  ) : (
+                    <button className="flex w-full cursor-pointer items-center justify-start gap-2 px-2.5 py-1.5 bg-white border border-slate-200 text-slate-700 font-bold rounded-md hover:bg-slate-50 transition-colors text-xs shadow-sm">
+                      <FileDown className="w-3.5 h-3.5" />
+                      Export Detailed DOCX
+                    </button>
+                  )}
+                </div>
+
+
               </div>
 
               {/* {(raisedCount > 0 || isInitialLoading) && (
@@ -499,7 +541,7 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
             <thead className="bg-slate-50/80 sticky top-0 z-10 backdrop-blur-sm">
               <tr>
                 {/* ---  Checkbox Header --- */}
-                <th scope="col" className="w-[48px] px-4 py-3 text-left">
+                <th scope="col" className="w-12 px-4 py-3 text-left">
                   <input
                     type="checkbox"
                     checked={isAllCurrentPageSelected}
@@ -515,7 +557,7 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                 </th>
                 <th
                   scope="col"
-                  className="w-[120px] px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100 transition-colors group select-none"
+                  className="w-30 px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100 transition-colors group select-none"
                   onClick={() => handleSortChange('threat_score')}
                 >
                   <div className="flex items-center">
@@ -523,39 +565,39 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                     <SortIcon field="threat_score" />
                   </div>
                 </th>
-                <th scope="col" className="w-[150px] px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Status</th>
+                <th scope="col" className="w-37.5 px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Status</th>
                 <th
                   scope="col"
-                  className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider w-full max-w-[100px]"
+                  className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider w-full max-w-25"
                 >
                   <div className="flex items-center">
                     Content
                   </div>
                 </th>
-                {/* <th scope="col" className="w-[120px] px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Platform</th> */}
-                <th scope="col" className="w-[170px] px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Violations</th>
+                {/* <th scope="col" className="w-30 px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Platform</th> */}
+                <th scope="col" className="w-42.5 px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Violations</th>
                 <th
                   scope="col"
-                  className="w-[120px] px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100 transition-colors group select-none"
+                  className="w-30 px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100 transition-colors group select-none"
                   onClick={() => handleSortChange('processed_date')}
                 >
                   <div className="flex items-center">
-                    Processed Date
+                    Alert Date
                     <SortIcon field="processed_date" />
                   </div>
                 </th>
 
                 <th
                   scope="col"
-                  className="w-[120px] px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100 transition-colors group select-none"
+                  className="w-30 px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100 transition-colors group select-none"
                   onClick={() => handleSortChange('original_date')}
                 >
                   <div className="flex items-center">
-                    Original Date
+                    Publish Date
                     <SortIcon field="original_date" />
                   </div>
                 </th>
-                <th scope="col" className="w-[110px] px-4 py-3 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Actions</th>
+                <th scope="col" className="w-27.5 px-4 py-3 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
 

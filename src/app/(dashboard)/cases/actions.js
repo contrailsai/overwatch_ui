@@ -19,7 +19,7 @@ export const normalized_S3_post = traceAction('normalized_S3_post', async (post)
   let s3UrlToSign = null;
   if (post.post_content?.media_urls && post.post_content.media_urls.length > 0) {
     const firstMedia = post.post_content.media_urls[0];
-    s3UrlToSign = firstMedia.s3_url || firstMedia.thumbnail_url;
+    s3UrlToSign = firstMedia.s3_url;
   } else if (post.s3_url) {
     s3UrlToSign = post.s3_url;
   }
