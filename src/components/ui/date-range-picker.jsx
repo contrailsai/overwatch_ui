@@ -80,19 +80,6 @@ export function DatePickerWithRange({
           />
         </PopoverContent>
       </Popover>
-      {date?.from && !trigger && (
-        <Button
-            variant="ghost"
-            size="sm"
-            onClick={(e) => {
-                e.stopPropagation();
-                setDate(undefined);
-            }}
-            className="absolute right-2 top-2 h-6 w-6 p-0 hover:bg-slate-100 rounded-full"
-        >
-            <X className="h-3 w-3 text-slate-500" />
-        </Button>
-      )}
     </div>
   )
 }

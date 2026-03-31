@@ -148,7 +148,7 @@ export const getPosts = traceAction('getPosts', async (project, page = 1, limit 
       if (violationsArray.length > 0) {
         const flagConditions = violationsArray.map(v => ({ [`review_details.flags.${v}`]: true }));
         andConditions.push({
-          $or: [
+          $and: [
             { 'review_details.threat_types': { $in: violationsArray } },
             ...flagConditions
           ]
@@ -466,7 +466,7 @@ export const getProjectDetails = traceAction('getProjectDetails_cases', async ()
   }
 })
 
-// FLAG FOR TAKEDOWN / NO ACTION
+// UPDATE CLIENT STATUS FLAG FOR TAKEDOWN / NO ACTION
 export const updateClientStatus = traceAction('updateClientStatus', async (caseId, status, client_email) => {
   try {
     const projectDetails = await getProjectDetails()
@@ -491,6 +491,13 @@ export const updateClientStatus = traceAction('updateClientStatus', async (caseI
           client_status: status,
           "content_reviewed_by": projectDetails.client_email,
           "metadata.updated_at": new Date().toISOString(),
+        },
+        $push: {
+          "metadata.update_history": {
+            updated_at: new Date(),
+            updated_by: projectDetails.client_email,
+            changes_summary: "client status change"
+          }
         }
       }
     )

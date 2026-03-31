@@ -29,9 +29,11 @@ const initialState = {
     error: null,
 }
 
-export default function ReviewForm({ post, project_details, onClose, onNavigate, hasPrev, hasNext, setPosts }) {
+export default function ReviewForm({ post, project, clientDetails, onClose, onNavigate, hasPrev, hasNext, setPosts }) {
+    const { project_details } = project
     // console.log(post)
-    const [state, formAction, isPending] = useActionState(submitCaseReview, initialState)
+    const submit_to_edit = submitCaseReview.bind(null, project, clientDetails)
+    const [state, formAction, isPending] = useActionState(submit_to_edit, initialState)
 
     // 1. Maintain a local version of the post so the UI can update immediately
     const [localPost, setLocalPost] = useState(post);
@@ -326,11 +328,11 @@ export default function ReviewForm({ post, project_details, onClose, onNavigate,
                                         </div>
                                         <div className="grid grid-cols-2 gap-10">
                                             <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between gap-1">
-                                                <span className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2"><Calendar className="w-3.5 h-3.5 text-slate-500" /> Posted</span>
+                                                <span className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2"><Calendar className="w-3.5 h-3.5 text-slate-500" /> Publish Date</span>
                                                 <span className="font-bold text-sm text-slate-900">{posted_date}</span>
                                             </div>
                                             <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between gap-1">
-                                                <span className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2"><History className="w-3.5 h-3.5 text-slate-500" /> Sourced</span>
+                                                <span className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2"><History className="w-3.5 h-3.5 text-slate-500" /> Alert Date</span>
                                                 <span className="font-bold text-sm text-slate-900">{sourced_date}</span>
                                             </div>
                                         </div>

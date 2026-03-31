@@ -2,6 +2,7 @@
 
 import { trackClientClick, getAllPostIds } from './actions'
 import { CaseDetailPanel } from './CaseDetailPanel'
+import { bulkAssignCasesTo } from './feature_actions'
 
 // IMPORT UI THINGS 
 // import { Skeleton } from "@/components/ui/skeleton"
@@ -11,7 +12,7 @@ import {
   ExternalLink, Info, Siren, ArrowRight, Quote, X, FlagTriangleLeft,
   FileDown, ArrowUp, ArrowDown, ClockFading,
   ChevronLeft, ChevronRight, Smile, TrendingDown, TriangleAlert,
-  Youtube, Instagram, Facebook
+  Youtube, Instagram, Facebook, UserPlus, Check
 } from 'lucide-react'
 
 import { Twitter, Reddit } from '@/utils/icons'
@@ -25,7 +26,6 @@ import { DetailedReportButton } from '@/components/pdf/DetailedReportButton'
 import { DetailedReportDocxButton } from '@/components/docx/DetailedReportDocxButton'
 import { Button } from "@/components/ui/button"
 // import { Badge } from "@/components/ui/badge"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
 import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
@@ -33,7 +33,7 @@ import { DateFilterPopover } from './DateFilterPopover'
 import { ViolationsFilter } from './ViolationsFilter'
 // import SafeDate from '@/components/SafeDate'
 
-export function CasesList({ cases, project, clientDetails, initialFilters, initialSort, currentPage, initialCase, projectEmails }) {
+export function CasesList({ cases, project, clientDetails, initialFilters, initialSort, currentPage, itemsPerPage, initialCase, projectEmails }) {
 
   // console.log(project)
   const router = useRouter()
@@ -54,6 +54,9 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
   // Select-all-filtered state
   const [isAllFilterSelected, setIsAllFilterSelected] = useState(false)
   const [isSelectingAll, setIsSelectingAll] = useState(false)
+
+  const [bulkAssignedEmail, setBulkAssignedEmail] = useState("")
+  const [isBulkAssigning, setIsBulkAssigning] = useState(false)
 
   // Memoize the selected posts array to stabilize the reference passed to report buttons
   const selectedPostsArray = useMemo(() => Object.values(selectedCases), [selectedCases])
@@ -161,6 +164,41 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
   const handleClearAllSelected = () => {
     setSelectedCases({})
     setIsAllFilterSelected(false)
+    setBulkAssignedEmail("")
+  }
+
+  const handleBulkAssign = async () => {
+    const postIds = Object.keys(selectedCases)
+    if (postIds.length === 0 || !bulkAssignedEmail) return
+
+    setIsBulkAssigning(true)
+    try {
+      const result = await bulkAssignCasesTo(project, clientDetails, postIds, bulkAssignedEmail)
+      if (result.success) {
+        // Update local state for all selected posts
+        setMergedPosts(prev => prev.map(post =>
+          selectedCases[post._id]
+            ? { ...post, assigned_to: bulkAssignedEmail }
+            : post
+        ))
+
+        // Update updatedCases to reflect changes in the table immediately
+        const newUpdatedCases = { ...updatedCases }
+        postIds.forEach(id => {
+          newUpdatedCases[id] = updatedCases[id] || 'Updated' // Dummy value to trigger refresh if needed
+        })
+        setUpdatedCases(newUpdatedCases)
+
+        alert(`Successfully assigned ${result.count} cases to ${bulkAssignedEmail}`)
+        handleClearAllSelected()
+      } else {
+        alert("Bulk assign failed: " + result.error)
+      }
+    } catch (error) {
+      alert("Error during bulk assignment")
+    } finally {
+      setIsBulkAssigning(false)
+    }
   }
 
   // Check if all items on the *current page* are selected for the header checkbox
@@ -255,7 +293,7 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
             <div className="flex gap-4 w-full">
 
               {/* Header Row: Title & Loading State */}
-              <div className="flex flex-col justify-center items-center w-full max-w-40 gap-3 rounded-lg ">
+              <div className="flex flex-col justify-center items-center w-full max-w-48 gap-3 rounded-lg ">
                 <div className="flex items-center justify-center">
                   <div className="flex items-center justify-center gap-2 shrink-0">
                     <div className="bg-blue-50 p-1.5 rounded-md text-blue-600">
@@ -294,18 +332,36 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                 >
                   {/* overflow-hidden is crucial here to clip the content while height is 0 */}
                   <div className="overflow-hidden">
-                    <div className="flex items-center justify-between pt-3 border-t border-slate-100">
-                      <span className="inline-flex items-center text-xs font-bold text-blue-700 bg-blue-50 px-2 py-1 rounded-md border border-blue-200">
-                        {selectedCount} Selected
-                      </span>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={handleClearAllSelected}
-                        className="h-7 px-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 font-semibold text-xs transition-colors cursor-pointer"
-                      >
-                        Clear All
-                      </Button>
+                    <div className="flex flex-col gap-2 pt-3 border-t border-slate-100">
+                      <div className="flex items-center justify-between">
+                        <span className="inline-flex items-center text-xs font-bold text-blue-700 px-2 py-1 rounded-md">
+                          {isAllFilterSelected ? `All ${totalCount}` : selectedCount} Selected
+                        </span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={handleClearAllSelected}
+                          className="h-7 px-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 font-semibold text-xs transition-colors cursor-pointer"
+                        >
+                          Clear All
+                        </Button>
+                      </div>
+
+                      {/* Select All Filtered Option - Integrated here for better UX */}
+                      {isAllCurrentPageSelected && totalCount > mergedPosts.length && !isAllFilterSelected && (
+                        <Button
+                          variant="Ghost"
+                          size="sm"
+                          onClick={handleSelectAllFiltered}
+                          disabled={isSelectingAll}
+                          className=" cursor-pointer h-8 p-0 w-full border border-blue-200 bg-blue-50/50 text-blue-700 hover:bg-blue-50 hover:text-blue-800 font-bold transition-all"
+                        >
+                          {isSelectingAll && (
+                            <Loader2 className="w-3 h-3 animate-spin mr-1.5" />
+                          )}
+                          Select all {totalCount} cases
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -313,72 +369,61 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
 
               <Separator orientation="vertical" className="h-8 bg-slate-100 hidden sm:block" />
 
-              {/* FILTERS */}
-              <div className=" grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-x-4 gap-y-4 w-full items-end">
+              {/* FILTERS & BULK ACTIONS */}
+              <div className="flex flex-col gap-4 w-full">
+                <div className=" flex flex-wrap items-start gap-6 w-full ">
 
                 {/* RISK LEVEL */}
-                <div className="space-y-1.5 w-full">
+                <div className="space-y-1.5 w-fit min-w-32">
                   <Label className="text-[10px] uppercase font-bold text-slate-400">Risk Severity</Label>
-                  <Select
+                  <select
                     value={initialFilters.risk_priority || 'all'}
-                    onValueChange={(val) => handleFilterChange('risk_priority', val)}
+                    onChange={(e) => handleFilterChange('risk_priority', e.target.value)}
+                    className="w-full bg-white border border-slate-200 rounded-md px-3 h-9 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
                   >
-                    <SelectTrigger className="w-full bg-white border-slate-200 h-9 text-xs font-semibold">
-                      <SelectValue placeholder="All Risks" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Risks</SelectItem>
-                      <SelectItem value="high">High Risk</SelectItem>
-                      <SelectItem value="medium">Medium Risk</SelectItem>
-                      <SelectItem value="low">Low Risk</SelectItem>
-                      <SelectItem value="safe">Safe</SelectItem>
-                    </SelectContent>
-                  </Select>
+                    <option value="all">All Risks</option>
+                    <option value="high">High Risk</option>
+                    <option value="medium">Medium Risk</option>
+                    <option value="low">Low Risk</option>
+                    <option value="safe">Safe</option>
+                  </select>
                 </div>
 
                 {/* PLATFORM */}
-                <div className="space-y-1.5 w-full">
+                <div className="space-y-1.5 w-fit min-w-32">
                   <Label className="text-[10px] uppercase font-bold text-slate-400">Platform</Label>
-                  <Select
+                  <select
                     value={initialFilters.platform}
-                    onValueChange={(val) => handleFilterChange('platform', val)}
+                    onChange={(e) => handleFilterChange('platform', e.target.value)}
+                    className="w-full bg-white border border-slate-200 rounded-md px-3 h-9 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
                   >
-                    <SelectTrigger className="w-full bg-white border-slate-200 h-9 text-xs font-semibold">
-                      <SelectValue placeholder="All Platforms" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Platforms</SelectItem>
-                      <SelectItem value="instagram">Instagram</SelectItem>
-                      <SelectItem value="facebook">Facebook</SelectItem>
-                      <SelectItem value="reddit">Reddit</SelectItem>
-                      <SelectItem value="x">X (Twitter)</SelectItem>
-                      <SelectItem value="youtube">Youtube</SelectItem>
-                      <SelectItem value="website">Websites</SelectItem>
-                    </SelectContent>
-                  </Select>
+                    <option value="all">All Platforms</option>
+                    <option value="instagram">Instagram</option>
+                    <option value="facebook">Facebook</option>
+                    <option value="reddit">Reddit</option>
+                    <option value="x">X (Twitter)</option>
+                    <option value="youtube">Youtube</option>
+                    <option value="website">Websites</option>
+                  </select>
                 </div>
 
                 {/* STATUS */}
-                <div className="space-y-1.5 w-full">
+                <div className="space-y-1.5 w-fit min-w-32">
                   <Label className="text-[10px] uppercase font-bold text-slate-400">Status</Label>
-                  <Select
+                  <select
                     value={initialFilters.client_status}
-                    onValueChange={(val) => handleFilterChange('client_status', val)}
+                    onChange={(e) => handleFilterChange('client_status', e.target.value)}
+                    className="w-full bg-white border border-slate-200 rounded-md px-3 h-9 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
                   >
-                    <SelectTrigger className="w-full bg-white border-slate-200 h-9 text-xs font-semibold">
-                      <SelectValue placeholder="Status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Statuses</SelectItem>
-                      <SelectItem value="To Be Reviewed">To Be Reviewed</SelectItem>
-                      <SelectItem value="No Action">No Action</SelectItem>
-                      <SelectItem value="Flag for Takedown">Flag for Takedown</SelectItem>
-                    </SelectContent>
-                  </Select>
+                    <option value="all">All Statuses</option>
+                    <option value="To Be Reviewed">To Be Reviewed</option>
+                    <option value="No Action">No Action</option>
+                    <option value="Flag for Takedown">Flag for Takedown</option>
+                  </select>
                 </div>
 
                 {/* violations */}
-                <div className="space-y-1.5 w-full">
+                <div className="space-y-1.5 w-fit min-w-32">
                   <ViolationsFilter
                     projectLabels={project?.project_details?.labels || []}
                     initialViolations={initialFilters.violations}
@@ -387,29 +432,29 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                 </div>
 
                 {/* Alert date  */}
-                <div className="space-y-1.5 w-full min-w-32">
+                <div className="space-y-1.5 w-fit min-w-32">
                   <Label className="text-[10px] uppercase font-bold text-slate-400">Alert Date</Label>
                   <DateFilterPopover
                     title="Alert Date"
                     initialFrom={initialFilters.processed_from}
                     initialTo={initialFilters.processed_to}
                     onApply={(range) => updateQueryParams({
-                      processed_from: range?.from ? range.from.toISOString() : null,
-                      processed_to: range?.to ? range.to.toISOString() : null
+                      processed_from: range?.from ? format(range.from, "yyyy-MM-dd'T'HH:mm:ssXXX") : null,
+                      processed_to: range?.to ? format(range.to, "yyyy-MM-dd'T'HH:mm:ssXXX") : null
                     })}
                   />
                 </div>
 
                 {/* Publishing date  */}
-                <div className="space-y-1.5 w-full min-w-32">
-                  <Label className="text-[10px] uppercase font-bold text-slate-400">Publishing Date</Label>
+                <div className="space-y-1.5 w-fit min-w-32">
+                  <Label className="text-[10px] uppercase font-bold text-slate-400">Publish Date</Label>
                   <DateFilterPopover
-                    title="Publishing Date"
+                    title="Publish Date"
                     initialFrom={initialFilters.original_date_from}
                     initialTo={initialFilters.original_date_to}
                     onApply={(range) => updateQueryParams({
-                      original_date_from: range?.from ? range.from.toISOString() : null,
-                      original_date_to: range?.to ? range.to.toISOString() : null
+                      original_date_from: range?.from ? format(range.from, "yyyy-MM-dd'T'HH:mm:ssXXX") : null,
+                      original_date_to: range?.to ? format(range.to, "yyyy-MM-dd'T'HH:mm:ssXXX") : null
                     })}
                   />
                 </div>
@@ -421,6 +466,41 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                     </Button>
                   </div>
                 )}
+                </div>
+
+                {/* BULK ASSIGN FUNCTIONALITY */}
+                {
+                  selectedCount > 0 && clientDetails?.permission === "client-admin" && (
+                    <div className="flex items-center gap-4 pt-3 border-t border-slate-100 mt-2 animate-in fade-in slide-in-from-top-1">
+                      <div className="flex items-center gap-2 px-2.5 py-1.5 bg-blue-50 text-blue-700 rounded-md border border-blue-100 whitespace-nowrap">
+                        <UserPlus className="w-3.5 h-3.5" />
+                        <span className="text-[10px] font-bold uppercase tracking-wider">Bulk Assignment</span>
+                      </div>
+                      <div className="flex items-center gap-3 w-full max-w-lg">
+                        <select
+                          value={bulkAssignedEmail}
+                          onChange={(e) => setBulkAssignedEmail(e.target.value)}
+                          className="w-full bg-white border border-slate-200 rounded-md px-3 h-9 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
+                        >
+                          <option value="">Select team member to assign these cases</option>
+                          {projectEmails?.map((email) => (
+                            <option key={email} value={email}>
+                              {email}
+                            </option>
+                          ))}
+                        </select>
+                        <Button
+                          onClick={handleBulkAssign}
+                          disabled={!bulkAssignedEmail || isBulkAssigning}
+                          className="h-9 px-6 cursor-pointer bg-blue-600 hover:bg-blue-700 text-white font-bold transition-all shadow-sm shrink-0"
+                        >
+                          {isBulkAssigning ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Check className="w-4 h-4 mr-2" />}
+                          Assign {selectedCount} {selectedCount === 1 ? 'Case' : 'Cases'}
+                        </Button>
+                      </div>
+                    </div>
+                  )
+                }
               </div>
             </div>
 
@@ -499,40 +579,7 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
         </div>
       </div>
 
-      {/* Select-all-filtered banner */}
-      {isAllCurrentPageSelected && totalCount > mergedPosts.length && (
-        <div className="px-6 pb-2 shrink-0">
-          <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-2.5 flex items-center justify-between">
-            {isAllFilterSelected ? (
-              <>
-                <span className="text-xs font-semibold text-blue-700">
-                  All <span className="font-bold">{totalCount}</span> cases across all pages are selected.
-                </span>
-                <button
-                  onClick={handleClearAllSelected}
-                  className="text-xs font-bold text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
-                >
-                  Clear selection
-                </button>
-              </>
-            ) : (
-              <>
-                <span className="text-xs font-semibold text-blue-700">
-                  Only the <span className="font-bold">{mergedPosts.length}</span> cases on this page are selected.
-                </span>
-                <button
-                  onClick={handleSelectAllFiltered}
-                  disabled={isSelectingAll}
-                  className="text-xs font-bold text-blue-600 hover:text-blue-800 hover:underline cursor-pointer disabled:opacity-60 flex items-center gap-1"
-                >
-                  {isSelectingAll && <Loader2 className="w-3 h-3 animate-spin" />}
-                  Select all {totalCount} cases
-                </button>
-              </>
-            )}
-          </div>
-        </div>
-      )}
+
 
       {/* Main Table */}
       <div className="flex-1 overflow-y-auto px-6 pb-4">
@@ -872,89 +919,115 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
       </div>
 
       {/* Pagination Controls */}
-      {totalPages > 1 && (
+      {totalCount > 0 && (
         <div className="px-6 pb-2 pt-2">
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 px-4 py-3 flex items-center justify-between">
-            <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-              Page <span className="text-slate-900">{currentPage}</span> of <span className="text-slate-900">{totalPages}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handlePageChange(1)}
-                disabled={currentPage === 1}
-                className="h-9 px-2 text-xs font-bold border-slate-200 hover:bg-slate-50 disabled:opacity-50"
-                title="First Page"
-              >
-                &lt;&lt;
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handlePageChange(currentPage - 1)}
-                disabled={currentPage === 1}
-                className="h-9 px-3 text-xs font-bold border-slate-200 hover:bg-slate-50 disabled:opacity-50"
-              >
-                <ChevronLeft className="w-4 h-4 mr-1" /> Previous
-              </Button>
-
-              <div className="flex items-center gap-1 mx-1">
-                {(() => {
-                  const pages = [];
-                  let start = Math.max(1, currentPage - 2);
-                  let end = Math.min(totalPages, currentPage + 2);
-
-                  if (currentPage <= 2) {
-                    end = Math.min(totalPages, 5);
-                  }
-                  if (currentPage >= totalPages - 1) {
-                    start = Math.max(1, totalPages - 4);
-                  }
-
-                  for (let i = start; i <= end; i++) {
-                    pages.push(i);
-                  }
-
-                  return pages.map(pageNum => (
-                    <Button
-                      key={pageNum}
-                      variant={currentPage === pageNum ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => handlePageChange(pageNum)}
+            <div className="flex items-center gap-6">
+              <div className="flex items-center gap-3">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap">Show:</span>
+                <div className="flex bg-slate-50 border border-slate-200 rounded-lg p-0.5">
+                  {[10, 25, 50, 75, 100].map((limit) => (
+                    <button
+                      key={limit}
+                      onClick={() => updateQueryParams({ limit: limit.toString(), page: 1 })}
                       className={cn(
-                        "h-9 w-9 p-0 text-xs font-bold",
-                        currentPage === pageNum
-                          ? "bg-slate-800 hover:bg-slate-900 text-white shadow-sm"
-                          : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                        "px-2.5 py-1 text-[10px] font-bold transition-all rounded-md cursor-pointer",
+                        itemsPerPage === limit
+                          ? "bg-white text-blue-600 shadow-sm ring-1 ring-slate-200"
+                          : "text-slate-500 hover:text-slate-700 hover:bg-slate-100"
                       )}
                     >
-                      {pageNum}
-                    </Button>
-                  ));
-                })()}
+                      {limit}
+                    </button>
+                  ))}
+                </div>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap">per page</span>
               </div>
 
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handlePageChange(currentPage + 1)}
-                disabled={currentPage === totalPages}
-                className="h-9 px-3 text-xs font-bold border-slate-200 hover:bg-slate-50 disabled:opacity-50"
-              >
-                Next <ChevronRight className="w-4 h-4 ml-1" />
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handlePageChange(totalPages)}
-                disabled={currentPage === totalPages}
-                className="h-9 px-2 text-xs font-bold border-slate-200 hover:bg-slate-50 disabled:opacity-50"
-                title="Last Page"
-              >
-                &gt;&gt;
-              </Button>
+              <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                Page <span className="text-slate-900">{currentPage}</span> of <span className="text-slate-900">{totalPages || 1}</span>
+              </div>
             </div>
+            
+            {totalPages > 1 && (
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handlePageChange(1)}
+                  disabled={currentPage === 1}
+                  className="h-9 px-2 text-xs font-bold border-slate-200 hover:bg-slate-50 disabled:opacity-50"
+                  title="First Page"
+                >
+                  &lt;&lt;
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handlePageChange(currentPage - 1)}
+                  disabled={currentPage === 1}
+                  className="h-9 px-3 text-xs font-bold border-slate-200 hover:bg-slate-50 disabled:opacity-50"
+                >
+                  <ChevronLeft className="w-4 h-4 mr-1" /> Previous
+                </Button>
+
+                <div className="flex items-center gap-1 mx-1">
+                  {(() => {
+                    const pages = [];
+                    let start = Math.max(1, currentPage - 2);
+                    let end = Math.min(totalPages, currentPage + 2);
+
+                    if (currentPage <= 2) {
+                      end = Math.min(totalPages, 5);
+                    }
+                    if (currentPage >= totalPages - 1) {
+                      start = Math.max(1, totalPages - 4);
+                    }
+
+                    for (let i = start; i <= end; i++) {
+                      pages.push(i);
+                    }
+
+                    return pages.map(pageNum => (
+                      <Button
+                        key={pageNum}
+                        variant={currentPage === pageNum ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => handlePageChange(pageNum)}
+                        className={cn(
+                          "h-9 w-9 p-0 text-xs font-bold",
+                          currentPage === pageNum
+                            ? "bg-slate-800 hover:bg-slate-900 text-white shadow-sm"
+                            : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                        )}
+                      >
+                        {pageNum}
+                      </Button>
+                    ));
+                  })()}
+                </div>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handlePageChange(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                  className="h-9 px-3 text-xs font-bold border-slate-200 hover:bg-slate-50 disabled:opacity-50"
+                >
+                  Next <ChevronRight className="w-4 h-4 ml-1" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handlePageChange(totalPages)}
+                  disabled={currentPage === totalPages}
+                  className="h-9 px-2 text-xs font-bold border-slate-200 hover:bg-slate-50 disabled:opacity-50"
+                  title="Last Page"
+                >
+                  &gt;&gt;
+                </Button>
+              </div>
+            )}
           </div>
         </div>
       )}

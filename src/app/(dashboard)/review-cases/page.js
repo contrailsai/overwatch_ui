@@ -63,7 +63,7 @@ export default async function ReviewCasesPage({ searchParams }) {
     postingDateEnd: resolvedParams?.postingDateEnd || undefined,
   }
 
-  const { posts, totalPages, totalCount } = await getPosts(project.mongo_db_map, page, 20, initialFilters)
+  const { posts, totalPages, totalCount } = await getPosts(project.mongo_db_map, page, 50, initialFilters)
 
   let initialCase = null;
   if (resolvedParams.case_id) {
@@ -93,6 +93,7 @@ export default async function ReviewCasesPage({ searchParams }) {
           totalPages={totalPages}
           currentPage={page}
           project={project}
+          clientDetails={clientDetails}
           initialFilters={initialFilters}
           totalCount={totalCount}
           initialCase={initialCase}

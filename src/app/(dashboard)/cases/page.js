@@ -14,7 +14,7 @@ export default async function CasesPage({ searchParams }) {
 
   const resolvedParams = await searchParams;
   const currentPage = resolvedParams.page ? parseInt(resolvedParams.page, 10) : 1;
-  const itemsPerPage = 20;
+  const itemsPerPage = Math.min(parseInt(resolvedParams.limit, 10) || 25, 100);
 
   const filters = {
     platform: resolvedParams.platform || 'all',
@@ -55,6 +55,7 @@ export default async function CasesPage({ searchParams }) {
           initialFilters={filters}
           initialSort={sort}
           currentPage={currentPage}
+          itemsPerPage={itemsPerPage}
           initialCase={initialCase}
           projectEmails={emails}
         />

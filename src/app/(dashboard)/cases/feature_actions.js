@@ -12,6 +12,7 @@ import { metadata } from '../layout'
 
 import { normalized_S3_post } from './actions'
 
+// ADD NOTE
 export const addReviewNote = traceAction('addReviewNote', async (caseId, noteText, project, clientDetails) => {
     try {
         if (!project?.mongo_db_map) {
@@ -30,7 +31,17 @@ export const addReviewNote = traceAction('addReviewNote', async (caseId, noteTex
 
         const result = await collection.updateOne(
             { _id: new ObjectId(caseId) },
-            { $push: { client_notes: newNote }, $set: { "metadata.updated_at": new Date().toISOString() } }
+            {
+                $set: { "metadata.updated_at": new Date().toISOString() },
+                $push: {
+                    client_notes: newNote,
+                    "metadata.update_history": {
+                        updated_at: new Date(),
+                        updated_by: clientDetails.email,
+                        changes_summary: "client added a review note"
+                    }
+                }
+            }
         )
 
         if (result.matchedCount > 0) {
@@ -45,7 +56,7 @@ export const addReviewNote = traceAction('addReviewNote', async (caseId, noteTex
 })
 
 // FOR RESULTS EDIT FUNCTIONALITY
-export const submitCaseReview = traceAction('submitCaseReview', async (project, prevState, formData) => {
+export const submitCaseReview = traceAction('submitCaseReview', async (project, clientDetails, prevState, formData) => {
 
     if (!project?.mongo_db_map) {
         return { success: false, error: 'Project database configuration missing' }
@@ -164,6 +175,13 @@ export const submitCaseReview = traceAction('submitCaseReview', async (project, 
                     processed: true,
                     processed_at: new Date(),
                     "metadata.updated_at": new Date().toISOString()
+                },
+                $push: {
+                    "metadata.update_history": {
+                        updated_at: new Date(),
+                        updated_by: clientDetails.email,
+                        changes_summary: "client edited case review details"
+                    }
                 }
             }
         )
@@ -223,7 +241,7 @@ export const fetch_clients_in_project = traceAction('fetch_clients_in_project', 
 });
 
 // ASSIGN TO OTHER CLIENTS (emails)
-export const assignCaseTo = traceAction('assignCaseTo', async (project, post_id, assigned_email) => {
+export const assignCaseTo = traceAction('assignCaseTo', async (project, clientDetails, post_id, assigned_email) => {
     if (!project?.mongo_db_map) {
         return { success: false, error: 'Project database configuration missing' }
     }
@@ -243,6 +261,13 @@ export const assignCaseTo = traceAction('assignCaseTo', async (project, post_id,
                 $set: {
                     "assigned_to": assigned_email,
                     "metadata.updated_at": new Date().toISOString()
+                },
+                $push: {
+                    "metadata.update_history": {
+                        updated_at: new Date(),
+                        updated_by: clientDetails.email,
+                        changes_summary: "client admin assigned case to another client"
+                    }
                 }
             }
         )
@@ -269,6 +294,63 @@ export const assignCaseTo = traceAction('assignCaseTo', async (project, post_id,
         }
     } catch (error) {
         console.error('MongoDB Update Error:', error)
+        return { success: false, error: error.message }
+    }
+})
+
+// BULK ASSIGN TO OTHER CLIENTS (emails)
+export const bulkAssignCasesTo = traceAction('bulkAssignCasesTo', async (project, clientDetails, post_ids, assigned_email) => {
+    if (!project?.mongo_db_map) {
+        return { success: false, error: 'Project database configuration missing' }
+    }
+
+    if (!post_ids || !Array.isArray(post_ids) || post_ids.length === 0) {
+        return { success: false, error: 'Missing or invalid Post IDs' }
+    }
+
+    try {
+        const client = await clientPromise
+        const db = client.db(project.mongo_db_map) // Use Correct DB
+        const collection = db.collection('Posts')
+
+        const objectIds = post_ids.map(id => new ObjectId(id))
+
+        const result = await collection.updateMany(
+            { _id: { $in: objectIds } },
+            {
+                $set: {
+                    "assigned_to": assigned_email,
+                    "metadata.updated_at": new Date().toISOString()
+                },
+                $push: {
+                    "metadata.update_history": {
+                        updated_at: new Date(),
+                        updated_by: clientDetails.email,
+                        changes_summary: "admin assigned case to another client"
+                    }
+                }
+            }
+        )
+
+        // FINALY ADD NOTIFICATION MESSAGE TO THE ASSIGNED CLIENT
+        const supabase = await createClient()
+
+        const { error } = await supabase
+            .from('notifications')
+            .insert([
+                {
+                    "client_email": assigned_email,
+                    "notification_msg": `You have been assigned ${post_ids.length} new cases to review.`,
+                    "notification_action": { "button": { "redirect": `/cases` } }
+                }
+            ])
+
+        return {
+            success: true,
+            count: result.modifiedCount
+        }
+    } catch (error) {
+        console.error('MongoDB Bulk Update Error:', error)
         return { success: false, error: error.message }
     }
 })

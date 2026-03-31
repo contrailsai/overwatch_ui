@@ -18,7 +18,7 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { cn } from "@/lib/utils"
 
-export default function EditForm({ post, project, setIsEditing, onUpdatePost }) {
+export default function EditForm({ post, project, clientDetails, setIsEditing, onUpdatePost }) {
     const project_details = project.project_details
 
     const initialState = {
@@ -26,7 +26,7 @@ export default function EditForm({ post, project, setIsEditing, onUpdatePost }) 
         error: null,
     }
 
-    const submit_to_edit = submitCaseReview.bind(null, project)
+    const submit_to_edit = submitCaseReview.bind(null, project, clientDetails)
 
     const [state, formAction, isPending] = useActionState(submit_to_edit, initialState);
 

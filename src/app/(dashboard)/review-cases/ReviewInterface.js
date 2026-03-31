@@ -32,6 +32,7 @@ export function ReviewInterface({
   totalPages,
   currentPage,
   project,
+  clientDetails,
   initialFilters,
   totalCount,
   initialCase
@@ -245,7 +246,7 @@ export function ReviewInterface({
                     </div>
                   )}
                   <Badge variant="secondary" className="px-3 py-1 bg-slate-100 text-slate-600 border-slate-200">
-                    {totalCount.toLocaleString()} Results Found
+                    {posts.length} of {totalCount.toLocaleString()} results
                   </Badge>
 
                   {/* ITEMS VISIBLE ON THE PAGE ? */}
@@ -343,22 +344,22 @@ export function ReviewInterface({
                   initialFrom={currentFilters.sourcingDateStart}
                   initialTo={currentFilters.sourcingDateEnd}
                   onApply={(range) => updateQueryParams({
-                    sourcingDateStart: range?.from ? range.from.toISOString() : null,
-                    sourcingDateEnd: range?.to ? range.to.toISOString() : null
+                    sourcingDateStart: range?.from ? format(range.from, "yyyy-MM-dd'T'HH:mm:ssXXX") : null,
+                    sourcingDateEnd: range?.to ? format(range.to, "yyyy-MM-dd'T'HH:mm:ssXXX") : null
                   })}
                 />
               </div>
 
               {/* posting date  */}
               <div className="space-y-1.5 w-full min-w-32">
-                <Label className="text-[10px] uppercase font-bold text-slate-400">Posting Date</Label>
+                <Label className="text-[10px] uppercase font-bold text-slate-400">Publish Date</Label>
                 <DateFilterPopover
-                  title="Posting Date"
+                  title="Publish Date"
                   initialFrom={currentFilters.postingDateStart}
                   initialTo={currentFilters.postingDateEnd}
                   onApply={(range) => updateQueryParams({
-                    postingDateStart: range?.from ? range.from.toISOString() : null,
-                    postingDateEnd: range?.to ? range.to.toISOString() : null
+                    postingDateStart: range?.from ? format(range.from, "yyyy-MM-dd'T'HH:mm:ssXXX") : null,
+                    postingDateEnd: range?.to ? format(range.to, "yyyy-MM-dd'T'HH:mm:ssXXX") : null
                   })}
                 />
               </div>
@@ -407,7 +408,7 @@ export function ReviewInterface({
                   <th scope="col" className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Content</th>
                   <th scope="col" className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Platform</th>
                   <th scope="col" className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Sourcing Date</th>
-                  <th scope="col" className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Posting Date</th>
+                  <th scope="col" className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Publish Date</th>
                   {/* <th scope="col" className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Threat Type</th> */}
                   <th scope="col" className="px-6 py-4 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Actions</th>
                 </tr>
@@ -677,7 +678,8 @@ export function ReviewInterface({
           <ReviewForm
             key={selectedPost._id}
             post={selectedPost}
-            project_details={project.project_details}
+            project={project}
+            clientDetails={clientDetails}
             onClose={() => setSelectedPost(null)}
             onNavigate={navigatePost}
             hasPrev={posts.findIndex(p => p._id === selectedPost._id) > 0}

@@ -5,11 +5,15 @@ import { useEffect, useState, useTransition, useRef } from 'react'
 import { Search, Plus, Hash, Loader2, Tag, AlertCircle, CheckCircle2, ChevronDown, ChevronUp, ChevronsUp } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Switch } from '@/components/ui/switch'
 import { cn } from '@/lib/utils'
 
 export default function KeywordsSection({ project }) {
     const [inputText, setInputText] = useState('')
     const [keywords, setKeywords] = useState([])
+    const [totalCount, setTotalCount] = useState(0)
+    const [limit, setLimit] = useState(50)
+    const [isHighImportance, setIsHighImportance] = useState(true)
     const [fetchLoading, setFetchLoading] = useState(false)
     const [feedback, setFeedback] = useState(null) // { type: 'error'|'success', message: string }
     const [isPending, startTransition] = useTransition()
@@ -21,11 +25,12 @@ export default function KeywordsSection({ project }) {
         setTimeout(() => setFeedback(null), 3000)
     }
 
-    const fetchKeywords = async (text = '') => {
+    const fetchKeywords = async (text = inputText, currentLimit = limit) => {
         setFetchLoading(true)
         try {
-            const res = await get_keywords(project.mongo_db_map, text)
-            setKeywords(res)
+            const res = await get_keywords(project.mongo_db_map, text, currentLimit)
+            setKeywords(res.keywords)
+            setTotalCount(res.totalCount)
         } catch {
             showFeedback('error', 'Failed to load keywords')
         } finally {
@@ -33,29 +38,45 @@ export default function KeywordsSection({ project }) {
         }
     }
 
+    // Effect for limit and project changes (immediate)
     useEffect(() => {
-        fetchKeywords()
-    }, [project])
+        fetchKeywords(inputText, limit)
+    }, [project, limit])
 
-    // Debounced search as user types
+    // Debounced effect for search text
     useEffect(() => {
+        if (inputText === '') {
+            // When cleared, reset limit and fetch everything immediately
+            setLimit(50)
+            return
+        }
+
         if (debounceRef.current) clearTimeout(debounceRef.current)
         debounceRef.current = setTimeout(() => {
-            fetchKeywords(inputText)
+            setLimit(50)
+            // If limit was already 50, the limit effect won't trigger, so we fetch here
+            if (limit === 50) {
+                fetchKeywords(inputText, 50)
+            }
         }, 800)
         return () => clearTimeout(debounceRef.current)
     }, [inputText])
 
+    const handleShowMore = () => {
+        setLimit(prev => prev + 50)
+    }
+
     const handleAdd = (word = inputText) => {
         if (!word.trim()) return
         startTransition(async () => {
-            const res = await add_keyword(project.mongo_db_map, word.trim())
+            const res = await add_keyword(project.mongo_db_map, word.trim(), isHighImportance)
             if (res?.error) {
                 showFeedback('error', res.error)
             } else {
                 showFeedback('success', `"${word.trim()}" added`)
                 setInputText('')
-                await fetchKeywords('')
+                setLimit(50)
+                setIsHighImportance(true)
                 inputRef.current?.focus()
             }
         })
@@ -92,29 +113,71 @@ export default function KeywordsSection({ project }) {
                             variant="secondary"
                             className="bg-blue-50 text-blue-700 border-blue-100 px-3 py-1 text-xs font-bold shrink-0"
                         >
-                            {keywords.length} keyword{keywords.length !== 1 ? 's' : ''}
+                            {keywords.length} of {totalCount} keywords
                         </Badge>
                     </div>
 
-                    {/* Search input */}
-                    <div className="flex gap-2 mt-4">
-                        <div className="relative flex-1">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-                            <input
-                                ref={inputRef}
-                                type="text"
-                                value={inputText}
-                                onChange={(e) => setInputText(e.target.value)}
-                                onKeyDown={handleKeyDown}
-                                placeholder="Search keywords…"
-                                className={cn(
-                                    "w-full pl-9 pr-4 py-2.5 text-sm font-medium rounded-xl border border-slate-200",
-                                    "bg-white shadow-sm outline-none",
-                                    "focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400",
-                                    "placeholder:text-slate-400 transition-all"
-                                )}
-                            />
+                    {/* Search input and Add Suggestion */}
+                    <div className="space-y-3 mt-4">
+                        <div className="flex gap-2">
+                            <div className="relative flex-1">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                                <input
+                                    ref={inputRef}
+                                    type="text"
+                                    value={inputText}
+                                    onChange={(e) => setInputText(e.target.value)}
+                                    onKeyDown={handleKeyDown}
+                                    placeholder="Search or add keywords…"
+                                    className={cn(
+                                        "w-full pl-9 pr-4 py-2.5 text-sm font-medium rounded-xl border border-slate-200",
+                                        "bg-white shadow-sm outline-none",
+                                        "focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400",
+                                        "placeholder:text-slate-400 transition-all"
+                                    )}
+                                />
+                            </div>
                         </div>
+
+                        {/* Add Prompt - Top Positioned */}
+                        {showAddSuggestion && (
+                            <div className="flex flex-col sm:flex-row items-center gap-3 p-3 bg-blue-50/50 border border-blue-100 rounded-xl animate-in slide-in-from-top-2 duration-200">
+                                <div className="flex items-center gap-2 flex-1">
+                                    <div className="p-2 bg-white rounded-lg border border-blue-100 text-blue-600 ">
+                                        <Plus className="w-4 h-4" />
+                                    </div>
+                                    <div>
+                                        <p className="text-sm font-bold text-slate-700 leading-none">Add &ldquo;{trimmed}&rdquo;</p>
+                                        <p className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider mt-1">This keyword is not in your index</p>
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center gap-6 w-full sm:w-auto">
+                                    <div className="w-full flex items-center gap-3 bg-white px-3 py-1.5 rounded-lg border border-slate-200">
+                                        <div className="flex flex-col items-end w-full">
+                                            <span className="text-[10px] font-bold text-slate-400 uppercase leading-none">Priority</span>
+                                            <span className={cn("text-xs font-bold mt-1", isHighImportance ? "text-blue-600" : "text-slate-400")}>
+                                                {isHighImportance ? "High" : "Normal"}
+                                            </span>
+                                        </div>
+                                        <Switch
+                                            checked={isHighImportance}
+                                            onCheckedChange={setIsHighImportance}
+                                            className="data-[state=checked]:bg-blue-600"
+                                        />
+                                    </div>
+
+                                    <button
+                                        type="button"
+                                        onClick={() => handleAdd(trimmed)}
+                                        disabled={isPending}
+                                        className=" w-full flex-1 sm:flex-initial bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg text-xs font-bold shadow-sm shadow-blue-200 disabled:opacity-50 flex items-center justify-center gap-2 transition-all active:scale-95"
+                                    >
+                                        {isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Confirm Add"}
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     {/* Feedback banner */}
@@ -147,24 +210,24 @@ export default function KeywordsSection({ project }) {
                                 <KeywordChip key={kw._id} keyword={kw} />
                             ))}
 
-                            {/* Add suggestion chip — shown when search has no exact match */}
-                            {showAddSuggestion && (
+                            {/* Show More button */}
+                            {totalCount > keywords.length && !showAddSuggestion && (
                                 <button
                                     type="button"
-                                    onClick={() => handleAdd(trimmed)}
-                                    disabled={isPending}
+                                    onClick={handleShowMore}
+                                    disabled={isLoading}
                                     className={cn(
                                         "flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-sm font-semibold transition-all duration-150",
-                                        "border-dashed border-blue-300 text-blue-600 bg-blue-50/60",
-                                        "hover:bg-blue-100 hover:border-blue-400 active:scale-95",
-                                        "disabled:opacity-50 disabled:cursor-not-allowed"
+                                        "border-slate-200 text-slate-500 bg-slate-50 hover:bg-slate-100 hover:border-slate-300 active:scale-95",
+                                        "disabled:opacity-50"
                                     )}
                                 >
-                                    {isPending
-                                        ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                        : <Plus className="w-3.5 h-3.5" />
-                                    }
-                                    Add &ldquo;{trimmed}&rdquo;
+                                    {isLoading ? (
+                                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                    ) : (
+                                        <Plus className="w-3.5 h-3.5" />
+                                    )}
+                                    Show {Math.min(50, totalCount - keywords.length)} More
                                 </button>
                             )}
 

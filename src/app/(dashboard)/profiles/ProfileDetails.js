@@ -310,7 +310,7 @@ export default function ProfileDetailPanel({ profile, project, isOpen, onClose, 
                                 {profile.metadata?.account_creation_date && (
                                     <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-100 text-slate-600 text-xs font-medium border border-slate-200/60">
                                         <Calendar className="w-3 h-3 text-slate-400" />
-                                        Joined {format(new Date(profile.metadata.account_creation_date), 'MMM yyyy')}
+                                        Joined {format(new Date(profile.metadata.account_creation_date), 'dd MMM yyyy')}
                                     </div>
                                 )}
                                 {profile.profile_url && (
@@ -406,27 +406,27 @@ export default function ProfileDetailPanel({ profile, project, isOpen, onClose, 
 
                                         // POSTED AT ---> ORIGINAL DATE FILTER ( WHEN IT WAS POSTED ON THE SOCIAL MEDIA PLATFORM)
                                         if (c.posted_date)
-                                            posted_date = format(new Date(c.posted_date), "dd/MM/yyyy hh:mm a");
+                                            posted_date = format(new Date(c.posted_date), "dd MMM yyyy hh:mm");
                                         else if (c.metadata?.posted_date)
-                                            posted_date = format(new Date(c.metadata.posted_date), "dd/MM/yyyy hh:mm a");
+                                            posted_date = format(new Date(c.metadata.posted_date), "dd/MM/yyyy hh:mm");
                                         else if (c.timestamp)
-                                            posted_date = format(new Date(c.timestamp), "dd/MM/yyyy hh:mm a");
+                                            posted_date = format(new Date(c.timestamp), "dd/MM/yyyy hh:mm");
                                         else if (c.sourcing_date)
-                                            posted_date = format(new Date(c.sourcing_date), "dd/MM/yyyy hh:mm a");
+                                            posted_date = format(new Date(c.sourcing_date), "dd/MM/yyyy hh:mm");
 
                                         // SOURCED AT ---> (NOT BEING USED WELL BUT ITS WHEN WE GOT THE POST)
                                         if (c.metadata?.created_at)
-                                            sourced_date = format(new Date(c.metadata.created_at), "dd/MM/yyyy hh:mm a");
+                                            sourced_date = format(new Date(c.metadata.created_at), "dd MMM yyyy hh:mm");
                                         else if (c.created_at)
-                                            sourced_date = format(new Date(c.created_at), "dd/MM/yyyy hh:mm a");
+                                            sourced_date = format(new Date(c.created_at), "dd MMM yyyy hh:mm");
                                         
                                         // REVIEWED AT. --> PROCESSED DATE FILTER
                                         if (c?.reviewed_at)
-                                            processed_date = format(new Date(c.reviewed_at), "dd/MM/yyyy hh:mm a");
+                                            processed_date = format(new Date(c.reviewed_at), "dd/MM/yyyy hh:mm ");
                                         else if (c.review_details?.reviewed_at)
-                                            processed_date = format(new Date(c.review_details.reviewed_at), "dd/MM/yyyy hh:mm a");
+                                            processed_date = format(new Date(c.review_details.reviewed_at), "dd/MM/yyyy hh:mm ");
                                         
-                                        console.log("posted date = ", posted_date, "sourced date = ", sourced_date, "processed date = ", processed_date)
+                                        // console.log("posted date = ", posted_date, "sourced date = ", sourced_date, "processed date = ", processed_date)
 
                                         return (
                                             <div key={c._id} className="group flex flex-col gap-2 bg-white border border-slate-100 rounded-xl px-4 py-3 hover:border-slate-200 hover:shadow-sm transition-all">

@@ -2,50 +2,39 @@ import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import { CalendarIcon, Clock2Icon, ChevronDown } from 'lucide-react';
 
-import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardFooter, CardDescription } from '@/components/ui/card';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Calendar } from '@/components/ui/calendar';
 import { Button } from '@/components/ui/button';
 import { cn } from "@/lib/utils"; // Assuming you have standard shadcn cn utility
 
-// Generate ["12:00", "12:30", "01:00", "01:30" ... "11:30"]
-const halfHourOptions = Array.from({ length: 24 }).map((_, i) => {
+// Generate ["00:00", "00:30", "01:00" ... "23:30"]
+const halfHourOptions = Array.from({ length: 48 }).map((_, i) => {
     const totalMinutes = i * 30;
     const hours = Math.floor(totalMinutes / 60);
     const mins = totalMinutes % 60;
-    const hour12 = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
-    return `${String(hour12).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
+    return `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
 });
 
-// Helper to extract 12-hour time (e.g., "01:30")
-const get12HourString = (date) => {
-    if (!date) return "12:00";
+// Helper to extract 24-hour time (e.g., "13:30")
+const get24HourString = (date) => {
+    if (!date) return "00:00";
     const d = new Date(date);
     d.setMinutes(d.getMinutes() < 30 ? 0 : 30);
-    return format(d, "hh:mm");
-};
-
-// Helper to extract AM/PM
-const getAMPMString = (date) => {
-    if (!date) return "AM";
-    return format(date, "aa");
+    return format(d, "HH:mm");
 };
 
 // --- NEW CUSTOM DROPDOWN COMPONENT ---
 function CustomTimePicker({ date, onChange, disabled }) {
-    const time12 = get12HourString(date);
-    const ampm = getAMPMString(date);
+    const time24 = get24HourString(date);
 
-    const updateDate = (newTime12, newAMPM) => {
+    const updateDate = (newTime24) => {
         if (!date) return;
-        let [h, m] = newTime12.split(':').map(Number);
-
-        if (newAMPM === "PM" && h !== 12) h += 12;
-        if (newAMPM === "AM" && h === 12) h = 0;
+        const [h, m] = newTime24.split(':').map(Number);
 
         const updated = new Date(date);
-        updated.setHours(h, m, 0);
+        updated.setHours(h, m, 0, 0);
         onChange(updated);
     };
 
@@ -63,54 +52,27 @@ function CustomTimePicker({ date, onChange, disabled }) {
                 >
                     <div className="flex items-center gap-2">
                         <Clock2Icon className="h-4 w-4 opacity-50" />
-                        {date ? `${time12} ${ampm}` : "Select time"}
+                        {date ? time24 : "Select time"}
                     </div>
                     <ChevronDown className="h-4 w-4 opacity-50" />
                 </Button>
             </PopoverTrigger>
             <PopoverContent className="w-auto p-0 flex h-[200px]" align="start">
-                {/* Left Side: Scrollable Times */}
-                <div className="flex flex-col w-24 overflow-y-auto p-1 custom-scrollbar">
+                {/* Scrollable Times */}
+                <div className="flex flex-col w-32 overflow-y-auto p-1 custom-scrollbar">
                     {halfHourOptions.map((t) => (
                         <Button
                             key={t}
                             variant="ghost"
                             className={cn(
                                 "justify-center font-normal px-2 py-1 h-8 shrink-0",
-                                time12 === t && "bg-blue-600 text-white" // Matches your image active state
+                                time24 === t && "bg-blue-600 text-white"
                             )}
-                            onClick={() => updateDate(t, ampm)}
+                            onClick={() => updateDate(t)}
                         >
                             {t}
                         </Button>
                     ))}
-                </div>
-
-                {/* Divider */}
-                <div className="w-px bg-slate-200 my-2" />
-
-                {/* Right Side: AM/PM */}
-                <div className="flex flex-col gap-1 p-2 w-16">
-                    <Button
-                        variant="ghost"
-                        className={cn(
-                            "px-2 py-1 h-8 font-medium",
-                            ampm === "AM" ? "bg-blue-600 text-white " : "text-slate-500"
-                        )}
-                        onClick={() => updateDate(time12, "AM")}
-                    >
-                        AM
-                    </Button>
-                    <Button
-                        variant="ghost"
-                        className={cn(
-                            "px-2 py-1 h-8 font-medium",
-                            ampm === "PM" ? "bg-blue-600 text-white" : "text-slate-500"
-                        )}
-                        onClick={() => updateDate(time12, "PM")}
-                    >
-                        PM
-                    </Button>
                 </div>
             </PopoverContent>
         </Popover>
@@ -209,11 +171,33 @@ export function DateFilterPopover({ title, onApply, initialFrom, initialTo }) {
 
             <PopoverContent className="w-auto p-0" align="start">
                 <Card className="w-fit shadow-none border-0 pt-0">
-                    <CardHeader className="border-b mb-4 pt-4 px-4 pb-3">
-                        <CardTitle className="text-sm font-semibold">Select Dates Range</CardTitle>
+                    <CardHeader className="border-b pt-4 px-4 m-0 flex">
+                        <div className=" w-full text-sm">
+                            Select Ranges for
+                            <br />
+                            <span className='font-bold text-xl py-3 rounded-full'>
+                                {title}
+                            </span>
+                        </div>
+                        <div className={"flex w-full justify-center pt-2"}>
+                            <div className="flex flex-col gap-1 text-sm w-fit ">
+                                <div className="flex justify-between items-center">
+                                    <span className="font-medium text-slate-500 pr-2">From:</span>
+                                    <span className="px-2 py-0.5 rounded-md text-black font-extrabold text-sm">
+                                        {dateRange?.from ? format(dateRange.from, "do MMM yyyy - HH:mm") : "—"}
+                                    </span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <span className="font-medium text-slate-500 pr-2">To:</span>
+                                    <span className="px-2 py-0.5 rounded-md text-black font-extrabold text-sm">
+                                        {dateRange?.to ? format(dateRange.to, "do MMM yyyy -  HH:mm") : "—"}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
                     </CardHeader>
 
-                    <CardContent className="flex gap-4 py-0 pr-4">
+                    <CardContent className="flex gap-4 py-0 m-0 ">
                         {/* Calendar Section */}
                         <Calendar
                             mode="range"
@@ -222,11 +206,11 @@ export function DateFilterPopover({ title, onApply, initialFrom, initialTo }) {
                             selected={dateRange}
                             onSelect={handleDateSelect}
                             disabled={{ after: new Date() }}
-                            className="rounded-md border-none p-0"
+                            className="rounded-md border-none p-0 w-full flex-1 md:[--cell-size:--spacing(12)]"
                         />
 
                         {/* Time Section */}
-                        <div className="flex flex-col gap-4 border-l pl-4 min-w-[200px] justify-center">
+                        <div className="flex flex-col gap-4 border-l pl-4 min-w-[160px] justify-start">
                             <FieldGroup className="gap-4">
                                 <Field>
                                     <FieldLabel className="text-xs text-muted-foreground mb-1 block">From Time</FieldLabel>
@@ -250,21 +234,8 @@ export function DateFilterPopover({ title, onApply, initialFrom, initialTo }) {
                     </CardContent>
 
                     {/* Action / Summary Footer */}
-                    <CardFooter className="flex flex-col items-stretch gap-3 border-t mt-4 bg-slate-50/50 px-4 py-3">
-                        <div className="flex flex-col gap-1 text-sm">
-                            <div className="flex justify-between items-center">
-                                <span className="font-medium text-slate-500">From:</span>
-                                <span className="px-2 py-0.5 bg-slate-100 rounded-md font-mono text-xs">
-                                    {dateRange?.from ? format(dateRange.from, "dd-MM-yyyy hh:mm a") : "—"}
-                                </span>
-                            </div>
-                            <div className="flex justify-between items-center">
-                                <span className="font-medium text-slate-500">To:</span>
-                                <span className="px-2 py-0.5 bg-slate-100 rounded-md font-mono text-xs">
-                                    {dateRange?.to ? format(dateRange.to, "dd-MM-yyyy hh:mm a") : "—"}
-                                </span>
-                            </div>
-                        </div>
+                    <CardFooter className="flex flex-col items-stretch gap-3 border-t m-0 bg-slate-50/50 px-4 py-3">
+
 
                         <div className="flex items-center gap-2 mt-2">
                             <Button

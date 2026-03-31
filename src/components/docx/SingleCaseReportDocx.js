@@ -223,9 +223,9 @@ export const generateCaseSections = async (post, project, compressedImage, caseN
     docChildren.push(metaPara("Platform", (post.platform || 'Unknown').toUpperCase()));
     const fullUrl = post.original_url || post.url;
     docChildren.push(metaPara("URL", processText(fullUrl || "N/A", 100), !!fullUrl, fullUrl));
-    docChildren.push(metaPara("Posted", posted_date));
-    docChildren.push(metaPara("Sourced", sourced_date));
-    docChildren.push(metaPara("Reviewed", reviewedDate));
+    docChildren.push(metaPara("Publish Date", posted_date));
+    docChildren.push(metaPara("Alert Date", sourced_date));
+    docChildren.push(metaPara("Review Date", reviewedDate));
 
     docChildren.push(sectionDivider(200));
 

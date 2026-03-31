@@ -240,6 +240,7 @@ export const getPosts = traceAction('getPosts_review', async (project_mongo_db_m
   }
 })
 
+// SHOWCASE A SINGLE POST link
 export const getPostById = traceAction('getPostById', async (project, case_id) => {
   try {
     const client = await clientPromise
@@ -258,6 +259,7 @@ export const getPostById = traceAction('getPostById', async (project, case_id) =
   }
 })
 
+// CSV EXPORT
 export const getAllPostsForExport = traceAction('getAllPostsForExport', async (project_mongo_db_map, filters = {}) => {
   try {
     // const supabase = await createClient()
@@ -385,7 +387,7 @@ export const getAllPostsForExport = traceAction('getAllPostsForExport', async (p
   }
 })
 
-
+// EMAIL SENDING
 async function sendNotification(notification_config, type) {
   try {
     if (type === "takedown_request") {
@@ -438,7 +440,7 @@ async function sendNotification(notification_config, type) {
   }
 }
 
-export const submitCaseReview = traceAction('submitCaseReview', async (prevState, formData) => {
+export const submitCaseReview = traceAction('submitCaseReview', async (project, client_details, prevState, formData) => {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
@@ -447,21 +449,21 @@ export const submitCaseReview = traceAction('submitCaseReview', async (prevState
   }
 
   // 1. Fetch Client Details & Project Config FIRST
-  const { data: client_details } = await supabase
-    .from('client_details')
-    .select('*')
-    .eq('id', user.id)
-    .single()
+  // const { data: client_details } = await supabase
+  //   .from('client_details')
+  //   .select('*')
+  //   .eq('id', user.id)
+  //   .single()
 
   if (!client_details?.project_name) {
     return { success: false, error: 'User not assigned to a project' }
   }
 
-  const { data: project } = await supabase
-    .from('project')
-    .select('project_name, mongo_db_map')
-    .eq('project_name', client_details.project_name)
-    .single()
+  // const { data: project } = await supabase
+  //   .from('project')
+  //   .select('project_name, mongo_db_map')
+  //   .eq('project_name', client_details.project_name)
+  //   .single()
 
   if (!project?.mongo_db_map) {
     return { success: false, error: 'Project database configuration missing' }
@@ -573,6 +575,13 @@ export const submitCaseReview = traceAction('submitCaseReview', async (prevState
           processed: true,
           processed_at: new Date(),
           "metadata.updated_at": new Date().toISOString()
+        },
+        $push: {
+          "metadata.update_history": {
+            updated_at: new Date(),
+            updated_by: client_details.email,
+            changes_summary: "Case Alerted "
+          }
         }
       }
     )
@@ -596,14 +605,15 @@ export const submitCaseReview = traceAction('submitCaseReview', async (prevState
       // client_details is already fetched at the top
 
       // GET THE CLIENT'S NOTIFICATION CONFIG CONNECTED TO THIS PROJECT
-      const { data: notification_data } = await supabase
-        .from('client_details')
-        .select('notification_config')
-        .eq('project_name', client_details.project_name)
-        .eq('permission', 'client')
-        .single()
+      const {notification_config} = client_details;
+      // const { data: notification_data } = await supabase
+      //   .from('client_details')
+      //   .select('notification_config')
+      //   .eq('project_name', client_details.project_name)
+      //   .eq('permission', 'client')
+      //   .single()
 
-      const notification_config = notification_data?.notification_config
+      // const notification_config = notification_data?.notification_config
 
       // SEND NOTIFICATION TO CLIENT
       const { success, error } = await sendNotification(notification_config, "takedown_request")

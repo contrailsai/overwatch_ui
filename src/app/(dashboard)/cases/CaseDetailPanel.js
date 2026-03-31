@@ -26,13 +26,6 @@ import { useRouter } from 'next/navigation'
 //  Shadcn imports
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { CaseExportButton } from '@/components/pdf/CaseExportButton'
 import { CaseExportDocxButton } from '@/components/docx/CaseExportDocxButton'
@@ -139,7 +132,7 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
         setIsAssigning(true);
         try {
             // Invoking your action function
-            const result = await assignCaseTo(project, post._id, assignedEmail);
+            const result = await assignCaseTo(project, clientDetails, post._id, assignedEmail);
 
             // Assuming successful assignment
             setIsAssignEditMode(false);
@@ -297,6 +290,8 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
             setIsProcessing(false);
         }
     }
+
+    // console.log(post);
 
     return (
         <div className="fixed inset-0 z-50 flex justify-end font-sans">
@@ -487,11 +482,11 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
                                             </div>
                                             <div className="grid grid-cols-2 gap-10">
                                                 <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between gap-1">
-                                                    <span className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2"><Calendar className="w-3.5 h-3.5 text-slate-500" /> Posted</span>
+                                                    <span className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2"><Calendar className="w-3.5 h-3.5 text-slate-500" /> Publish Date</span>
                                                     <span className="font-bold text-sm text-slate-900">{posted_date}</span>
                                                 </div>
                                                 <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between gap-1">
-                                                    <span className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2"><History className="w-3.5 h-3.5 text-slate-500" /> Sourced</span>
+                                                    <span className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2"><History className="w-3.5 h-3.5 text-slate-500" /> Alert Date</span>
                                                     <span className="font-bold text-sm text-slate-900">{sourced_date}</span>
                                                 </div>
                                             </div>
@@ -504,7 +499,13 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
 
                     {
                         isEditing ? (
-                            <EditForm post={post} project={project} setIsEditing={setIsEditing} onUpdatePost={onUpdatePost} />
+                            <EditForm
+                                post={post}
+                                project={project}
+                                clientDetails={clientDetails}
+                                setIsEditing={setIsEditing}
+                                onUpdatePost={onUpdatePost}
+                            />
                         ) : (
                             <div className="relative w-full lg:w-[500px] bg-white flex flex-col h-full shrink-0">
 
@@ -615,66 +616,70 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
                                     </div>
 
                                     {/* ASSIGN THE CASE TO A USER */}
-                                    <div className="space-y-3">
-                                        <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                                            <UserPlus className="w-3.5 h-3.5" /> Assignment
-                                        </h4>
-                                        <div className="w-full bg-slate-50 p-4 rounded-xl border border-slate-100 flex items-center gap-3">
-                                            {!isAssignEditMode ? (
-                                                <>
-                                                    <div className="flex-1 flex items-center gap-2">
-                                                        <span className="text-sm text-slate-500 font-medium">Assigned to:</span>
-                                                        <Badge variant="secondary" className="font-bold text-slate-700 bg-white border-slate-200">
-                                                            {assignedEmail}
-                                                        </Badge>
-                                                    </div>
-                                                    <Button variant="ghost" size="sm" onClick={() => setIsAssignEditMode(true)} className="h-8 text-slate-500 hover:text-slate-900">
-                                                        <Pencil className="w-4 h-4 mr-1.5" /> Edit
-                                                    </Button>
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <span className="text-sm text-slate-500 font-medium whitespace-nowrap">Assign to:</span>
-                                                    <Select value={assignedEmail} onValueChange={setAssignedEmail}>
-                                                        <SelectTrigger className="w-full bg-white">
-                                                            <SelectValue placeholder="Select an email" />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            {projectEmails?.map((email) => (
-                                                                <SelectItem key={email} value={email}>
-                                                                    {email}
-                                                                </SelectItem>
-                                                            ))}
-                                                        </SelectContent>
-                                                    </Select>
+                                    {
+                                        clientDetails.role === "client-admin" && (
+                                            <div className="space-y-3">
+                                                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                                    <UserPlus className="w-3.5 h-3.5" /> Assignment
+                                                </h4>
+                                                <div className="w-full bg-slate-50 p-4 rounded-xl border border-slate-100 flex items-center gap-3">
+                                                    {!isAssignEditMode ? (
+                                                        <>
+                                                            <div className="flex-1 flex items-center gap-2">
+                                                                <span className="text-sm text-slate-500 font-medium">Assigned to:</span>
+                                                                <Badge variant="secondary" className="font-bold text-slate-700 bg-white border-slate-200">
+                                                                    {assignedEmail}
+                                                                </Badge>
+                                                            </div>
+                                                            <Button variant="ghost" size="sm" onClick={() => setIsAssignEditMode(true)} className="h-8 text-slate-500 hover:text-slate-900">
+                                                                <Pencil className="w-4 h-4 mr-1.5" /> Edit
+                                                            </Button>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <span className="text-sm text-slate-500 font-medium whitespace-nowrap">Assign to:</span>
+                                                            <select
+                                                                value={assignedEmail}
+                                                                onChange={(e) => setAssignedEmail(e.target.value)}
+                                                                className="w-full bg-white border border-slate-200 rounded-md px-3 h-10 text-sm font-medium focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
+                                                            >
+                                                                <option value="">Select an email</option>
+                                                                {projectEmails?.map((email) => (
+                                                                    <option key={email} value={email}>
+                                                                        {email}
+                                                                    </option>
+                                                                ))}
+                                                            </select>
 
-                                                    <Button
-                                                        onClick={handleAssign}
-                                                        disabled={!assignedEmail || isAssigning || assignedEmail === post?.assigned_to}
-                                                        size="sm"
-                                                        // variant="ghost"
-                                                        className=" cursor-pointer disabled:cursor-not-allowed shrink-0 bg-blue-600 hover:bg-blue-700 text-white"
-                                                    >
-                                                        {isAssigning ? <Loader2 className="w-4 h-4 animate-spin mr-1.5" /> : <Check className="w-4 h-4 mr-1.5" />}
-                                                        Assign
-                                                    </Button>
+                                                            <Button
+                                                                onClick={handleAssign}
+                                                                disabled={!assignedEmail || isAssigning || assignedEmail === post?.assigned_to}
+                                                                size="sm"
+                                                                // variant="ghost"
+                                                                className=" cursor-pointer disabled:cursor-not-allowed shrink-0 bg-blue-600 hover:bg-blue-700 text-white"
+                                                            >
+                                                                {isAssigning ? <Loader2 className="w-4 h-4 animate-spin mr-1.5" /> : <Check className="w-4 h-4 mr-1.5" />}
+                                                                Assign
+                                                            </Button>
 
-                                                    {/* Show a Cancel button only if it was already assigned previously to allow backing out of edit mode */}
-                                                    {post?.assigned_to && (
-                                                        <Button variant="ghost" size="sm"
+                                                            {/* Show a Cancel button only if it was already assigned previously to allow backing out of edit mode */}
+                                                            {post?.assigned_to && (
+                                                                <Button variant="ghost" size="sm"
 
-                                                            className=""
-                                                            onClick={() => {
-                                                                setAssignedEmail(post.assigned_to);
-                                                                setIsAssignEditMode(false);
-                                                            }}>
-                                                            Cancel
-                                                        </Button>
+                                                                    className=""
+                                                                    onClick={() => {
+                                                                        setAssignedEmail(post.assigned_to);
+                                                                        setIsAssignEditMode(false);
+                                                                    }}>
+                                                                    Cancel
+                                                                </Button>
+                                                            )}
+                                                        </>
                                                     )}
-                                                </>
-                                            )}
-                                        </div>
-                                    </div>
+                                                </div>
+                                            </div>
+                                        )
+                                    }
 
                                     {/* Reviewer Note (MADE THIS REVIEWER ONLY FOR NOW) */}
                                     {/* {reviewerNote && (
@@ -739,29 +744,99 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
                                         </div>
                                     </div>
 
+                                    {/* Audit Log / Update History */}
+                                    {((Array.isArray(post.update_history) && post.update_history.length > 0) || post.content_reviewed_by) && (
+                                        <div className="mt-4 p-4 border-t border-slate-100">
+                                            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                                <History className="w-3.5 h-3.5" /> Audit Log
+                                            </h4>
+
+                                            <div className="space-y-6 relative before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-[0.5px] before:bg-slate-200">
+                                                {Array.isArray(post.update_history) && post.update_history.length > 0 ? (
+                                                    post.update_history.slice().reverse().map((entry, idx) => {
+                                                        const isEmail = /\S+@\S+\.\S+/.test(entry.updated_by);
+                                                        return (
+                                                            <div key={idx} className="relative pl-8 group">
+                                                                <div className="absolute left-0 top-1.5 h-[22px] w-[22px] rounded-full bg-white border border-slate-200 flex items-center justify-center z-10 group-hover:border-blue-400 transition-colors">
+                                                                    <div className="h-1.5 w-1.5 rounded-full bg-slate-300 group-hover:bg-blue-500 transition-colors" />
+                                                                </div>
+                                                                <div className="flex flex-col gap-1">
+                                                                    <div className="flex items-center justify-between gap-2">
+                                                                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">
+                                                                            <SafeDate date={entry.updated_at} formatStr="dd/MM/yyyy HH:mm" />
+                                                                        </span>
+                                                                        {/* DONT SHOW EMAILS FOR CASE ALERTING  */}
+                                                                        {isEmail && !entry.changes_summary.includes("Case Alerted") &&(
+                                                                            <span className="text-[10px] font-bold text-blue-600 bg-blue-50/50 border border-blue-100/50 px-2 py-0.5 rounded-full truncate max-w-[150px]" title={entry.updated_by}>
+                                                                                {entry.updated_by}
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                    <p className="text-sm text-slate-600 font-medium leading-snug">
+                                                                        {
+                                                                            entry.changes_summary === "Manual ingestion from simplified JSON" ?
+                                                                                "Content was sourced and ingested into the system."
+                                                                                :
+                                                                                entry.changes_summary
+                                                                        }
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })
+                                                ) : (
+                                                    /* Fallback for legacy content_reviewed_by if no update_history exists */
+                                                    <div className="relative pl-8 group">
+                                                        <div className="absolute left-0 top-1.5 h-[22px] w-[22px] rounded-full bg-white border border-slate-200 flex items-center justify-center z-10">
+                                                            <div className="h-1.5 w-1.5 rounded-full bg-blue-500" />
+                                                        </div>
+                                                        <div className="flex flex-col gap-1">
+                                                            <div className="flex items-center justify-between gap-2">
+                                                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">
+                                                                    Last Review
+                                                                </span>
+                                                                <span className="text-[10px] font-bold text-blue-600 bg-blue-50/50 border border-blue-100/50 px-2 py-0.5 rounded-full">
+                                                                    {post.content_reviewed_by}
+                                                                </span>
+                                                            </div>
+                                                            <p className="text-sm text-slate-600 font-medium">
+                                                                Case reviewed and finalized.
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {/* Original Publishing Date */}
+                                                {(post.posted_date || post.metadata?.posted_date || post.timestamp || post.sourcing_date) && (
+                                                    <div className="relative pl-8 group">
+                                                        <div className="absolute left-0 top-1.5 h-[22px] w-[22px] rounded-full bg-slate-50 border border-slate-100 flex items-center justify-center z-10 group-hover:border-slate-300 transition-colors">
+                                                            <div className="h-1.5 w-1.5 rounded-full bg-slate-300" />
+                                                        </div>
+                                                        <div className="flex flex-col gap-1">
+                                                            <div className="flex items-center justify-between gap-2">
+                                                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">
+                                                                    <SafeDate date={post.posted_date || post.metadata?.posted_date || post.timestamp || post.sourcing_date} formatStr="dd/MM/yyyy HH:mm" />
+                                                                </span>
+                                                                <span className="text-[10px] font-bold text-slate-400 bg-slate-100/50 border border-slate-100 px-2 py-0.5 rounded-full uppercase tracking-tighter">
+                                                                    Published
+                                                                </span>
+                                                            </div>
+                                                            <p className="text-xs text-slate-500 font-medium leading-snug italic">
+                                                                Original content published on {post.platform || "source"}.
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+
                                 </div>
 
                                 {/* Footer Action Area */}
                                 <div className=" border-t border-slate-100 bg-white sticky bottom-0 z-10">
 
-                                    {/* SHOW WHO REVIEWED IT BEFORE */}
-                                    {post.content_reviewed_by && (
-                                        <div className="mt-4 p-4 border-t border-slate-100">
-                                            <div className="flex items-center gap-3 px-1">
-                                                <div className="h-8 w-8 rounded-full bg-blue-50 flex items-center justify-center border border-blue-100 shrink-0">
-                                                    <BadgeCheck className="w-4 h-4 text-blue-600" />
-                                                </div>
-                                                <div className="flex flex-col">
-                                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">
-                                                        Audit Log
-                                                    </span>
-                                                    <p className="text-sm text-slate-600 font-medium">
-                                                        Content last reviewed by <span className="text-slate-900 font-bold py-1 px-2 rounded-full bg-slate-100 ">{post.content_reviewed_by}</span>
-                                                    </p>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )}
+
 
                                     {(isRequested) && (
                                         <div className="flex items-start gap-3 mb-4 p-4 bg-orange-50 rounded-xl border border-orange-100">
