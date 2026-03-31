@@ -146,13 +146,24 @@ export const getPosts = traceAction('getPosts', async (project, page = 1, limit 
     if (filters.violations && filters.violations !== 'all') {
       const violationsArray = filters.violations.split(',');
       if (violationsArray.length > 0) {
-        const flagConditions = violationsArray.map(v => ({ [`review_details.flags.${v}`]: true }));
-        andConditions.push({
-          $and: [
-            { 'review_details.threat_types': { $in: violationsArray } },
-            ...flagConditions
-          ]
-        });
+        const normalViolations = violationsArray.filter(v => v !== 'aigc');
+        const hasAigc = violationsArray.includes('aigc');
+        
+        const violationConditions = [];
+        if (normalViolations.length > 0) {
+          violationConditions.push({ 'review_details.threat_types': { $in: normalViolations } });
+          const flagConditions = normalViolations.map(v => ({ [`review_details.flags.${v}`]: true }));
+          violationConditions.push(...flagConditions);
+        }
+        if (hasAigc) {
+          violationConditions.push({ 'review_details.is_aigc': true });
+        }
+        
+        if (violationConditions.length > 0) {
+          andConditions.push({
+            $and: violationConditions
+          });
+        }
       }
     }
 
@@ -357,13 +368,24 @@ export const getAllPostIds = traceAction('getAllPostIds', async (project, filter
     if (filters.violations && filters.violations !== 'all') {
       const violationsArray = filters.violations.split(',');
       if (violationsArray.length > 0) {
-        const flagConditions = violationsArray.map(v => ({ [`review_details.flags.${v}`]: true }));
-        andConditions.push({
-          $or: [
-            { 'review_details.threat_types': { $in: violationsArray } },
-            ...flagConditions
-          ]
-        });
+        const normalViolations = violationsArray.filter(v => v !== 'aigc');
+        const hasAigc = violationsArray.includes('aigc');
+        
+        const orConditions = [];
+        if (normalViolations.length > 0) {
+          orConditions.push({ 'review_details.threat_types': { $in: normalViolations } });
+          const flagConditions = normalViolations.map(v => ({ [`review_details.flags.${v}`]: true }));
+          orConditions.push(...flagConditions);
+        }
+        if (hasAigc) {
+          orConditions.push({ 'review_details.is_aigc': true });
+        }
+        
+        if (orConditions.length > 0) {
+          andConditions.push({
+            $or: orConditions
+          });
+        }
       }
     }
 

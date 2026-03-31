@@ -21,6 +21,11 @@ export function ViolationsFilter({ projectLabels = [], initialViolations = '', o
   const [open, setOpen] = useState(false)
   const [expanded, setExpanded] = useState(false)
 
+  const allLabels = [...projectLabels];
+  if (!allLabels.find(l => l.name === 'aigc')) {
+    allLabels.push({ name: 'aigc' });
+  }
+
   // Parse initial string 'hate-speech,fraud' into array
   const [selectedValues, setSelectedValues] = useState([])
 
@@ -64,11 +69,12 @@ export function ViolationsFilter({ projectLabels = [], initialViolations = '', o
               {selectedValues.length > 0 ? (
                 <>
                   {visibleItems.map(val => {
-                    const labelObj = projectLabels.find(l => l.name === val)
-                    const displayLabel = labelObj ? labelObj.name.replace(/[-_]/g, ' ') : val.replace(/[-_]/g, ' ')
+                    const labelObj = allLabels.find(l => l.name === val)
+                    let displayLabel = labelObj ? labelObj.name.replace(/[-_]/g, ' ') : val.replace(/[-_]/g, ' ')
+                    if (val === 'aigc') displayLabel = 'AIGC'
 
                     return (
-                      <Badge key={val} variant='secondary' className='rounded-sm px-1.5 h-6 font-semibold capitalize bg-slate-100 text-slate-700 hover:bg-slate-200 border-none'>
+                      <Badge key={val} variant='secondary' className={`rounded-sm px-1.5 h-6 font-semibold ${val === 'aigc' ? 'uppercase' : 'capitalize'} bg-slate-100 text-slate-700 hover:bg-slate-200 border-none`}>
                         <span className="truncate max-w-[80px] text-[10px]">{displayLabel}</span>
                         <div
                           role="button"
@@ -133,14 +139,14 @@ export function ViolationsFilter({ projectLabels = [], initialViolations = '', o
             <CommandList>
               <CommandEmpty className="text-xs p-4 text-center text-slate-500">No violations found.</CommandEmpty>
               <CommandGroup>
-                {projectLabels.map(label => (
+                {allLabels.map(label => (
                   <CommandItem
                     key={label.name}
                     value={label.name}
                     onSelect={() => toggleSelection(label.name)}
-                    className="text-xs capitalize"
+                    className={`text-xs ${label.name === 'aigc' ? 'uppercase' : 'capitalize'}`}
                   >
-                    <span className='truncate'>{label.name.replace(/[-_]/g, ' ')}</span>
+                    <span className='truncate'>{label.name === 'aigc' ? 'AIGC' : label.name.replace(/[-_]/g, ' ')}</span>
                     {selectedValues.includes(label.name) && <CheckIcon size={14} className='ml-auto text-blue-600' />}
                   </CommandItem>
                 ))}
