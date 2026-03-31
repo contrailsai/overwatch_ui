@@ -82,6 +82,7 @@ function CustomTimePicker({ date, onChange, disabled }) {
 
 export function DateFilterPopover({ title, onApply, initialFrom, initialTo }) {
     const [open, setOpen] = useState(false);
+    const [hoveredDate, setHoveredDate] = useState(null);
     const [dateRange, setDateRange] = useState({
         from: initialFrom ? new Date(initialFrom) : undefined,
         to: initialTo ? new Date(initialTo) : undefined,
@@ -95,31 +96,52 @@ export function DateFilterPopover({ title, onApply, initialFrom, initialTo }) {
     }, [initialFrom, initialTo]);
 
     // Intercept calendar selection to preserve the currently selected times
-    const handleDateSelect = (newRange) => {
-        if (!newRange) {
-            setDateRange({ from: undefined, to: undefined });
+    const handleDateSelect = (newRange, selectedDay) => {
+        if (!selectedDay) return;
+
+        // Requirement 1: If we already have a full range, or no range at all, start over with the new click as "from"
+        if (!dateRange?.from || (dateRange?.from && dateRange?.to)) {
+            const newFrom = new Date(selectedDay);
+            if (dateRange?.from) {
+                // Preserve existing time if the user already tweaked it
+                newFrom.setHours(dateRange.from.getHours(), dateRange.from.getMinutes(), 0, 0);
+            } else {
+                // Default to 12:00 AM
+                newFrom.setHours(0, 0, 0, 0);
+            }
+            setDateRange({ from: newFrom, to: undefined });
             return;
+        }
+
+        // Requirement 2: We have a 'from' but no 'to'. The second click completes the range.
+        let rawFrom = dateRange.from;
+        let rawTo = selectedDay;
+        
+        // Ensure dates are chronologically ordered (ignoring time for comparison)
+        const dayFrom = new Date(rawFrom).setHours(0,0,0,0);
+        const dayTo = new Date(rawTo).setHours(0,0,0,0);
+        
+        if (dayTo < dayFrom) {
+            rawTo = dateRange.from;
+            rawFrom = selectedDay;
         }
 
         // Deep clone the dates to ensure 'from' and 'to' don't share a reference
         const updatedRange = {
-            from: newRange.from ? new Date(newRange.from) : undefined,
-            to: newRange.to ? new Date(newRange.to) : undefined,
+            from: new Date(rawFrom),
+            to: new Date(rawTo),
         };
 
         if (updatedRange.from) {
-            if (dateRange?.from) {
-                // Preserve existing time if the user already tweaked it
+            if (dateRange?.from && rawFrom === dateRange.from) {
                 updatedRange.from.setHours(dateRange.from.getHours(), dateRange.from.getMinutes(), 0, 0);
             } else {
-                // Default to 12:00 AM
                 updatedRange.from.setHours(0, 0, 0, 0);
             }
         }
 
         if (updatedRange.to) {
-            if (dateRange?.to) {
-                // Preserve existing time if the user already tweaked it
+            if (dateRange?.to && rawTo === dateRange.to) {
                 updatedRange.to.setHours(dateRange.to.getHours(), dateRange.to.getMinutes(), 0, 0);
             } else {
                 // Default to 11:30 PM
@@ -205,8 +227,50 @@ export function DateFilterPopover({ title, onApply, initialFrom, initialTo }) {
                             numberOfMonths={1}
                             selected={dateRange}
                             onSelect={handleDateSelect}
+                            onDayMouseEnter={(day) => setHoveredDate(day)}
+                            onDayMouseLeave={() => setHoveredDate(null)}
                             disabled={{ after: new Date() }}
                             className="rounded-md border-none p-0 w-full flex-1 md:[--cell-size:--spacing(12)]"
+                            modifiers={{
+                                hoverRange: (date) => {
+                                    if (!dateRange?.from || dateRange?.to || !hoveredDate) return false
+                                    const dateStart = new Date(dateRange.from).setHours(0,0,0,0)
+                                    const hovStart = new Date(hoveredDate).setHours(0,0,0,0)
+                                    const dStart = new Date(date).setHours(0,0,0,0)
+                                    const min = dateStart < hovStart ? dateStart : hovStart
+                                    const max = dateStart > hovStart ? dateStart : hovStart
+                                    return dStart > min && dStart < max
+                                },
+                                hoverRangeEnd: (date) => {
+                                    if (!dateRange?.from || dateRange?.to || !hoveredDate) return false
+                                    const dateStart = new Date(dateRange.from).setHours(0,0,0,0)
+                                    const hovStart = new Date(hoveredDate).setHours(0,0,0,0)
+                                    const dStart = new Date(date).setHours(0,0,0,0)
+                                    return dStart === hovStart && hovStart > dateStart
+                                },
+                                hoverRangeStart: (date) => {
+                                    if (!dateRange?.from || dateRange?.to || !hoveredDate) return false
+                                    const dateStart = new Date(dateRange.from).setHours(0,0,0,0)
+                                    const hovStart = new Date(hoveredDate).setHours(0,0,0,0)
+                                    const dStart = new Date(date).setHours(0,0,0,0)
+                                    return dStart === hovStart && hovStart < dateStart
+                                },
+                                fromDateHover: (date) => {
+                                    if (!dateRange?.from || dateRange?.to || !hoveredDate) return false
+                                    const dateStart = new Date(dateRange.from).setHours(0,0,0,0)
+                                    const hovStart = new Date(hoveredDate).setHours(0,0,0,0)
+                                    const dStart = new Date(date).setHours(0,0,0,0)
+                                    return dStart === dateStart && hovStart !== dateStart
+                                }
+                            }}
+                            modifiersClassNames={{
+                                hoverRange: "bg-slate-100 text-slate-900 !rounded-none",
+                                hoverRangeStart: "bg-slate-100 text-slate-900 !rounded-l-md !rounded-r-none",
+                                hoverRangeEnd: "bg-slate-100 text-slate-900 !rounded-r-md !rounded-l-none",
+                                fromDateHover: (dateRange?.from && hoveredDate && new Date(dateRange.from).setHours(0,0,0,0) < new Date(hoveredDate).setHours(0,0,0,0)) 
+                                    ? "!rounded-l-md !rounded-r-none" 
+                                    : "!rounded-r-md !rounded-l-none"
+                            }}
                         />
 
                         {/* Time Section */}

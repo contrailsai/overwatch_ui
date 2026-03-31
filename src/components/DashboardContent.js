@@ -1,17 +1,19 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import {
     PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
     BarChart, Bar, XAxis, YAxis, CartesianGrid,
     LineChart, Line, AreaChart, Area,
 } from 'recharts'
-import { Clock, Eye, Activity, TrendingUp, ShieldCheck, Filter, ChevronDown, LayoutDashboard, Siren } from 'lucide-react'
+import { Clock, Eye, Activity, TrendingUp, ShieldCheck, Filter, ChevronDown, LayoutDashboard, Siren, CalendarIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import PageHeader from '@/components/PageHeader'
 
-import { DatePickerWithRange } from '@/components/ui/date-range-picker'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Calendar } from '@/components/ui/calendar'
+import { Button } from '@/components/ui/button'
 import { format } from 'date-fns'
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -35,6 +37,21 @@ function DateFilter({ active, from, to }) {
     const pathname = usePathname()
     const searchParams = useSearchParams()
     const [isPickerOpen, setIsPickerOpen] = useState(false)
+    const [hoveredDate, setHoveredDate] = useState(null)
+
+    // Internal range state to track selection before both dates are picked
+    const [internalRange, setInternalRange] = useState({
+        from: from ? new Date(from) : undefined,
+        to: to ? new Date(to) : undefined
+    })
+
+    // Sync internal range when props change (e.g. from URL or preset buttons)
+    useEffect(() => {
+        setInternalRange({
+            from: from ? new Date(from) : undefined,
+            to: to ? new Date(to) : undefined
+        })
+    }, [from, to])
 
     const opts = [
         { label: 'Past 24 Hours', value: 1 },
@@ -49,28 +66,40 @@ function DateFilter({ active, from, to }) {
         router.push(`${pathname}?${p.toString()}`)
     }
 
-    const setDateRange = (range) => {
+    const applyRange = (range) => {
         const p = new URLSearchParams(searchParams.toString())
         if (range?.from && range?.to) {
             p.set('from', format(range.from, 'yyyy-MM-dd'))
             p.set('to', format(range.to, 'yyyy-MM-dd'))
             p.set('days', 'custom')
             router.push(`${pathname}?${p.toString()}`)
-        } else if (range?.from) {
-            // Keep waiting for 'to'
-            p.set('from', format(range.from, 'yyyy-MM-dd'))
-            p.delete('to')
-            p.set('days', 'custom')
-            router.push(`${pathname}?${p.toString()}`)
-        } else {
-            p.delete('from')
-            p.delete('to')
-            p.set('days', '7')
-            router.push(`${pathname}?${p.toString()}`)
+            setIsPickerOpen(false)
         }
     }
 
-    const date = (from) ? { from: new Date(from), to: to ? new Date(to) : undefined } : undefined
+    const handleSelect = (range, selectedDay) => {
+        if (!selectedDay) return
+
+        // Requirement 1: If we already have a full range, or no range at all, start over with the new click as "from"
+        if (!internalRange?.from || (internalRange?.from && internalRange?.to)) {
+            setInternalRange({ from: selectedDay, to: undefined })
+            return
+        }
+
+        // Requirement 2: We have a 'from' but no 'to'. The second click completes the range.
+        let newFrom = internalRange.from
+        let newTo = selectedDay
+
+        // Ensure dates are chronologically ordered
+        if (newTo < newFrom) {
+            newFrom = selectedDay
+            newTo = internalRange.from
+        }
+
+        const newRange = { from: newFrom, to: newTo }
+        setInternalRange(newRange)
+        applyRange(newRange)
+    }
 
     return (
         <div className="flex flex-col gap-3">
@@ -94,7 +123,7 @@ function DateFilter({ active, from, to }) {
                         {o.label}
                     </button>
                 ))}
-                
+
                 <button
                     onClick={() => setIsPickerOpen(true)}
                     aria-pressed={active === 'custom'}
@@ -110,17 +139,72 @@ function DateFilter({ active, from, to }) {
             </div>
 
             <div className="bg-white rounded-2xl border shadow-sm overflow-hidden">
-                <DatePickerWithRange 
-                    date={date} 
-                    setDate={setDateRange} 
-                    open={isPickerOpen}
-                    onOpenChange={setIsPickerOpen}
-                    className={cn(
-                        "w-full [&>div>button]:border-none [&>div>button]:shadow-none [&>div>button]:bg-transparent  hover:[&>div>button]:bg-slate-50",
-                        active === 'custom' && "[&>div>button]:text-blue-600 [&>div>button]:bg-blue-50/50"
-                    )}
-                    placeholder="Set custom range..."
-                />
+                <Popover open={isPickerOpen} onOpenChange={setIsPickerOpen}>
+                    <PopoverTrigger asChild>
+                        <Button
+                            variant="ghost"
+                            className={cn(
+                                "w-full justify-start text-left font-bold text-sm h-12 rounded-2xl hover:bg-slate-50 px-5",
+                                active === 'custom' && "text-blue-600 bg-blue-50/50"
+                            )}
+                        >
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {internalRange?.from ? (
+                                internalRange.to ? (
+                                    <>
+                                        {format(internalRange.from, "MMM dd, yyyy")} - {format(internalRange.to, "MMM dd, yyyy")}
+                                    </>
+                                ) : (
+                                    <>
+                                        {format(internalRange.from, "MMM dd, yyyy")} - Select end date...
+                                    </>
+                                )
+                            ) : (
+                                <span className="text-slate-400">Set custom range...</span>
+                            )}
+                        </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                            initialFocus
+                            mode="range"
+                            defaultMonth={internalRange?.from}
+                            selected={internalRange}
+                            onSelect={handleSelect}
+                            onDayMouseEnter={(day) => setHoveredDate(day)}
+                            onDayMouseLeave={() => setHoveredDate(null)}
+                            numberOfMonths={2}
+                            disabled={(date) => date > new Date()}
+                            className="rounded-md border-none p-1.5 w-full flex-1 md:[--cell-size:--spacing(10)]"
+                            modifiers={{
+                                hoverRange: (date) => {
+                                    if (!internalRange?.from || internalRange?.to || !hoveredDate) return false
+                                    const min = internalRange.from < hoveredDate ? internalRange.from : hoveredDate
+                                    const max = internalRange.from > hoveredDate ? internalRange.from : hoveredDate
+                                    return date > min && date < max
+                                },
+                                hoverRangeEnd: (date) => {
+                                    if (!internalRange?.from || internalRange?.to || !hoveredDate) return false
+                                    return date.getTime() === hoveredDate.getTime() && hoveredDate > internalRange.from
+                                },
+                                hoverRangeStart: (date) => {
+                                    if (!internalRange?.from || internalRange?.to || !hoveredDate) return false
+                                    return date.getTime() === hoveredDate.getTime() && hoveredDate < internalRange.from
+                                },
+                                fromDateHover: (date) => {
+                                    if (!internalRange?.from || internalRange?.to || !hoveredDate) return false
+                                    return date.getTime() === internalRange.from.getTime() && hoveredDate.getTime() !== internalRange.from.getTime()
+                                }
+                            }}
+                            modifiersClassNames={{
+                                hoverRange: "bg-blue-600/10 text-slate-900 !rounded-none ",
+                                hoverRangeStart: "bg-blue-600/10 text-slate-900 !rounded-l-md !rounded-r-none",
+                                hoverRangeEnd: "bg-blue-600/10 text-slate-900 !rounded-r-md !rounded-l-none",
+                                fromDateHover: internalRange?.from < hoveredDate ? "!rounded-l-md !rounded-r-none" : "!rounded-r-md !rounded-l-none"
+                            }}
+                        />
+                    </PopoverContent>
+                </Popover>
             </div>
         </div>
     )
@@ -353,7 +437,7 @@ export function DashboardContent({ data }) {
                                 {/* Bottom Info Section */}
                                 <div className="mt-6 pt-6 border-t border-slate-100">
                                     <p className="text-[11px] font-bold text-slate-500 flex items-center gap-1.5">
-                                        <Activity className="w-3.5 h-3.5 text-blue-500" /> 
+                                        <Activity className="w-3.5 h-3.5 text-blue-500" />
                                         Activity recorded for {daysLabel.toLowerCase()}
                                     </p>
                                 </div>
