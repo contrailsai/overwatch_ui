@@ -102,7 +102,7 @@ const AdminDashboard = ({ project_name, clients }) => {
         const totalClients = clients?.length || 0
         const totalReviewedCases = clients?.reduce((acc, client) => acc + (client.meta_stats?.reviewed_cases || 0), 0) || 0
         const totalReviewedProfiles = clients?.reduce((acc, client) => acc + (client.meta_stats?.reviewed_profiles || 0), 0) || 0
-        console.log("clients = ", clients)
+        // console.log("clients = ", clients)
         return [
             {
                 label: 'Total Team Members',

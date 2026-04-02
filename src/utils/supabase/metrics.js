@@ -362,6 +362,26 @@ export async function trackClientActivity(client_id, project_name, actionType = 
     const date = now.toISOString().split('T')[0] // YYYY-MM-DD
     const time = now.toISOString().split('T')[1].split('.')[0] + 'Z' // HH:MM:SSZ
 
+    // Helper to perform the update on an existing record safely
+    const updateExisting = async (existingRecord) => {
+      const updates = { last_activity: time }
+
+      if (actionType === 'login' && !existingRecord.login_time) {
+        updates.login_time = time
+      } else if (actionType === 'reviewed_case') {
+        updates.reviewed_cases = (existingRecord.reviewed_cases || 0) + 1
+      } else if (actionType === 'reviewed_profile') {
+        updates.reviewed_profiles = (existingRecord.reviewed_profiles || 0) + 1
+      }
+
+      const { error: updateError } = await supabase
+        .from('client_logs')
+        .update(updates)
+        .eq('id', existingRecord.id)
+
+      if (updateError) throw updateError
+    }
+
     // We use a single query approach to avoid race conditions.
     // First, check if the record for today already exists
     const { data: existingArray, error: fetchError } = await supabase
@@ -387,33 +407,37 @@ export async function trackClientActivity(client_id, project_name, actionType = 
         reviewed_profiles: actionType === 'reviewed_profile' ? 1 : 0
       }
 
-      // We use insert here instead of upsert to avoid constraint errors
-      // if the unique constraint is missing in the database.
       const { error: insertError } = await supabase
         .from('client_logs')
         .insert(newData)
 
       if (insertError) {
+        // Handle race condition: another concurrent request successfully inserted the record.
+        // This requires the 'client_logs_unique_day' constraint to be active in the DB!
+        if (insertError.code === '23505' || (insertError.message && insertError.message.includes('duplicate'))) {
+          // Fetch the newly created record and update it instead
+          const { data: retryArray, error: retryFetchError } = await supabase
+            .from('client_logs')
+            .select('*')
+            .eq('client_id', client_id)
+            .eq('project_name', project_name)
+            .eq('date', date)
+            .limit(1)
+
+          if (retryFetchError) throw retryFetchError
+          const retryExisting = retryArray && retryArray.length > 0 ? retryArray[0] : null
+          
+          if (retryExisting) {
+            await updateExisting(retryExisting)
+            return
+          }
+        }
+        // If it's a different error (or constraint is missing), throw it
         throw insertError
       }
     } else {
       // Already active today, update metrics
-      const updates = { last_activity: time }
-
-      if (actionType === 'login' && !existing.login_time) {
-        updates.login_time = time
-      } else if (actionType === 'reviewed_case') {
-        updates.reviewed_cases = (existing.reviewed_cases || 0) + 1
-      } else if (actionType === 'reviewed_profile') {
-        updates.reviewed_profiles = (existing.reviewed_profiles || 0) + 1
-      }
-
-      const { error: updateError } = await supabase
-        .from('client_logs')
-        .update(updates)
-        .eq('id', existing.id)
-
-      if (updateError) throw updateError
+      await updateExisting(existing)
     }
   } catch (err) {
     console.error('Failed to track daily activity in client_logs:', err)
