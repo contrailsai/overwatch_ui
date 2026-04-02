@@ -102,7 +102,7 @@ const AdminDashboard = ({ project_name, clients }) => {
         const totalClients = clients?.length || 0
         const totalReviewedCases = clients?.reduce((acc, client) => acc + (client.meta_stats?.reviewed_cases || 0), 0) || 0
         const totalReviewedProfiles = clients?.reduce((acc, client) => acc + (client.meta_stats?.reviewed_profiles || 0), 0) || 0
-
+        console.log("clients = ", clients)
         return [
             {
                 label: 'Total Team Members',
@@ -193,8 +193,8 @@ const AdminDashboard = ({ project_name, clients }) => {
                                 <TableHead>Status</TableHead>
                                 <TableHead>Today&apos;s Activity</TableHead>
                                 <TableHead className="text-center">Today&apos;s Reviews</TableHead>
-                                <TableHead className="text-center">This Week</TableHead>
-                                <TableHead className="text-center">This Month</TableHead>
+                                <TableHead className="text-center">Last 7 Days</TableHead>
+                                <TableHead className="text-center">Last 30 Days</TableHead>
                                 <TableHead className="text-right">Actions</TableHead>
                             </TableRow>
                         </TableHeader>
@@ -260,26 +260,26 @@ const AdminDashboard = ({ project_name, clients }) => {
                                         </TableCell>
                                         <TableCell>
                                             <div className="flex items-center justify-center gap-3 text-sm">
-                                                <div className="text-center" title="Cases Reviewed This Week">
-                                                    <span className="font-semibold text-slate-900">{stats.weekCases || 0}</span>
+                                                <div className="text-center" title="Cases Reviewed Last 7 Days">
+                                                    <span className="font-semibold text-slate-900">{stats.last7DaysCases || 0}</span>
                                                     <span className="text-[10px] text-slate-400 block -mt-1">cases</span>
                                                 </div>
                                                 <div className="w-px h-6 bg-slate-200"></div>
-                                                <div className="text-center" title="Profiles Reviewed This Week">
-                                                    <span className="font-semibold text-slate-900">{stats.weekProfiles || 0}</span>
+                                                <div className="text-center" title="Profiles Reviewed Last 7 Days">
+                                                    <span className="font-semibold text-slate-900">{stats.last7DaysProfiles || 0}</span>
                                                     <span className="text-[10px] text-slate-400 block -mt-1">profiles</span>
                                                 </div>
                                             </div>
                                         </TableCell>
                                         <TableCell>
                                             <div className="flex items-center justify-center gap-3 text-sm">
-                                                <div className="text-center" title="Cases Reviewed This Month">
-                                                    <span className="font-semibold text-slate-900">{stats.monthCases || 0}</span>
+                                                <div className="text-center" title="Cases Reviewed Last 30 Days">
+                                                    <span className="font-semibold text-slate-900">{stats.last30DaysCases || 0}</span>
                                                     <span className="text-[10px] text-slate-400 block -mt-1">cases</span>
                                                 </div>
                                                 <div className="w-px h-6 bg-slate-200"></div>
-                                                <div className="text-center" title="Profiles Reviewed This Month">
-                                                    <span className="font-semibold text-slate-900">{stats.monthProfiles || 0}</span>
+                                                <div className="text-center" title="Profiles Reviewed Last 30 Days">
+                                                    <span className="font-semibold text-slate-900">{stats.last30DaysProfiles || 0}</span>
                                                     <span className="text-[10px] text-slate-400 block -mt-1">profiles</span>
                                                 </div>
                                             </div>

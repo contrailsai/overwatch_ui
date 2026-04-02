@@ -20,28 +20,33 @@ export const fetch_clients_in_project = traceAction('fetch_clients_in_project', 
         return null
     }
 
+    // Helper to format local date as YYYY-MM-DD
+    const getLocalDateStr = (date) => {
+        const tzOffsetMs = date.getTimezoneOffset() * 60000;
+        return (new Date(date.getTime() - tzOffsetMs)).toISOString().slice(0, 10);
+    }
+
     // Get current date boundaries
     const now = new Date()
-    const todayStr = now.toISOString().split('T')[0]
+    const todayStr = getLocalDateStr(now)
     
-    // Start of week (assuming Monday is start of week)
-    const startOfWeek = new Date(now)
-    const day = startOfWeek.getDay() || 7 // Get current day number, converting Sun(0) to 7
-    if (day !== 1) startOfWeek.setHours(-24 * (day - 1)) // Adjust to previous Monday
-    const startOfWeekStr = startOfWeek.toISOString().split('T')[0]
+    // Last 7 days
+    const last7Days = new Date(now)
+    last7Days.setDate(last7Days.getDate() - 6) // Include today
+    const last7DaysStr = getLocalDateStr(last7Days)
 
-    // Start of month
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
-    const startOfMonthStr = startOfMonth.toISOString().split('T')[0]
+    // Last 30 days
+    const last30Days = new Date(now)
+    last30Days.setDate(last30Days.getDate() - 29) // Include today
+    const last30DaysStr = getLocalDateStr(last30Days)
 
-    // Fetch logs for these clients within the current month
+    // Fetch all logs for these clients to calculate all-time stats as well
     const clientIds = client_details.map(c => c.id)
     const { data: logsData, error: logsError } = await supabase
         .from('client_logs')
         .select('*')
         .in('client_id', clientIds)
         .eq('project_name', project_name)
-        .gte('date', startOfMonthStr)
 
     if (logsError) {
         console.error("ERROR fetching client logs: ", logsError)
@@ -59,21 +64,29 @@ export const fetch_clients_in_project = traceAction('fetch_clients_in_project', 
                     todayLastActivity: null,
                     todayCases: 0,
                     todayProfiles: 0,
-                    weekCases: 0,
-                    weekProfiles: 0,
-                    monthCases: 0,
-                    monthProfiles: 0
+                    last7DaysCases: 0,
+                    last7DaysProfiles: 0,
+                    last30DaysCases: 0,
+                    last30DaysProfiles: 0,
+                    allTimeCases: 0,
+                    allTimeProfiles: 0
                 }
             }
             
-            // Month aggregation (all fetched logs are >= startOfMonthStr)
-            logsMap[cid].monthCases += log.reviewed_cases || 0
-            logsMap[cid].monthProfiles += log.reviewed_profiles || 0
+            // All-time aggregation
+            logsMap[cid].allTimeCases += log.reviewed_cases || 0
+            logsMap[cid].allTimeProfiles += log.reviewed_profiles || 0
 
-            // Week aggregation
-            if (log.date >= startOfWeekStr) {
-                logsMap[cid].weekCases += log.reviewed_cases || 0
-                logsMap[cid].weekProfiles += log.reviewed_profiles || 0
+            // 30 days aggregation
+            if (log.date >= last30DaysStr) {
+                logsMap[cid].last30DaysCases += log.reviewed_cases || 0
+                logsMap[cid].last30DaysProfiles += log.reviewed_profiles || 0
+            }
+
+            // 7 days aggregation
+            if (log.date >= last7DaysStr) {
+                logsMap[cid].last7DaysCases += log.reviewed_cases || 0
+                logsMap[cid].last7DaysProfiles += log.reviewed_profiles || 0
             }
 
             // Today data
@@ -93,15 +106,21 @@ export const fetch_clients_in_project = traceAction('fetch_clients_in_project', 
             todayLastActivity: null,
             todayCases: 0,
             todayProfiles: 0,
-            weekCases: 0,
-            weekProfiles: 0,
-            monthCases: 0,
-            monthProfiles: 0
+            last7DaysCases: 0,
+            last7DaysProfiles: 0,
+            last30DaysCases: 0,
+            last30DaysProfiles: 0,
+            allTimeCases: 0,
+            allTimeProfiles: 0
         }
         
         return {
             ...client,
-            activityStats: stats
+            activityStats: stats,
+            meta_stats: {
+                reviewed_cases: stats.allTimeCases,
+                reviewed_profiles: stats.allTimeProfiles
+            }
         }
     })
 

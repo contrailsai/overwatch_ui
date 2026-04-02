@@ -18,6 +18,7 @@ import {
     metaPara,
     generateCaseSections
 } from "./SingleCaseReportDocx";
+import { format } from 'date-fns'
 
 export const generateProfileDocx = async (profile, cases, project, compressedImages, compressedProfilePic) => {
     const docChildren = [];
@@ -79,7 +80,7 @@ export const generateProfileDocx = async (profile, cases, project, compressedIma
                                 metaPara("Following", profile?.metadata?.following_count?.toLocaleString() || "0"),
                                 metaPara("Total Posts", profile?.metadata?.media_count?.toLocaleString() || "0"),
                                 metaPara("Verified", profile?.metadata?.verified ? "Yes" : "No"),
-                                profile?.metadata?.account_creation_date && metaPara("Account Creation Date", formatCompleteDate(profile?.metadata?.account_creation_date) || "N/A"),
+                                profile?.metadata?.account_creation_date && metaPara("Account Creation Date", format(new Date(profile.metadata.account_creation_date), 'dd MMM yyyy') || "N/A"),
                                 profile?.metadata?.location && metaPara("Location", profile?.metadata?.location || "N/A"),
                                 profile?.profile_url && metaPara("Profile URL", profile.profile_url, true)
                             ],

@@ -387,19 +387,14 @@ export async function trackClientActivity(client_id, project_name, actionType = 
         reviewed_profiles: actionType === 'reviewed_profile' ? 1 : 0
       }
 
-      // Use upsert to handle race conditions where two processes try to insert at the same time
-      const { error: upsertError } = await supabase
+      // We use insert here instead of upsert to avoid constraint errors
+      // if the unique constraint is missing in the database.
+      const { error: insertError } = await supabase
         .from('client_logs')
-        .upsert(newData, { 
-          onConflict: 'client_id,project_name,date',
-          ignoreDuplicates: false // We want to update if it exists now
-        })
+        .insert(newData)
 
-      if (upsertError) {
-        // If it was a race condition and it now exists, we should probably retry the update logic,
-        // but for simplicity and because it's "fire and forget", we can just log it or 
-        // rely on the next activity to update the stats.
-        throw upsertError
+      if (insertError) {
+        throw insertError
       }
     } else {
       // Already active today, update metrics
