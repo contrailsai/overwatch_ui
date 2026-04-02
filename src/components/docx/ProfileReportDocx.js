@@ -20,7 +20,7 @@ import {
 } from "./SingleCaseReportDocx";
 import { format } from 'date-fns'
 
-export const generateProfileDocx = async (profile, cases, project, compressedImages, compressedProfilePic) => {
+export const generateProfileDocx = async (profile, cases, project, compressedImages, compressedProfilePic, clientDetails) => {
     const docChildren = [];
 
     // ── 1. PROFILE OVERVIEW (With Top-Right Image) ───────────────────────────
@@ -30,7 +30,7 @@ export const generateProfileDocx = async (profile, cases, project, compressedIma
     if (compressedProfilePic?.startsWith('data:image/')) {
         try {
             const dimensions = await getImageDimensions(compressedProfilePic);
-            const TARGET_SIZE = 60; // Slightly larger than 30x30 for better visibility in DOCX
+            const TARGET_SIZE = 120; // Increased size for better visibility in DOCX
             let { width, height } = dimensions;
 
             if (width > TARGET_SIZE || height > TARGET_SIZE) {
@@ -75,15 +75,15 @@ export const generateProfileDocx = async (profile, cases, project, compressedIma
                                 metaPara("Username", `@${profile?.username || profile?._id || 'unknown'}`),
                                 metaPara("Platform", (profile?.platform || 'Unknown').toUpperCase()),
                                 metaPara("Full Name", profile?.metadata?.full_name || "N/A"),
-                                profile?.metadata?.biography && metaPara("Bio", processText(profile?.metadata?.biography || profile?.metadata?.description || "N/A", 300)),
+                                ...(profile?.metadata?.biography ? [metaPara("Bio", processText(profile?.metadata?.biography || profile?.metadata?.description || "N/A", 300))] : []),
                                 metaPara("Followers", profile?.metadata?.follower_count?.toLocaleString() || "0"),
                                 metaPara("Following", profile?.metadata?.following_count?.toLocaleString() || "0"),
                                 metaPara("Total Posts", profile?.metadata?.media_count?.toLocaleString() || "0"),
-                                metaPara("Verified", profile?.metadata?.verified ? "Yes" : "No"),
-                                profile?.metadata?.account_creation_date && metaPara("Account Creation Date", format(new Date(profile.metadata.account_creation_date), 'dd MMM yyyy') || "N/A"),
-                                profile?.metadata?.location && metaPara("Location", profile?.metadata?.location || "N/A"),
-                                profile?.profile_url && metaPara("Profile URL", profile.profile_url, true)
-                            ],
+                                metaPara("Verified", profile?.metadata?.is_verified ? "Yes" : "No"),
+                                ...(profile?.metadata?.account_creation_date ? [metaPara("Account Creation Date", format(new Date(profile.metadata.account_creation_date), 'dd MMM yyyy') || "N/A")] : []),
+                                ...(profile?.metadata?.location ? [metaPara("Location", profile?.metadata?.location || "N/A")] : []),
+                                ...(profile?.profile_url ? [metaPara("Profile URL", profile.profile_url, true)] : [])
+                            ].filter(Boolean),
                         }),
                         new TableCell({
                             width: { size: Math.round(PAGE_WIDTH * 0.2), type: WidthType.DXA },
@@ -143,7 +143,7 @@ export const generateProfileDocx = async (profile, cases, project, compressedIma
         styles: {
             default: {
                 document: {
-                    run: { font: "Outfit" },
+                    run: { font: "Inter" },
                 },
             },
         },
@@ -153,9 +153,10 @@ export const generateProfileDocx = async (profile, cases, project, compressedIma
                     page: {
                         margin: { top: 1080, right: 1080, bottom: 1080, left: 1080 },
                     },
+                    titlePage: true,
                 },
                 headers: {
-                    default: new Header({
+                    first: new Header({
                         children: [
                             new Table({
                                 width: { size: PAGE_WIDTH, type: WidthType.DXA },
@@ -170,8 +171,7 @@ export const generateProfileDocx = async (profile, cases, project, compressedIma
                                                 margins: { top: 0, bottom: 120, left: 0, right: 200 },
                                                 verticalAlign: VerticalAlign.BOTTOM,
                                                 children: [
-                                                    new Paragraph({ children: [new TextRun({ text: "OVERWATCH", bold: true, size: 34, color: "1E293B" })] }),
-                                                    new Paragraph({ children: [new TextRun({ text: "Threat Intelligence Platform", size: 14, color: "64748B" })], spacing: { after: 80 } }),
+                                                    new Paragraph({ children: [new TextRun({ text: "PROFILE ANALYSIS", bold: true, size: 34, color: "1E293B" })] }),
                                                 ],
                                             }),
                                             new TableCell({
@@ -205,13 +205,57 @@ export const generateProfileDocx = async (profile, cases, project, compressedIma
                                                 width: { size: Math.round(PAGE_WIDTH / 3), type: WidthType.DXA },
                                                 borders: { ...noBorders, top: { style: BorderStyle.SINGLE, size: 6, color: "CBD5E1" } },
                                                 verticalAlign: VerticalAlign.CENTER,
-                                                children: [new Paragraph({ children: [new TextRun({ text: "CONFIDENTIAL", bold: true, size: 14, color: "94A3B8" })], spacing: { before: 120 } })],
+                                                children: [new Paragraph({ children: [new TextRun({ text: clientDetails?.organization ? `REQUESTED BY ${clientDetails.organization.toUpperCase()}` : "REQUESTED BY CLIENT", bold: true, size: 14, color: "94A3B8" })], spacing: { before: 120 } })],
                                             }),
                                             new TableCell({
                                                 width: { size: Math.round(PAGE_WIDTH / 3), type: WidthType.DXA },
                                                 borders: { ...noBorders, top: { style: BorderStyle.SINGLE, size: 6, color: "CBD5E1" } },
                                                 verticalAlign: VerticalAlign.CENTER,
-                                                children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "POWERED BY CONTRAILS AI", size: 14, color: "94A3B8" })], spacing: { before: 120 } })],
+                                                children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "POWERED BY OVERWATCH", size: 14, color: "94A3B8" })], spacing: { before: 120 } })],
+                                            }),
+                                            new TableCell({
+                                                width: { size: PAGE_WIDTH - Math.round(PAGE_WIDTH / 3) * 2, type: WidthType.DXA },
+                                                borders: { ...noBorders, top: { style: BorderStyle.SINGLE, size: 6, color: "CBD5E1" } },
+                                                verticalAlign: VerticalAlign.CENTER,
+                                                children: [
+                                                    new Paragraph({
+                                                        alignment: AlignmentType.RIGHT,
+                                                        spacing: { before: 120 },
+                                                        children: [
+                                                            new TextRun({ text: "Page ", bold: true, size: 14, color: "94A3B8" }),
+                                                            new TextRun({ children: [PageNumber.CURRENT], bold: true, size: 14, color: "64748B" }),
+                                                            new TextRun({ text: " of ", bold: true, size: 14, color: "94A3B8" }),
+                                                            new TextRun({ children: [PageNumber.TOTAL_PAGES], bold: true, size: 14, color: "64748B" }),
+                                                        ],
+                                                    }),
+                                                ],
+                                            }),
+                                        ],
+                                    }),
+                                ],
+                            }),
+                        ],
+                    }),
+                    first: new Footer({
+                        children: [
+                            new Table({
+                                width: { size: PAGE_WIDTH, type: WidthType.DXA },
+                                columnWidths: [Math.round(PAGE_WIDTH / 3), Math.round(PAGE_WIDTH / 3), PAGE_WIDTH - Math.round(PAGE_WIDTH / 3) * 2],
+                                borders: noBorders,
+                                rows: [
+                                    new TableRow({
+                                        children: [
+                                            new TableCell({
+                                                width: { size: Math.round(PAGE_WIDTH / 3), type: WidthType.DXA },
+                                                borders: { ...noBorders, top: { style: BorderStyle.SINGLE, size: 6, color: "CBD5E1" } },
+                                                verticalAlign: VerticalAlign.CENTER,
+                                                children: [new Paragraph({ children: [new TextRun({ text: clientDetails?.organization ? `REQUESTED BY ${clientDetails.organization.toUpperCase()}` : "REQUESTED BY CLIENT", bold: true, size: 14, color: "94A3B8" })], spacing: { before: 120 } })],
+                                            }),
+                                            new TableCell({
+                                                width: { size: Math.round(PAGE_WIDTH / 3), type: WidthType.DXA },
+                                                borders: { ...noBorders, top: { style: BorderStyle.SINGLE, size: 6, color: "CBD5E1" } },
+                                                verticalAlign: VerticalAlign.CENTER,
+                                                children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "POWERED BY OVERWATCH", size: 14, color: "94A3B8" })], spacing: { before: 120 } })],
                                             }),
                                             new TableCell({
                                                 width: { size: PAGE_WIDTH - Math.round(PAGE_WIDTH / 3) * 2, type: WidthType.DXA },

@@ -7,8 +7,10 @@ import { sendGAEvent } from '@next/third-parties/google';
 import { generateProfileDocx } from './ProfileReportDocx';
 import { fetchAndCompressImage } from './CaseExportDocxButton';
 import { getPostsByIds } from '@/app/(dashboard)/cases/actions';
+import { useClient } from '@/context/ClientContext';
 
 export function ProfileExportDocxButton({ profile, project, className }) {
+    const { clientDetails } = useClient();
     const [imgState, setImgState] = useState({ compressedImages: [], compressedProfilePic: null, loading: true });
     const [fetchingData, setFetchingData] = useState(false);
     const [fullyLoadedPosts, setFullyLoadedPosts] = useState([]);
@@ -110,7 +112,8 @@ export function ProfileExportDocxButton({ profile, project, className }) {
                 fullyLoadedPosts,
                 project,
                 imgState.compressedImages,
-                imgState.compressedProfilePic
+                imgState.compressedProfilePic,
+                clientDetails
             );
 
             sendGAEvent('event', 'download_profile_report_docx', {

@@ -206,7 +206,7 @@ export default function ProfileDetailPanel({ profile, project, isOpen, onClose, 
         if (val === 'low' || (val >= 41 && val < 76)) return "bg-amber-500 border-amber-400 text-white";
         return "bg-emerald-500 border-emerald-400 text-white shadow-sm";
     }
-
+    console.log(profile)
     return (
         <>
             <div
@@ -398,7 +398,7 @@ export default function ProfileDetailPanel({ profile, project, isOpen, onClose, 
                                         const risk = getRiskLabel(c.review_details?.threat_score)
                                         const statusCfg = getStatusConfig(c.client_status)
                                         const StatusIcon = statusCfg.icon
-                                        console.log(c)
+                                        // console.log(c)
 
                                         let posted_date = ""
                                         let sourced_date = ""

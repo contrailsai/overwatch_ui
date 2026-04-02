@@ -6,8 +6,10 @@ import { sendGAEvent } from '@next/third-parties/google';
 import { fetchAndCompressImage } from './CaseExportDocxButton';
 import { getPostsByIds } from '@/app/(dashboard)/cases/actions';
 import { generateDetailedCasesDocx } from './DetailedCasesReportDocx';
+import { useClient } from '@/context/ClientContext';
 
 export function DetailedReportDocxButton({ posts, project, className }) {
+    const { clientDetails } = useClient();
     const [imgState, setImgState] = useState({ compressedImages: [], loading: true });
     const [fetchingData, setFetchingData] = useState(false);
     const [fullyLoadedPosts, setFullyLoadedPosts] = useState([]);
@@ -106,7 +108,7 @@ export function DetailedReportDocxButton({ posts, project, className }) {
                 status: 'downloading'
             });
             
-            await generateDetailedCasesDocx(fullyLoadedPosts, project, imgState.compressedImages);
+            await generateDetailedCasesDocx(fullyLoadedPosts, project, imgState.compressedImages, clientDetails);
 
             sendGAEvent('event', 'download_detailed_cases_report_docx', {
                 event_id: 'detailed_cases_report_docx',

@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button"
 import { sendGAEvent } from '@next/third-parties/google';
 import { generateSingleCaseDocx } from './SingleCaseReportDocx';
 
+import { useClient } from '@/context/ClientContext';
+
 export const fetchAndCompressImage = async (imageUrl, maxWidth = 800) => {
     try {
         // Fetch the image as a blob to bypass some strict rendering checks
@@ -51,6 +53,7 @@ export const fetchAndCompressImage = async (imageUrl, maxWidth = 800) => {
 };
 
 export function CaseExportDocxButton({ post, project }) {
+    const { clientDetails } = useClient();
     const [imgState, setImgState] = useState({ compressedUrl: null, loading: true });
     const [isGenerating, setIsGenerating] = useState(false);
 
@@ -88,7 +91,7 @@ export function CaseExportDocxButton({ post, project }) {
                 event_id: 'single_case_report_docx',
                 status: 'downloading'
             });
-            await generateSingleCaseDocx(post, project, imgState.compressedUrl);
+            await generateSingleCaseDocx(post, project, imgState.compressedUrl, clientDetails);
 
             sendGAEvent('event', 'download_single_case_report_docx', {
                 event_id: 'single_case_report_docx',
