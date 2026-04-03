@@ -1,134 +1,34 @@
 'use client'
 
-import React, { useState, useEffect } from 'react';
-import dynamic from 'next/dynamic';
+import React from 'react';
 import { FileDown, Loader2 } from 'lucide-react';
-import { sendGAEvent } from '@next/third-parties/google'
-
-const PDFDownloadLink = dynamic(
-    () => import('@react-pdf/renderer').then((mod) => mod.PDFDownloadLink),
-    { ssr: false, loading: () => <button className="flex cursor-pointer items-center gap-2 px-3 py-2 bg-slate-100 text-slate-400 border border-slate-200 font-medium rounded-lg text-sm shadow-sm" disabled><Loader2 className="w-4 h-4 animate-spin" /> Preparing...</button> }
-);
-
-import { DetailedCasesReportDocument } from './DetailedCasesReport';
-import { fetchAndCompressImage } from './CaseExportButton';
-import { getPostsByIds } from '@/app/(dashboard)/cases/actions';
+import { usePdfExport } from './usePdfExport';
 
 export function DetailedReportButton({ posts, project, className }) {
-    const [imgState, setImgState] = useState({ compressedImages: [], loading: true });
-    const [fetchingData, setFetchingData] = useState(false);
-    const [fullyLoadedPosts, setFullyLoadedPosts] = useState([]);
+    const { exportPdf, loading, statusText } = usePdfExport();
 
-    useEffect(() => {
-        let isMounted = true;
-        const processImages = async (postsToProcess) => {
-            if (!postsToProcess || postsToProcess.length === 0) {
-                if (isMounted) setImgState({ compressedImages: [], loading: false });
-                return;
-            }
-
-            setImgState(prev => ({ ...prev, loading: true }));
-
-            try {
-                const imagePromises = postsToProcess.map(async (post) => {
-                    try {
-                        const sourceUrl = post?.signedImageUrl ||
-                            post?.image_url ||
-                            (post?.post_content?.media_urls?.[0]?.s3_url) ||
-                            (post?.media_urls?.[0]?.s3_url) ||
-                            (post?.post_content?.media_urls?.[0]?.original_url) ||
-                            null;
-
-                        if (sourceUrl) {
-                            const compressed = await fetchAndCompressImage(sourceUrl);
-                            return compressed || sourceUrl;
-                        }
-                    } catch (e) {
-                        console.warn("Failed to process image for post:", post._id, e);
-                    }
-                    return null;
-                });
-
-                const images = await Promise.all(imagePromises);
-
-                if (isMounted) {
-                    setImgState({ compressedImages: images, loading: false });
-                }
-            } catch (error) {
-                console.error("Error processing images for report:", error);
-                if (isMounted) {
-                    setImgState(prev => ({ ...prev, loading: false }));
-                }
-            }
-        };
-
-        const loadDataAndProcess = async () => {
-            if (!posts || posts.length === 0) {
-                setFullyLoadedPosts([]);
-                processImages([]);
-                return;
-            }
-
-            // Check if we have placeholder posts (only _id)
-            const placeholderIds = posts
-                .filter(p => !p.caption && !p.user && p._id)
-                .map(p => p._id);
-
-            let finalPosts = [...posts];
-
-            if (placeholderIds.length > 0) {
-                if (isMounted) setFetchingData(true);
-                try {
-                    const fullPosts = await getPostsByIds(project, placeholderIds);
-                    // Merge full posts back into our list
-                    finalPosts = posts.map(p => {
-                        const full = fullPosts.find(fp => fp._id === p._id);
-                        return full || p;
-                    });
-                } catch (err) {
-                    console.error("Failed to fetch full posts for detailed report:", err);
-                } finally {
-                    if (isMounted) setFetchingData(false);
-                }
-            }
-
-            if (isMounted) {
-                setFullyLoadedPosts(finalPosts);
-                processImages(finalPosts);
-            }
-        };
-
-        loadDataAndProcess();
-        return () => { isMounted = false; };
-    }, [posts, project]);
-
-    const fileName = `Detailed_Report_${new Date().toISOString().split('T')[0]}.pdf`;
+    const handleDownload = () => {
+        exportPdf({
+            posts,
+            project,
+            reportType: 'Detailed',
+            fileNamePrefix: 'Detailed_Report',
+            gaEventName: 'download_detailed_report'
+        });
+    };
 
     return (
-        <PDFDownloadLink
-            document={<DetailedCasesReportDocument posts={fullyLoadedPosts} project={project} compressedImages={imgState.compressedImages} />}
-            fileName={fileName}
-
-            onClick={() => {
-                sendGAEvent('event', 'download_detailed_report', {
-                    event_id: 'detailed_report',
-                    status: 'downloaded'
-                })
-            }}
+        <button
+            onClick={handleDownload}
+            disabled={loading || posts?.length === 0}
+            className={className || "flex cursor-pointer items-center gap-2 px-3 py-2 bg-white border border-slate-200 text-slate-700 font-medium rounded-lg hover:bg-slate-50 transition-colors text-sm shadow-sm disabled:cursor-not-allowed disabled:opacity-50"}
         >
-            {({ blob, url, loading, error }) => (
-                <button
-                    disabled={loading || imgState.loading || fetchingData || posts?.length === 0}
-                    className={className || "flex cursor-pointer items-center gap-2 px-3 py-2 bg-white border border-slate-200 text-slate-700 font-medium rounded-lg hover:bg-slate-50 transition-colors text-sm shadow-sm disabled:cursor-not-allowed disabled:opacity-50"}
-                >
-                    {(loading || imgState.loading || fetchingData) ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                        <FileDown className="w-4 h-4" />
-                    )}
-                    {(loading || imgState.loading || fetchingData) ? 'Preparing...' : 'Export Detailed Report'}
-                </button>
+            {loading ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+                <FileDown className="w-4 h-4" />
             )}
-        </PDFDownloadLink>
+            {loading ? statusText || 'Generating PDF...' : 'Export Detailed Report'}
+        </button>
     );
 }

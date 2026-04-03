@@ -1,128 +1,39 @@
 'use client'
 
-import React, { useState, useEffect } from 'react';
-import dynamic from 'next/dynamic';
+import React from 'react';
 import { FileDown, Loader2 } from 'lucide-react';
 import { Button } from "@/components/ui/button"
-import { sendGAEvent } from '@next/third-parties/google';
-
-// Dynamic import for PDFDownloadLink to avoid server-side rendering issues
-const PDFDownloadLink = dynamic(
-    () => import('@react-pdf/renderer').then((mod) => mod.PDFDownloadLink),
-    {
-        ssr: false,
-        loading: () => (
-            <Button variant="outline" size="sm" disabled className="gap-2">
-                <Loader2 className="w-4 h-4 animate-spin" /> Preparing...
-            </Button>
-        )
-    }
-);
-
-import SingleCaseReportDocument from './SingleCaseReport';
-
-export const fetchAndCompressImage = async (imageUrl, maxWidth = 800) => {
-    try {
-        // Fetch the image as a blob to bypass some strict rendering checks
-        const response = await fetch(imageUrl, { mode: 'cors' });
-        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-        const blob = await response.blob();
-
-        if (!blob.type.startsWith('image/')) {
-            console.warn(`Fetched resource is not an image (type: ${blob.type}), returning null`);
-            return null;
-        }
-
-        return await new Promise((resolve, reject) => {
-            const img = new window.Image();
-            img.onload = () => {
-                try {
-                    const canvas = document.createElement('canvas');
-                    let width = img.width;
-                    let height = img.height;
-
-                    if (width > maxWidth) {
-                        height = Math.round((height * maxWidth) / width);
-                        width = maxWidth;
-                    }
-
-                    canvas.width = width;
-                    canvas.height = height;
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, 0, 0, width, height);
-
-                    resolve(canvas.toDataURL('image/jpeg', 0.8));
-                } catch (e) {
-                    reject(new Error(`Canvas processing failed: ${e.message}`));
-                }
-            };
-            img.onerror = () => reject(new Error('Image failed to load in browser context'));
-            img.src = URL.createObjectURL(blob);
-        });
-    } catch (error) {
-        console.warn("Failed to load/compress image for PDF:", error.message);
-        return null;
-    }
-};
+import { usePdfExport } from './usePdfExport';
 
 export function CaseExportButton({ post, project }) {
-    const [imgState, setImgState] = useState({ compressedUrl: null, loading: true });
-
-    useEffect(() => {
-        let isMounted = true;
-        const processImage = async () => {
-            const sourceUrl = post?.signedImageUrl ||
-                post?.image_url ||
-                (post?.post_content?.media_urls?.[0]?.s3_url) ||
-                (post?.media_urls?.[0]?.s3_url) ||
-                (post?.post_content?.media_urls?.[0]?.original_url) ||
-                null;
-
-            if (sourceUrl) {
-                const compressed = await fetchAndCompressImage(sourceUrl);
-                if (isMounted) {
-                    setImgState({ compressedUrl: compressed || sourceUrl, loading: false }); // Fallback to sourceUrl if compression fails
-                }
-            } else {
-                if (isMounted) {
-                    setImgState({ compressedUrl: null, loading: false });
-                }
-            }
-        };
-        processImage();
-        return () => { isMounted = false; };
-    }, [post]);
+    const { exportPdf, loading, statusText } = usePdfExport();
 
     if (!post) return null;
 
-    const fileName = `Case_${post._id}_${new Date().toISOString().split('T')[0]}.pdf`;
+    const handleDownload = () => {
+        exportPdf({
+            posts: [post],
+            project,
+            reportType: 'Single',
+            fileNamePrefix: `Case_${post._id}`,
+            gaEventName: 'download_single_case_report'
+        });
+    };
 
     return (
-        <PDFDownloadLink
-            document={<SingleCaseReportDocument post={post} project={project} compressedImage={imgState.compressedUrl} />}
-            fileName={fileName}
+        <Button
+            variant="outline"
+            size="sm"
+            disabled={loading}
+            onClick={handleDownload}
+            className="gap-2 cursor-pointer disabled:cursor-not-allowed border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-100 transition-all font-semibold shadow-sm h-8"
         >
-            {({ blob, url, loading, error }) => (
-                <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={loading || imgState.loading}
-                    onClick={() => {
-                        sendGAEvent('event', 'download_single_case_report', {
-                            event_id: 'single_case_report',
-                            status: 'downloaded'
-                        })
-                    }}
-                    className="gap-2 cursor-pointer disabled:cursor-not-allowed border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-100 transition-all font-semibold shadow-sm h-8"
-                >
-                    {(loading || imgState.loading) ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                        <FileDown className="w-4 h-4" />
-                    )}
-                    {(loading || imgState.loading) ? 'Preparing...' : 'Download Content Report'}
-                </Button>
+            {loading ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+                <FileDown className="w-4 h-4" />
             )}
-        </PDFDownloadLink>
+            {loading ? statusText || 'Preparing...' : 'Download Content Report'}
+        </Button>
     );
 }
