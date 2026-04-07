@@ -1,15 +1,31 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { List, ShieldAlert, Settings, LogOut, LayoutDashboard, ShieldCheck, GitPullRequestCreateArrow, Users } from 'lucide-react'
-// import { useClient } from '@/context/ClientContext'
+import { List, ShieldAlert, Settings, LogOut, LayoutDashboard, ShieldCheck, GitPullRequestCreateArrow, Users, Menu, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export function Sidebar({ user, clientDetails, project }) {
-  // console.log(user, clientDetails, project)
   const pathname = usePathname()
-  // const { user, clientDetails, isLoading } = useClient()
+  const [isOpen, setIsOpen] = useState(false)
+
+  // Close the mobile drawer when navigating
+  useEffect(() => {
+    setIsOpen(false)
+  }, [pathname])
+
+  // Prevent background scrolling when mobile drawer is open
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = 'unset'
+    }
+    return () => {
+      document.body.style.overflow = 'unset'
+    }
+  }, [isOpen])
 
   // All nav items.
   const allNavItems = [
@@ -39,15 +55,24 @@ export function Sidebar({ user, clientDetails, project }) {
       return item;
     });
 
-  return (
-    <div className="flex flex-col w-64 h-full bg-white border-r border-slate-200 shadow-sm shrink-0 z-40">
-
+  const SidebarContent = () => (
+    <>
       {/* Brand Header */}
-      <div className="flex items-center h-16 px-6 border-b border-slate-100 shrink-0">
-        <ShieldCheck className="h-6 w-6 text-blue-600 shrink-0" strokeWidth={2.5} />
-        <span className="ml-3 text-lg font-bold tracking-tight text-slate-900 uppercase">
-          Overwatch
-        </span>
+      <div className="flex items-center justify-between h-16 px-6 border-b border-slate-100 shrink-0">
+        <div className="flex items-center">
+          <ShieldCheck className="h-6 w-6 text-blue-600 shrink-0" strokeWidth={2.5} />
+          <span className="ml-3 text-lg font-bold tracking-tight text-slate-900 uppercase">
+            Overwatch
+          </span>
+        </div>
+        {/* Mobile Close Button */}
+        <button 
+          onClick={() => setIsOpen(false)}
+          className="md:hidden p-2 -mr-2 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
+          aria-label="Close menu"
+        >
+          <X className="h-5 w-5" />
+        </button>
       </div>
 
       {/* Navigation */}
@@ -135,6 +160,48 @@ export function Sidebar({ user, clientDetails, project }) {
           </button>
         </form>
       </div>
-    </div >
+    </>
+  )
+
+  return (
+    <>
+      {/* Mobile Top Navigation Bar */}
+      <div className="md:hidden flex items-center justify-between px-6 h-16 bg-white border-b border-slate-200 shrink-0 w-full z-30">
+        <div className="flex items-center">
+          <ShieldCheck className="h-6 w-6 text-blue-600 shrink-0" strokeWidth={2.5} />
+          <span className="ml-3 text-lg font-bold tracking-tight text-slate-900 uppercase">
+            Overwatch
+          </span>
+        </div>
+        <button 
+          onClick={() => setIsOpen(true)}
+          className="p-2 -mr-2 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
+          aria-label="Open menu"
+        >
+          <Menu className="h-6 w-6" />
+        </button>
+      </div>
+
+      {/* Mobile Backdrop Overlay */}
+      {isOpen && (
+        <div 
+          className="fixed inset-0 bg-slate-900/40 z-40 md:hidden backdrop-blur-sm transition-opacity duration-300"
+          onClick={() => setIsOpen(false)}
+        />
+      )}
+
+      {/* Mobile Drawer */}
+      <div className={cn(
+        "fixed inset-y-0 left-0 z-50 w-72 bg-white shadow-2xl transform transition-transform duration-300 ease-in-out md:hidden flex flex-col h-full",
+        isOpen ? "translate-x-0" : "-translate-x-full"
+      )}>
+        <SidebarContent />
+      </div>
+
+      {/* Desktop Sidebar */}
+      <div className="hidden md:flex flex-col w-64 h-full bg-white border-r border-slate-200 shadow-sm shrink-0 z-40">
+        <SidebarContent />
+      </div>
+    </>
   )
 }

@@ -29,7 +29,7 @@ export default async function DashboardLayout({ children }) {
   const isProd = process.env.NODE_ENV === 'production';
 
   return (
-    <div className="flex h-full bg-slate-50 overflow-hidden">
+    <div className="flex flex-col md:flex-row h-full bg-slate-50 overflow-hidden">
       {
         isProd && (
           <GoogleAnalyticsConfig userId={user?.id} />

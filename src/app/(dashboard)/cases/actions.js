@@ -96,13 +96,16 @@ export const getPosts = traceAction('getPosts', async (project, page = 1, limit 
     // Build query
     // CLIENT VIEW: Enforce processed = true
     const query = {
-      processed: true
+      // CONTENT MUST BE REVIEWED ON REVIEW-CASES PAGE BEFORE COMMING HERE
+      "review_details.threat_score": { $exists: true }
+      // processed: true
     }
 
     // Only exclude raised cases if we are not explicitly asking for 'all' or 'Flag for Takedown'
     // if (filters.client_status !== 'all' && filters.client_status !== 'Flag for Takedown') {
     //   query['takedown_info.takedown_status'] = { $ne: 'raised' }
     // }
+
     const andConditions = []
 
     // Platform filter
@@ -112,7 +115,11 @@ export const getPosts = traceAction('getPosts', async (project, page = 1, limit 
 
     // Client Status filter
     if (filters.client_status && filters.client_status !== 'all') {
-      // To Be Reviewed cases might not even have the key "client_status"
+      // To Be Reviewed edge case: 
+      // ---> any case that doesnt have the key, 
+      // ---> key is null or 
+      // ---> the key is explicitly "To Be Reviewed" 
+      // should be included in this filter.
       if (filters.client_status === 'To Be Reviewed') {
         andConditions.push({
           $or: [
@@ -126,10 +133,8 @@ export const getPosts = traceAction('getPosts', async (project, page = 1, limit 
       }
     }
 
-    // NECESSARY CONDITION FOR POSTS TO APPEAR ON THIS PAGE (CONTENT MUST BE REVIEWED ON REVIEW-CASES PAGE BEFORE COMMING HERE)
-    query["review_details.threat_score"] = { $exists: true }
-
     // Risk Priority filter
+    // high > 95 >= medium > 75 >= low > 40 >= safe
     if (filters.risk_priority && filters.risk_priority !== 'all') {
       if (filters.risk_priority === 'high') {
         query['review_details.threat_score'] = { $gt: 95 }
