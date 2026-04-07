@@ -19,6 +19,17 @@ import { format } from 'date-fns'
 // ─── Helpers ────────────────────────────────────────────────────────────────
 const fmt = (n) => (n ?? 0).toLocaleString()
 
+function useIsMobile() {
+    const [isMobile, setIsMobile] = useState(false)
+    useEffect(() => {
+        const check = () => setIsMobile(window.innerWidth < 768)
+        check()
+        window.addEventListener('resize', check)
+        return () => window.removeEventListener('resize', check)
+    }, [])
+    return isMobile
+}
+
 const PLATFORM_COLORS = {
     instagram: '#e1306c',
     facebook: '#1877f2',
@@ -38,6 +49,7 @@ function DateFilter({ active, from, to }) {
     const searchParams = useSearchParams()
     const [isPickerOpen, setIsPickerOpen] = useState(false)
     const [hoveredDate, setHoveredDate] = useState(null)
+    const isMobile = useIsMobile()
 
     // Internal range state to track selection before both dates are picked
     const [internalRange, setInternalRange] = useState({
@@ -104,7 +116,7 @@ function DateFilter({ active, from, to }) {
     return (
         <div className="flex flex-col gap-3">
             <div
-                className="flex rounded-3xl items-center gap-1 bg-white backdrop-blur-md p-2 border w-full shadow-sm"
+                className="flex flex-col sm:flex-row rounded-3xl sm:items-center gap-2 sm:gap-1 bg-white backdrop-blur-md p-2 border w-full shadow-sm"
                 role="group"
                 aria-label="Filter by date range"
             >
@@ -114,7 +126,7 @@ function DateFilter({ active, from, to }) {
                         onClick={() => go(o.value)}
                         aria-pressed={active === o.value}
                         className={cn(
-                            'px-5 py-2 rounded-2xl text-sm font-bold transition-all duration-300 w-full',
+                            'px-4 sm:px-5 py-2.5 sm:py-2 rounded-2xl text-sm font-bold transition-all duration-300 w-full',
                             active === o.value
                                 ? 'bg-blue-600 text-white shadow-lg shadow-blue-200/50 scale-[1.02]'
                                 : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50 cursor-pointer'
@@ -128,7 +140,7 @@ function DateFilter({ active, from, to }) {
                     onClick={() => setIsPickerOpen(true)}
                     aria-pressed={active === 'custom'}
                     className={cn(
-                        'px-5 py-2 rounded-2xl text-sm font-bold transition-all duration-300 w-full flex justify-center',
+                        'px-4 sm:px-5 py-2.5 sm:py-2 rounded-2xl text-sm font-bold transition-all duration-300 w-full flex justify-center',
                         active === 'custom'
                             ? 'bg-blue-600 text-white shadow-lg shadow-blue-200/50 scale-[1.02]'
                             : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50 cursor-pointer'
@@ -164,7 +176,7 @@ function DateFilter({ active, from, to }) {
                             )}
                         </Button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
+                    <PopoverContent className="w-auto p-0 max-w-[100vw]" align={isMobile ? "center" : "start"}>
                         <Calendar
                             initialFocus
                             mode="range"
@@ -173,7 +185,7 @@ function DateFilter({ active, from, to }) {
                             onSelect={handleSelect}
                             onDayMouseEnter={(day) => setHoveredDate(day)}
                             onDayMouseLeave={() => setHoveredDate(null)}
-                            numberOfMonths={2}
+                            numberOfMonths={isMobile ? 1 : 2}
                             disabled={(date) => date > new Date()}
                             className="rounded-md border-none p-1.5 w-full flex-1 md:[--cell-size:--spacing(10)]"
                             modifiers={{
@@ -380,6 +392,8 @@ export function DashboardContent({ data }) {
         });
     }, [categoryDistribution]);
 
+    const isMobile = useIsMobile();
+
     return (
         <div className="min-h-full bg-[#f8f9fa]">
 
@@ -397,12 +411,12 @@ export function DashboardContent({ data }) {
             {/* </header> */}
 
             {/* ── Main Content ────────────────────────────────────────── */}
-            <main className="px-6 pt-6 pb-20 relative z-10 space-y-8">
+            <main className="px-4 md:px-6 pt-4 md:pt-6 pb-24 md:pb-20 relative z-10 space-y-6 md:space-y-8">
 
                 <section>
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                         {/* Card 1: Main Review Progress */}
-                        <div className="lg:col-span-6 bg-white border border-slate-200/60 rounded-3xl p-6 shadow-sm flex flex-col md:flex-row gap-8">
+                        <div className="lg:col-span-6 bg-white border border-slate-200/60 rounded-3xl p-5 md:p-6 shadow-sm flex flex-col md:flex-row gap-6 md:gap-8">
 
                             {/* Left Side: Main Stats & Progress */}
                             <div className="flex-1 flex flex-col justify-center">
@@ -417,7 +431,7 @@ export function DashboardContent({ data }) {
                                         <div>
                                             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Cases Reviewed</span>
                                             <div className="flex items-baseline gap-3">
-                                                <span className="text-7xl font-black text-slate-900 tracking-tighter tabular-nums leading-none">
+                                                <span className="text-6xl md:text-7xl font-black text-slate-900 tracking-tighter tabular-nums leading-none">
                                                     {fmt(totalReviewed)}
                                                 </span>
                                             </div>
@@ -426,7 +440,7 @@ export function DashboardContent({ data }) {
                                         <div>
                                             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">New Cases Discovered</span>
                                             <div className="flex items-baseline gap-3">
-                                                <span className="text-5xl font-black text-slate-400 tracking-tighter tabular-nums leading-none">
+                                                <span className="text-4xl md:text-5xl font-black text-slate-400 tracking-tighter tabular-nums leading-none">
                                                     {fmt(totalCasesDiscovered)}
                                                 </span>
                                             </div>
@@ -444,7 +458,7 @@ export function DashboardContent({ data }) {
                             </div>
 
                             {/* Right Side: Decision Distribution Visual */}
-                            <div className="bg-slate-50/50 rounded-3xl p-6 border border-slate-100 flex flex-col min-w-[220px]">
+                            <div className="bg-slate-50/50 rounded-3xl p-5 md:p-6 border border-slate-100 flex flex-col min-w-0 md:min-w-[220px]">
                                 <div className="mb-auto"> {/* Pushes content to top/bottom with balance */}
                                     <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-8 text-center">
                                         Review Decisions
@@ -485,7 +499,7 @@ export function DashboardContent({ data }) {
                             <DateFilter active={days} from={from} to={to} />
 
                             {/* Queue Status Card */}
-                            <div className="bg-white border border-slate-200/60 rounded-3xl p-8 shadow-sm flex-1 flex flex-col">
+                            <div className="bg-white border border-slate-200/60 rounded-3xl p-6 md:p-8 shadow-sm flex-1 flex flex-col">
                                 <div className="flex items-center justify-between mb-6">
                                     <h3 className="text-sm font-black text-slate-900 uppercase tracking-tight">Queue Status</h3>
                                     <div className="bg-slate-50 p-1.5 rounded-lg border border-slate-100">
@@ -495,7 +509,7 @@ export function DashboardContent({ data }) {
 
                                 <div className="flex-1 flex flex-col justify-center">
                                     <div className="bg-amber-400/10 text-amber-600 self-start px-2 py-0.5 rounded-md text-[10px] font-black mb-4 uppercase tracking-widest">Pending Review</div>
-                                    <div className="text-6xl font-black text-slate-900 tabular-nums border-b-4 border-amber-400 inline-block mb-10">{fmt(totalPending)}</div>
+                                    <div className="text-5xl md:text-6xl font-black text-slate-900 tabular-nums border-b-4 border-amber-400 inline-block mb-8 md:mb-10">{fmt(totalPending)}</div>
 
                                     <div className="space-y-5">
                                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Risk Breakdown</p>
@@ -519,8 +533,8 @@ export function DashboardContent({ data }) {
 
                 <section className="space-y-8">
                     {/* Trends Over Time */}
-                    <div className="bg-white border border-slate-200/60 rounded-3xl p-8 shadow-sm">
-                        <div className="flex flex-col md:flex-row justify-between md:items-start gap-8 mb-8">
+                    <div className="bg-white border border-slate-200/60 rounded-3xl p-6 md:p-8 shadow-sm">
+                        <div className="flex flex-col md:flex-row justify-between md:items-start gap-6 md:gap-8 mb-6 md:mb-8">
                             <div>
                                 <div className="flex items-center gap-2 mb-4">
                                     <div className="p-1.5 bg-slate-900/5 rounded-lg">
@@ -528,7 +542,7 @@ export function DashboardContent({ data }) {
                                     </div>
                                     <span className="text-[11px] font-black uppercase tracking-widest text-slate-800">Scanning Trends</span>
                                 </div>
-                                <h2 className="text-5xl font-black text-slate-900 tracking-tighter tabular-nums">{fmt(totalCasesDiscovered)}</h2>
+                                <h2 className="text-4xl md:text-5xl font-black text-slate-900 tracking-tighter tabular-nums">{fmt(totalCasesDiscovered)}</h2>
                                 <p className="text-slate-400 font-bold mt-1">Total cases discovered</p>
                             </div>
                             <div className="flex flex-wrap gap-4 pt-2">
@@ -588,7 +602,7 @@ export function DashboardContent({ data }) {
 
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                         {/* Category Analysis */}
-                        <div className="lg:col-span-8 bg-white border border-slate-200/60 rounded-3xl p-8 shadow-sm">
+                        <div className="lg:col-span-8 bg-white border border-slate-200/60 rounded-3xl p-6 md:p-8 shadow-sm">
                             <h3 className="text-[12px] font-black text-slate-900 uppercase tracking-widest mb-6 px-1">Top Categories</h3>
                             {categoryDataWithColors.length === 0 ? <Empty h={300} /> : (
                                 <div className="h-[300px]">
@@ -610,8 +624,11 @@ export function DashboardContent({ data }) {
                                                 tick={{ fontSize: 10, fontWeight: 800, fill: '#64748b' }}
                                                 tickLine={false}
                                                 axisLine={false}
-                                                width={140}
-                                                tickFormatter={(val) => val.replace(/_/g, ' ').toUpperCase()}
+                                                width={isMobile ? 100 : 140}
+                                                tickFormatter={(val) => {
+                                                    const str = val.replace(/_/g, ' ').toUpperCase();
+                                                    return isMobile && str.length > 12 ? str.substring(0, 10) + '...' : str;
+                                                }}
                                             />
                                             <Tooltip content={<ChartTooltip />} cursor={{ fill: '#f8f9fa' }} />
                                             <Bar
@@ -630,7 +647,7 @@ export function DashboardContent({ data }) {
                         </div>
 
                         {/* Source Distribution (Now positioned away from Hero Queue Status) */}
-                        <div className="lg:col-span-4 bg-white border border-slate-200/60 rounded-3xl p-8 shadow-sm">
+                        <div className="lg:col-span-4 bg-white border border-slate-200/60 rounded-3xl p-6 md:p-8 shadow-sm">
                             <div className="flex items-center justify-between mb-8">
                                 <h3 className="text-sm font-black text-slate-900 uppercase tracking-tight">Source Distribution</h3>
                                 <div className="bg-slate-50 p-1.5 rounded-lg border border-slate-100">
