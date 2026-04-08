@@ -1,6 +1,6 @@
 'use client'
 
-import { get_keywords, add_keyword } from '@/app/(dashboard)/configurations/actions'
+import { get_keywords, add_keyword } from '@/app/(dashboard)/configurations/keywordsActions'
 import { useEffect, useState, useTransition, useRef } from 'react'
 import { Search, Plus, Hash, Loader2, Tag, AlertCircle, CheckCircle2, ChevronDown, ChevronUp, ChevronsUp } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useActionState } from 'react'
-import { updateConfiguration } from './actions'
+import { updateConfiguration } from './accountActions'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'

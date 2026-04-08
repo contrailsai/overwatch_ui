@@ -1,12 +1,13 @@
 'use client'
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Settings, Globe, Eye } from 'lucide-react'
+import { Settings, Globe, Eye, Search } from 'lucide-react'
 import PageHeader from '@/components/PageHeader'
 import KeywordsSection from './KeywordsSection'
 import WatchlistSection from './WatchlistSection'
 import AccountSection from './AccountSection'
 import ProjectSection from './ProjectSection'
+import ResearchSection from './ResearchSection'
 
 
 export default function ConfigurationsPage({ clientDetails, project }) {
@@ -39,6 +40,11 @@ export default function ConfigurationsPage({ clientDetails, project }) {
                             <Eye className="w-4 h-4 shrink-0" />
                             Profile Watchlist
                         </TabsTrigger>
+
+                        <TabsTrigger value="research" className="flex-none shrink-0 px-4 md:px-8 py-2.5 md:py-2 text-[13px] md:text-sm whitespace-nowrap rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm flex items-center justify-center gap-2">
+                            <Search className="w-4 h-4 shrink-0" />
+                            Research Watchlist
+                        </TabsTrigger>
                     </TabsList>
 
                     <TabsContent value="keywords" className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
@@ -57,6 +63,11 @@ export default function ConfigurationsPage({ clientDetails, project }) {
                     {/* --- PROJECT TAB --- */}
                     <TabsContent value="project">
                         <ProjectSection project={project} isEditable={isEditable} />
+                    </TabsContent>
+
+                    {/* --- RESEARCH TAB --- */}
+                    <TabsContent value="research">
+                        <ResearchSection project={project} />
                     </TabsContent>
                 </Tabs>
             </div>

@@ -1,6 +1,6 @@
 'use client'
 
-import { get_watchlist, add_to_watchlist, delete_from_watchlist } from '@/app/(dashboard)/configurations/actions'
+import { get_watchlist, add_to_watchlist, delete_from_watchlist } from '@/app/(dashboard)/configurations/watchlistActions'
 import { useEffect, useState, useTransition, useRef } from 'react'
 import {
     Search, Plus, Eye, Loader2, User, AlertCircle,
