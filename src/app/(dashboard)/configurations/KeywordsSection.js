@@ -101,7 +101,7 @@ export default function KeywordsSection({ project }) {
             </div>
 
             <Card className="border-slate-200 shadow-sm rounded-xl overflow-hidden p-0">
-                <CardHeader className="bg-slate-50/50 border-b border-slate-100 pt-8 pb-6">
+                <CardHeader className="bg-slate-50/50 border-b border-slate-100 pt-6 pb-4 px-4 md:pt-8 md:pb-6 md:px-6">
                     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                         <div>
                             <CardTitle className="text-lg font-bold text-slate-800">Search Index Labels</CardTitle>
@@ -130,7 +130,7 @@ export default function KeywordsSection({ project }) {
                                     onKeyDown={handleKeyDown}
                                     placeholder="Search or add keywords…"
                                     className={cn(
-                                        "w-full pl-9 pr-4 py-2.5 text-sm font-medium rounded-xl border border-slate-200",
+                                        "w-full pl-9 pr-4 py-3 md:py-2.5 text-base md:text-sm font-medium rounded-xl border border-slate-200",
                                         "bg-white shadow-sm outline-none",
                                         "focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400",
                                         "placeholder:text-slate-400 transition-all"
@@ -152,8 +152,8 @@ export default function KeywordsSection({ project }) {
                                     </div>
                                 </div>
 
-                                <div className="flex items-center gap-6 w-full sm:w-auto">
-                                    <div className="w-full flex items-center gap-3 bg-white px-3 py-1.5 rounded-lg border border-slate-200">
+                                <div className="flex flex-col sm:flex-row items-center gap-3 sm:gap-6 w-full sm:w-auto">
+                                    <div className="w-full sm:w-auto flex items-center justify-between sm:justify-start gap-3 bg-white px-3 py-1.5 rounded-lg border border-slate-200">
                                         <div className="flex flex-col items-end w-full">
                                             <span className="text-[10px] font-bold text-slate-400 uppercase leading-none">Priority</span>
                                             <span className={cn("text-xs font-bold mt-1", isHighImportance ? "text-blue-600" : "text-slate-400")}>
@@ -197,7 +197,7 @@ export default function KeywordsSection({ project }) {
                     )}
                 </CardHeader>
 
-                <CardContent className="p-6">
+                <CardContent className="p-4 md:p-6">
                     {isLoading && keywords.length === 0 ? (
                         <div className="flex flex-col items-center justify-center py-16 gap-3">
                             <Loader2 className="w-7 h-7 text-blue-400 animate-spin" />

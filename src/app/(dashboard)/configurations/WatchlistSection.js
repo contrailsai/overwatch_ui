@@ -134,7 +134,7 @@ export default function WatchlistSection({ project }) {
             </div>
 
             <Card className="border-slate-200 shadow-sm rounded-xl overflow-hidden p-0">
-                <CardHeader className="bg-slate-50/50 border-b border-slate-100 pt-8 pb-6">
+                <CardHeader className="bg-slate-50/50 border-b border-slate-100 pt-6 pb-4 px-4 md:pt-8 md:pb-6 md:px-6">
                     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                         <div>
                             <CardTitle className="text-lg font-bold text-slate-800">Watched Profiles</CardTitle>
@@ -151,7 +151,7 @@ export default function WatchlistSection({ project }) {
                     </div>
 
                     {/* Search / Add input */}
-                    <div className="flex gap-2 mt-4">
+                    <div className="flex flex-col sm:flex-row gap-2 mt-4">
                         <div className="relative flex-1">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                             <input
@@ -162,7 +162,7 @@ export default function WatchlistSection({ project }) {
                                 onKeyDown={handleKeyDown}
                                 placeholder="Search or paste profile link…"
                                 className={cn(
-                                    "w-full pl-9 pr-4 py-2.5 text-sm font-medium rounded-xl border border-slate-200",
+                                    "w-full pl-9 pr-4 py-3 md:py-2.5 text-base md:text-sm font-medium rounded-xl border border-slate-200",
                                     "bg-white shadow-sm outline-none",
                                     "focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400",
                                     "placeholder:text-slate-400 transition-all"
@@ -173,7 +173,7 @@ export default function WatchlistSection({ project }) {
                             <Button
                                 onClick={() => handleAdd()}
                                 disabled={isLoading || !trimmed.startsWith('http')}
-                                className="bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl h-auto"
+                                className="bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl h-12 md:h-auto w-full sm:w-auto"
                             >
                                 {isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Plus className="w-4 h-4 mr-2" />}
                                 Add Profile
@@ -234,8 +234,8 @@ export default function WatchlistSection({ project }) {
 
 function WatchlistItem({ item, onDelete }) {
     return (
-        <div className="group flex items-center justify-between p-4 hover:bg-slate-50/50 transition-colors">
-            <div className="flex items-center gap-3 min-w-0">
+        <div className="group flex items-center justify-between p-4 md:px-6 hover:bg-slate-50/50 transition-colors gap-2">
+            <div className="flex items-center gap-3 min-w-0 flex-1">
                 <div className="p-2 bg-blue-50 text-blue-600 rounded-lg shrink-0">
                     <User className="w-4 h-4" />
                 </div>

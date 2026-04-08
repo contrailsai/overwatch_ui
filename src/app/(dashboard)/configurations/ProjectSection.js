@@ -71,6 +71,15 @@ export default function ProjectSection({ project, isEditable }) {
     return (
         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
             <section className="space-y-4 w-full">
+                {isEditable && (
+                    <div className="md:hidden flex items-start gap-3 p-4 bg-amber-50 text-amber-800 rounded-xl border border-amber-200 mb-6 shadow-sm">
+                        <AlertCircle className="w-5 h-5 shrink-0 mt-0.5 text-amber-600" />
+                        <div className="text-sm font-medium">
+                            <span className="font-bold block mb-1">Editing disabled on mobile</span>
+                            Please use a desktop device to manage project configurations.
+                        </div>
+                    </div>
+                )}
                 <div className="flex items-center gap-2 px-1">
                     <Globe className="w-4 h-4 text-slate-400" />
                     <h2 className="text-sm font-bold text-slate-500 uppercase tracking-widest">Project Overview</h2>
@@ -113,7 +122,7 @@ export default function ProjectSection({ project, isEditable }) {
                                         onChange={(e) => setProjectDescription(e.target.value)}
                                         placeholder="Project description..."
                                         disabled={!isEditable}
-                                        className="h-8 text-sm font-medium border-slate-200 p-2 focus-visible:ring-blue-500/20 truncate"
+                                        className="h-8 text-sm font-medium border-slate-200 p-2 focus-visible:ring-blue-500/20 truncate max-md:pointer-events-none max-md:opacity-80 max-md:bg-slate-50"
                                     />
                                 </div>
                             </div>
@@ -149,7 +158,7 @@ export default function ProjectSection({ project, isEditable }) {
                                     size="sm"
                                     onClick={handleAddLabel}
                                     disabled={!isEditable}
-                                    className="h-9 px-3 border-slate-200 hover:bg-slate-50 text-slate-600 font-bold"
+                                    className="hidden md:flex h-9 px-3 border-slate-200 hover:bg-slate-50 text-slate-600 font-bold"
                                 >
                                     <Plus className="w-4 h-4 mr-1.5" />
                                     Add New Label
@@ -157,10 +166,13 @@ export default function ProjectSection({ project, isEditable }) {
                             </div>
                         </CardHeader>
                         <CardContent className="p-0">
-                            <Table>
-                                <TableHeader className="bg-slate-50/30">
-                                    <TableRow className="border-slate-100 hover:bg-transparent">
-                                        <TableHead className="w-[25%] pl-6">Label Title</TableHead>
+                            <div className="w-full overflow-x-auto">
+                                <div className="relative min-w-[800px] md:min-w-0 max-md:opacity-80">
+                                    <div className="md:hidden absolute inset-0 z-10 bg-transparent" />
+                                    <Table className="w-full">
+                                        <TableHeader className="bg-slate-50/30">
+                                            <TableRow className="border-slate-100 hover:bg-transparent">
+                                                <TableHead className="w-[25%] pl-6">Label Title</TableHead>
                                         <TableHead className="w-1/2">Definition & Context</TableHead>
                                         <TableHead className="w-[15%]">Severity Level</TableHead>
                                         <TableHead className="w-[80px] text-right pr-6">Action</TableHead>
@@ -225,6 +237,8 @@ export default function ProjectSection({ project, isEditable }) {
                                     ))}
                                 </TableBody>
                             </Table>
+                                </div>
+                            </div>
 
                             {projectLabels.length === 0 && (
                                 <div className="text-center py-16">
@@ -262,7 +276,7 @@ export default function ProjectSection({ project, isEditable }) {
                                     size="sm"
                                     onClick={handleAddLegalCode}
                                     disabled={!isEditable}
-                                    className="h-9 px-3 border-slate-200 hover:bg-slate-50 text-slate-600 font-bold"
+                                    className="hidden md:flex h-9 px-3 border-slate-200 hover:bg-slate-50 text-slate-600 font-bold"
                                 >
                                     <Plus className="w-4 h-4 mr-1.5" />
                                     Add New Code
@@ -270,10 +284,13 @@ export default function ProjectSection({ project, isEditable }) {
                             </div>
                         </CardHeader>
                         <CardContent className="p-0">
-                            <Table>
-                                <TableHeader className="bg-slate-50/30">
-                                    <TableRow className="border-slate-100 hover:bg-transparent">
-                                        <TableHead className="w-[20%] pl-6">Act Name</TableHead>
+                            <div className="w-full overflow-x-auto">
+                                <div className="relative min-w-[800px] md:min-w-0 max-md:opacity-80">
+                                    <div className="md:hidden absolute inset-0 z-10 bg-transparent" />
+                                    <Table className="w-full">
+                                        <TableHeader className="bg-slate-50/30">
+                                            <TableRow className="border-slate-100 hover:bg-transparent">
+                                                <TableHead className="w-[20%] pl-6">Act Name</TableHead>
                                         <TableHead className="w-[20%]">Code Name</TableHead>
                                         <TableHead className="w-[30%]">Definition & Context</TableHead>
                                         <TableHead className="w-[15%]">Severity Level</TableHead>
@@ -349,6 +366,8 @@ export default function ProjectSection({ project, isEditable }) {
                                     ))}
                                 </TableBody>
                             </Table>
+                                </div>
+                            </div>
 
                             {legalCodes.length === 0 && (
                                 <div className="text-center py-16">
@@ -383,7 +402,7 @@ export default function ProjectSection({ project, isEditable }) {
                                 )}
                             </div>
                         </CardContent>
-                        <CardFooter className="bg-slate-50/50 border-t border-slate-100 p-6 flex justify-end">
+                        <CardFooter className="hidden md:flex bg-slate-50/50 border-t border-slate-100 p-6 justify-end">
                             <Button
                                 type="submit"
                                 disabled={labelPending || !isEditable}

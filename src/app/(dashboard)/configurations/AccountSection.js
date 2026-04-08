@@ -61,8 +61,8 @@ export default function AccountSection({ clientDetails }) {
                     <h2 className="text-sm font-bold text-slate-500 uppercase tracking-widest">Account Details</h2>
                 </div>
                 <Card className="border-slate-200 shadow-sm rounded-xl overflow-hidden p-0">
-                    <CardContent className="p-6">
-                        <div className="flex items-center justify-between">
+                    <CardContent className="p-4 md:p-6">
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                             <div className="space-y-1">
                                 <Label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Registered Email</Label>
                                 <div className="text-lg font-bold text-slate-900">{clientDetails?.email || 'N/A'}</div>
@@ -87,14 +87,14 @@ export default function AccountSection({ clientDetails }) {
                     <input type="hidden" name="notification_config" value={JSON.stringify(notificationConfig)} />
 
                     <Card className="border-slate-200 shadow-sm rounded-xl overflow-hidden p-0">
-                        <CardHeader className="bg-slate-50/50 border-b border-slate-100 pt-10">
+                        <CardHeader className="bg-slate-50/50 border-b border-slate-100 pt-6 px-4 pb-4 md:pt-10 md:px-6 md:pb-6">
                             <CardTitle className="text-lg font-bold text-slate-800">Alert Workflow</CardTitle>
                             <CardDescription className="text-slate-500">
                                 Configure where to receive high-threat alerts and takedown requests.
                             </CardDescription>
                         </CardHeader>
 
-                        <CardContent className="p-6 space-y-8">
+                        <CardContent className="p-4 md:p-6 space-y-8">
                             <div className="space-y-3">
                                 <Label className="text-sm font-bold text-slate-700">Primary Delivery Method</Label>
                                 <Select
@@ -226,14 +226,14 @@ export default function AccountSection({ clientDetails }) {
                             )}
                         </CardContent>
 
-                        <CardFooter className="bg-slate-50/50 border-t border-slate-100 p-6 flex justify-end">
+                        <CardFooter className="bg-slate-50/50 border-t border-slate-100 p-4 md:p-6 flex justify-end">
                             <Button
                                 type="submit"
                                 disabled={isPending}
-                                className="cursor-pointer bg-blue-600 hover:bg-blue-700 text-white font-bold px-8 h-11 shadow-lg shadow-blue-600/20 transition-all active:scale-95"
+                                className="cursor-pointer w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white font-bold px-8 h-12 md:h-11 shadow-lg shadow-blue-600/20 transition-all active:scale-95"
                             >
                                 {isPending ? (
-                                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving Configuration...</>
+                                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...</>
                                 ) : 'Save Notification Settings'}
                             </Button>
                         </CardFooter>

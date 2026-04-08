@@ -126,14 +126,14 @@ export default function RequestContentPage() {
             <PageHeader title="Request Content" description="Submit new links for data ingestion and analysis" />
 
             {/* Content Area */}
-            <div className="flex-1 overflow-y-auto p-8">
-                <div className="max-w-5xl mx-auto space-y-8 pb-12">
+            <div className="flex-1 overflow-y-auto p-4 sm:p-8">
+                <div className="max-w-5xl mx-auto space-y-6 sm:space-y-8 pb-12">
                     {/* Request Form */}
                     <section className="space-y-6">
                         <Card className="border-slate-200 shadow-xl shadow-slate-200/50 rounded-2xl overflow-hidden p-0 bg-white">
-                            <CardHeader className="bg-white border-b border-slate-100 p-6 sm:p-8">
-                                <div className="flex items-center gap-4">
-                                    <div className="w-12 h-12 rounded-xl bg-blue-600/10 flex items-center justify-center">
+                            <CardHeader className="bg-white border-b border-slate-100 p-5 sm:p-8">
+                                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
+                                    <div className="w-12 h-12 rounded-xl bg-blue-600/10 flex items-center justify-center shrink-0">
                                         <LinkIcon className="w-6 h-6 text-blue-600" />
                                     </div>
                                     <div>
@@ -147,11 +147,11 @@ export default function RequestContentPage() {
 
 
                             <CardContent className="p-0">
-                                <div className="p-8 space-y-6">
+                                <div className="p-4 sm:p-8 space-y-6">
                                     <div className="space-y-3">
-                                        <div className="flex items-center justify-between px-1">
+                                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between px-1 gap-2 sm:gap-0">
                                             <Label htmlFor="bulk-links" className="text-sm font-bold text-slate-700">Data Source (Paste links here)</Label>
-                                            <div className="flex items-center gap-2">
+                                            <div className="flex items-center gap-2 w-full sm:w-auto">
                                                 <input
                                                     type="file"
                                                     ref={fileInputRef}
@@ -163,7 +163,7 @@ export default function RequestContentPage() {
                                                     variant="secondary"
                                                     type="button"
                                                     onClick={() => fileInputRef.current?.click()}
-                                                    className="cursor-pointer h-7 text-[10px] uppercase tracking-wider font-bold px-3 bg-slate-100/80 hover:bg-slate-200 text-slate-600 border-none rounded-lg flex items-center gap-1.5 transition-all"
+                                                    className="w-full sm:w-auto cursor-pointer h-7 text-[10px] uppercase tracking-wider font-bold px-3 bg-slate-100/80 hover:bg-slate-200 text-slate-600 border-none rounded-lg flex items-center justify-center gap-1.5 transition-all"
                                                 >
                                                     <FileUp className="w-3 h-3" />
                                                     Upload CSV/TXT
@@ -186,12 +186,12 @@ export default function RequestContentPage() {
                                     {/* Link Preview Pills */}
                                     {parsedLinks.length > 0 && (
                                         <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
-                                            <div className="flex items-center justify-between px-1">
+                                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between px-1 gap-3 sm:gap-0">
                                                 <div className="flex items-center gap-2 text-slate-500 text-[10px] font-bold uppercase tracking-widest">
                                                     <ListChecks className="w-3.5 h-3.5 text-blue-500" />
                                                     Ready for Ingestion
                                                 </div>
-                                                <div className="flex items-center gap-3">
+                                                <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
                                                     <Badge variant="secondary" className="bg-blue-600/5 text-blue-600 border-blue-100/50 px-3 py-1 font-bold text-[10px] tracking-tight">
                                                         {parsedLinks.length} {parsedLinks.length === 1 ? 'Item' : 'Items'} Found
                                                     </Badge>
@@ -242,14 +242,14 @@ export default function RequestContentPage() {
                                 </div>
                             </CardContent>
 
-                            <CardFooter className="bg-slate-50/50 border-t border-slate-100 p-6 flex justify-between items-center px-8">
-                                <div className="text-xs text-slate-400 font-medium">
+                            <CardFooter className="bg-slate-50/50 border-t border-slate-100 p-4 sm:p-6 flex flex-col sm:flex-row justify-between items-center px-4 sm:px-8 gap-4 sm:gap-0">
+                                <div className="text-xs text-slate-400 font-medium text-center sm:text-left">
                                     {parsedLinks.length > 0 ? `${parsedLinks.length} unique items prepared` : 'Enter or upload links to get started'}
                                 </div>
                                 <Button
                                     onClick={handleBulkSubmit}
                                     disabled={parsedLinks.length === 0 || isSubmittingBulk}
-                                    className="cursor-pointer bg-blue-600 hover:bg-blue-700 text-white font-bold px-8 h-12 shadow-lg shadow-blue-600/20 transition-all active:scale-95 flex items-center gap-2 rounded-xl group disabled:opacity-50 disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none"
+                                    className="w-full sm:w-auto cursor-pointer bg-blue-600 hover:bg-blue-700 text-white font-bold px-8 h-12 shadow-lg shadow-blue-600/20 transition-all active:scale-95 flex items-center justify-center gap-2 rounded-xl group disabled:opacity-50 disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none"
                                 >
                                     {isSubmittingBulk ? (
                                         <>
@@ -271,10 +271,10 @@ export default function RequestContentPage() {
                     {/* Status List */}
                     <section className="space-y-6">
                         <Card className="border-slate-200 shadow-sm rounded-xl overflow-hidden p-0 flex flex-col">
-                            <CardHeader className="bg-white border-b border-slate-100 p-6 shrink-0">
-                                <div className="flex items-center justify-between">
+                            <CardHeader className="bg-white border-b border-slate-100 p-5 sm:p-6 shrink-0">
+                                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 sm:gap-0">
                                     <div className="flex items-center gap-2">
-                                        <div className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center">
+                                        <div className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center shrink-0">
                                             <History className="w-4 h-4 text-slate-600" />
                                         </div>
                                         <div>
@@ -289,7 +289,7 @@ export default function RequestContentPage() {
                                         size="sm"
                                         onClick={fetchLinks}
                                         disabled={isLoadingLinks}
-                                        className=" cursor-pointer h-9 text-slate-600 border-slate-200 hover:text-blue-600 hover:bg-blue-50 hover:border-blue-200 transition-all font-bold px-4 rounded-lg"
+                                        className="w-full sm:w-auto cursor-pointer h-9 text-slate-600 border-slate-200 hover:text-blue-600 hover:bg-blue-50 hover:border-blue-200 transition-all font-bold px-4 rounded-lg flex justify-center"
                                     >
                                         <RefreshCw className={`w-3.5 h-3.5 mr-2 ${isLoadingLinks ? 'animate-spin' : ''}`} />
                                         Refresh Status
@@ -316,43 +316,43 @@ export default function RequestContentPage() {
                                         <table className="w-full text-left border-collapse">
                                             <thead>
                                                 <tr className="bg-slate-50/50 border-b border-slate-100">
-                                                    <th className="px-8 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Link Source</th>
-                                                    <th className="px-8 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest whitespace-nowrap">Ingestion Status</th>
-                                                    <th className="px-8 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest whitespace-nowrap">Timestamp</th>
+                                                    <th className="px-4 sm:px-8 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Link Source</th>
+                                                    <th className="px-4 sm:px-8 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest whitespace-nowrap">Ingestion Status</th>
+                                                    <th className="px-4 sm:px-8 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest whitespace-nowrap">Timestamp</th>
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-slate-50">
                                                 {requestedLinks.map((item) => (
                                                     <tr key={item.id} className="hover:bg-slate-50/40 transition-colors group">
-                                                        <td className="px-8 py-5">
-                                                            <div className="flex items-center gap-3 min-w-0 max-w-sm sm:max-w-md">
+                                                        <td className="px-4 sm:px-8 py-4 sm:py-5">
+                                                            <div className="flex items-center gap-3 min-w-[200px] max-w-[200px] sm:max-w-md">
                                                                 {/* <div className="shrink-0 w-2 h-2 rounded-full bg-slate-200 group-hover:bg-blue-400 transition-colors" /> */}
                                                                 <a
                                                                     href={item.link}
                                                                     target="_blank"
                                                                     rel="noopener noreferrer"
-                                                                    className="text-sm font-bold text-slate-700 hover:text-blue-600 transition-colors truncate block flex-1"
+                                                                    className="text-xs sm:text-sm font-bold text-slate-700 hover:text-blue-600 transition-colors truncate block flex-1"
                                                                 >
                                                                     {item.link}
                                                                 </a>
                                                                 {/* <ExternalLink className="w-3.5 h-3.5 text-slate-300 group-hover:text-blue-400 shrink-0 opacity-0 group-hover:opacity-100 transition-all" /> */}
                                                             </div>
                                                         </td>
-                                                        <td className="px-8 py-5">
+                                                        <td className="px-4 sm:px-8 py-4 sm:py-5">
                                                             {item.ingested ? (
-                                                                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 text-[11px] font-bold border border-emerald-100 shadow-sm">
+                                                                <div className="inline-flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg bg-emerald-50 text-emerald-700 text-[10px] sm:text-[11px] font-bold border border-emerald-100 shadow-sm">
                                                                     <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                                                                     Processed
                                                                 </div>
                                                             ) : (
-                                                                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-50 text-amber-700 text-[11px] font-bold border border-amber-100 shadow-sm">
-                                                                    <Clock className="w-3 h-3" />
-                                                                    Pending Ingestion
+                                                                <div className="inline-flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg bg-amber-50 text-amber-700 text-[10px] sm:text-[11px] font-bold border border-amber-100 shadow-sm whitespace-nowrap">
+                                                                    <Clock className="w-3 h-3 shrink-0" />
+                                                                    Pending
                                                                 </div>
                                                             )}
                                                         </td>
-                                                        <td className="px-8 py-5">
-                                                            <div className="flex flex-col text-[11px] text-slate-600 font-bold">
+                                                        <td className="px-4 sm:px-8 py-4 sm:py-5">
+                                                            <div className="flex flex-col text-[10px] sm:text-[11px] text-slate-600 font-bold whitespace-nowrap">
                                                                 <span>{format(new Date(item.created_at), 'MMM dd, yyyy')}</span>
                                                                 <span className="text-slate-400 font-medium text-[10px]">{format(new Date(item.created_at), 'hh:mm aa')}</span>
                                                             </div>
