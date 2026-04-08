@@ -223,7 +223,8 @@ export async function updateLabels(prevState, formData) {
             codeName: code.codeName,
             description: code.description,
             name: generatedName,
-            severity: code.severity || 'low'
+            severity: code.severity || 'low',
+            referenceLink: code.referenceLink || ''
           }
         })
     }

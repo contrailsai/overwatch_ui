@@ -36,6 +36,7 @@ export default function ProjectSection({ project, isEditable }) {
         return initialCodes.map(c => ({ 
             ...c, 
             severity: c.severity || 'low',
+            referenceLink: c.referenceLink || '',
             originalName: c.name || (`${c.actName || ''} - ${c.codeName || ''}`.trim().replace(/^-|-$/g, '').trim())
         }))
     })
@@ -54,7 +55,7 @@ export default function ProjectSection({ project, isEditable }) {
         })
     }
 
-    const handleAddLegalCode = () => setLegalCodes([{ actName: '', codeName: '', description: '', severity: 'low', originalName: '' }, ...legalCodes])
+    const handleAddLegalCode = () => setLegalCodes([{ actName: '', codeName: '', description: '', severity: 'low', referenceLink: '', originalName: '' }, ...legalCodes])
 
     const handleRemoveLegalCode = (index) => {
         setLegalCodes(prev => prev.filter((_, i) => i !== index))
@@ -290,9 +291,10 @@ export default function ProjectSection({ project, isEditable }) {
                                     <Table className="w-full">
                                         <TableHeader className="bg-slate-50/30">
                                             <TableRow className="border-slate-100 hover:bg-transparent">
-                                                <TableHead className="w-[20%] pl-6">Act Name</TableHead>
-                                        <TableHead className="w-[20%]">Code Name</TableHead>
-                                        <TableHead className="w-[30%]">Definition & Context</TableHead>
+                                                <TableHead className="w-[15%] pl-6">Act Name</TableHead>
+                                        <TableHead className="w-[15%]">Code Name</TableHead>
+                                        <TableHead className="w-[20%]">Reference Link</TableHead>
+                                        <TableHead className="w-[25%]">Definition & Context</TableHead>
                                         <TableHead className="w-[15%]">Severity Level</TableHead>
                                         <TableHead className="w-[80px] text-right pr-6">Action</TableHead>
                                     </TableRow>
@@ -318,6 +320,16 @@ export default function ProjectSection({ project, isEditable }) {
                                                     disabled={!isEditable}
                                                     className="bg-white border-slate-200 h-10 font-bold text-slate-800 focus:ring-blue-500/20"
                                                     required
+                                                />
+                                            </TableCell>
+                                            <TableCell className="align-top pt-5">
+                                                <Input
+                                                    value={code.referenceLink || ''}
+                                                    onChange={(e) => handleLegalCodeChange(index, 'referenceLink', e.target.value)}
+                                                    placeholder="https://..."
+                                                    disabled={!isEditable}
+                                                    className="bg-white border-slate-200 h-10 text-slate-800 focus:ring-blue-500/20"
+                                                    type="url"
                                                 />
                                             </TableCell>
                                             <TableCell className="align-top pt-5">

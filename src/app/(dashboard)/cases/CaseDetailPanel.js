@@ -596,15 +596,19 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
                                                 <Scale className="w-3.5 h-3.5" /> Legal Framework
                                             </h4>
                                             <div className="flex gap-2 flex-wrap">
-                                                {legalCodes.map((code, idx) => (
-                                                    <ViolationCard
-                                                        key={idx}
-                                                        active={true}
-                                                        title={code}
-                                                        icon={Scale}
-                                                        color="purple"
-                                                    />
-                                                ))}
+                                                {legalCodes.map((code, idx) => {
+                                                    const projectCode = project?.project_details?.legal_codes?.find(pc => pc.name === code);
+                                                    return (
+                                                        <ViolationCard
+                                                            key={idx}
+                                                            active={true}
+                                                            title={code}
+                                                            icon={Scale}
+                                                            color="purple"
+                                                            referenceLink={projectCode?.referenceLink}
+                                                        />
+                                                    );
+                                                })}
                                             </div>
                                         </div>
                                     )}
@@ -941,7 +945,7 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
     )
 }
 
-function ViolationCard({ active, title, icon: Icon, color, extra }) {
+function ViolationCard({ active, title, icon: Icon, color, extra, referenceLink }) {
     if (!active) return null;
 
     const colorStyles = {
@@ -982,6 +986,18 @@ function ViolationCard({ active, title, icon: Icon, color, extra }) {
                 {/* <span className="text-[10px] font-bold uppercase tracking-widest opacity-60 block leading-none mb-1">Signal</span> */}
                 <span className="text-sm font-bold truncate block">{title}</span>
             </div>
+            {referenceLink && (
+                <a
+                    href={referenceLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="p-1.5 rounded-md hover:bg-black/5 transition-colors shrink-0"
+                    title="View Reference"
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <ExternalLink className="w-4 h-4 opacity-70" />
+                </a>
+            )}
             {/* <div className="absolute top-2 right-2">
                 <div className="h-1.5 w-1.5 rounded-full bg-current animate-pulse opacity-40 shadow-[0_0_8px_currentColor]" />
             </div> */}
