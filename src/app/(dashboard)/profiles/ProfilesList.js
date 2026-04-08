@@ -70,6 +70,20 @@ export function ProfilesList({ profiles, project, initialFilters, currentPage, c
         router.refresh()
     }
 
+    const selectedIndex = selectedProfile ? localProfiles.findIndex(p => p._id === selectedProfile._id) : -1
+
+    const handleNextProfile = useCallback(() => {
+        if (selectedIndex >= 0 && selectedIndex < localProfiles.length - 1) {
+            setSelectedProfile(localProfiles[selectedIndex + 1])
+        }
+    }, [selectedIndex, localProfiles])
+
+    const handlePrevProfile = useCallback(() => {
+        if (selectedIndex > 0) {
+            setSelectedProfile(localProfiles[selectedIndex - 1])
+        }
+    }, [selectedIndex, localProfiles])
+
     const updateQueryParams = useCallback((newParams) => {
         const params = new URLSearchParams(searchParams.toString())
         Object.entries(newParams).forEach(([key, value]) => {
@@ -91,20 +105,25 @@ export function ProfilesList({ profiles, project, initialFilters, currentPage, c
     return (
         <div className="flex flex-col h-full bg-slate-50">
             {/* Filters */}
-            <div className="px-6 py-4 shrink-0">
-                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
-                    <div className="flex flex-col lg:flex-row items-center justify-between gap-6">
-                        <div className="flex items-center gap-6 w-full lg:w-auto">
-                            <div className="flex items-center gap-2.5 shrink-0">
-                                <div className="bg-blue-50 p-2 rounded-lg text-blue-600"><Filter className="w-4 h-4" /></div>
-                                <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Filters</span>
+            <div className="px-4 md:px-6 py-3 md:py-4 shrink-0">
+                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 md:p-5">
+                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 md:gap-6">
+                        <div className="flex flex-col md:flex-row md:items-center gap-4 md:gap-6 w-full lg:w-auto">
+                            <div className="flex items-center justify-between md:justify-start gap-2.5 shrink-0">
+                                <div className="flex items-center gap-2.5">
+                                    <div className="bg-blue-50 p-2 rounded-lg text-blue-600"><Filter className="w-4 h-4" /></div>
+                                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Filters</span>
+                                </div>
+                                <div className="text-xs font-medium text-slate-500 md:hidden">
+                                    <span className="font-bold text-slate-900 text-sm px-1">{totalCount}</span> found
+                                </div>
                             </div>
-                            <Separator orientation="vertical" className="h-8 bg-slate-100 hidden sm:block" />
-                            <div className="flex flex-wrap items-center gap-4">
-                                <div className="space-y-1">
+                            <Separator orientation="vertical" className="h-8 bg-slate-100 hidden md:block" />
+                            <div className="grid grid-cols-2 md:flex md:flex-wrap items-end md:items-center gap-3 md:gap-4 w-full md:w-auto">
+                                <div className="space-y-1 col-span-1">
                                     <Label className="text-[10px] uppercase font-bold text-slate-400">Platform</Label>
                                     <Select value={initialFilters.platform} onValueChange={(val) => handleFilterChange('platform', val)}>
-                                        <SelectTrigger className="w-[140px] bg-white border-slate-200 h-9 text-xs font-semibold">
+                                        <SelectTrigger className="w-full md:w-[140px] bg-white border-slate-200 h-9 text-xs font-semibold">
                                             <SelectValue placeholder="All Platforms" />
                                         </SelectTrigger>
                                         <SelectContent>
@@ -117,10 +136,10 @@ export function ProfilesList({ profiles, project, initialFilters, currentPage, c
                                         </SelectContent>
                                     </Select>
                                 </div>
-                                <div className="space-y-1">
+                                <div className="space-y-1 col-span-1">
                                     <Label className="text-[10px] uppercase font-bold text-slate-400">Verified</Label>
                                     <Select value={initialFilters.is_verified} onValueChange={(val) => handleFilterChange('is_verified', val)}>
-                                        <SelectTrigger className="w-[130px] bg-white border-slate-200 h-9 text-xs font-semibold">
+                                        <SelectTrigger className="w-full md:w-[130px] bg-white border-slate-200 h-9 text-xs font-semibold">
                                             <SelectValue placeholder="All" />
                                         </SelectTrigger>
                                         <SelectContent>
@@ -130,10 +149,10 @@ export function ProfilesList({ profiles, project, initialFilters, currentPage, c
                                         </SelectContent>
                                     </Select>
                                 </div>
-                                <div className="space-y-1">
+                                <div className="space-y-1 col-span-2 md:col-span-1">
                                     <Label className="text-[10px] uppercase font-bold text-slate-400">Status</Label>
                                     <Select value={initialFilters.status} onValueChange={(val) => handleFilterChange('status', val)}>
-                                        <SelectTrigger className="w-[160px] bg-white border-slate-200 h-9 text-xs font-semibold">
+                                        <SelectTrigger className="w-full md:w-[160px] bg-white border-slate-200 h-9 text-xs font-semibold">
                                             <SelectValue placeholder="All Status" />
                                         </SelectTrigger>
                                         <SelectContent>
@@ -145,7 +164,7 @@ export function ProfilesList({ profiles, project, initialFilters, currentPage, c
                                     </Select>
                                 </div>
                                 {hasActiveFilter && (
-                                    <div className="pt-4">
+                                    <div className="pt-0 md:pt-4 col-span-2 md:col-span-1 flex justify-end md:justify-start">
                                         <Button variant="ghost" size="sm" onClick={clearFilters} className="h-9 px-2 text-rose-600 hover:text-rose-700 hover:bg-rose-50 font-bold text-xs">
                                             <X className="w-3.5 h-3.5 mr-1" /> Clear
                                         </Button>
@@ -153,7 +172,7 @@ export function ProfilesList({ profiles, project, initialFilters, currentPage, c
                                 )}
                             </div>
                         </div>
-                        <div className="flex items-center gap-5 w-full lg:w-auto justify-end">
+                        <div className="hidden md:flex items-center gap-5 w-full lg:w-auto justify-end">
                             <Separator orientation="vertical" className="h-8 bg-slate-100 hidden sm:block" />
                             <div className="text-xs font-medium text-slate-500">
                                 <span className="font-bold text-slate-900 text-sm px-2">{totalCount}</span> profiles found
@@ -164,8 +183,9 @@ export function ProfilesList({ profiles, project, initialFilters, currentPage, c
             </div>
 
             {/* Table */}
-            <div className="flex-1 overflow-y-auto px-6 pb-4">
-                <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+            <div className="flex-1 overflow-y-auto px-4 md:px-6 pb-4">
+                {/* Desktop Table View */}
+                <div className="hidden md:block bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                     <table className="min-w-full table-fixed divide-y divide-slate-100">
                         <thead className="bg-slate-50/80 sticky top-0 z-10 backdrop-blur-sm text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                             <tr>
@@ -310,11 +330,138 @@ export function ProfilesList({ profiles, project, initialFilters, currentPage, c
                         </tbody>
                     </table>
                 </div>
+
+                {/* Mobile Cards View */}
+                <div className="block md:hidden space-y-3 mt-2">
+                    {localProfiles.length === 0 ? (
+                        <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center shadow-sm">
+                            <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4 border border-slate-100 shadow-inner">
+                                <User className="w-8 h-8 opacity-20" />
+                            </div>
+                            <h3 className="text-lg font-bold text-slate-900 mb-1">No profiles found</h3>
+                            <p className="text-sm text-slate-500 leading-relaxed mb-6">
+                                We couldn't find any profiles matching your current filters.
+                            </p>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={clearFilters}
+                                className="h-9 px-4 text-xs font-bold border-slate-200 hover:bg-slate-50 text-slate-600 rounded-lg shadow-sm"
+                            >
+                                <X className="w-3.5 h-3.5 mr-2" />
+                                Clear Filters
+                            </Button>
+                        </div>
+                    ) : (
+                        localProfiles.map((profile) => {
+                            const isSelected = selectedProfile?._id === profile._id
+                            const risk = profile.review_details?.risk || 'safe'
+                            const statusCfg = getStatusConfig(profile.client_status)
+                            const StatusIcon = statusCfg.icon
+                            
+                            return (
+                                <div 
+                                    key={profile._id} 
+                                    onClick={() => setSelectedProfile(profile)}
+                                    className={cn(
+                                        "bg-white rounded-2xl border p-4 flex flex-col gap-4 shadow-sm transition-all cursor-pointer relative overflow-hidden",
+                                        isSelected ? "border-blue-300 bg-blue-50/50" : "border-slate-200 hover:border-slate-300 hover:shadow-md"
+                                    )}
+                                >
+                                    {/* Header: Platform & Status */}
+                                    <div className="flex justify-between items-start">
+                                        <div className="flex items-center gap-2">
+                                            <Badge variant="outline" className="capitalize font-bold text-slate-500 border-slate-200 gap-1.5 pl-1.5 pr-2 h-6 text-[10px]">
+                                                <PlatformIcon platform={profile.platform} className="w-3 h-3" />
+                                                {profile.platform}
+                                            </Badge>
+                                            <Badge variant="outline" className={cn('rounded-md capitalize font-bold border gap-1 pl-1.5 pr-2 h-6 text-[10px]', statusCfg.color)}>
+                                                <StatusIcon className="w-3 h-3" />
+                                                {statusCfg.label}
+                                            </Badge>
+                                        </div>
+                                        <span className={cn("inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold border shadow-sm",
+                                            risk === "high" ? "bg-rose-100 text-rose-600 border-rose-300"
+                                                : risk === "mid" ? "bg-orange-100 text-orange-600 border-orange-300"
+                                                    : risk === "low" ? "bg-amber-100 text-amber-600 border-amber-300"
+                                                        : "bg-emerald-100 text-emerald-600 border-emerald-300")}>
+                                            {
+                                                risk === "high" ? (
+                                                    <Siren className="w-3 h-3 mr-1" />
+                                                ) : risk === "mid" ? (
+                                                    <TriangleAlert className="w-3 h-3 mr-1" />
+                                                ) : risk === "low" ? (
+                                                    <TrendingDown className="w-3 h-3 mr-1" />
+                                                ) : (
+                                                    <Smile className="w-3 h-3 mr-1" />
+                                                )
+                                            }
+                                            {risk}
+                                        </span>
+                                    </div>
+
+                                    {/* Profile Info */}
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-12 h-12 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center shrink-0 overflow-hidden">
+                                            {profile.metadata?.profile_pic ? (
+                                                <img src={profile.metadata.profile_pic} alt="" className="w-full h-full object-cover" />
+                                            ) : (
+                                                <User className="w-5 h-5 text-slate-400" />
+                                            )}
+                                        </div>
+                                        <div className="flex flex-col min-w-0 flex-1">
+                                            <span className="font-bold text-slate-900 text-sm tracking-tight truncate">
+                                                {profile.display_name}
+                                            </span>
+                                            {profile.username && (
+                                                <span className="text-[11px] text-slate-500 truncate">
+                                                    @{profile.username}
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Bottom: Cases, Source, Actions */}
+                                    <div className="flex items-center justify-between pt-3 border-t border-slate-100 mt-1">
+                                        <div className="flex items-center gap-4">
+                                            <div className="flex flex-col">
+                                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Cases</span>
+                                                <span className="text-xs font-bold text-slate-700 leading-none">{profile.posts.length}</span>
+                                            </div>
+                                            <div className="w-px h-6 bg-slate-100"></div>
+                                            <a
+                                                href={profile.profile_url}
+                                                target="_blank"
+                                                rel="noreferrer"
+                                                onClick={(e) => e.stopPropagation()}
+                                                className="inline-flex items-center text-blue-600 hover:text-blue-800 font-bold text-[10px] transition-colors hover:underline bg-blue-50 px-2 py-1 rounded-md"
+                                            >
+                                                Source <ExternalLink className="w-2.5 h-2.5 ml-1" />
+                                            </a>
+                                        </div>
+                                        <Button
+                                            size="sm"
+                                            variant="secondary"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setSelectedProfile(profile);
+                                            }}
+                                            className="h-7 px-3 text-[10px] font-bold shadow-sm bg-white border border-slate-200 hover:bg-slate-50 text-slate-600"
+                                        >
+                                            Details
+                                            <ArrowRight className="w-2.5 h-2.5 ml-1 opacity-50" />
+                                        </Button>
+                                    </div>
+                                </div>
+                            )
+                        })
+                    )}
+                </div>
             </div>
 
             {/* Pagination */}
             {totalPages > 1 && (
-                <div className="px-6 pb-6 pt-2 shrink-0">
+                <div className="px-4 md:px-6 pb-6 pt-2 shrink-0">
                     <div className="bg-white rounded-xl shadow-sm border border-slate-200 px-4 py-3 flex items-center justify-between">
                         <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
                             Page {currentPage} of {totalPages}
@@ -338,6 +485,10 @@ export function ProfilesList({ profiles, project, initialFilters, currentPage, c
                 onClose={() => setSelectedProfile(null)}
                 onUpdate={handleProfileUpdate}
                 clientDetails={clientDetails}
+                onNext={handleNextProfile}
+                onPrev={handlePrevProfile}
+                hasNext={selectedIndex >= 0 && selectedIndex < localProfiles.length - 1}
+                hasPrev={selectedIndex > 0}
             />
         </div>
     )

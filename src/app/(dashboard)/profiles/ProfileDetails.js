@@ -11,7 +11,7 @@ import {
     Fingerprint, MessageSquareWarning, Laugh, EyeOff, ShieldX, ShieldQuestion,
     FishingHook, UserRoundX, AlertCircle, Eye,
     MessageCircle, Send, Loader2, CheckCircle2, Download, AlertTriangle,
-    MapPin, Calendar, Link2, Hash
+    MapPin, Calendar, Link2, Hash, ChevronLeft, ChevronRight
 } from 'lucide-react'
 import { Twitter, Reddit } from '@/utils/icons'
 import { Button } from '@/components/ui/button'
@@ -128,7 +128,7 @@ const SafeDate = ({ date }) => {
     return <span>{formatted || '...'}</span>
 }
 
-export default function ProfileDetailPanel({ profile, project, isOpen, onClose, onUpdate, clientDetails }) {
+export default function ProfileDetailPanel({ profile, project, isOpen, onClose, onUpdate, clientDetails, onNext, onPrev, hasNext, hasPrev }) {
     const [cases, setCases] = useState(null)
     const [loading, setLoading] = useState(false)
     const [localNotes, setLocalNotes] = useState([])
@@ -214,25 +214,52 @@ export default function ProfileDetailPanel({ profile, project, isOpen, onClose, 
                 onClick={onClose}
             />
 
-            <div className="fixed right-0 top-0 h-full bg-white shadow-2xl border-l border-slate-200 z-40 flex flex-row animate-in slide-in-from-right duration-300">
+            <div className="fixed right-0 top-0 h-full w-full md:w-auto bg-white shadow-2xl md:border-l border-slate-200 z-40 flex flex-col md:flex-row animate-in slide-in-from-right duration-300">
 
-                {/* LEFT: Profile & Cases */}
-                <div className="w-[540px] h-full flex flex-col overflow-hidden border-r border-slate-100">
-                    {/* Profile & Metadata Section */}
-                    <div className="px-6 py-6 border-b border-slate-100 bg-linear-to-b from-slate-50/80 to-white shrink-0 relative">
-                        {/* Close Button */}
-                        <div className="absolute top-4 right-4">
-                            <button
-                                onClick={onClose}
-                                className="p-1.5 rounded-lg hover:bg-slate-200/50 text-slate-400 hover:text-slate-700 transition-colors bg-white/50 backdrop-blur-sm"
-                            >
-                                <X className="w-4 h-4" />
-                            </button>
-                        </div>
+                {/* Mobile Header (Navigation & Close) */}
+                <div className="md:hidden flex items-center justify-between p-4 border-b border-slate-100 bg-white shrink-0 z-10 shadow-sm relative">
+                    <button onClick={onClose} className="flex items-center gap-1.5 text-slate-600 hover:text-slate-800 font-bold text-xs bg-slate-50 px-3 py-2 rounded-lg border border-slate-200 active:scale-95 transition-all">
+                        <X className="w-3.5 h-3.5" /> Close
+                    </button>
+                    <div className="flex items-center gap-2 bg-slate-50 p-1 rounded-lg border border-slate-200">
+                        <button onClick={onPrev} disabled={!hasPrev} className="p-1.5 rounded-md text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-white hover:shadow-sm transition-all active:scale-95">
+                            <ChevronLeft className="w-4 h-4" />
+                        </button>
+                        <div className="w-px h-4 bg-slate-200 mx-0.5"></div>
+                        <button onClick={onNext} disabled={!hasNext} className="p-1.5 rounded-md text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-white hover:shadow-sm transition-all active:scale-95">
+                            <ChevronRight className="w-4 h-4" />
+                        </button>
+                    </div>
+                </div>
 
-                        <div className="flex flex-col gap-5">
-                            {/* Profile Info Row */}
-                            <div className="flex items-start gap-4 pr-8">
+                {/* Content wrapper for responsive scrolling */}
+                <div className="flex-1 flex flex-col md:flex-row overflow-y-auto md:overflow-hidden w-full md:w-auto relative">
+                    
+                    {/* LEFT: Profile & Cases */}
+                    <div className="w-full md:w-[540px] md:h-full flex flex-col md:overflow-hidden border-b md:border-b-0 md:border-r border-slate-100 shrink-0">
+                        {/* Profile & Metadata Section */}
+                        <div className="px-4 md:px-6 py-5 md:py-6 border-b border-slate-100 bg-linear-to-b from-slate-50/80 to-white shrink-0 relative">
+                            {/* Desktop Close & Nav Buttons */}
+                            <div className="hidden md:flex absolute top-4 right-4 items-center gap-2">
+                                <div className="flex items-center gap-1 bg-slate-50/50 p-1 rounded-lg border border-slate-200/60 backdrop-blur-sm mr-2">
+                                    <button onClick={onPrev} disabled={!hasPrev} className="p-1 rounded text-slate-400 hover:text-slate-700 disabled:opacity-30 disabled:hover:text-slate-400 hover:bg-white transition-all">
+                                        <ChevronLeft className="w-4 h-4" />
+                                    </button>
+                                    <button onClick={onNext} disabled={!hasNext} className="p-1 rounded text-slate-400 hover:text-slate-700 disabled:opacity-30 disabled:hover:text-slate-400 hover:bg-white transition-all">
+                                        <ChevronRight className="w-4 h-4" />
+                                    </button>
+                                </div>
+                                <button
+                                    onClick={onClose}
+                                    className="p-1.5 rounded-lg hover:bg-slate-200/50 text-slate-400 hover:text-slate-700 transition-colors bg-white/50 backdrop-blur-sm border border-slate-200/60"
+                                >
+                                    <X className="w-4 h-4" />
+                                </button>
+                            </div>
+
+                            <div className="flex flex-col gap-5">
+                                {/* Profile Info Row */}
+                                <div className="flex items-start gap-4 pr-0 md:pr-24">
                                 <div className="w-16 h-16 rounded-full bg-white shadow-sm ring-1 ring-slate-200/60 flex items-center justify-center shrink-0 overflow-hidden relative">
                                     {profile.metadata?.profile_pic ? (
                                         <img src={profile.metadata.profile_pic} alt="" className="w-full h-full object-cover" />
@@ -374,8 +401,8 @@ export default function ProfileDetailPanel({ profile, project, isOpen, onClose, 
                     )}
 
                     {/* Cases List */}
-                    <div className="flex-1 overflow-y-auto">
-                        <div className="px-6 py-4">
+                    <div className="flex-1 md:overflow-y-auto">
+                        <div className="px-4 md:px-6 py-4">
                             <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Associated Cases</h3>
                             {loading && (
                                 <div className="space-y-3">
@@ -483,13 +510,13 @@ export default function ProfileDetailPanel({ profile, project, isOpen, onClose, 
                 </div>
 
                 {/* RIGHT: Review Analysis */}
-                <div className="w-[420px] h-full flex flex-col overflow-hidden bg-slate-50">
+                <div className="w-full md:w-[420px] md:h-full flex flex-col md:overflow-hidden bg-slate-50 shrink-0 border-t md:border-t-0 border-slate-100">
                     {/* <div className="px-6 py-4 border-b border-slate-100 bg-white shrink-0">
                         <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Review Analysis</h3>
                         <p className="text-[10px] text-slate-400 mt-1 uppercase tracking-widest font-bold">Reviewed Date: {review.reviewed_at ? format(new Date(review.reviewed_at), 'dd MMM yyyy, HH:mm') : 'N/A'}</p>
                     </div> */}
 
-                    <div className="flex-1 overflow-y-auto py-5 px-3 space-y-8 bg-white">
+                    <div className="flex-1 md:overflow-y-auto py-6 md:py-5 px-4 md:px-3 space-y-8 bg-white">
                         {/* Risk Assessment */}
                         <div>
                             <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Risk Assessment</h4>
@@ -597,8 +624,8 @@ export default function ProfileDetailPanel({ profile, project, isOpen, onClose, 
                     )}
 
                     {/* STICKY FOOTER: Actions */}
-                    <div className="p-5 border-t border-slate-100 bg-white sticky bottom-0 z-10 space-y-4">
-                        <div className="flex gap-4">
+                    <div className="p-4 md:p-5 border-t border-slate-100 bg-white sticky bottom-0 z-10 space-y-4">
+                        <div className="flex gap-3 md:gap-4">
                             <Button
                                 onClick={() => { if (clientStatus !== 'No Action' && clientStatus !== 'Pass') handleUpdateStatus('No Action') }}
                                 disabled={isUpdatingStatus}
@@ -645,6 +672,8 @@ export default function ProfileDetailPanel({ profile, project, isOpen, onClose, 
                         </div>
                     </div>
                 </div>
+
+                </div> {/* Closing wrapper div */}
             </div>
         </>
     )
