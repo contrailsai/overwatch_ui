@@ -2,6 +2,16 @@ import { useState } from 'react';
 import { sendGAEvent } from '@next/third-parties/google';
 import { getReportDownloadUrl } from '@/app/(dashboard)/cases/pdf_actions';
 
+function getProgressMessage(progress) {
+    if (!progress) return "Waiting in queue...";
+    if (progress < 30) return "Fetching case data...";
+    if (progress < 50) return "Processing images...";
+    if (progress < 70) return "Rendering PDF layout...\n(This may take a minute)";
+    if (progress < 90) return "Uploading to secure storage...";
+    if (progress < 100) return "Finalizing report...";
+    return "Complete!";
+}
+
 export function usePdfExport() {
     const [loading, setLoading] = useState(false);
     const [statusText, setStatusText] = useState('');
@@ -45,11 +55,11 @@ export function usePdfExport() {
                 s3Url = generateData.url;
             } else if (generateData.status === 'processing' && generateData.jobId) {
                 // Poll for completion
-                setStatusText('Generating PDF...');
+                setStatusText('Waiting in queue...');
                 let jobStatus = 'processing';
                 
                 while (jobStatus === 'processing' || jobStatus === 'active' || jobStatus === 'waiting') {
-                    await new Promise(resolve => setTimeout(resolve, 2000)); // Poll every 2s
+                    await new Promise(resolve => setTimeout(resolve, 1000)); // Poll every 2s
                     
                     const statusResponse = await fetch(`${pdfServiceUrl}/job-status/${generateData.jobId}`);
                     if (!statusResponse.ok) throw new Error('Failed to check job status');
@@ -57,7 +67,13 @@ export function usePdfExport() {
                     const statusData = await statusResponse.json();
                     jobStatus = statusData.status;
                     
+                    if (jobStatus === 'processing' || jobStatus === 'active' || jobStatus === 'waiting') {
+                        const prog = statusData.progress || 0;
+                        setStatusText(`${prog}% - ${getProgressMessage(prog)}`);
+                    }
+                    
                     if (jobStatus === 'completed') {
+                        setStatusText(`100% - Complete!`);
                         s3Url = statusData.url;
                         break;
                     } else if (jobStatus === 'failed') {

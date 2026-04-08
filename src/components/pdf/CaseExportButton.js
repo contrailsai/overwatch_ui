@@ -26,14 +26,16 @@ export function CaseExportButton({ post, project }) {
             size="sm"
             disabled={loading}
             onClick={handleDownload}
-            className="gap-2 cursor-pointer disabled:cursor-not-allowed border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-100 transition-all font-semibold shadow-sm h-8"
+            className="gap-2 cursor-pointer disabled:cursor-not-allowed border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-100 transition-all font-semibold shadow-sm h-auto min-h-[32px] py-1.5"
         >
             {loading ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
+                <Loader2 className="w-4 h-4 animate-spin shrink-0" />
             ) : (
-                <FileDown className="w-4 h-4" />
+                <FileDown className="w-4 h-4 shrink-0" />
             )}
-            {loading ? statusText || 'Preparing...' : 'Download Content Report'}
+            <span className="whitespace-pre-line text-left leading-snug">
+                {loading ? statusText || 'Preparing...' : 'Download Content Report'}
+            </span>
         </Button>
     );
 }
