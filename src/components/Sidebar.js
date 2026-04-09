@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { List, ShieldAlert, Settings, LogOut, LayoutDashboard, ShieldCheck, GitPullRequestCreateArrow, Users, Menu, X } from 'lucide-react'
+import { List, ShieldAlert, Settings, UserStar, LogOut, LayoutDashboard, ShieldCheck, GitPullRequestCreateArrow, Users, Menu, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export function Sidebar({ user, clientDetails, project }) {
@@ -37,7 +37,7 @@ export function Sidebar({ user, clientDetails, project }) {
     { name: 'Takedowns', href: '/takedowns', icon: ShieldAlert, show: true },
     { name: 'Upload Content', href: '/upload-content', icon: GitPullRequestCreateArrow, show: true },
     { name: 'Configurations', href: '/configurations', icon: Settings, show: true },
-    { name: 'Admin', href: '/admin', icon: Settings, show: (clientDetails?.permission === 'client-admin' || clientDetails?.permission === 'reviewer')},
+    { name: 'Admin', href: '/admin', icon: UserStar, show: (clientDetails?.permission === 'client-admin' || clientDetails?.permission === 'reviewer')},
   ]
 
   // Filter and map navigation items
