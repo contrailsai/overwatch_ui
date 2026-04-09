@@ -19,6 +19,7 @@ export default function KeywordsSection({ project }) {
     const [isPending, startTransition] = useTransition()
     const inputRef = useRef(null)
     const debounceRef = useRef(null)
+    const mounted = useRef(false)
 
     const showFeedback = (type, message) => {
         setFeedback({ type, message })
@@ -45,9 +46,17 @@ export default function KeywordsSection({ project }) {
 
     // Debounced effect for search text
     useEffect(() => {
+        if (!mounted.current) {
+            mounted.current = true
+            return
+        }
+
         if (inputText === '') {
             // When cleared, reset limit and fetch everything immediately
             setLimit(50)
+            if (limit === 50) {
+                fetchKeywords('', 50)
+            }
             return
         }
 

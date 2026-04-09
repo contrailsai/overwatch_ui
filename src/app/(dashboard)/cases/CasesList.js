@@ -791,7 +791,7 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
 
                     {/* Content */}
                     <td className="px-2 sm:px-4 py-3 overflow-hidden align-middle">
-                      <div className="flex gap-3 sm:gap-4">
+                      <div className="flex gap-3 sm:gap-4 max-w-100">
                         <div className="shrink-0 relative">
                           {post.signedImageUrl ? (
                             <div className="h-12 w-12 sm:h-16 sm:w-16 rounded-lg overflow-hidden border border-slate-200 shadow-sm bg-slate-200 group-hover:shadow-md transition-all">
