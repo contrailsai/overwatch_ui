@@ -37,7 +37,7 @@ export function Sidebar({ user, clientDetails, project }) {
     { name: 'Takedowns', href: '/takedowns', icon: ShieldAlert, show: true },
     { name: 'Upload Content', href: '/upload-content', icon: GitPullRequestCreateArrow, show: true },
     { name: 'Configurations', href: '/configurations', icon: Settings, show: true },
-    { name: 'Admin', href: '/admin', icon: Settings, show: clientDetails?.permission === 'client-admin' },
+    { name: 'Admin', href: '/admin', icon: Settings, show: (clientDetails?.permission === 'client-admin' || clientDetails?.permission === 'reviewer')},
   ]
 
   // Filter and map navigation items

@@ -20,7 +20,7 @@ export default async function AdminPage({ searchParams }) {
   const { user, clientDetails, project } = result
 
 
-  if (clientDetails.permission !== "client-admin") {
+  if (clientDetails.permission !== "client-admin" && clientDetails.permission !== "reviewer") {
     return (
       <main className="flex-1 flex items-center justify-center bg-slate-50">
         <div className="text-center p-8 bg-white rounded-2xl border border-slate-200 shadow-sm">
