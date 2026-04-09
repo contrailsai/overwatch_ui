@@ -6,7 +6,7 @@ function getProgressMessage(progress) {
     if (!progress) return "Waiting in queue...";
     if (progress < 30) return "Fetching case data...";
     if (progress < 50) return "Processing images...";
-    if (progress < 70) return "Rendering PDF layout...\n(This may take a minute)";
+    if (progress < 70) return "Rendering PDF...please wait";
     if (progress < 90) return "Uploading to secure storage...";
     if (progress < 100) return "Finalizing report...";
     return "Complete!";
@@ -59,7 +59,7 @@ export function usePdfExport() {
                 let jobStatus = 'processing';
                 
                 while (jobStatus === 'processing' || jobStatus === 'active' || jobStatus === 'waiting') {
-                    await new Promise(resolve => setTimeout(resolve, 1000)); // Poll every 2s
+                    await new Promise(resolve => setTimeout(resolve, 1000)); // Poll every 1s
                     
                     const statusResponse = await fetch(`${pdfServiceUrl}/job-status/${generateData.jobId}`);
                     if (!statusResponse.ok) throw new Error('Failed to check job status');

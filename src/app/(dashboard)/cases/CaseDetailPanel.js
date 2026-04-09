@@ -756,7 +756,7 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
                                     {((Array.isArray(post.update_history) && post.update_history.length > 0) || post.content_reviewed_by) && (
                                         <div className="mt-4 p-4 border-t border-slate-100">
                                             <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                                                <History className="w-3.5 h-3.5" /> Audit Log
+                                                <History className="w-3.5 h-3.5" /> Action Log
                                             </h4>
 
                                             <div className="space-y-6 relative before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-[0.5px] before:bg-slate-200">

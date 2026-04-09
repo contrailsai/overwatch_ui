@@ -2,7 +2,7 @@
 
 import { get_keywords, add_keyword } from '@/app/(dashboard)/configurations/keywordsActions'
 import { useEffect, useState, useTransition, useRef } from 'react'
-import { Search, Plus, Hash, Loader2, Tag, AlertCircle, CheckCircle2, ChevronDown, ChevronUp, ChevronsUp } from 'lucide-react'
+import { Search, Plus, Hash, Loader2, Slash , Tag, AlertCircle, CheckCircle2, ChevronDown, ChevronUp, ChevronsUp } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
@@ -88,8 +88,9 @@ export default function KeywordsSection({ project }) {
 
     // "Add" suggestion: only when search text is non-empty, not loading, and no exact match
     const trimmed = inputText.trim().toLowerCase()
-    const hasExactMatch = keywords.some(k => k.keyword.toLowerCase() === trimmed)
-    const showAddSuggestion = trimmed.length > 0 && !fetchLoading && !hasExactMatch
+    const exactMatch = keywords.find(k => k.keyword.toLowerCase() === trimmed)
+    const showAddSuggestion = trimmed.length > 0 && !fetchLoading && !exactMatch
+    const showAlreadyExists = trimmed.length > 0 && !fetchLoading && exactMatch
 
     const isLoading = fetchLoading || isPending
 
@@ -105,9 +106,11 @@ export default function KeywordsSection({ project }) {
                     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                         <div>
                             <CardTitle className="text-lg font-bold text-slate-800">Search Index Labels</CardTitle>
-                            {/* <CardDescription className="text-slate-500 mt-1">
-                                Keywords used to track and flag content across your project.
-                            </CardDescription> */}
+                            <div className="flex items-center gap-3 text-[10px] font-bold uppercase tracking-wider text-slate-500 mt-2">
+                                <div className="flex items-center gap-1.5" title="Priority > 1500"><span className="p-0.5 rounded-full bg-rose-500 text-white shadow-sm"><ChevronsUp className="w-2.5 h-2.5" strokeWidth={3}/></span> Critical</div>
+                                <div className="flex items-center gap-1.5" title="Priority > 1000"><span className="p-0.5 rounded-full bg-amber-500 text-white shadow-sm"><ChevronUp className="w-2.5 h-2.5" strokeWidth={3}/></span> High</div>
+                                <div className="flex items-center gap-1.5" title="Priority <= 1000"><span className="p-0.5 rounded-full bg-slate-400 text-white shadow-sm"><ChevronDown className="w-2.5 h-2.5" strokeWidth={3}/></span> Normal</div>
+                            </div>
                         </div>
                         <Badge
                             variant="secondary"
@@ -122,6 +125,8 @@ export default function KeywordsSection({ project }) {
                         <div className="flex gap-2">
                             <div className="relative flex-1">
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                                <span className="absolute left-8 top-1/2 -translate-y-3/4 w-4 h-4 text-slate-400 pointer-events-none"> /</span>
+                                <Plus className="absolute left-10 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                                 <input
                                     ref={inputRef}
                                     type="text"
@@ -130,7 +135,7 @@ export default function KeywordsSection({ project }) {
                                     onKeyDown={handleKeyDown}
                                     placeholder="Search or add keywords…"
                                     className={cn(
-                                        "w-full pl-9 pr-4 py-3 md:py-2.5 text-base md:text-sm font-medium rounded-xl border border-slate-200",
+                                        "w-full pl-15 pr-4 py-3 md:py-2.5 text-base md:text-sm font-medium rounded-xl border border-slate-200",
                                         "bg-white shadow-sm outline-none",
                                         "focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400",
                                         "placeholder:text-slate-400 transition-all"
@@ -138,6 +143,23 @@ export default function KeywordsSection({ project }) {
                                 />
                             </div>
                         </div>
+
+                        {/* Keyword Already Exists */}
+                        {showAlreadyExists && (
+                            <div className="flex items-center gap-3 p-3 bg-emerald-50/50 border border-emerald-100 rounded-xl animate-in slide-in-from-top-2 duration-200">
+                                <div className="p-2 bg-white rounded-lg border border-emerald-100 text-emerald-600 shadow-sm">
+                                    <CheckCircle2 className="w-4 h-4" />
+                                </div>
+                                <div>
+                                    <p className="text-sm font-bold text-slate-700 leading-none">
+                                        &ldquo;{exactMatch.keyword}&rdquo; is already in your index
+                                    </p>
+                                    <p className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider mt-1">
+                                        No need to add it again
+                                    </p>
+                                </div>
+                            </div>
+                        )}
 
                         {/* Add Prompt - Top Positioned */}
                         {showAddSuggestion && (
@@ -154,16 +176,16 @@ export default function KeywordsSection({ project }) {
 
                                 <div className="flex flex-col sm:flex-row items-center gap-3 sm:gap-6 w-full sm:w-auto">
                                     <div className="w-full sm:w-auto flex items-center justify-between sm:justify-start gap-3 bg-white px-3 py-1.5 rounded-lg border border-slate-200">
-                                        <div className="flex flex-col items-end w-full">
+                                        <div className="flex flex-col items-start w-full">
                                             <span className="text-[10px] font-bold text-slate-400 uppercase leading-none">Priority</span>
-                                            <span className={cn("text-xs font-bold mt-1", isHighImportance ? "text-blue-600" : "text-slate-400")}>
+                                            <span className={cn("text-xs font-bold mt-1", isHighImportance ? "text-amber-600" : "text-slate-500")}>
                                                 {isHighImportance ? "High" : "Normal"}
                                             </span>
                                         </div>
                                         <Switch
                                             checked={isHighImportance}
                                             onCheckedChange={setIsHighImportance}
-                                            className="data-[state=checked]:bg-blue-600"
+                                            className="data-[state=checked]:bg-amber-500"
                                         />
                                     </div>
 
@@ -207,7 +229,11 @@ export default function KeywordsSection({ project }) {
                         <div className={cn("flex flex-wrap gap-2.5 transition-opacity duration-200", isLoading ? "opacity-50" : "opacity-100")}>
                             {/* Keyword chips */}
                             {keywords.map((kw) => (
-                                <KeywordChip key={kw._id} keyword={kw} />
+                                <KeywordChip 
+                                    key={kw._id} 
+                                    keyword={kw} 
+                                    isHighlighted={trimmed.length > 0 && kw.keyword.toLowerCase() === trimmed} 
+                                />
                             ))}
 
                             {/* Show More button */}
@@ -249,18 +275,27 @@ export default function KeywordsSection({ project }) {
     )
 }
 
-function KeywordChip({ keyword }) {
-    // console.log(keyword)
+function KeywordChip({ keyword, isHighlighted }) {
+    const isCritical = keyword.importance > 1500;
+    const isHigh = keyword.importance > 1000 && !isCritical;
+    const isNormal = keyword.importance <= 1000;
+
     return (
-        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-sm font-semibold bg-white border-slate-200 text-slate-700 shadow-sm">
-            {/* <Hash className="w-3 h-3 text-slate-400 shrink-0" /> */}
-            <span className={cn('p-1 rounded-full text-white', keyword.importance > 1500 ? 'bg-blue-700' : keyword.importance > 1000 ? 'bg-blue-500' : 'bg-blue-300')}>
-                {keyword.importance > 1500 ?
-                    <ChevronsUp className="w-3 h-3" /> :
-                    keyword.importance > 1000 ?
-                        <ChevronUp className="w-3 h-3" /> :
-                        <ChevronDown className="w-3 h-3" />
-                }
+        <div className={cn(
+            "flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-sm font-semibold transition-all duration-200 cursor-default",
+            isHighlighted 
+                ? "bg-blue-50 border-blue-300 text-blue-900 shadow-md ring-2 ring-blue-500/20 scale-105 z-10" 
+                : "bg-white border-slate-200 text-slate-700 shadow-sm hover:border-slate-300 hover:shadow"
+        )}>
+            <span className={cn(
+                'p-1 rounded-full text-white', 
+                isCritical ? 'bg-rose-500' : 
+                isHigh ? 'bg-amber-500' : 
+                'bg-slate-400'
+            )}>
+                {isCritical ? <ChevronsUp className="w-2.5 h-2.5" strokeWidth={3} /> :
+                 isHigh ? <ChevronUp className="w-2.5 h-2.5" strokeWidth={3} /> :
+                 <ChevronDown className="w-2.5 h-2.5" strokeWidth={3} />}
             </span>
             <span>{keyword.keyword}</span>
         </div>
