@@ -4,7 +4,7 @@ import { createClient, getAuthenticatedUser } from '@/utils/supabase/server'
 import clientPromise from '@/utils/mongodb/client'
 import { getSignedImageUrl } from '@/utils/aws/s3'
 import { sendSlackNotification } from '@/utils/slack'
-import { manageTakedownCase, updateClientReviewedMetrics, updateDailyMetrics, updateClientMetaStats } from '@/utils/supabase/metrics'
+import { updateClientReviewedMetrics, updateDailyMetrics, updateClientMetaStats } from '@/utils/supabase/metrics'
 import { ObjectId } from 'mongodb'
 // import { getClientandProjectDetails } from '@/app/(dashboard)/actions'
 import { traceAction, recordClickMetric } from '@/utils/tracing'
@@ -523,7 +523,7 @@ export const updateClientStatus = traceAction('updateClientStatus', async (caseI
           "metadata.update_history": {
             updated_at: new Date(),
             updated_by: projectDetails.client_email,
-            changes_summary: "client status change"
+            changes_summary: "client status change to " + status
           }
         }
       }
@@ -536,13 +536,13 @@ export const updateClientStatus = traceAction('updateClientStatus', async (caseI
       const currentReviewData = {
         risk_score: post.review_details?.threat_score || 0,
         client_status: status,
-        platform: post.platform ? post.platform.toLowerCase() : 'instagram'
+        platform: post?.platform.toLowerCase()
       }
 
       const previousReviewData = post.client_status && post.client_status !== 'To Be Reviewed' ? {
         risk_score: post.review_details?.threat_score || 0,
         client_status: post.client_status,
-        platform: post.platform ? post.platform.toLowerCase() : 'instagram'
+        platform: post?.platform.toLowerCase() 
       } : null
 
       await updateClientReviewedMetrics(

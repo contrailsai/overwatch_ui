@@ -303,48 +303,6 @@ export async function updateClientMetaStats(project_name, client_email, action) 
   }
 }
 
-export async function manageTakedownCase(data) {
-  const supabase = await createClient()
-  const {
-    mongo_post_id,
-    post_platform_id,
-    platform,
-    is_in_takedown,
-    risk_score,
-    threat_type
-  } = data
-
-  if (!is_in_takedown) {
-    // If not in takedown, we might want to remove it or mark resolved? 
-    // For now, let's just ignore or leave as is.
-    return null
-  }
-
-  try {
-    const { data: record, error } = await supabase
-      .from('takedown_cases')
-      .upsert({
-        mongo_post_id,
-        post_platform_id,
-        platform,
-        status: 'initiated',
-        risk_score,
-        threat_type,
-        updated_at: new Date().toISOString()
-      }, {
-        onConflict: 'mongo_post_id'
-      })
-      .select()
-      .single()
-
-    if (error) throw error
-    return record
-  } catch (err) {
-    console.error('Failed to manage takedown case:', err)
-    return null
-  }
-}
-
 /**
  * Tracks the daily login/activity of a client in a project.
  * If the entry for today doesn't exist, it inserts one.

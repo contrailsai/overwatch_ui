@@ -2,7 +2,7 @@
 
 import { updateClientStatus, trackClientClick } from './actions'
 import { addReviewNote, assignCaseTo } from './feature_actions'
-import { approveTakedown, } from './takedown_actions'
+import { initiateTakedown, } from './takedown_actions'
 import EditForm from "./EditForm"
 
 // UI IMPORTS BELOW
@@ -233,10 +233,10 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
     });
 
     // Takedown logic
-    const takedownStatus = post.takedown_info?.takedown_status || 'None';
-    const isRaised = (takedownStatus === 'raised');
-    const isRequested = (takedownStatus === 'requested');
+    const takedownStatus = post.takedown_info?.takedown_status || post.takedown_info?.status || 'None';
     const clientStatus = post.client_status || 'To Be Reviewed';
+    const isRaised = post.takedown_info?.in_takedown_process || clientStatus === 'Takedown' || false;
+    const isRequested = (takedownStatus === 'requested');
 
     let posted_date = ""
     let sourced_date = ""
@@ -256,13 +256,15 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
         sourced_date = format(new Date(post.created_at), "dd/MM/yyyy");
 
     const handleTakedown = async () => {
+        const status = "Takedown";
         setIsProcessing('takedown');
         try {
-            const result = await approveTakedown(post._id);
+            // const result = await updateClientStatus(post._id, status, clientDetails.email);
+            const result = await initiateTakedown(post._id, status, clientDetails.email);
             if (result.success) {
-                if (onUpdateStatus) onUpdateStatus(post._id, 'Flag for Takedown');
+                if (onUpdateStatus) onUpdateStatus(post._id, 'Takedown'); // CASE SENSITIVE BE CAREFULL
+                setShowProcessed(post._id);
                 onClose();
-                router.push("/takedowns/case/" + result.supabase_id)
             } else {
                 alert("Error: " + result.error);
             }
@@ -499,6 +501,7 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
                         </div>
                     </div>
 
+                    {/* RIGHT PANEL */}
                     {
                         isEditing ? (
                             <div className="hidden sm:flex flex-row w-full lg:w-[500px] shrink-0">
@@ -770,11 +773,11 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
                                                                 </div>
                                                                 <div className="flex flex-col gap-1">
                                                                     <div className="flex items-center justify-between gap-2">
-                                                                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">
+                                                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">
                                                                             <SafeDate date={entry.updated_at} formatStr="dd/MM/yyyy HH:mm" />
                                                                         </span>
                                                                         {/* DONT SHOW EMAILS FOR CASE ALERTING  */}
-                                                                        {isEmail && !entry.changes_summary.includes("Case Alerted") &&(
+                                                                        {isEmail && !entry.changes_summary.includes("Case Alerted") && (
                                                                             <span className="text-[10px] font-bold text-blue-600 bg-blue-50/50 border border-blue-100/50 px-2 py-0.5 rounded-full truncate max-w-[150px]" title={entry.updated_by}>
                                                                                 {entry.updated_by}
                                                                             </span>
@@ -869,66 +872,70 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
 
                                     <div className="flex flex-col items-center pb-4 pt-1 px-4">
 
-                                        <div className="w-full flex flex-col sm:flex-row gap-3 sm:gap-4 py-2" >
-                                            {isRaised &&
-                                                <Button
-                                                    onClick={() => router.push(`/takedowns/case/${post.takedown_info.supabase_id}`)}
-                                                    variant="outline"
-                                                    className="flex-1 h-12 border-slate-200 text-slate-700 font-bold"
+                                        {isRaised ? (
+                                            <div className="w-full flex flex-row gap-3 py-2">
+                                                <div className="w-full h-12 font-bold text-white shadow-rose-900/20 bg-rose-600 opacity-100 cursor-default ring-2 ring-rose-700 ring-offset-2 flex items-center justify-center rounded-md">
+                                                    <CheckCircle className="w-5 h-5 mr-2" />
+                                                    Takedown in Progress
+                                                </div>
+                                                <a
+                                                    href={`/takedowns/case/${post._id.toString()}`}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="w-full"
                                                 >
-                                                    View Takedown Status
+                                                    <Button
+                                                        variant="outline"
+                                                        className="w-full h-12 border-slate-200 text-slate-700 hover:bg-slate-50 font-bold"
+                                                    >
+                                                        <ExternalLink className="w-4 h-4 mr-2 text-slate-500" />
+                                                        Check Takedown Status
+                                                    </Button>
+                                                </a>
+
+                                            </div>
+                                        ) : (
+                                            <div className="w-full flex flex-col sm:flex-row gap-3 sm:gap-4 py-2" >
+                                                <Button
+                                                    onClick={() => { if (clientStatus !== 'No Action' && clientStatus !== 'Pass') handleUpdateStatus('No Action') }}
+                                                    disabled={isProcessing === 'No Action'}
+                                                    className={cn(
+                                                        "flex-1 h-12 font-bold text-white transition-all duration-200 shadow-emerald-900/20 bg-emerald-500",
+                                                        (clientStatus === 'No Action' || clientStatus === 'Pass') ? "opacity-100 cursor-default ring-2 ring-emerald-600 ring-offset-2" : "opacity-50 hover:opacity-100 cursor-pointer hover:bg-emerald-600"
+                                                    )}
+                                                >
+                                                    {isProcessing === 'No Action' && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
+                                                    No Action
                                                 </Button>
-                                            }
-                                            {isRaised ?
-                                                <Button disabled className="flex-1 h-12 bg-slate-100 text-slate-400 border border-slate-200">
-                                                    <CheckCircle className="w-4 h-4 mr-2" /> Action in Progress
+                                                <Button
+                                                    onClick={() => { if (clientStatus !== 'Flag for Takedown') handleUpdateStatus('Flag for Takedown') }}
+                                                    disabled={isProcessing === 'Flag for Takedown'}
+                                                    className={cn(
+                                                        "flex-1 h-12 font-bold text-white transition-all duration-200",
+                                                        allowDoTakedown ? "shadow-amber-900/20 bg-amber-500" : "shadow-rose-900/20 bg-rose-600",
+                                                        clientStatus === 'Flag for Takedown'
+                                                            ? cn("opacity-100 cursor-default ring-2 ring-offset-2", allowDoTakedown ? "ring-amber-600" : "ring-rose-700")
+                                                            : cn("opacity-50 hover:opacity-100 cursor-pointer", allowDoTakedown ? "hover:bg-amber-600" : "hover:bg-rose-700")
+                                                    )}
+                                                >
+                                                    {isProcessing === 'Flag for Takedown' ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <AlertTriangle className="w-4 h-4 mr-2" />}
+                                                    Flag for Takedown
                                                 </Button>
-                                                : (
-                                                    <>
-                                                        <Button
-                                                            onClick={() => { if (clientStatus !== 'No Action' && clientStatus !== 'Pass') handleUpdateStatus('No Action') }}
-                                                            disabled={isProcessing === 'No Action'}
-                                                            className={cn(
-                                                                "flex-1 h-12 font-bold text-white transition-all duration-200 shadow-emerald-900/20 bg-emerald-500 opacity-50 hover:opacity-100 ",
-                                                                (clientStatus === 'No Action' || clientStatus === 'Pass') ? "opacity-100 cursor-default hover:bg-emerald-500 ring-2 ring-emerald-600 ring-offset-2" : "cursor-pointer hover:bg-emerald-600",
-                                                                // (clientStatus !== 'To Be Reviewed' && clientStatus !== 'No Action' && clientStatus !== 'Pass') ? "" : ""
-                                                            )}
-                                                        >
-                                                            {isProcessing === 'No Action' && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
-                                                            No Action
-                                                        </Button>
-                                                        <Button
-                                                            onClick={() => { if (clientStatus !== 'Flag for Takedown') handleUpdateStatus('Flag for Takedown') }}
-                                                            disabled={isProcessing === 'Flag for Takedown'}
-                                                            className={cn(
-                                                                "flex-1 h-12 font-bold text-white transition-all duration-200 opacity-50 hover:opacity-100 ",
-                                                                allowDoTakedown ? "shadow-amber-900/20 bg-amber-500" : "shadow-rose-900/20 bg-rose-600",
-                                                                clientStatus === 'Flag for Takedown'
-                                                                    ? cn("opacity-100 cursor-default ring-2 ring-offset-2", allowDoTakedown ? "hover:bg-amber-500 ring-amber-600" : "hover:bg-rose-600 ring-rose-700")
-                                                                    : cn("cursor-pointer", allowDoTakedown ? "hover:bg-amber-600" : "hover:bg-rose-700"),
-                                                                // (clientStatus !== 'To Be Reviewed' && clientStatus !== 'Flag for Takedown') ? "" : ""
-                                                            )}
-                                                        >
-                                                            {isProcessing === 'Flag for Takedown' ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <AlertTriangle className="w-4 h-4 mr-2" />}
-                                                            Flag for Takedown
-                                                        </Button>
-                                                        {allowDoTakedown && (
-                                                            <Button
-                                                                onClick={handleTakedown}
-                                                                disabled={isProcessing === 'takedown'}
-                                                                className={cn(
-                                                                    "flex-1 h-12 font-bold text-white transition-all duration-200 shadow-rose-900/20 bg-rose-600 cursor-pointer hover:bg-rose-700",
-                                                                    (clientStatus !== 'To Be Reviewed') ? "opacity-50 hover:opacity-100" : "opacity-100"
-                                                                )}
-                                                            >
-                                                                {isProcessing === 'takedown' ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <ShieldAlert className="w-4 h-4 mr-2" />}
-                                                                Do Takedown
-                                                            </Button>
+                                                {allowDoTakedown && (
+                                                    <Button
+                                                        onClick={handleTakedown}
+                                                        disabled={isProcessing === 'Takedown'}
+                                                        className={cn(
+                                                            "flex-1 h-12 font-bold text-white transition-all duration-200 shadow-rose-900/20 bg-rose-600",
+                                                            cn("opacity-50 hover:opacity-100 cursor-pointer hover:bg-rose-700", clientStatus === 'To Be Reviewed' ? "opacity-100" : "")
                                                         )}
-                                                    </>
-                                                )
-                                            }
-                                        </div>
+                                                    >
+                                                        {isProcessing === 'Takedown' ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <ShieldAlert className="w-4 h-4 mr-2" />}
+                                                        Do Takedown
+                                                    </Button>
+                                                )}
+                                            </div>
+                                        )}
                                         <div onClick={() => trackClientClick('download_case_report', { page: 'CaseDetailPanel' })} className="flex gap-2">
                                             <CaseExportButton post={post} project={project} />
                                             <CaseExportDocxButton post={post} project={project} />

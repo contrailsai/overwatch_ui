@@ -28,16 +28,33 @@ export async function uploadFileToS3(buffer, key, contentType) {
 
 export async function getSignedDownloadUrl(key, originalName) {
   try {
+    const encodedName = encodeURIComponent(originalName || 'document');
     const command = new GetObjectCommand({
       Bucket: process.env.AWS_BUCKET_NAME,
       Key: key,
-      ResponseContentDisposition: `attachment; filename="${originalName}"`,
+      ResponseContentDisposition: `attachment; filename*=UTF-8''${encodedName}`,
     })
 
     const signedUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 })
     return signedUrl
   } catch (error) {
     console.error("Error generating signed download URL:", error)
+    return null
+  }
+}
+
+export async function getSignedViewUrl(key) {
+  try {
+    const command = new GetObjectCommand({
+      Bucket: process.env.AWS_BUCKET_NAME,
+      Key: key,
+      ResponseContentDisposition: `inline`,
+    })
+
+    const signedUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 })
+    return signedUrl
+  } catch (error) {
+    console.error("Error generating signed view URL:", error)
     return null
   }
 }
