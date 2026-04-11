@@ -33,7 +33,7 @@ const formatTime = (timeStr) => {
     try {
         // Use today's local date to ensure we handle DST correctly for the current period
         const todayStr = format(new Date(), 'yyyy-MM-dd')
-        
+
         // Normalize timeStr for JavaScript parsing
         // PostgreSQL timetz (+00, +0530) might not be parsed by all browsers without modification
         let normalized = timeStr;
@@ -44,12 +44,12 @@ const formatTime = (timeStr) => {
         } else if (normalized.match(/[+-]\d{4}$/)) {
             normalized = normalized.slice(0, -2) + ':' + normalized.slice(-2); // +0530 to +05:30
         }
-        
+
         const isoString = `${todayStr}T${normalized}`;
         const d = parseISO(isoString);
-        
+
         if (isNaN(d.getTime())) return timeStr
-        
+
         // Format to 24-hour time (HH:mm)
         return format(d, 'HH:mm')
     } catch {
@@ -215,7 +215,11 @@ const AdminDashboard = ({ project_name, clients }) => {
                                                         {client.email}
                                                     </div>
                                                     <Badge variant={client.permission === 'client-admin' ? 'default' : 'secondary'} className="capitalize mt-0.5 px-1.5 py-0 text-[9px] font-semibold">
-                                                        {client.permission?.replace('-', ' ')}
+                                                        {
+                                                            client.permission === 'client-admin' ? 'Admin' :
+                                                                client.permission === 'client-reviewer' ? 'Reviewer' :
+                                                                    "analyst"
+                                                        }
                                                     </Badge>
                                                 </div>
                                             </div>

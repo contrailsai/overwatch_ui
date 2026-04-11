@@ -14,6 +14,8 @@ import {
   Heart, Facebook, Instagram, Youtube, Video, Image as ImageIcon
 } from 'lucide-react'
 import { Twitter, Reddit } from '@/utils/icons'
+import { CaseExportButton } from '@/components/pdf/CaseExportButton'
+import { CaseExportDocxButton } from '@/components/docx/CaseExportDocxButton'
 import { format } from "date-fns"
 import SafeDate from '@/components/SafeDate'
 import { useEditor, EditorContent } from '@tiptap/react'
@@ -33,63 +35,93 @@ import { cn } from "@/lib/utils"
 
 // Helper for Visual Stages
 function StageProgress({ status, onUpdate, updating, readOnly }) {
-  const steps = [
-    { id: 'raised', label: 'Raised', icon: Shield },
-    { id: 'under_review', label: 'Under Review', icon: Eye },
-    { id: 'resolution', label: 'Resolution', icon: CheckCircle }
-  ]
-
   const getStepIndex = (s) => {
-    if (['accepted', 'rejected', 'suspended'].includes(s)) return 2
-    if (s === 'under_review') return 1
-    return 0 // raised or initiated
+    if (['takedown_successful', 'takedown_failed'].includes(s)) return 2
+    if (['under_review', 're_appeal_takedown'].includes(s)) return 1
+    return 0 // initiated
   }
 
   const currentIndex = getStepIndex(status)
+  const isReAppeal = status === 're_appeal_takedown'
 
-  const handleNext = () => {
-    if (readOnly) return
-    if (currentIndex === 0) onUpdate('under_review')
-  }
+  const Diagram = () => (
+    <div className="flex items-center justify-center w-full px-2 py-4 overflow-x-auto">
+      <div className="flex items-center min-w-max">
+        
+        {/* 1. Initiated */}
+        <div className="flex flex-col items-center gap-2">
+          <div className={cn("w-10 h-10 rounded-full flex items-center justify-center border-2 z-10 transition-all", 
+             currentIndex === 0 ? "bg-blue-600 border-blue-600 text-white shadow-lg scale-110" : "bg-blue-100 border-blue-600 text-blue-600")}>
+             <Shield className="w-5 h-5" />
+          </div>
+          <span className={cn("text-[10px] sm:text-xs font-bold uppercase", currentIndex === 0 ? "text-blue-600" : "text-slate-900")}>Initiated</span>
+        </div>
 
-  const handleBack = () => {
-    if (readOnly) return
-    if (currentIndex === 1) onUpdate('raised')
-    if (currentIndex === 2) onUpdate('under_review')
-  }
+        {/* Line 1 */}
+        <div className={cn("h-1 w-10 sm:w-16 transition-colors duration-500", currentIndex > 0 ? "bg-blue-600" : "bg-gray-200")} />
+
+        {/* 2. Under Review / Re-Appealing */}
+        <div className="flex flex-col items-center gap-2">
+          <div className={cn("w-10 h-10 rounded-full flex items-center justify-center border-2 z-10 transition-all", 
+             currentIndex === 1 ? (isReAppeal ? "bg-orange-500 border-orange-500 text-white shadow-lg scale-110" : "bg-blue-600 border-blue-600 text-white shadow-lg scale-110") : 
+             currentIndex > 1 ? "bg-blue-100 border-blue-600 text-blue-600" : "bg-white border-gray-200 text-gray-300")}>
+             {currentIndex > 1 ? <Check className="w-5 h-5" /> : (isReAppeal ? <History className="w-5 h-5" /> : <Eye className="w-5 h-5" />)}
+          </div>
+          <span className={cn("text-[10px] sm:text-xs font-bold uppercase", 
+            currentIndex === 1 ? (isReAppeal ? "text-orange-600" : "text-blue-600") : 
+            currentIndex > 1 ? "text-slate-900" : "text-gray-400"
+          )}>
+            {isReAppeal ? 'Re-Appealing' : 'Under Review'}
+          </span>
+        </div>
+
+        {/* Branches */}
+        <div className="relative w-12 sm:w-16 h-32 mx-0 sm:mx-2">
+           {/* Horizontal entry line */}
+           <div className={cn("absolute left-0 top-1/2 -translate-y-1/2 w-6 h-1 transition-colors duration-500", currentIndex > 1 ? "bg-blue-600" : "bg-gray-200")} />
+           
+           {/* Top branch for Success */}
+           <div className={cn("absolute left-6 top-5 bottom-1/2 border-l-[4px] border-t-[4px] rounded-tl-xl w-[calc(100%-24px)] transition-colors duration-500", 
+               status === 'takedown_successful' ? "border-green-500" : "border-gray-200")} />
+               
+           {/* Bottom branch for Failed */}
+           <div className={cn("absolute left-6 top-1/2 bottom-5 border-l-[4px] border-b-[4px] rounded-bl-xl w-[calc(100%-24px)] transition-colors duration-500", 
+               status === 'takedown_failed' ? "border-red-500" : "border-gray-200")} />
+        </div>
+
+        {/* 3. Terminal States */}
+        <div className="flex flex-col justify-between h-32 py-0 pl-1 sm:pl-2">
+           {/* Success Node */}
+           <div className="flex items-center gap-2 sm:gap-3">
+              <div className={cn("w-10 h-10 rounded-full flex items-center justify-center border-2 z-10 transition-all duration-500", 
+                 status === 'takedown_successful' ? "bg-green-500 border-green-500 text-white shadow-lg scale-110" : "bg-white border-gray-200 text-gray-300")}>
+                 <CheckCircle className="w-5 h-5" />
+              </div>
+              <span className={cn("text-[10px] sm:text-xs font-bold uppercase", status === 'takedown_successful' ? "text-green-600" : "text-gray-400")}>Successful</span>
+           </div>
+           
+           {/* Failed Node */}
+           <div className="flex items-center gap-2 sm:gap-3">
+              <div className={cn("w-10 h-10 rounded-full flex items-center justify-center border-2 z-10 transition-all duration-500", 
+                 status === 'takedown_failed' ? "bg-red-500 border-red-500 text-white shadow-lg scale-110" : "bg-white border-gray-200 text-gray-300")}>
+                 <XCircle className="w-5 h-5" />
+              </div>
+              <span className={cn("text-[10px] sm:text-xs font-bold uppercase", status === 'takedown_failed' ? "text-red-600" : "text-gray-400")}>Failed</span>
+           </div>
+        </div>
+
+      </div>
+    </div>
+  )
 
   // Read-Only / Client View - Clean Timeline
   if (readOnly) {
     return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between w-full px-2">
-          {steps.map((step, idx) => {
-            const isActive = idx === currentIndex
-            const isCompleted = idx < currentIndex
-            const Icon = step.icon
-
-            return (
-              <div key={step.id} className="flex flex-col items-center gap-3 relative z-10">
-                <div className={cn(
-                  "w-12 h-12 rounded-full flex items-center justify-center border-2 transition-colors duration-300 bg-white",
-                  isActive || isCompleted ? "border-blue-600 text-blue-600" : "border-gray-200 text-gray-300"
-                )}>
-                  <Icon className="w-5 h-5" />
-                </div>
-                <span className={cn(
-                  "text-xs font-bold uppercase tracking-wider",
-                  isActive || isCompleted ? "text-blue-900" : "text-gray-400"
-                )}>{step.label}</span>
-              </div>
-            )
-          })}
-          {/* Simple background line */}
-          <div className="absolute left-6 right-6 top-[3.5rem] h-0.5 bg-gray-100 -z-0 hidden md:block" />
-        </div>
-
-        <div className="bg-slate-50 rounded-lg p-4 border text-center">
+      <div className="space-y-4">
+        <Diagram />
+        <div className="bg-slate-50 rounded-lg p-4 border text-center mt-2">
           <p className="text-sm text-slate-600 font-medium">
-            Current Status: <span className="text-blue-700 font-bold uppercase">{status?.replace('_', ' ')}</span>
+            Current Status: <span className="text-blue-700 font-bold uppercase">{status?.replace(/_/g, ' ')}</span>
           </p>
         </div>
       </div>
@@ -98,56 +130,20 @@ function StageProgress({ status, onUpdate, updating, readOnly }) {
 
   // Reviewer Interactive View
   return (
-    <div className="space-y-8">
-      {/* Visual Stepper */}
-      <div className="relative flex items-center justify-between w-full px-4">
-        {/* Connecting Line */}
-        <div className="absolute left-0 top-1/2 transform -translate-y-1/2 w-full h-1 bg-gray-100 -z-10 rounded-full" />
-        <div
-          className="absolute left-0 top-1/2 transform -translate-y-1/2 h-1 bg-blue-600 -z-10 rounded-full transition-all duration-500"
-          style={{ width: `${(currentIndex / (steps.length - 1)) * 100}%` }}
-        />
-
-        {steps.map((step, idx) => {
-          const isActive = idx === currentIndex
-          const isCompleted = idx < currentIndex
-          const Icon = step.icon
-
-          return (
-            <div key={step.id} className="flex flex-col items-center gap-2 bg-white px-2">
-              <div
-                className={cn(
-                  "w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all duration-300 z-10",
-                  isActive ? "bg-blue-600 border-blue-600 text-white shadow-lg scale-110" :
-                    isCompleted ? "bg-blue-100 border-blue-600 text-blue-600" :
-                      "bg-white border-gray-200 text-gray-300"
-                )}
-              >
-                {isCompleted ? <Check className="w-5 h-5" /> : <Icon className="w-5 h-5" />}
-              </div>
-              <span className={cn(
-                "text-xs font-bold uppercase tracking-wider transition-colors duration-300",
-                isActive ? "text-blue-600" :
-                  isCompleted ? "text-gray-900" : "text-gray-300"
-              )}>
-                {step.label}
-              </span>
-            </div>
-          )
-        })}
-      </div>
+    <div className="space-y-5">
+      <Diagram />
 
       {/* Action Area */}
-      <div className="bg-gray-50/50 rounded-xl border border-gray-100 p-6 flex flex-col items-center justify-center space-y-4">
+      <div className="bg-gray-50/50 rounded-xl border border-gray-100 p-4 sm:p-5 flex flex-col items-center justify-center space-y-3">
 
-        {/* Stage 1: Raised -> Under Review */}
+        {/* Stage 1: Initiated -> Under Review */}
         {currentIndex === 0 && (
-          <div className="text-center space-y-4">
+          <div className="text-center space-y-3">
             <div className="bg-blue-50 text-blue-700 px-4 py-2 rounded-lg text-sm font-medium">
-              Case has been raised and is ready for review.
+              Case has been initiated and is ready for review.
             </div>
             <Button
-              onClick={handleNext}
+              onClick={() => onUpdate('under_review')}
               disabled={updating}
               className="bg-blue-600 hover:bg-blue-700 w-full md:w-auto"
             >
@@ -160,47 +156,36 @@ function StageProgress({ status, onUpdate, updating, readOnly }) {
         {currentIndex === 1 && (
           <div className="w-full space-y-6">
             <div className="bg-blue-50 text-blue-700 px-4 py-2 rounded-lg text-sm font-medium text-center">
-              Case is currently under investigation. Select an outcome below.
+              {status === 're_appeal_takedown' ? 'Case is being re-appealed. Select an outcome below.' : 'Case is currently under investigation. Select an outcome below.'}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-lg mx-auto">
               <button
-                onClick={() => onUpdate('accepted')}
+                onClick={() => onUpdate('takedown_successful')}
                 disabled={updating}
                 className="flex flex-col items-center justify-center p-4 rounded-xl border-2 border-transparent bg-green-50 text-green-700 hover:border-green-200 hover:bg-green-100 transition-all group"
               >
                 <div className="w-10 h-10 rounded-full bg-green-200 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
                   <CheckCircle className="w-6 h-6" />
                 </div>
-                <span className="font-bold">Accept Takedown</span>
+                <span className="font-bold">Takedown Successful</span>
               </button>
 
               <button
-                onClick={() => onUpdate('rejected')}
+                onClick={() => onUpdate('takedown_failed')}
                 disabled={updating}
                 className="flex flex-col items-center justify-center p-4 rounded-xl border-2 border-transparent bg-red-50 text-red-700 hover:border-red-200 hover:bg-red-100 transition-all group"
               >
                 <div className="w-10 h-10 rounded-full bg-red-200 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
                   <XCircle className="w-6 h-6" />
                 </div>
-                <span className="font-bold">Reject Case</span>
-              </button>
-
-              <button
-                onClick={() => onUpdate('suspended')}
-                disabled={updating}
-                className="flex flex-col items-center justify-center p-4 rounded-xl border-2 border-transparent bg-orange-50 text-orange-700 hover:border-orange-200 hover:bg-orange-100 transition-all group"
-              >
-                <div className="w-10 h-10 rounded-full bg-orange-200 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
-                  <AlertCircle className="w-6 h-6" />
-                </div>
-                <span className="font-bold">Suspend Case</span>
+                <span className="font-bold">Takedown Failed</span>
               </button>
             </div>
 
             <div className="flex justify-center pt-2">
-              <Button variant="ghost" size="sm" onClick={handleBack} disabled={updating} className="text-gray-400 hover:text-gray-600">
-                <ChevronLeft className="w-4 h-4 mr-1" /> Back to Raised
+              <Button variant="ghost" size="sm" onClick={() => onUpdate('initiated')} disabled={updating} className="text-gray-400 hover:text-gray-600">
+                <ChevronLeft className="w-4 h-4 mr-1" /> Back to Initiated
               </Button>
             </div>
           </div>
@@ -211,25 +196,29 @@ function StageProgress({ status, onUpdate, updating, readOnly }) {
           <div className="text-center space-y-4 w-full">
             <div className={cn(
               "p-6 rounded-xl border-2 flex flex-col items-center animate-in zoom-in duration-300",
-              status === 'accepted' ? "bg-green-50 border-green-100 text-green-800" :
-                status === 'rejected' ? "bg-red-50 border-red-100 text-red-800" :
-                  "bg-orange-50 border-orange-100 text-orange-800"
+              status === 'takedown_successful' ? "bg-green-50 border-green-100 text-green-800" :
+                "bg-red-50 border-red-100 text-red-800"
             )}>
-              {status === 'accepted' && <CheckCircle className="w-12 h-12 mb-3 text-green-600" />}
-              {status === 'rejected' && <XCircle className="w-12 h-12 mb-3 text-red-600" />}
-              {status === 'suspended' && <AlertTriangle className="w-12 h-12 mb-3 text-orange-600" />}
+              {status === 'takedown_successful' && <CheckCircle className="w-12 h-12 mb-3 text-green-600" />}
+              {status === 'takedown_failed' && <XCircle className="w-12 h-12 mb-3 text-red-600" />}
 
               <h3 className="text-xl font-bold uppercase tracking-wide mb-1">
-                Case {status}
+                Case {status?.replace(/_/g, ' ')}
               </h3>
               <p className="opacity-80 text-sm">
                 This case has been resolved. You can reopen it if necessary.
               </p>
             </div>
 
-            <Button variant="outline" onClick={handleBack} disabled={updating} className="text-gray-500 hover:text-gray-900">
-              <History className="w-4 h-4 mr-2" /> Reopen for Review
-            </Button>
+            {status === 'takedown_failed' ? (
+              <Button variant="outline" onClick={() => onUpdate('re_appeal_takedown')} disabled={updating} className="text-gray-500 hover:text-gray-900 border-gray-300">
+                <History className="w-4 h-4 mr-2" /> Re-appeal Takedown
+              </Button>
+            ) : (
+              <Button variant="outline" onClick={() => onUpdate('under_review')} disabled={updating} className="text-gray-500 hover:text-gray-900 border-gray-300">
+                <History className="w-4 h-4 mr-2" /> Reopen for Review
+              </Button>
+            )}
           </div>
         )}
       </div>
@@ -415,14 +404,12 @@ export default function TakedownDetails({ takedownId, initialData, initialDocume
 
   // Form State
   const [status, setStatus] = useState(initialData?.takedown?.status || '')
-  const [emailStatus, setEmailStatus] = useState(initialData?.takedown?.platform_email_status || '')
 
   useEffect(() => {
     setData(initialData)
     setDocuments(initialDocuments)
     if (initialData?.takedown) {
       setStatus(initialData.takedown.status)
-      setEmailStatus(initialData.takedown.platform_email_status)
     }
   }, [initialData, initialDocuments])
 
@@ -468,23 +455,8 @@ export default function TakedownDetails({ takedownId, initialData, initialDocume
     const statusToUpdate = newStatus || status
 
     await updateTakedown(takedownId, {
-      status: statusToUpdate,
-      platform_email_status: emailStatus
-    }, `Status updated to: ${statusToUpdate.replace('_', ' ')}`)
-
-    const details = await getTakedownDetails(takedownId)
-    setData(details)
-    setUpdating(false)
-    router.refresh()
-  }
-
-  const handleEmailStatusUpdate = async () => {
-    if (!isReviewer) return
-    setUpdating(true)
-    await updateTakedown(takedownId, {
-      status: status,
-      platform_email_status: emailStatus
-    }, `Email status updated to: ${emailStatus}`)
+      status: statusToUpdate
+    }, `Status updated to: ${statusToUpdate.replace(/_/g, ' ')}`)
 
     const details = await getTakedownDetails(takedownId)
     setData(details)
@@ -535,10 +507,11 @@ export default function TakedownDetails({ takedownId, initialData, initialDocume
 
   const getStatusColorClass = (s) => {
     switch (s) {
-      case 'accepted': return 'bg-green-100 text-green-800 hover:bg-green-100'
-      case 'rejected': return 'bg-red-100 text-red-800 hover:bg-red-100'
+      case 'takedown_successful': return 'bg-green-100 text-green-800 hover:bg-green-100'
+      case 'takedown_failed': return 'bg-red-100 text-red-800 hover:bg-red-100'
       case 'under_review': return 'bg-blue-100 text-blue-800 hover:bg-blue-100'
-      case 'suspended': return 'bg-orange-100 text-orange-800 hover:bg-orange-100'
+      case 're_appeal_takedown': return 'bg-orange-100 text-orange-800 hover:bg-orange-100'
+      case 'initiated': return 'bg-slate-100 text-slate-800 hover:bg-slate-100'
       default: return 'bg-gray-100 text-gray-800 hover:bg-gray-100'
     }
   }
@@ -636,12 +609,16 @@ export default function TakedownDetails({ takedownId, initialData, initialDocume
               <h1 className="text-base sm:text-lg font-bold text-slate-900 leading-tight truncate flex items-center gap-2">
                 Takedown Case
                 <Badge className={cn("uppercase text-[10px] px-1.5 py-0 h-5 border-0", getStatusColorClass(takedown.status))}>
-                  {takedown.status?.replace('_', ' ')}
+                  {takedown.status?.replace(/_/g, ' ')}
                 </Badge>
               </h1>
               <p className="text-[10px] sm:text-xs font-mono text-slate-400 truncate">Case ID: {post?._id?.toString() || takedown.id || 'Unknown'}</p>
             </div>
           </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <CaseExportButton post={post} project={project} />
+          <CaseExportDocxButton post={post} project={project} />
         </div>
       </header>
 
@@ -651,93 +628,43 @@ export default function TakedownDetails({ takedownId, initialData, initialDocume
 
         {/* LEFT PANEL: Takedown Management & Information */}
         <div className="relative w-full lg:w-[700px] xl:w-[750px] bg-slate-50 lg:bg-white flex flex-col lg:h-full shrink-0 border-t lg:border-t-0 border-slate-100">
-          <div className="flex-none lg:flex-1 lg:overflow-y-auto p-4 sm:p-6 space-y-6 sm:space-y-8">
+          <div className="flex-none lg:flex-1 lg:overflow-y-auto p-4 sm:p-5 space-y-4 sm:space-y-5">
             
+            {/* Takedown Status Management (Always visible) */}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+              <div className="px-4 py-3 bg-slate-50/50 border-b border-slate-100 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Shield className="w-4 h-4 text-blue-600" />
+                  <span className="text-xs font-bold text-slate-700 uppercase tracking-widest">Status Management</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge className={cn("uppercase text-[10px] px-1.5 py-0 h-5 border-0 shadow-sm", getStatusColorClass(status))}>
+                    {status?.replace(/_/g, ' ')}
+                  </Badge>
+                </div>
+              </div>
+              <div className="p-4 sm:p-5 bg-white">
+                {/* <div className="bg-slate-50/50 rounded-xl border border-slate-100 p-4 sm:p-5"> */}
+                  <StageProgress
+                    status={status}
+                    onUpdate={updateStatusDirectly}
+                    updating={updating}
+                    readOnly={!isReviewer}
+                  />
+                {/* </div> */}
+              </div>
+            </div>
+
             {/* Main Interactive Accordion Group */}
-            <Accordion type="multiple" defaultValue={["status", "intelligence", "documents"]} className="w-full space-y-4">
-              
-              {/* Takedown Status Management */}
-              <AccordionItem value="status" className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden px-1 data-[state=open]:pb-2">
-                <AccordionTrigger className="px-5 py-4 hover:no-underline hover:bg-slate-50/50 rounded-t-2xl transition-colors [&[data-state=open]_.metadata]:hidden">
-                  <div className="flex flex-1 items-center justify-between pr-4">
-                    <div className="flex items-center gap-2">
-                      <Shield className="w-4 h-4 text-blue-600" />
-                      <span className="text-xs font-bold text-slate-700 uppercase tracking-widest">Status Management</span>
-                    </div>
-                    <div className="metadata flex items-center gap-2 opacity-90">
-                      <Badge className={cn("uppercase text-[10px] px-1.5 py-0 h-5 border-0", getStatusColorClass(status))}>
-                        {status?.replace('_', ' ')}
-                      </Badge>
-                      {emailStatus && emailStatus !== 'pending' && (
-                        <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded-md flex items-center gap-1">
-                          <Mail className="w-3 h-3" />
-                          {emailStatus}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </AccordionTrigger>
-                <AccordionContent className="px-5 pt-2 pb-4">
-                  <div className="bg-slate-50/50 rounded-xl border border-slate-100 p-6 mb-6">
-                    <StageProgress
-                      status={status}
-                      onUpdate={updateStatusDirectly}
-                      updating={updating}
-                      readOnly={!isReviewer}
-                    />
-                  </div>
+            <Accordion type="multiple" defaultValue={["intelligence"]} className="w-full space-y-3 sm:space-y-4">
 
-                  <div className="space-y-3">
-                    <Label htmlFor="email-select" className="text-xs font-bold text-slate-500 uppercase tracking-wide">Platform Email Status</Label>
-                    {isReviewer ? (
-                      <div className="flex gap-4">
-                        <Select value={emailStatus} onValueChange={setEmailStatus} disabled={!isReviewer}>
-                          <SelectTrigger id="email-select" className="w-full bg-slate-50 border-slate-200 focus:ring-blue-500">
-                            <SelectValue placeholder="Select email status" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="pending">Pending</SelectItem>
-                            <SelectItem value="sent">Email Sent</SelectItem>
-                            <SelectItem value="replied">Platform Replied</SelectItem>
-                            <SelectItem value="failed">Delivery Failed</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <Button
-                          size="sm"
-                          onClick={handleEmailStatusUpdate}
-                          disabled={updating || !isReviewer}
-                          className="bg-blue-600 hover:bg-blue-700 text-white shrink-0"
-                        >
-                          Update
-                        </Button>
-                      </div>
-                    ) : (
-                      // Read Only View for Clients
-                      <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
-                        <Mail className="w-4 h-4 text-slate-500" />
-                        <span className="text-sm font-bold text-slate-700 capitalize">
-                          {emailStatus === 'pending' ? 'Pending Correspondence' :
-                            emailStatus === 'sent' ? 'Email Sent to Platform' :
-                              emailStatus === 'replied' ? 'Platform Replied' : 'Delivery Failed'}
-                        </span>
-                      </div>
-                    )}
-                    {isReviewer && (
-                      <p className="text-xs text-slate-400 font-medium">
-                        Track the status of correspondence with the platform.
-                      </p>
-                    )}
-                  </div>
-                </AccordionContent>
-              </AccordionItem>
-
-              {/* Risk Assessment & Violations */}
+              {/* Review Analysis */}
               <AccordionItem value="intelligence" className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden px-1 data-[state=open]:pb-2">
-                <AccordionTrigger className="px-5 py-4 hover:no-underline hover:bg-slate-50/50 rounded-t-2xl transition-colors [&[data-state=open]_.metadata]:hidden">
+                <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-slate-50/50 rounded-t-2xl transition-colors [&[data-state=open]_.metadata]:hidden">
                   <div className="flex flex-1 items-center justify-between pr-4">
                     <div className="flex items-center gap-2">
                       <Activity className="w-4 h-4 text-orange-500" />
-                      <span className="text-xs font-bold text-slate-700 uppercase tracking-widest">Intelligence & Analysis</span>
+                      <span className="text-xs font-bold text-slate-700 uppercase tracking-widest">Review Analysis</span>
                     </div>
                     <div className="metadata flex items-center gap-2 opacity-90">
                       <Badge className={cn("uppercase text-[10px] px-1.5 py-0 h-5", getRiskLabel(riskScore).color)}>
@@ -751,7 +678,7 @@ export default function TakedownDetails({ takedownId, initialData, initialDocume
                     </div>
                   </div>
                 </AccordionTrigger>
-                <AccordionContent className="px-5 pt-2 pb-4 space-y-6">
+                <AccordionContent className="px-4 pt-2 pb-3 space-y-4 sm:space-y-5">
                   {/* Threat Score Card */}
                   <div className={cn(
                     "rounded-2xl p-6 border relative overflow-hidden shadow-lg transition-all",
@@ -806,6 +733,51 @@ export default function TakedownDetails({ takedownId, initialData, initialDocume
                     </div>
                   )}
 
+                  {/* Timeline / Dates */}
+                  <div className="space-y-3">
+                    <h5 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                      <Calendar className="w-3 h-3" /> Timeline
+                    </h5>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
+                          <Calendar className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Published</p>
+                          <p className="text-sm font-bold text-slate-700">{posted_date || 'N/A'}</p>
+                        </div>
+                      </div>
+                      <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-purple-100 text-purple-600 flex items-center justify-center shrink-0">
+                          <History className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Alerted</p>
+                          <p className="text-sm font-bold text-slate-700">{sourced_date || 'N/A'}</p>
+                        </div>
+                      </div>
+                      <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-orange-100 text-orange-600 flex items-center justify-center shrink-0">
+                          <Shield className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Takedown Initiated</p>
+                          <p className="text-sm font-bold text-slate-700">{post?.takedown_info?.takedown_start_date ? format(new Date(post.takedown_info.takedown_start_date), "dd/MM/yyyy HH:mm") : 'N/A'}</p>
+                        </div>
+                      </div>
+                      <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0">
+                          <CheckCircle className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Takedown Completed</p>
+                          <p className="text-sm font-bold text-slate-700">{post?.takedown_info?.takedown_end_date ? format(new Date(post.takedown_info.takedown_end_date), "dd/MM/yyyy HH:mm") : 'N/A'}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
                   {/* Reasoning */}
                   <div className="space-y-3">
                     <h5 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
@@ -820,7 +792,7 @@ export default function TakedownDetails({ takedownId, initialData, initialDocume
 
               {/* Evidence Documents */}
               <AccordionItem value="documents" className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden px-1 data-[state=open]:pb-2">
-                <AccordionTrigger className="px-5 py-4 hover:no-underline hover:bg-slate-50/50 rounded-t-2xl transition-colors [&[data-state=open]_.metadata]:hidden">
+                <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-slate-50/50 rounded-t-2xl transition-colors [&[data-state=open]_.metadata]:hidden">
                   <div className="flex flex-1 items-center justify-between pr-4">
                     <div className="flex items-center gap-2">
                       <File className="w-4 h-4 text-emerald-500" />
@@ -833,7 +805,7 @@ export default function TakedownDetails({ takedownId, initialData, initialDocume
                     </div>
                   </div>
                 </AccordionTrigger>
-                <AccordionContent className="px-5 pt-2 pb-4 space-y-4">
+                <AccordionContent className="px-4 pt-2 pb-3 space-y-3 sm:space-y-4">
                   {/* Upload Area - Reviewer Only */}
                   {isReviewer && (
                     <div
@@ -948,7 +920,7 @@ export default function TakedownDetails({ takedownId, initialData, initialDocume
 
               {/* Notes Section */}
               <AccordionItem value="notes" className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden px-1 data-[state=open]:pb-2">
-                <AccordionTrigger className="px-5 py-4 hover:no-underline hover:bg-slate-50/50 rounded-t-2xl transition-colors [&[data-state=open]_.metadata]:hidden">
+                <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-slate-50/50 rounded-t-2xl transition-colors [&[data-state=open]_.metadata]:hidden">
                   <div className="flex flex-1 items-center justify-between pr-4">
                     <div className="flex items-center gap-2">
                       <FileText className="w-4 h-4 text-purple-500" />
@@ -967,7 +939,7 @@ export default function TakedownDetails({ takedownId, initialData, initialDocume
                     </div>
                   </div>
                 </AccordionTrigger>
-                <AccordionContent className="px-5 pt-2 pb-4 space-y-4">
+                <AccordionContent className="px-4 pt-2 pb-3 space-y-3 sm:space-y-4">
                   {/* Notes Read-Only View */}
                   {takedown.notes && takedown.notes.length > 0 ? (
                     <div className="space-y-4 max-h-[350px] overflow-y-auto pr-2 custom-scrollbar">
@@ -1023,7 +995,7 @@ export default function TakedownDetails({ takedownId, initialData, initialDocume
 
               {/* Audit Log / Case History */}
               <AccordionItem value="history" className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden px-1 data-[state=open]:pb-2">
-                <AccordionTrigger className="px-5 py-4 hover:no-underline hover:bg-slate-50/50 rounded-t-2xl transition-colors [&[data-state=open]_.metadata]:hidden">
+                <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-slate-50/50 rounded-t-2xl transition-colors [&[data-state=open]_.metadata]:hidden">
                   <div className="flex flex-1 items-center justify-between pr-4">
                     <div className="flex items-center gap-2">
                       <History className="w-4 h-4 text-slate-500" />
@@ -1036,8 +1008,8 @@ export default function TakedownDetails({ takedownId, initialData, initialDocume
                     </div>
                   </div>
                 </AccordionTrigger>
-                <AccordionContent className="px-5 pt-2 pb-4">
-                  <div className="bg-slate-50/50 p-6 rounded-2xl border border-slate-100">
+                <AccordionContent className="px-4 pt-2 pb-3">
+                  <div className="bg-slate-50/50 p-4 sm:p-5 rounded-xl border border-slate-100">
                     <div className="space-y-6 relative ml-2 before:absolute before:left-[11px] before:top-2 before:bottom-0 before:w-[2px] before:bg-slate-200">
                       {history.map((event, idx) => (
                         <div key={event.id} className="relative pl-8 group">
@@ -1091,13 +1063,13 @@ export default function TakedownDetails({ takedownId, initialData, initialDocume
               {/* Raw JSON Section - REVIEWER ONLY */}
               {isReviewer && (
                 <AccordionItem value="raw-json" className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden px-1 data-[state=open]:pb-2">
-                  <AccordionTrigger className="px-5 py-4 hover:no-underline hover:bg-slate-50/50 rounded-t-2xl transition-colors">
+                  <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-slate-50/50 rounded-t-2xl transition-colors">
                     <div className="flex items-center gap-2">
                       <Database className="w-4 h-4 text-slate-400" />
                       <span className="text-xs font-bold text-slate-700 uppercase tracking-widest">Raw Data (Internal)</span>
                     </div>
                   </AccordionTrigger>
-                  <AccordionContent className="px-5 pt-2 pb-4">
+                  <AccordionContent className="px-4 pt-2 pb-3">
                     <div className="bg-slate-950 text-slate-300 p-4 rounded-xl overflow-x-auto shadow-inner">
                       <pre className="text-[10px] font-mono leading-relaxed">
                         {JSON.stringify(post, null, 2)}
@@ -1112,132 +1084,135 @@ export default function TakedownDetails({ takedownId, initialData, initialDocume
 
         {/* RIGHT: Source Content (Scrollable) */}
         <div className="flex-none lg:flex-1 lg:overflow-y-auto space-y-4 bg-slate-50/50">
-          <div className="flex flex-col gap-6 sm:gap-8 px-4 sm:px-8 pb-8 pt-4 sm:pt-6">
-
-            {/* Media Display */}
-            <div className="bg-slate-900 rounded-xl sm:rounded-2xl overflow-hidden shadow-lg border border-slate-800 relative group flex items-center justify-center min-h-[300px] sm:min-h-[400px]">
-              <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-slate-800/50 to-slate-950 pointer-events-none" />
-              {post?.signedImageUrl ? (
-                <img
-                  src={post.signedImageUrl}
-                  alt="Evidence"
-                  className="max-w-full h-auto max-h-[400px] sm:max-h-[600px] object-contain relative z-10"
-                />
-              ) : (
-                <div className="text-center p-8 sm:p-12 relative z-10">
-                  <Quote className="w-12 h-12 sm:w-16 sm:h-16 text-slate-700 mx-auto mb-3 sm:mb-4" />
-                  <p className="text-slate-500 font-medium text-base sm:text-lg">Text-Only Content</p>
+          <div className="flex flex-col gap-0 px-4 sm:px-6 pb-6 pt-4 sm:pt-5 max-w-2xl mx-auto">
+            {/* Mock Social Media Post Container */}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+              
+              {/* Pre-metadata: Dates */}
+              {post?.platform?.toLowerCase() !== "website" && (
+                <div className="flex items-center justify-between px-4 py-2.5 bg-slate-50/80 border-b border-slate-100 text-[10px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider">
+                  <div className="flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" /> Published: {posted_date}</div>
+                  <div className="flex items-center gap-1.5"><History className="w-3.5 h-3.5" /> Alerted: {sourced_date}</div>
                 </div>
               )}
-            </div>
 
-            {/* Unified User Context & Caption Card */}
-            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
-              <div className="p-4 sm:p-5 flex items-start sm:items-center gap-3 sm:gap-5">
-                <div className="relative shrink-0 mt-1 sm:mt-0">
-                  {(post?.user?.profile_pic_url && !imgError) ? (
-                    <img
-                      src={post.user.profile_pic_url}
-                      onError={() => setImgError(true)}
-                      alt=""
-                      className="w-12 h-12 sm:w-16 sm:h-16 rounded-full object-cover border-2 sm:border-4 border-slate-50"
-                    />
-                  ) : (
-                    <div className="scale-75 sm:scale-100 origin-top-left sm:origin-center">
-                      <ProfilePic user={post?.user?.username || 'Unknown'} size={64} />
-                    </div>
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="text-lg sm:text-xl font-bold text-slate-900 truncate flex items-center gap-1.5 sm:gap-2">
-                    <div className="">
-                      <div className="flex-1 min-w-4">
-                        {
-                          post?.platform === "x" || post?.platform === "twitter" ? (
-                            <span className="inline-block size-4 text-black">
-                              <Twitter className="w-3.5 h-3.5 text-slate-900" />
-                            </span>
-                          ) : post?.platform === "reddit" ? (
-                            <span className="inline-block size-4 text-black">
-                              <Reddit className="w-3.5 h-3.5 text-slate-900" />
-                            </span>
-                          ) : post?.platform?.toLowerCase() === "instagram" ? (
-                            <Instagram className="w-6 h-6 text-pink-500" />
-                          ) : post?.platform?.toLowerCase() === "facebook" ? (
-                            <Facebook className="w-6 h-6 text-blue-500" />
-                          ) : post?.platform?.toLowerCase() === "youtube" ? (
-                            <Youtube className="w-6 h-6 text-red-500" />
-                          ) : (
-                            <p className="text-slate-500 font-medium truncate">{post?.platform}</p>
-                          )
-                        }
+              {/* Profile and Details */}
+              <div className="p-2 sm:p-5 flex items-start sm:items-center justify-between gap-3 sm:gap-5">
+                <div className="flex items-center gap-3">
+                  <div className="relative shrink-0 mt-1 sm:mt-0">
+                    {(post?.user?.profile_pic_url && !imgError) ? (
+                      <img
+                        src={post.user.profile_pic_url}
+                        onError={() => setImgError(true)}
+                        alt=""
+                        className="w-10 h-10 sm:w-12 sm:h-12 rounded-full object-cover border-2 border-slate-50 shadow-sm"
+                      />
+                    ) : (
+                      <div className="scale-75 sm:scale-100 origin-top-left sm:origin-center">
+                        <ProfilePic user={post?.user?.username || 'Unknown'} size={48} />
                       </div>
-                    </div>
-                    {post?.user?.username || 'Unknown User'}
-                    {post?.user?.is_verified && <BadgeCheck className="w-5 h-5 text-blue-500 fill-blue-50" />}
-                  </h3>
-                  <p className="text-slate-500 font-medium truncate">{post?.user?.full_name}</p>
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-base sm:text-lg font-bold text-slate-900 truncate flex items-center gap-1.5 sm:gap-2">
+                      <div className="shrink-0">
+                          {
+                            post?.platform === "x" || post?.platform === "twitter" ? (
+                              <span className="inline-block size-4 text-black">
+                                <Twitter className="w-3.5 h-3.5 text-slate-900" />
+                              </span>
+                            ) : post?.platform === "reddit" ? (
+                              <span className="inline-block size-4 text-black">
+                                <Reddit className="w-3.5 h-3.5 text-slate-900" />
+                              </span>
+                            ) : post?.platform?.toLowerCase() === "instagram" ? (
+                              <Instagram className="w-5 h-5 text-pink-500" />
+                            ) : post?.platform?.toLowerCase() === "facebook" ? (
+                              <Facebook className="w-5 h-5 text-blue-500" />
+                            ) : post?.platform?.toLowerCase() === "youtube" ? (
+                              <Youtube className="w-5 h-5 text-red-500" />
+                            ) : (
+                              <p className="text-slate-500 font-medium truncate text-xs uppercase">{post?.platform}</p>
+                            )
+                          }
+                      </div>
+                      {post?.user?.username || 'Unknown User'}
+                      {post?.user?.is_verified && <BadgeCheck className="w-4 h-4 text-blue-500 fill-blue-50" />}
+                    </h3>
+                    <p className="text-slate-500 text-xs sm:text-sm font-medium truncate">{post?.user?.full_name}</p>
+                  </div>
                 </div>
+                
                 <a
                   href={post?.url || post?.original_url || '#'}
                   target="_blank"
                   rel="noreferrer"
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-sm font-bold transition-colors flex items-center gap-2"
+                  className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs sm:text-sm font-bold transition-colors flex items-center gap-1.5 shrink-0"
                 >
-                  <ExternalLink className="w-4 h-4" />
+                  <ExternalLink className="w-3.5 h-3.5" />
                   <span className="hidden sm:inline">View Source</span>
                 </a>
               </div>
 
-              <div className="px-5 pb-5 pt-0">
-                <div className="bg-slate-50/50 rounded-lg p-4 border border-slate-100">
-                  <h4 className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">
-                    <MessageCircle className="w-3 h-3" />  {post?.platform?.toLowerCase() === "website" ? "Post Content" : "Post Caption"}
-                  </h4>
-                  <div className="text-slate-800 leading-relaxed whitespace-pre-wrap font-medium text-sm font-sans">
-                    {post?.caption || post?.content || post?.post_content?.caption || <span className="italic text-slate-400">No caption content available.</span>}
+              {/* Content Image */}
+              <div className="bg-slate-950 border-y border-slate-100 relative group flex items-center justify-center min-h-75 sm:min-h-100">
+                {post?.signedImageUrl ? (
+                  <img
+                    src={post.signedImageUrl}
+                    alt="Evidence"
+                    className="w-full h-auto max-h-125 sm:max-h-175 object-contain relative z-10"
+                  />
+                ) : (
+                  <div className="text-center p-8 sm:p-12 relative z-10">
+                    <Quote className="w-12 h-12 sm:w-16 sm:h-16 text-slate-700 mx-auto mb-3 sm:mb-4" />
+                    <p className="text-slate-500 font-medium text-base sm:text-lg">Text-Only Content</p>
                   </div>
+                )}
+              </div>
+
+              {/* Stats (Likes, Comments, Shares, Views) */}
+              {post?.platform?.toLowerCase() !== "website" && (
+                <div className=" px-4 py-3 sm:py-4 border-b border-slate-200 flex items-center justify-between flex-wrap bg-white">
+                  <div className="flex items-center gap-1.5 group cursor-default">
+                    <span className=' text-xs font-extrabold text-slate-400 tracking-wide' >likes</span>
+                    <Heart className="w-5 h-5 text-slate-400 transition-colors" />
+                    <span className="font-bold text-sm text-slate-700">{post?.stats?.like_count?.toLocaleString() || 0}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 group cursor-default">
+                    <span className=' text-xs font-extrabold text-slate-400 tracking-wide' >comments</span>
+                    <MessageCircle className="w-5 h-5 text-slate-400 group-hover:text-blue-500 transition-colors" />
+                    <span className="font-bold text-sm text-slate-700">{post?.stats?.comment_count?.toLocaleString() || 0}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 group cursor-default">
+                    <span className=' text-xs font-extrabold text-slate-400 tracking-wide' >shares</span>
+                    <Share2 className="w-5 h-5 text-slate-400 transition-colors" />
+                    <span className="font-bold text-sm text-slate-700">{post?.stats?.share_count?.toLocaleString() || 0}</span>
+                  </div>
+                    <div className="flex items-center gap-1.5 group cursor-default">
+                      <span className=' text-xs font-extrabold text-slate-400 tracking-wide' >views</span>
+                      <Eye className="w-5 h-5 text-slate-400 group-hover:text-violet-500 transition-colors" />
+                      <span className="font-bold text-sm text-slate-700">{post?.stats?.view_count?.toLocaleString() || 0}</span>
+                    </div>
+                  {/* {post?.stats?.view_count > 0 && ( */}
+                  {/* )} */}
+                </div>
+              )}
+
+              {/* Caption */}
+              <div className="px-4 pb-5 pt-3 sm:px-5 sm:pb-6 bg-white">
+                <div className="text-slate-800 leading-relaxed whitespace-pre-wrap text-sm sm:text-base font-sans">
+                  {post?.caption || post?.content || post?.post_content?.caption ? (
+                    <span>
+                      <span className="font-bold mr-2 text-slate-900">{post?.user?.username || 'User'}</span>
+                      {post?.caption || post?.content || post?.post_content?.caption}
+                    </span>
+                  ) : (
+                    <span className="italic text-slate-400">No caption content available.</span>
+                  )}
                 </div>
               </div>
-            </div>
 
-            {post?.platform?.toLowerCase() !== "website" && (
-              <>
-                {/* Stats & Dates */}
-                <div className="space-y-4 sm:space-y-6">
-                  <div className="grid grid-cols-2 sm:flex sm:flex-row gap-3 sm:gap-4">
-                    <div className="w-full bg-white p-3 sm:p-4 rounded-xl border border-slate-200 shadow-sm flex flex-row justify-between items-center gap-1">
-                      <span className="text-[10px] sm:text-xs font-bold text-slate-500 uppercase flex items-center gap-1.5 sm:gap-2"><Heart className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-rose-500" /> Likes</span>
-                      <span className="font-bold text-sm sm:text-lg text-slate-900">{post?.stats?.like_count?.toLocaleString() || 0}</span>
-                    </div>
-                    <div className="w-full bg-white p-3 sm:p-4 rounded-xl border border-slate-200 shadow-sm flex flex-row justify-between items-center gap-1">
-                      <span className="text-[10px] sm:text-xs font-bold text-slate-500 uppercase flex items-center gap-1.5 sm:gap-2"><MessageCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-blue-500" /> Comments</span>
-                      <span className="font-bold text-sm sm:text-lg text-slate-900">{post?.stats?.comment_count?.toLocaleString() || 0}</span>
-                    </div>
-                    <div className="w-full bg-white p-3 sm:p-4 rounded-xl border border-slate-200 shadow-sm flex flex-row justify-between items-center gap-1">
-                      <span className="text-[10px] sm:text-xs font-bold text-slate-500 uppercase flex items-center gap-1.5 sm:gap-2"><Share2 className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-green-500" /> Shares</span>
-                      <span className="font-bold text-sm sm:text-lg text-slate-900">{post?.stats?.share_count?.toLocaleString() || 0}</span>
-                    </div>
-                    {post?.stats?.view_count > 0 && (
-                      <div className="w-full bg-white p-3 sm:p-4 rounded-xl border border-slate-200 shadow-sm flex flex-row justify-between items-center gap-1">
-                        <span className="text-[10px] sm:text-xs font-bold text-slate-500 uppercase flex items-center gap-1.5 sm:gap-2"><Eye className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-violet-600" /> Views</span>
-                        <span className="font-bold text-sm sm:text-lg text-slate-900">{post?.stats?.view_count?.toLocaleString() || 0}</span>
-                      </div>
-                    )}
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-10">
-                    <div className="bg-white p-3 sm:p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between gap-1">
-                      <span className="text-[10px] sm:text-xs font-bold text-slate-500 uppercase flex items-center gap-1.5 sm:gap-2"><Calendar className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-slate-500" /> Publish Date</span>
-                      <span className="font-bold text-xs sm:text-sm text-slate-900">{posted_date}</span>
-                    </div>
-                    <div className="bg-white p-3 sm:p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between gap-1">
-                      <span className="text-[10px] sm:text-xs font-bold text-slate-500 uppercase flex items-center gap-1.5 sm:gap-2"><History className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-slate-500" /> Alert Date</span>
-                      <span className="font-bold text-xs sm:text-sm text-slate-900">{sourced_date}</span>
-                    </div>
-                  </div>
-                </div>
-              </>
-            )}
+            </div>
           </div>
         </div>
       </div>

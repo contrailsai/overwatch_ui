@@ -1,5 +1,6 @@
 import TakedownsList from './TakedownsList'
-import { getTakedowns, checkReviewerPermission } from './actions'
+import { getTakedowns, checkReviewerPermission, getTakedownMetrics } from './actions'
+import { getClientandProjectDetails } from '@/app/(dashboard)/actions'
 import PageHeader from "@/components/PageHeader"
 export const metadata = {
   title: 'overwatch - Takedowns',
@@ -12,14 +13,20 @@ export default async function TakedownsPage({ searchParams }) {
   const filters = {
     status: resolvedParams.status || 'all',
     platform: resolvedParams.platform || 'all',
-    threat_type: resolvedParams.threat_type || 'all',
-    risk_score: resolvedParams.risk_score || 'all',
-    date_from: resolvedParams.date_from || null,
-    date_to: resolvedParams.date_to || null,
+    violations: resolvedParams.violations || 'all',
+    risk_priority: resolvedParams.risk_priority || 'all',
+    original_date_from: resolvedParams.original_date_from || null,
+    original_date_to: resolvedParams.original_date_to || null,
+    processed_from: resolvedParams.processed_from || null,
+    processed_to: resolvedParams.processed_to || null,
+    takedown_date_from: resolvedParams.takedown_date_from || null,
+    takedown_date_to: resolvedParams.takedown_date_to || null,
   }
 
-  const [takedowns, isReviewer] = await Promise.all([
+  const [takedowns, metrics, { project }, isReviewer] = await Promise.all([
     getTakedowns(filters),
+    getTakedownMetrics(filters),
+    getClientandProjectDetails(),
     checkReviewerPermission()
   ])
 
@@ -31,6 +38,8 @@ export default async function TakedownsPage({ searchParams }) {
         initialTakedowns={takedowns}
         initialFilters={filters}
         isReviewer={isReviewer}
+        metrics={metrics}
+        projectLabels={project?.project_details?.labels || []}
       />
     </>
   )

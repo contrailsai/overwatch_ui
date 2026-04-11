@@ -53,6 +53,71 @@ export const checkReviewerPermission = traceAction('checkReviewerPermission', as
   return clientDetails.permission === 'reviewer'
 })
 
+const buildTakedownMatchQuery = (filters = {}) => {
+  let query = {
+    $or: [
+      { client_status: { $regex: /^takedown$/i } },
+      { 'takedown_info.status': { $exists: true } }
+    ]
+  }
+
+  const andConditions = []
+
+  // Status Filter
+  if (filters.status && filters.status !== 'all') {
+    query['takedown_info.status'] = filters.status
+  }
+
+  // Platform Filter
+  if (filters.platform && filters.platform !== 'all') {
+    query.platform = { $regex: new RegExp(`^${filters.platform}$`, 'i') }
+  }
+
+  // Risk Priority Filter
+  if (filters.risk_priority && filters.risk_priority !== 'all') {
+    if (filters.risk_priority === 'high') {
+      query['review_details.threat_score'] = { $gt: 95 }
+    } else if (filters.risk_priority === 'medium') {
+      query['review_details.threat_score'] = { $gt: 75, $lte: 95 }
+    } else if (filters.risk_priority === 'low') {
+      query['review_details.threat_score'] = { $gt: 40, $lte: 75 }
+    } else if (filters.risk_priority === 'safe') {
+      query['review_details.threat_score'] = { $lte: 40 }
+    }
+  }
+
+  // Violations filter
+  if (filters.violations && filters.violations !== 'all') {
+    const violationsArray = filters.violations.split(',');
+    if (violationsArray.length > 0) {
+      const normalViolations = violationsArray.filter(v => v !== 'aigc');
+      const hasAigc = violationsArray.includes('aigc');
+      
+      const violationConditions = [];
+      if (normalViolations.length > 0) {
+        violationConditions.push({ 'review_details.threat_types': { $in: normalViolations } });
+        const flagConditions = normalViolations.map(v => ({ [`review_details.flags.${v}`]: true }));
+        violationConditions.push(...flagConditions);
+      }
+      if (hasAigc) {
+        violationConditions.push({ 'review_details.is_aigc': true });
+      }
+      
+      if (violationConditions.length > 0) {
+        andConditions.push({
+          $or: violationConditions
+        });
+      }
+    }
+  }
+
+  if (andConditions.length > 0) {
+    query.$and = andConditions
+  }
+
+  return query
+}
+
 /**
  * Fetch all active takedowns with filters and enriched MongoDB data
  */
@@ -63,36 +128,68 @@ export const getTakedowns = traceAction('getTakedowns', async (filters = {}) => 
   try {
     const client = await clientPromise
     const db = client.db(projectDetails.dbName)
+    const collection = db.collection('Posts')
 
-    let query = {
-      $or: [
-        { client_status: { $regex: /^takedown$/i } },
-        { 'takedown_info.status': { $exists: true } }
-      ]
+    const matchStage = buildTakedownMatchQuery(filters)
+
+    const dateFilterStage = {}
+
+    if (filters.original_date_from || filters.original_date_to) {
+      dateFilterStage.sort_original_date = {};
+      if (filters.original_date_from) {
+        dateFilterStage.sort_original_date.$gte = new Date(filters.original_date_from);
+      }
+      if (filters.original_date_to) {
+        dateFilterStage.sort_original_date.$lte = new Date(filters.original_date_to);
+      }
     }
 
-    if (filters.status && filters.status !== 'all') {
-      query['takedown_info.status'] = filters.status
+    if (filters.processed_from || filters.processed_to) {
+      dateFilterStage.sort_processed_after = {};
+      if (filters.processed_from) {
+        dateFilterStage.sort_processed_after.$gte = new Date(filters.processed_from);
+      }
+      if (filters.processed_to) {
+        dateFilterStage.sort_processed_after.$lte = new Date(filters.processed_to);
+      }
     }
 
-    if (filters.platform && filters.platform !== 'all') {
-      query.platform = filters.platform
+    if (filters.takedown_date_from || filters.takedown_date_to) {
+      dateFilterStage.sort_takedown_date = {};
+      if (filters.takedown_date_from) {
+        dateFilterStage.sort_takedown_date.$gte = new Date(filters.takedown_date_from);
+      }
+      if (filters.takedown_date_to) {
+        dateFilterStage.sort_takedown_date.$lte = new Date(filters.takedown_date_to);
+      }
     }
 
-    if (filters.threat_type && filters.threat_type !== 'all') {
-      query['review_details.threat_types'] = filters.threat_type
-    }
+    const hasDateFilters = Object.keys(dateFilterStage).length > 0;
 
-    if (filters.risk_score && filters.risk_score !== 'all') {
-      if (filters.risk_score === 'high') query['review_details.threat_score'] = { $gte: 80 }
-      else if (filters.risk_score === 'medium') query['review_details.threat_score'] = { $gte: 40, $lt: 80 }
-      else if (filters.risk_score === 'low') query['review_details.threat_score'] = { $lt: 40 }
-    }
-
-    const posts = await db.collection('Posts')
-      .find(query)
-      .sort({ 'takedown_info.events.date': -1, 'metadata.updated_at': -1 })
-      .toArray()
+    const posts = await collection.aggregate([
+      { $match: matchStage },
+      {
+        $addFields: {
+          sort_original_date: {
+            $toDate: {
+              $ifNull: ["$engagement.posted_at", "$metadata.posted_date"]
+            }
+          },
+          sort_processed_after: {
+            $toDate: {
+              $ifNull: ["$review_details.reviewed_at", "$metadata.updated_at"]
+            }
+          },
+          sort_takedown_date: {
+            $toDate: {
+              $ifNull: ["$takedown_info.takedown_start_date", "$metadata.updated_at"]
+            }
+          }
+        }
+      },
+      ...(hasDateFilters ? [{ $match: dateFilterStage }] : []),
+      { $sort: { 'takedown_info.events.date': -1, 'metadata.updated_at': -1 } }
+    ]).toArray()
 
     const enrichedTakedowns = await Promise.all(posts.map(async (post) => {
       let thumbnail = null
@@ -117,6 +214,9 @@ export const getTakedowns = traceAction('getTakedowns', async (filters = {}) => 
         : (post.takedown_info?.takedown_start_date || post.metadata?.updated_at || null)
 
       if (lastUpdateDate && lastUpdateDate.$date) lastUpdateDate = lastUpdateDate.$date
+      
+      let takedownDate = post.takedown_info?.takedown_start_date || null
+      if (takedownDate && takedownDate.$date) takedownDate = takedownDate.$date
 
       return {
         id: post._id.toString(),
@@ -127,6 +227,7 @@ export const getTakedowns = traceAction('getTakedowns', async (filters = {}) => 
         risk_score: post.review_details?.threat_score || 0,
         threat_type: post.review_details?.threat_types?.[0] || 'Unknown',
         last_update_date: lastUpdateDate,
+        takedown_date: takedownDate,
         notes: post.takedown_info?.notes ? post.takedown_info.notes.join('\n\n') : '',
         enrichment: {
           caption: caption.length > 100 ? caption.substring(0, 100) + '...' : caption,
@@ -136,24 +237,109 @@ export const getTakedowns = traceAction('getTakedowns', async (filters = {}) => 
       }
     }))
 
-    // Sort by last update date descending
-    let sortedTakedowns = enrichedTakedowns.sort((a, b) => new Date(b.last_update_date || 0) - new Date(a.last_update_date || 0))
-
-    if (filters.date_from) {
-      const from = new Date(filters.date_from).getTime()
-      sortedTakedowns = sortedTakedowns.filter(t => new Date(t.last_update_date).getTime() >= from)
-    }
-
-    if (filters.date_to) {
-      const to = new Date(filters.date_to).getTime()
-      sortedTakedowns = sortedTakedowns.filter(t => new Date(t.last_update_date).getTime() <= to)
-    }
-
-    return sortedTakedowns
-
+    return enrichedTakedowns
   } catch (mongoError) {
     console.error('Error fetching takedowns from MongoDB:', mongoError)
     return []
+  }
+})
+
+export const getTakedownMetrics = traceAction('getTakedownMetrics', async (filters = {}) => {
+  const projectDetails = await getProjectDetails()
+  if (!projectDetails?.projectName) return { inProgress: 0, successful: 0, reAppeal: 0 }
+
+  try {
+    const client = await clientPromise
+    const db = client.db(projectDetails.dbName)
+    const collection = db.collection('Posts')
+    
+    // Create filters clone without status
+    const metricsFilters = { ...filters }
+    delete metricsFilters.status
+    
+    const matchStage = buildTakedownMatchQuery(metricsFilters)
+    
+    const dateFilterStage = {}
+
+    if (filters.original_date_from || filters.original_date_to) {
+      dateFilterStage.sort_original_date = {};
+      if (filters.original_date_from) {
+        dateFilterStage.sort_original_date.$gte = new Date(filters.original_date_from);
+      }
+      if (filters.original_date_to) {
+        dateFilterStage.sort_original_date.$lte = new Date(filters.original_date_to);
+      }
+    }
+
+    if (filters.processed_from || filters.processed_to) {
+      dateFilterStage.sort_processed_after = {};
+      if (filters.processed_from) {
+        dateFilterStage.sort_processed_after.$gte = new Date(filters.processed_from);
+      }
+      if (filters.processed_to) {
+        dateFilterStage.sort_processed_after.$lte = new Date(filters.processed_to);
+      }
+    }
+
+    if (filters.takedown_date_from || filters.takedown_date_to) {
+      dateFilterStage.sort_takedown_date = {};
+      if (filters.takedown_date_from) {
+        dateFilterStage.sort_takedown_date.$gte = new Date(filters.takedown_date_from);
+      }
+      if (filters.takedown_date_to) {
+        dateFilterStage.sort_takedown_date.$lte = new Date(filters.takedown_date_to);
+      }
+    }
+
+    const hasDateFilters = Object.keys(dateFilterStage).length > 0;
+
+    const pipeline = [
+      { $match: matchStage }
+    ]
+    
+    if (hasDateFilters) {
+      pipeline.push({
+        $addFields: {
+          sort_original_date: {
+            $toDate: {
+              $ifNull: ["$engagement.posted_at", "$metadata.posted_date"]
+            }
+          },
+          sort_processed_after: {
+            $toDate: {
+              $ifNull: ["$review_details.reviewed_at", "$metadata.updated_at"]
+            }
+          },
+          sort_takedown_date: {
+            $toDate: {
+              $ifNull: ["$takedown_info.takedown_start_date", "$metadata.updated_at"]
+            }
+          }
+        }
+      })
+      pipeline.push({ $match: dateFilterStage })
+    }
+
+    pipeline.push({
+      $group: {
+        _id: "$takedown_info.status",
+        count: { $sum: 1 }
+      }
+    })
+
+    const metrics = await collection.aggregate(pipeline).toArray()
+
+    return metrics.reduce((acc, curr) => {
+      const status = curr._id ? curr._id.toLowerCase() : 'unknown'
+      if (['initiated', 'under_review'].includes(status)) acc.inProgress += curr.count;
+      else if (status === 'takedown_successful' || status === 'takedown successful') acc.successful += curr.count;
+      else if (status === 're_appeal_takedown' || status === 'appealed again') acc.reAppeal += curr.count;
+      return acc;
+    }, { inProgress: 0, successful: 0, reAppeal: 0 });
+    
+  } catch (error) {
+    console.error('Error fetching takedown metrics:', error)
+    return { inProgress: 0, successful: 0, reAppeal: 0 }
   }
 })
 
@@ -338,7 +524,6 @@ export const getTakedownDetails = traceAction('getTakedownDetails', async (id) =
       created_at: takedownStartDate,
       post_platform_id: post.post_id || post.code,
       notes: post.takedown_info?.notes || [],
-      platform_email_status: post.takedown_info?.platform_email_status || 'pending',
     }
 
     // Prepare history array
@@ -384,8 +569,13 @@ export const updateTakedown = traceAction('updateTakedown', async (id, updates, 
     const db = client.db(projectDetails.dbName)
     
     const updateFields = {}
-    if (updates.status !== undefined) updateFields['takedown_info.status'] = updates.status
-    if (updates.platform_email_status !== undefined) updateFields['takedown_info.platform_email_status'] = updates.platform_email_status
+    if (updates.status !== undefined) {
+      updateFields['takedown_info.status'] = updates.status
+      if (updates.status === 'takedown_successful') {
+        updateFields['takedown_info.takedown_end_date'] = new Date().toISOString()
+        updateFields['takedown_info.content_active'] = false
+      }
+    }
 
     const eventRecord = {
       id: crypto.randomUUID(),

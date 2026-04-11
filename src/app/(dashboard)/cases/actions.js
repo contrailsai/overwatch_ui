@@ -166,7 +166,7 @@ export const getPosts = traceAction('getPosts', async (project, page = 1, limit 
         
         if (violationConditions.length > 0) {
           andConditions.push({
-            $and: violationConditions
+            $or: violationConditions
           });
         }
       }

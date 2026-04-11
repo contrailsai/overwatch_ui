@@ -12,7 +12,8 @@ import {
   ExternalLink, Info, Siren, ArrowRight, Quote, X, FlagTriangleLeft,
   FileDown, ArrowUp, ArrowDown, ClockFading,
   ChevronLeft, ChevronRight, Smile, TrendingDown, TriangleAlert,
-  Youtube, Instagram, Facebook, UserPlus, Check
+  Youtube, Instagram, Facebook, UserPlus, Check,
+  AlertOctagon
 } from 'lucide-react'
 
 import { Twitter, Reddit } from '@/utils/icons'
@@ -264,7 +265,16 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
       return { label: 'No Action', icon: CheckCircle, color: 'text-emerald-500 bg-emerald-50 border-emerald-200' };
     }
     if (status === 'Flag for Takedown') {
-      return { label: 'Flag for Takedown', icon: FlagTriangleLeft, color: 'text-rose-500 bg-rose-50 border-rose-200' };
+      if (allowDoTakedown){
+        return { label: 'Flag for Takedown', icon: FlagTriangleLeft, color: 'text-orange-500 bg-orange-50 border-orange-200' };
+      }
+      else{
+        return { label: 'Flag for Takedown', icon: FlagTriangleLeft, color: 'text-rose-500 bg-rose-50 border-rose-200' };
+      }
+    }
+
+    if (status === 'Takedown') {
+      return { label: 'Takedown', icon: AlertOctagon, color: 'text-rose-500 bg-rose-50 border-rose-200' };
     }
     return { label: status, icon: Info, color: 'text-slate-600 bg-slate-50 border-slate-200' };
   }
@@ -282,6 +292,24 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
     setSelectedCases({})
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filtersKey])
+
+
+  let allowDoTakedown = false;
+  try {
+    if (project && project.project_details) {
+      const details = project.project_details;
+      if (details.do_takedowns === true || details.do_takedowns === undefined) {
+        allowDoTakedown = true;
+      } else {
+        allowDoTakedown = false;
+      }
+    } else {
+      allowDoTakedown = true;
+    }
+  } catch (e) {
+    console.error(e)
+    allowDoTakedown = true;
+  }
 
   return (
     <div className="flex flex-col h-full bg-slate-50">
@@ -305,9 +333,9 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                       Filters
                     </span>
 
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
+                    <Button
+                      variant="ghost"
+                      size="sm"
                       onClick={() => setIsMobileFiltersOpen(!isMobileFiltersOpen)}
                       className="lg:hidden h-8 text-xs font-bold bg-blue-50 hover:bg-blue-100 text-blue-700 ml-1"
                     >
@@ -337,8 +365,8 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                 {/* Active Filters / Clear All Actions (Animated) */}
                 <div
                   className={`grid transition-all duration-300 ease-in-out w-full ${selectedCount > 0
-                      ? "grid-rows-[1fr] opacity-100 mt-1"
-                      : "grid-rows-[0fr] opacity-0 mt-0"
+                    ? "grid-rows-[1fr] opacity-100 mt-1"
+                    : "grid-rows-[0fr] opacity-0 mt-0"
                     }`}
                 >
                   {/* overflow-hidden is crucial here to clip the content while height is 0 */}
@@ -384,99 +412,99 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
               <div className={cn("flex flex-col gap-4 w-full transition-all overflow-hidden", !isMobileFiltersOpen && "hidden lg:flex")}>
                 <div className=" flex flex-wrap items-start gap-4 lg:gap-6 w-full ">
 
-                {/* RISK LEVEL */}
-                <div className="space-y-1.5 w-fit min-w-32">
-                  <Label className="text-[10px] uppercase font-bold text-slate-400">Risk Severity</Label>
-                  <select
-                    value={initialFilters.risk_priority || 'all'}
-                    onChange={(e) => handleFilterChange('risk_priority', e.target.value)}
-                    className="w-full bg-white border border-slate-200 rounded-md px-3 h-9 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
-                  >
-                    <option value="all">All Risks</option>
-                    <option value="high">High Risk</option>
-                    <option value="medium">Medium Risk</option>
-                    <option value="low">Low Risk</option>
-                    <option value="safe">Safe</option>
-                  </select>
-                </div>
-
-                {/* PLATFORM */}
-                <div className="space-y-1.5 w-fit min-w-32">
-                  <Label className="text-[10px] uppercase font-bold text-slate-400">Platform</Label>
-                  <select
-                    value={initialFilters.platform}
-                    onChange={(e) => handleFilterChange('platform', e.target.value)}
-                    className="w-full bg-white border border-slate-200 rounded-md px-3 h-9 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
-                  >
-                    <option value="all">All Platforms</option>
-                    <option value="instagram">Instagram</option>
-                    <option value="facebook">Facebook</option>
-                    <option value="reddit">Reddit</option>
-                    <option value="x">X (Twitter)</option>
-                    <option value="youtube">Youtube</option>
-                    <option value="website">Websites</option>
-                  </select>
-                </div>
-
-                {/* STATUS */}
-                <div className="space-y-1.5 w-fit min-w-32">
-                  <Label className="text-[10px] uppercase font-bold text-slate-400">Status</Label>
-                  <select
-                    value={initialFilters.client_status}
-                    onChange={(e) => handleFilterChange('client_status', e.target.value)}
-                    className="w-full bg-white border border-slate-200 rounded-md px-3 h-9 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
-                  >
-                    <option value="all">All Statuses</option>
-                    <option value="To Be Reviewed">To Be Reviewed</option>
-                    <option value="No Action">No Action</option>
-                    <option value="Flag for Takedown">Flag for Takedown</option>
-                  </select>
-                </div>
-
-                {/* violations */}
-                <div className="space-y-1.5 w-fit min-w-32">
-                  <ViolationsFilter
-                    projectLabels={project?.project_details?.labels || []}
-                    initialViolations={initialFilters.violations}
-                    onChange={(val) => handleFilterChange('violations', val)}
-                  />
-                </div>
-
-                {/* Alert date  */}
-                <div className="space-y-1.5 w-fit min-w-32">
-                  <Label className="text-[10px] uppercase font-bold text-slate-400">Alert Date</Label>
-                  <DateFilterPopover
-                    title="Alert Date"
-                    initialFrom={initialFilters.processed_from}
-                    initialTo={initialFilters.processed_to}
-                    onApply={(range) => updateQueryParams({
-                      processed_from: range?.from ? format(range.from, "yyyy-MM-dd'T'HH:mm:ssXXX") : null,
-                      processed_to: range?.to ? format(range.to, "yyyy-MM-dd'T'HH:mm:ssXXX") : null
-                    })}
-                  />
-                </div>
-
-                {/* Publishing date  */}
-                <div className="space-y-1.5 w-fit min-w-32">
-                  <Label className="text-[10px] uppercase font-bold text-slate-400">Publish Date</Label>
-                  <DateFilterPopover
-                    title="Publish Date"
-                    initialFrom={initialFilters.original_date_from}
-                    initialTo={initialFilters.original_date_to}
-                    onApply={(range) => updateQueryParams({
-                      original_date_from: range?.from ? format(range.from, "yyyy-MM-dd'T'HH:mm:ssXXX") : null,
-                      original_date_to: range?.to ? format(range.to, "yyyy-MM-dd'T'HH:mm:ssXXX") : null
-                    })}
-                  />
-                </div>
-
-                {(initialFilters.platform !== 'all' || initialFilters.risk_priority !== 'all' || initialFilters.client_status !== 'all' || (initialFilters.violations && initialFilters.violations !== 'all') || initialFilters.original_date_from || initialFilters.original_date_to || initialFilters.processed_from || initialFilters.processed_to) && (
-                  <div className=" mt-1">
-                    <Button variant="ghost" size="sm" onClick={clearFilters} className="h-9 px-2 text-rose-600 hover:text-rose-700 hover:bg-rose-50 font-bold text-xs">
-                      <X className="w-3.5 h-3.5 mr-1" /> Clear Filters
-                    </Button>
+                  {/* RISK LEVEL */}
+                  <div className="space-y-1.5 w-fit min-w-32">
+                    <Label className="text-[10px] uppercase font-bold text-slate-400">Risk Severity</Label>
+                    <select
+                      value={initialFilters.risk_priority || 'all'}
+                      onChange={(e) => handleFilterChange('risk_priority', e.target.value)}
+                      className="w-full bg-white border border-slate-200 rounded-md px-3 h-9 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
+                    >
+                      <option value="all">All Risks</option>
+                      <option value="high">High Risk</option>
+                      <option value="medium">Medium Risk</option>
+                      <option value="low">Low Risk</option>
+                      <option value="safe">Safe</option>
+                    </select>
                   </div>
-                )}
+
+                  {/* PLATFORM */}
+                  <div className="space-y-1.5 w-fit min-w-32">
+                    <Label className="text-[10px] uppercase font-bold text-slate-400">Platform</Label>
+                    <select
+                      value={initialFilters.platform}
+                      onChange={(e) => handleFilterChange('platform', e.target.value)}
+                      className="w-full bg-white border border-slate-200 rounded-md px-3 h-9 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
+                    >
+                      <option value="all">All Platforms</option>
+                      <option value="instagram">Instagram</option>
+                      <option value="facebook">Facebook</option>
+                      <option value="reddit">Reddit</option>
+                      <option value="x">X (Twitter)</option>
+                      <option value="youtube">Youtube</option>
+                      <option value="website">Websites</option>
+                    </select>
+                  </div>
+
+                  {/* STATUS */}
+                  <div className="space-y-1.5 w-fit min-w-32">
+                    <Label className="text-[10px] uppercase font-bold text-slate-400">Status</Label>
+                    <select
+                      value={initialFilters.client_status}
+                      onChange={(e) => handleFilterChange('client_status', e.target.value)}
+                      className="w-full bg-white border border-slate-200 rounded-md px-3 h-9 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
+                    >
+                      <option value="all">All Statuses</option>
+                      <option value="To Be Reviewed">To Be Reviewed</option>
+                      <option value="No Action">No Action</option>
+                      <option value="Flag for Takedown">Flag for Takedown</option>
+                    </select>
+                  </div>
+
+                  {/* violations */}
+                  <div className="space-y-1.5 w-fit min-w-32">
+                    <ViolationsFilter
+                      projectLabels={project?.project_details?.labels || []}
+                      initialViolations={initialFilters.violations}
+                      onChange={(val) => handleFilterChange('violations', val)}
+                    />
+                  </div>
+
+                  {/* Alert date  */}
+                  <div className="space-y-1.5 w-fit min-w-32">
+                    <Label className="text-[10px] uppercase font-bold text-slate-400">Alert Date</Label>
+                    <DateFilterPopover
+                      title="Alert Date"
+                      initialFrom={initialFilters.processed_from}
+                      initialTo={initialFilters.processed_to}
+                      onApply={(range) => updateQueryParams({
+                        processed_from: range?.from ? format(range.from, "yyyy-MM-dd'T'HH:mm:ssXXX") : null,
+                        processed_to: range?.to ? format(range.to, "yyyy-MM-dd'T'HH:mm:ssXXX") : null
+                      })}
+                    />
+                  </div>
+
+                  {/* Publishing date  */}
+                  <div className="space-y-1.5 w-fit min-w-32">
+                    <Label className="text-[10px] uppercase font-bold text-slate-400">Publish Date</Label>
+                    <DateFilterPopover
+                      title="Publish Date"
+                      initialFrom={initialFilters.original_date_from}
+                      initialTo={initialFilters.original_date_to}
+                      onApply={(range) => updateQueryParams({
+                        original_date_from: range?.from ? format(range.from, "yyyy-MM-dd'T'HH:mm:ssXXX") : null,
+                        original_date_to: range?.to ? format(range.to, "yyyy-MM-dd'T'HH:mm:ssXXX") : null
+                      })}
+                    />
+                  </div>
+
+                  {(initialFilters.platform !== 'all' || initialFilters.risk_priority !== 'all' || initialFilters.client_status !== 'all' || (initialFilters.violations && initialFilters.violations !== 'all') || initialFilters.original_date_from || initialFilters.original_date_to || initialFilters.processed_from || initialFilters.processed_to) && (
+                    <div className=" mt-1">
+                      <Button variant="ghost" size="sm" onClick={clearFilters} className="h-9 px-2 text-rose-600 hover:text-rose-700 hover:bg-rose-50 font-bold text-xs">
+                        <X className="w-3.5 h-3.5 mr-1" /> Clear Filters
+                      </Button>
+                    </div>
+                  )}
                 </div>
 
                 {/* BULK ASSIGN FUNCTIONALITY */}
@@ -660,260 +688,260 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
               </thead>
 
               <tbody className="bg-white divide-y divide-slate-100">
-              {mergedPosts.map((post, index) => {
-                const currentPost = { ...post, client_status: updatedCases[post._id] || post.client_status };
-                const riskScore = currentPost.review_details?.threat_score;
-                const risk = getRiskLabel(riskScore);
+                {mergedPosts.map((post, index) => {
+                  const currentPost = { ...post, client_status: updatedCases[post._id] || post.client_status };
+                  const riskScore = currentPost.review_details?.threat_score;
+                  const risk = getRiskLabel(riskScore);
 
-                const review = currentPost.review_details || {};
-                const analysis = currentPost.analysis_results || {};
+                  const review = currentPost.review_details || {};
+                  const analysis = currentPost.analysis_results || {};
 
-                // 1. Resolve Global Flags
-                const isAigc = review.is_aigc ?? review.flags?.is_aigc ?? analysis.aigc_check?.is_aigc ?? false;
+                  // 1. Resolve Global Flags
+                  const isAigc = review.is_aigc ?? review.flags?.is_aigc ?? analysis.aigc_check?.is_aigc ?? false;
 
-                // 2. Resolve Dynamic Labels and Legacy Flags
-                const projectLabels = project?.project_details?.labels || [];
-                const resolvedThreats = [];
+                  // 2. Resolve Dynamic Labels and Legacy Flags
+                  const projectLabels = project?.project_details?.labels || [];
+                  const resolvedThreats = [];
 
-                if (isAigc) resolvedThreats.push({ label: "AIGC", type: 'aigc' });
+                  if (isAigc) resolvedThreats.push({ label: "AIGC", type: 'aigc' });
 
-                // Check Project Labels (New Format)
-                projectLabels.forEach(label => {
-                  if (review.flags?.[label.name] === true) {
-                    resolvedThreats.push({
-                      label: label.name,
-                      type: label.severity === 'high' ? 'hate_speech' : label.severity === 'medium' ? 'scam' : 'nsfw'
-                    });
-                  }
-                });
+                  // Check Project Labels (New Format)
+                  projectLabels.forEach(label => {
+                    if (review.flags?.[label.name] === true) {
+                      resolvedThreats.push({
+                        label: label.name,
+                        type: label.severity === 'high' ? 'hate_speech' : label.severity === 'medium' ? 'scam' : 'nsfw'
+                      });
+                    }
+                  });
 
-                // Check Legacy Flags (Backward Compatibility)
-                const legacyMapping = {
-                  is_nsfw: { label: "NSFW", type: 'nsfw' },
-                  is_hate_speech: { label: "Hate Speech", type: 'hate_speech' },
-                  is_fake_news: { label: "Fake News", type: 'fake_news' },
-                  is_fraud: { label: "Fraud", type: 'fake_news' },
-                  is_asset_misuse: { label: "Asset Misuse", type: 'scam' },
-                  is_humor: { label: "Satire", type: 'nsfw' },
-                  is_terrorism: { label: "Terrorism", type: 'fake_news' },
-                  is_violence: { label: "Violence", type: 'fake_news' }
-                };
+                  // Check Legacy Flags (Backward Compatibility)
+                  const legacyMapping = {
+                    is_nsfw: { label: "NSFW", type: 'nsfw' },
+                    is_hate_speech: { label: "Hate Speech", type: 'hate_speech' },
+                    is_fake_news: { label: "Fake News", type: 'fake_news' },
+                    is_fraud: { label: "Fraud", type: 'fake_news' },
+                    is_asset_misuse: { label: "Asset Misuse", type: 'scam' },
+                    is_humor: { label: "Satire", type: 'nsfw' },
+                    is_terrorism: { label: "Terrorism", type: 'fake_news' },
+                    is_violence: { label: "Violence", type: 'fake_news' }
+                  };
 
-                Object.entries(legacyMapping).forEach(([key, config]) => {
-                  if (review.flags?.[key] === true && !resolvedThreats.some(t => t.label === config.label)) {
-                    resolvedThreats.push(config);
-                  }
-                });
+                  Object.entries(legacyMapping).forEach(([key, config]) => {
+                    if (review.flags?.[key] === true && !resolvedThreats.some(t => t.label === config.label)) {
+                      resolvedThreats.push(config);
+                    }
+                  });
 
-                const statusConfig = getStatusConfig(currentPost);
+                  const statusConfig = getStatusConfig(currentPost);
 
-                const StatusIcon = statusConfig.icon;
-                // const isPanelOpen = selectedPost?._id === currentPost._id
+                  const StatusIcon = statusConfig.icon;
+                  // const isPanelOpen = selectedPost?._id === currentPost._id
 
-                let posted_date = ""
-                let sourced_date = ""
-                let processed_date = ""
+                  let posted_date = ""
+                  let sourced_date = ""
+                  let processed_date = ""
 
-                // POSTED AT ---> ORIGINAL DATE FILTER ( WHEN IT WAS POSTED ON THE SOCIAL MEDIA PLATFORM)
-                if (post.posted_date)
-                  posted_date = format(new Date(post.posted_date), "dd/MM/yyyy hh:mm a");
-                else if (post.metadata?.posted_date)
-                  posted_date = format(new Date(post.metadata.posted_date), "dd/MM/yyyy hh:mm a");
-                else if (post.timestamp)
-                  posted_date = format(new Date(post.timestamp), "dd/MM/yyyy hh:mm a");
-                else if (post.sourcing_date)
-                  posted_date = format(new Date(post.sourcing_date), "dd/MM/yyyy hh:mm a");
+                  // POSTED AT ---> ORIGINAL DATE FILTER ( WHEN IT WAS POSTED ON THE SOCIAL MEDIA PLATFORM)
+                  if (post.posted_date)
+                    posted_date = format(new Date(post.posted_date), "dd/MM/yyyy hh:mm a");
+                  else if (post.metadata?.posted_date)
+                    posted_date = format(new Date(post.metadata.posted_date), "dd/MM/yyyy hh:mm a");
+                  else if (post.timestamp)
+                    posted_date = format(new Date(post.timestamp), "dd/MM/yyyy hh:mm a");
+                  else if (post.sourcing_date)
+                    posted_date = format(new Date(post.sourcing_date), "dd/MM/yyyy hh:mm a");
 
-                // SOURCED AT ---> (NOT BEING USED WELL BUT ITS WHEN WE GOT THE POST)
-                if (post.metadata?.created_at)
-                  sourced_date = format(new Date(post.metadata.created_at), "dd/MM/yyyy hh:mm a");
-                else if (post.created_at)
-                  sourced_date = format(new Date(post.created_at), "dd/MM/yyyy hh:mm a");
+                  // SOURCED AT ---> (NOT BEING USED WELL BUT ITS WHEN WE GOT THE POST)
+                  if (post.metadata?.created_at)
+                    sourced_date = format(new Date(post.metadata.created_at), "dd/MM/yyyy hh:mm a");
+                  else if (post.created_at)
+                    sourced_date = format(new Date(post.created_at), "dd/MM/yyyy hh:mm a");
 
-                // REVIEWED AT. --> PROCESSED DATE FILTER
-                if (post?.reviewed_at)
-                  processed_date = format(new Date(post.reviewed_at), "dd/MM/yyyy hh:mm a");
-                else if (post.review_details?.reviewed_at)
-                  processed_date = format(new Date(post.review_details.reviewed_at), "dd/MM/yyyy hh:mm a");
+                  // REVIEWED AT. --> PROCESSED DATE FILTER
+                  if (post?.reviewed_at)
+                    processed_date = format(new Date(post.reviewed_at), "dd/MM/yyyy hh:mm a");
+                  else if (post.review_details?.reviewed_at)
+                    processed_date = format(new Date(post.review_details.reviewed_at), "dd/MM/yyyy hh:mm a");
 
-                const isSelectedRow = !!selectedCases[currentPost._id];
-                const isPanelOpen = selectedPost?._id === currentPost._id;
+                  const isSelectedRow = !!selectedCases[currentPost._id];
+                  const isPanelOpen = selectedPost?._id === currentPost._id;
 
-                return (
-                  <tr
-                    key={currentPost._id}
-                    ref={el => postRefs.current[currentPost._id] = el}
-                    onClick={() => setSelectedPost(currentPost)}
-                    className={cn(
-                      "transition-all cursor-pointer group",
-                      isPanelOpen ? "bg-blue-50/60 ring-1 ring-inset ring-blue-200 z-10 relative" : "hover:bg-slate-50",
-                      // Optional: lightly highlight rows that are checked
-                      isSelectedRow && !isPanelOpen && "bg-slate-50"
-                    )}
-                  >
-                    {/* SELECTED OR NOT  */}
-                    <td className="px-2 sm:px-4 py-3 whitespace-nowrap align-middle" onClick={(e) => e.stopPropagation()}>
-                      <input
-                        type="checkbox"
-                        checked={isSelectedRow}
-                        onChange={(e) => handleToggleCase(currentPost, e)}
-                        className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                      />
-                    </td>
+                  return (
+                    <tr
+                      key={currentPost._id}
+                      ref={el => postRefs.current[currentPost._id] = el}
+                      onClick={() => setSelectedPost(currentPost)}
+                      className={cn(
+                        "transition-all cursor-pointer group",
+                        isPanelOpen ? "bg-blue-50/60 ring-1 ring-inset ring-blue-200 z-10 relative" : "hover:bg-slate-50",
+                        // Optional: lightly highlight rows that are checked
+                        isSelectedRow && !isPanelOpen && "bg-slate-50"
+                      )}
+                    >
+                      {/* SELECTED OR NOT  */}
+                      <td className="px-2 sm:px-4 py-3 whitespace-nowrap align-middle" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          checked={isSelectedRow}
+                          onChange={(e) => handleToggleCase(currentPost, e)}
+                          className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                        />
+                      </td>
 
-                    {/* Priority */}
-                    <td className="px-2 sm:px-4 py-3 whitespace-nowrap align-middle hidden sm:table-cell">
-                      <span className={cn("inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold border shadow-sm", risk.color)}>
+                      {/* Priority */}
+                      <td className="px-2 sm:px-4 py-3 whitespace-nowrap align-middle hidden sm:table-cell">
+                        <span className={cn("inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold border shadow-sm", risk.color)}>
 
-                        {
-                          risk.label === "High" ? (
-                            <Siren className="w-3.5 h-3.5 sm:mr-1.5" />
-                          ) : risk.label === "Medium" ? (
-                            <TriangleAlert className="w-3.5 h-3.5 sm:mr-1.5" />
-                          ) : risk.label === "Low" ? (
-                            <TrendingDown className="w-3.5 h-3.5 sm:mr-1.5" />
-                          ) : (
-                            <Smile className="w-3.5 h-3.5 sm:mr-1.5" />
-                          )
-                        }
+                          {
+                            risk.label === "High" ? (
+                              <Siren className="w-3.5 h-3.5 sm:mr-1.5" />
+                            ) : risk.label === "Medium" ? (
+                              <TriangleAlert className="w-3.5 h-3.5 sm:mr-1.5" />
+                            ) : risk.label === "Low" ? (
+                              <TrendingDown className="w-3.5 h-3.5 sm:mr-1.5" />
+                            ) : (
+                              <Smile className="w-3.5 h-3.5 sm:mr-1.5" />
+                            )
+                          }
 
-                        <span className="hidden sm:inline">{risk.label}</span>
-                      </span>
-                    </td>
+                          <span className="hidden sm:inline">{risk.label}</span>
+                        </span>
+                      </td>
 
-                    {/* Status */}
-                    <td className="px-2 sm:px-4 py-3 whitespace-nowrap align-middle hidden md:table-cell">
-                      <span className={cn("inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold border shadow-sm", statusConfig.color)}>
-                        <StatusIcon className="w-3.5 h-3.5 mr-1.5" />
-                        {statusConfig.label}
-                      </span>
-                    </td>
+                      {/* Status */}
+                      <td className="px-2 sm:px-4 py-3 whitespace-nowrap align-middle hidden md:table-cell">
+                        <span className={cn("inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold border shadow-sm", statusConfig.color)}>
+                          <StatusIcon className="w-3.5 h-3.5 mr-1.5" />
+                          {statusConfig.label}
+                        </span>
+                      </td>
 
-                    {/* Content */}
-                    <td className="px-2 sm:px-4 py-3 overflow-hidden align-middle">
-                      <div className="flex gap-3 sm:gap-4 max-w-100">
-                        <div className="shrink-0 relative">
-                          {post.signedImageUrl ? (
-                            <div className="h-12 w-12 sm:h-16 sm:w-16 rounded-lg overflow-hidden border border-slate-200 shadow-sm bg-slate-200 group-hover:shadow-md transition-all">
-                              <img
-                                src={post.signedImageUrl}
-                                alt="Content"
-                                /* text-transparent hides the alt text while loading */
-                                className="h-full w-full object-cover text-transparent"
-                                loading="lazy"
-                              />
-                            </div>
-                          ) : (
-                            <div className="h-16 w-16 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-center">
-                              <Quote className="h-6 w-6 text-slate-300" />
-                            </div>
-                          )}
-                        </div>
-                        <div className="flex flex-col min-w-0 gap-1">
-                          <div className="flex items-center gap-2">
-                            <div
-                              className="font-semibold text-slate-600 rounded-full bg-slate-50 max-w-5 flex items-center justify-center p-1 "
-                              title={post.platform.charAt(0).toUpperCase() + post.platform.slice(1)}
-                            >
-                              {post.platform === 'instagram' ? <Instagram className="size-4 sm:size-5 text-pink-500" />
-                                : post.platform === 'facebook' ? <Facebook className="size-4 sm:size-5 shrink-0 text-blue-600" />
-                                  : post.platform === 'x' ? <Twitter className="size-4 sm:size-5 text-slate-900" />
-                                    : post.platform === 'youtube' ? <Youtube className="size-4 sm:size-5 text-red-600" />
-                                      : post.platform === 'reddit' ? <Reddit className="size-4 sm:size-5 text-red-600" />
-                                        : post.platform
-                              }
-                            </div>
-                            <span className="text-xs text-slate-400">•</span>
-                            <span className="font-bold text-slate-900 text-xs sm:text-sm truncate transition-colors max-w-[80px] sm:max-w-none">
-                              {post.user?.username ? `@${post.user.username}` : 'Unknown User'}
-                            </span>
-                            <span className="text-xs text-slate-400 hidden sm:inline">•</span>
-                            <span className="text-xs text-slate-500 font-mono hidden sm:inline">
-                              <a
-                                href={post.original_url ? post.original_url : getPostLink(post)}
-                                target="_blank"
-                                rel="noreferrer"
-                                onClick={(e) => e.stopPropagation()}
-                                className="inline-flex items-center tracking-tight text-blue-600 hover:text-blue-800 font-bold text-xs transition-colors hover:underline bg-blue-50 px-1.5 py-0.5 rounded-md"
+                      {/* Content */}
+                      <td className="px-2 sm:px-4 py-3 overflow-hidden align-middle">
+                        <div className="flex gap-3 sm:gap-4 max-w-96">
+                          <div className="shrink-0 relative">
+                            {post.signedImageUrl ? (
+                              <div className="h-12 w-12 sm:h-16 sm:w-16 rounded-lg overflow-hidden border border-slate-200 shadow-sm bg-slate-200 group-hover:shadow-md transition-all">
+                                <img
+                                  src={post.signedImageUrl}
+                                  alt="Content"
+                                  /* text-transparent hides the alt text while loading */
+                                  className="h-full w-full object-cover text-transparent"
+                                  loading="lazy"
+                                />
+                              </div>
+                            ) : (
+                              <div className="h-16 w-16 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-center">
+                                <Quote className="h-6 w-6 text-slate-300" />
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex flex-col min-w-0 gap-1">
+                            <div className="flex items-center gap-2">
+                              <div
+                                className="font-semibold text-slate-600 rounded-full bg-slate-50 max-w-5 flex items-center justify-center p-1 "
+                                title={post.platform.charAt(0).toUpperCase() + post.platform.slice(1)}
                               >
-                                Source <ExternalLink className="w-3 h-3 ml-1" />
-                              </a>
-                            </span>
-                            
-                            {/* Mobile Risk Icon (visible only when risk column is hidden) */}
-                            <span className="sm:hidden ml-auto">
-                              <span className={cn("inline-flex items-center p-1 rounded-md text-xs font-bold border shadow-sm", risk.color)}>
-                                {
-                                  risk.label === "High" ? <Siren className="w-3 h-3" /> :
-                                  risk.label === "Medium" ? <TriangleAlert className="w-3 h-3" /> :
-                                  risk.label === "Low" ? <TrendingDown className="w-3 h-3" /> :
-                                  <Smile className="w-3 h-3" />
+                                {post.platform === 'instagram' ? <Instagram className="size-4 sm:size-5 text-pink-500" />
+                                  : post.platform === 'facebook' ? <Facebook className="size-4 sm:size-5 shrink-0 text-blue-600" />
+                                    : post.platform === 'x' ? <Twitter className="size-4 sm:size-5 text-slate-900" />
+                                      : post.platform === 'youtube' ? <Youtube className="size-4 sm:size-5 text-red-600" />
+                                        : post.platform === 'reddit' ? <Reddit className="size-4 sm:size-5 text-red-600" />
+                                          : post.platform
                                 }
+                              </div>
+                              <span className="text-xs text-slate-400">•</span>
+                              <span className="font-bold text-slate-900 text-xs sm:text-sm truncate transition-colors max-w-[80px] sm:max-w-none">
+                                {post.user?.username ? `@${post.user.username}` : 'Unknown User'}
                               </span>
+                              <span className="text-xs text-slate-400 hidden sm:inline">•</span>
+                              <span className="text-xs text-slate-500 font-mono hidden sm:inline">
+                                <a
+                                  href={post.original_url ? post.original_url : getPostLink(post)}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="inline-flex items-center tracking-tight text-blue-600 hover:text-blue-800 font-bold text-xs transition-colors hover:underline bg-blue-50 px-1.5 py-0.5 rounded-md"
+                                >
+                                  Source <ExternalLink className="w-3 h-3 ml-1" />
+                                </a>
+                              </span>
+
+                              {/* Mobile Risk Icon (visible only when risk column is hidden) */}
+                              <span className="sm:hidden ml-auto">
+                                <span className={cn("inline-flex items-center p-1 rounded-md text-xs font-bold border shadow-sm", risk.color)}>
+                                  {
+                                    risk.label === "High" ? <Siren className="w-3 h-3" /> :
+                                      risk.label === "Medium" ? <TriangleAlert className="w-3 h-3" /> :
+                                        risk.label === "Low" ? <TrendingDown className="w-3 h-3" /> :
+                                          <Smile className="w-3 h-3" />
+                                  }
+                                </span>
+                              </span>
+                            </div>
+                            <span className="text-[10px] sm:text-xs text-slate-600 line-clamp-2 leading-relaxed">
+                              {post.caption || <span className="italic text-slate-400">No caption content.</span>}
                             </span>
                           </div>
-                          <span className="text-[10px] sm:text-xs text-slate-600 line-clamp-2 leading-relaxed">
-                            {post.caption || <span className="italic text-slate-400">No caption content.</span>}
+                        </div>
+                      </td>
+
+                      {/* Threat Type */}
+                      <td className="px-4 py-3 whitespace-nowrap align-middle hidden lg:table-cell">
+                        <div className="flex flex-wrap gap-1.5 max-w-[200px]">
+                          {resolvedThreats.map((threat, idx) => {
+                            return (
+                              <span
+                                key={idx}
+                                className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold border uppercase tracking-wider shadow-sm text-slate-600 bg-slate-50 border-slate-200"
+                              >
+                                {threat.label.replace(/[-_]/g, ' ')}
+                              </span>
+                            );
+                          })}
+                          {resolvedThreats.length === 0 && <span className="text-xs text-slate-400 italic"></span>}
+                        </div>
+                      </td>
+
+                      {/* Processed Date */}
+                      <td className="px-4 py-3 whitespace-nowrap align-middle hidden lg:table-cell">
+                        <div className="flex flex-col gap-1 justify-center items-center text-sm font-semibold text-slate-500">
+                          <span>{processed_date.split(' ')[0]}</span>
+                          <span className="text-xs text-slate-400">
+                            {processed_date.split(' ')[1] + ' ' + processed_date.split(' ')[2]}
                           </span>
                         </div>
-                      </div>
-                    </td>
+                      </td>
 
-                    {/* Threat Type */}
-                    <td className="px-4 py-3 whitespace-nowrap align-middle hidden lg:table-cell">
-                      <div className="flex flex-wrap gap-1.5 max-w-[200px]">
-                        {resolvedThreats.map((threat, idx) => {
-                          return (
-                            <span
-                              key={idx}
-                              className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold border uppercase tracking-wider shadow-sm text-slate-600 bg-slate-50 border-slate-200"
-                            >
-                              {threat.label.replace(/[-_]/g, ' ')}
-                            </span>
-                          );
-                        })}
-                        {resolvedThreats.length === 0 && <span className="text-xs text-slate-400 italic"></span>}
-                      </div>
-                    </td>
+                      {/* Original Date */}
+                      <td className="px-4 py-3 whitespace-nowrap align-middle hidden xl:table-cell">
+                        <div className="flex flex-col gap-1 justify-center items-center text-sm font-semibold text-slate-500">
+                          <span>{posted_date.split(' ')[0]}</span>
+                          <span className="text-xs text-slate-400">
+                            {posted_date.split(' ')[1] + ' ' + posted_date.split(' ')[2]}
+                          </span>
+                        </div>
+                      </td>
 
-                    {/* Processed Date */}
-                    <td className="px-4 py-3 whitespace-nowrap align-middle hidden lg:table-cell">
-                      <div className="flex flex-col gap-1 justify-center items-center text-sm font-semibold text-slate-500">
-                        <span>{processed_date.split(' ')[0]}</span>
-                        <span className="text-xs text-slate-400">
-                          {processed_date.split(' ')[1] + ' ' + processed_date.split(' ')[2]}
-                        </span>
-                      </div>
-                    </td>
-
-                    {/* Original Date */}
-                    <td className="px-4 py-3 whitespace-nowrap align-middle hidden xl:table-cell">
-                      <div className="flex flex-col gap-1 justify-center items-center text-sm font-semibold text-slate-500">
-                        <span>{posted_date.split(' ')[0]}</span>
-                        <span className="text-xs text-slate-400">
-                          {posted_date.split(' ')[1] + ' ' + posted_date.split(' ')[2]}
-                        </span>
-                      </div>
-                    </td>
-
-                    {/* Actions */}
-                    <td className="px-2 sm:px-4 py-3 whitespace-nowrap text-right align-middle">
-                      <Button
-                        size="sm"
-                        variant={isPanelOpen ? "default" : "secondary"}
-                        className={cn(
-                          "h-8 w-8 sm:w-auto px-0 sm:px-3 text-xs font-bold transition-all shadow-sm",
-                          isPanelOpen ? "bg-blue-600 hover:bg-blue-700 shadow-blue-200" : "bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 group "
-                        )}
-                      >
-                        <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 group-hover:translate-x-0.5 transition-all duration-200 " />
-                      </Button>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+                      {/* Actions */}
+                      <td className="px-2 sm:px-4 py-3 whitespace-nowrap text-right align-middle">
+                        <Button
+                          size="sm"
+                          variant={isPanelOpen ? "default" : "secondary"}
+                          className={cn(
+                            "h-8 w-8 sm:w-auto px-0 sm:px-3 text-xs font-bold transition-all shadow-sm",
+                            isPanelOpen ? "bg-blue-600 hover:bg-blue-700 shadow-blue-200" : "bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 group "
+                          )}
+                        >
+                          <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 group-hover:translate-x-0.5 transition-all duration-200 " />
+                        </Button>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
           </div>
 
           {mergedPosts.length === 0 && (
@@ -961,7 +989,7 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                 Page <span className="text-slate-900">{currentPage}</span> / <span className="text-slate-900">{totalPages || 1}</span>
               </div>
             </div>
-            
+
             {totalPages > 1 && (
               <div className="flex items-center gap-1 sm:gap-2 w-full sm:w-auto justify-between sm:justify-end mt-2 sm:mt-0">
                 <Button
