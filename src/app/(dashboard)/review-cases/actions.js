@@ -10,9 +10,11 @@ import { sendEmail } from '@/utils/email'
 import { traceAction } from '@/utils/tracing'
 
 export const normalized_S3_post = traceAction('normalized_S3_post', async (post) => {
+  if (!post) return null;
+
   // Find S3 URL to sign from post_content.media_urls
   let s3UrlToSign = null;
-  if (post.post_content?.media_urls && post.post_content.media_urls.length > 0) {
+  if (post?.post_content?.media_urls && post.post_content.media_urls.length > 0) {
     const firstMedia = post.post_content.media_urls[0];
     // Prefer thumbnail for videos, otherwise use s3_url
     s3UrlToSign = firstMedia.thumbnail_url || firstMedia.s3_url;
@@ -23,9 +25,9 @@ export const normalized_S3_post = traceAction('normalized_S3_post', async (post)
   // Map to frontend structure
   const normalized = {
     ...post,
-    _id: post._id.toString(),
-    created_at: post.metadata?.created_at ? new Date(post.metadata.created_at).toISOString() : null,
-    sourcing_date: post.metadata?.sourcing_date ? new Date(post.metadata.sourcing_date).toISOString() : null,
+    _id: post?._id?.toString() || post?.id?.toString() || '',
+    created_at: post?.metadata?.created_at ? new Date(post.metadata.created_at).toISOString() : null,
+    sourcing_date: post?.metadata?.sourcing_date ? new Date(post.metadata.sourcing_date).toISOString() : null,
     signedImageUrl: signedUrl,
 
     // Content
@@ -100,7 +102,7 @@ export const getPosts = traceAction('getPosts_review', async (project_mongo_db_m
     const skip = (page - 1) * limit
 
     // Build query with filters
-    const query = {}
+    const query = { _id: { $ne: null } }
     const andConditions = []
 
     // Filter by Review Status
@@ -277,7 +279,7 @@ export const getAllPostsForExport = traceAction('getAllPostsForExport', async (p
     const db = client.db(project_mongo_db_map)
     const collection = db.collection('Posts')
 
-    const query = {}
+    const query = { _id: { $ne: null } }
     const andConditions = []
 
     if (filters.status === 'pending') {
