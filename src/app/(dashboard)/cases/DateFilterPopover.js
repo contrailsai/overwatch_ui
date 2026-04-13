@@ -87,13 +87,47 @@ export function DateFilterPopover({ title, onApply, initialFrom, initialTo }) {
         from: initialFrom ? new Date(initialFrom) : undefined,
         to: initialTo ? new Date(initialTo) : undefined,
     });
+    const [appliedRange, setAppliedRange] = useState({
+        from: initialFrom ? new Date(initialFrom) : undefined,
+        to: initialTo ? new Date(initialTo) : undefined,
+    });
 
     useEffect(() => {
         setDateRange({
             from: initialFrom ? new Date(initialFrom) : undefined,
             to: initialTo ? new Date(initialTo) : undefined,
         });
+        setAppliedRange({
+            from: initialFrom ? new Date(initialFrom) : undefined,
+            to: initialTo ? new Date(initialTo) : undefined,
+        });
     }, [initialFrom, initialTo]);
+
+    const handleOpenChange = (newOpen) => {
+        if (!newOpen) {
+            setDateRange({ ...appliedRange });
+        }
+        setOpen(newOpen);
+    };
+
+    const handleApply = () => {
+        if (!dateRange.from || !dateRange.to) {
+            setDateRange({ from: undefined, to: undefined });
+            setAppliedRange({ from: undefined, to: undefined });
+            onApply({ from: null, to: null });
+        } else {
+            setAppliedRange({ ...dateRange });
+            onApply(dateRange);
+        }
+        setOpen(false);
+    };
+
+    const handleClear = () => {
+        setDateRange({ from: undefined, to: undefined });
+        setAppliedRange({ from: undefined, to: undefined });
+        onApply({ from: null, to: null });
+        setOpen(false);
+    };
 
     // Intercept calendar selection to preserve the currently selected times
     const handleDateSelect = (newRange, selectedDay) => {
@@ -116,11 +150,11 @@ export function DateFilterPopover({ title, onApply, initialFrom, initialTo }) {
         // Requirement 2: We have a 'from' but no 'to'. The second click completes the range.
         let rawFrom = dateRange.from;
         let rawTo = selectedDay;
-        
+
         // Ensure dates are chronologically ordered (ignoring time for comparison)
-        const dayFrom = new Date(rawFrom).setHours(0,0,0,0);
-        const dayTo = new Date(rawTo).setHours(0,0,0,0);
-        
+        const dayFrom = new Date(rawFrom).setHours(0, 0, 0, 0);
+        const dayTo = new Date(rawTo).setHours(0, 0, 0, 0);
+
         if (dayTo < dayFrom) {
             rawTo = dateRange.from;
             rawFrom = selectedDay;
@@ -173,45 +207,50 @@ export function DateFilterPopover({ title, onApply, initialFrom, initialTo }) {
     // };
 
     return (
-        <Popover open={open} onOpenChange={setOpen}>
+        <Popover open={open} onOpenChange={handleOpenChange}>
             <PopoverTrigger asChild>
                 <Button variant="outline" className="w-full justify-start text-left font-normal bg-white border-slate-200 h-9 text-xs">
-                    <CalendarIcon className="h-3.5 w-3.5 mr-2" />
-                    {dateRange?.from ? (
-                        dateRange.to ? (
+                    <CalendarIcon className="h-3.5 w-3.5 mr-2 shrink-0" />
+                    {appliedRange?.from ? (
+                        appliedRange.to ? (
                             <span className="truncate">
-                                {format(dateRange.from, "LLL dd")} - {format(dateRange.to, "LLL dd")}
+                                {format(appliedRange.from, "LLL dd")} - {format(appliedRange.to, "LLL dd")}
                             </span>
                         ) : (
-                            <span className="truncate">{format(dateRange.from, "LLL dd, y")}</span>
+                            <span className="truncate">{format(appliedRange.from, "LLL dd, y")}</span>
                         )
                     ) : (
-                        <span className="text-slate-500">{title}</span>
+                        <span className="text-slate-500 truncate">{title}</span>
                     )}
                 </Button>
             </PopoverTrigger>
 
-            <PopoverContent className="w-auto p-0" align="start">
-                <Card className="w-fit shadow-none border-0 pt-0">
-                    <CardHeader className="border-b pt-4 px-4 m-0 flex">
-                        <div className=" w-full text-sm">
+            <PopoverContent 
+                className="w-auto p-1 py-2 overflow-y-auto overflow-x-hidden custom-scrollbar" 
+                align="start"
+                collisionPadding={20}
+                style={{ maxHeight: 'calc(var(--radix-popover-content-available-height) - 16px)' }}
+            >
+                <Card className="w-full sm:w-fit shadow-none border-0 pt-0">
+                    <CardHeader className="border-b pt-3 px-3 pb-3 m-0 flex flex-col sm:flex-row gap-2 sm:gap-0">
+                        <div className=" w-full text-xs">
                             Select Ranges for
                             <br />
-                            <span className='font-bold text-xl py-3 rounded-full'>
+                            <span className='font-bold text-lg py-1 rounded-full inline-block'>
                                 {title}
                             </span>
                         </div>
-                        <div className={"flex w-full justify-center pt-2"}>
-                            <div className="flex flex-col gap-1 text-sm w-fit ">
+                        <div className={"flex w-full justify-start sm:justify-end md:justify-center pt-1"}>
+                            <div className="flex flex-col gap-1 text-xs w-fit ">
                                 <div className="flex justify-between items-center">
                                     <span className="font-medium text-slate-500 pr-2">From:</span>
-                                    <span className="px-2 py-0.5 rounded-md text-black font-extrabold text-sm">
+                                    <span className="px-2 py-0.5 rounded-md text-black font-extrabold text-xs">
                                         {dateRange?.from ? format(dateRange.from, "do MMM yyyy - HH:mm") : "—"}
                                     </span>
                                 </div>
                                 <div className="flex justify-between items-center">
                                     <span className="font-medium text-slate-500 pr-2">To:</span>
-                                    <span className="px-2 py-0.5 rounded-md text-black font-extrabold text-sm">
+                                    <span className="px-2 py-0.5 rounded-md text-black font-extrabold text-xs">
                                         {dateRange?.to ? format(dateRange.to, "do MMM yyyy -  HH:mm") : "—"}
                                     </span>
                                 </div>
@@ -219,62 +258,64 @@ export function DateFilterPopover({ title, onApply, initialFrom, initialTo }) {
                         </div>
                     </CardHeader>
 
-                    <CardContent className="flex gap-4 py-0 m-0 ">
+                    <CardContent className="flex flex-col sm:flex-row gap-4 py-3 sm:py-4 m-0 px-3 sm:px-4 ">
                         {/* Calendar Section */}
-                        <Calendar
-                            mode="range"
-                            defaultMonth={dateRange?.from}
-                            numberOfMonths={1}
-                            selected={dateRange}
-                            onSelect={handleDateSelect}
-                            onDayMouseEnter={(day) => setHoveredDate(day)}
-                            onDayMouseLeave={() => setHoveredDate(null)}
-                            disabled={{ after: new Date() }}
-                            className="rounded-md border-none p-0 w-full flex-1 md:[--cell-size:--spacing(12)]"
-                            modifiers={{
-                                hoverRange: (date) => {
-                                    if (!dateRange?.from || dateRange?.to || !hoveredDate) return false
-                                    const dateStart = new Date(dateRange.from).setHours(0,0,0,0)
-                                    const hovStart = new Date(hoveredDate).setHours(0,0,0,0)
-                                    const dStart = new Date(date).setHours(0,0,0,0)
-                                    const min = dateStart < hovStart ? dateStart : hovStart
-                                    const max = dateStart > hovStart ? dateStart : hovStart
-                                    return dStart > min && dStart < max
-                                },
-                                hoverRangeEnd: (date) => {
-                                    if (!dateRange?.from || dateRange?.to || !hoveredDate) return false
-                                    const dateStart = new Date(dateRange.from).setHours(0,0,0,0)
-                                    const hovStart = new Date(hoveredDate).setHours(0,0,0,0)
-                                    const dStart = new Date(date).setHours(0,0,0,0)
-                                    return dStart === hovStart && hovStart > dateStart
-                                },
-                                hoverRangeStart: (date) => {
-                                    if (!dateRange?.from || dateRange?.to || !hoveredDate) return false
-                                    const dateStart = new Date(dateRange.from).setHours(0,0,0,0)
-                                    const hovStart = new Date(hoveredDate).setHours(0,0,0,0)
-                                    const dStart = new Date(date).setHours(0,0,0,0)
-                                    return dStart === hovStart && hovStart < dateStart
-                                },
-                                fromDateHover: (date) => {
-                                    if (!dateRange?.from || dateRange?.to || !hoveredDate) return false
-                                    const dateStart = new Date(dateRange.from).setHours(0,0,0,0)
-                                    const hovStart = new Date(hoveredDate).setHours(0,0,0,0)
-                                    const dStart = new Date(date).setHours(0,0,0,0)
-                                    return dStart === dateStart && hovStart !== dateStart
-                                }
-                            }}
-                            modifiersClassNames={{
-                                hoverRange: "bg-slate-100 text-slate-900 !rounded-none",
-                                hoverRangeStart: "bg-slate-100 text-slate-900 !rounded-l-md !rounded-r-none",
-                                hoverRangeEnd: "bg-slate-100 text-slate-900 !rounded-r-md !rounded-l-none",
-                                fromDateHover: (dateRange?.from && hoveredDate && new Date(dateRange.from).setHours(0,0,0,0) < new Date(hoveredDate).setHours(0,0,0,0)) 
-                                    ? "!rounded-l-md !rounded-r-none" 
-                                    : "!rounded-r-md !rounded-l-none"
-                            }}
-                        />
+                        <div className="flex flex-col gap-3 w-full">
+                            <Calendar
+                                mode="range"
+                                defaultMonth={dateRange?.from}
+                                numberOfMonths={1}
+                                selected={dateRange}
+                                onSelect={handleDateSelect}
+                                onDayMouseEnter={(day) => setHoveredDate(day)}
+                                onDayMouseLeave={() => setHoveredDate(null)}
+                                disabled={{ after: new Date() }}
+                                className="rounded-md border-none p-0 w-full flex-1 md:[--cell-size:--spacing(10)] scale-95 sm:scale-100 origin-top"
+                                modifiers={{
+                                    hoverRange: (date) => {
+                                        if (!dateRange?.from || dateRange?.to || !hoveredDate) return false
+                                        const dateStart = new Date(dateRange.from).setHours(0, 0, 0, 0)
+                                        const hovStart = new Date(hoveredDate).setHours(0, 0, 0, 0)
+                                        const dStart = new Date(date).setHours(0, 0, 0, 0)
+                                        const min = dateStart < hovStart ? dateStart : hovStart
+                                        const max = dateStart > hovStart ? dateStart : hovStart
+                                        return dStart > min && dStart < max
+                                    },
+                                    hoverRangeEnd: (date) => {
+                                        if (!dateRange?.from || dateRange?.to || !hoveredDate) return false
+                                        const dateStart = new Date(dateRange.from).setHours(0, 0, 0, 0)
+                                        const hovStart = new Date(hoveredDate).setHours(0, 0, 0, 0)
+                                        const dStart = new Date(date).setHours(0, 0, 0, 0)
+                                        return dStart === hovStart && hovStart > dateStart
+                                    },
+                                    hoverRangeStart: (date) => {
+                                        if (!dateRange?.from || dateRange?.to || !hoveredDate) return false
+                                        const dateStart = new Date(dateRange.from).setHours(0, 0, 0, 0)
+                                        const hovStart = new Date(hoveredDate).setHours(0, 0, 0, 0)
+                                        const dStart = new Date(date).setHours(0, 0, 0, 0)
+                                        return dStart === hovStart && hovStart < dateStart
+                                    },
+                                    fromDateHover: (date) => {
+                                        if (!dateRange?.from || dateRange?.to || !hoveredDate) return false
+                                        const dateStart = new Date(dateRange.from).setHours(0, 0, 0, 0)
+                                        const hovStart = new Date(hoveredDate).setHours(0, 0, 0, 0)
+                                        const dStart = new Date(date).setHours(0, 0, 0, 0)
+                                        return dStart === dateStart && hovStart !== dateStart
+                                    }
+                                }}
+                                modifiersClassNames={{
+                                    hoverRange: "bg-slate-100 text-slate-900 !rounded-none",
+                                    hoverRangeStart: "bg-slate-100 text-slate-900 !rounded-l-md !rounded-r-none",
+                                    hoverRangeEnd: "bg-slate-100 text-slate-900 !rounded-r-md !rounded-l-none",
+                                    fromDateHover: (dateRange?.from && hoveredDate && new Date(dateRange.from).setHours(0, 0, 0, 0) < new Date(hoveredDate).setHours(0, 0, 0, 0))
+                                        ? "!rounded-l-md !rounded-r-none"
+                                        : "!rounded-r-md !rounded-l-none"
+                                }}
+                            />
+                        </div>
 
                         {/* Time Section */}
-                        <div className="flex flex-col gap-4 border-l pl-4 min-w-[160px] justify-start">
+                        <div className="flex flex-col gap-4 sm:border-l sm:pl-4 sm:min-w-[150px] justify-start w-full sm:w-auto mt-2 sm:mt-0 pt-4 sm:pt-0 border-t sm:border-t-0 px-1 sm:px-0">
                             <FieldGroup className="gap-4">
                                 <Field>
                                     <FieldLabel className="text-xs text-muted-foreground mb-1 block">From Time</FieldLabel>
@@ -294,33 +335,25 @@ export function DateFilterPopover({ title, onApply, initialFrom, initialTo }) {
                                     />
                                 </Field>
                             </FieldGroup>
+
+                            {/* Action Buttons */}
+                            <div className="flex flex-col items-center gap-2 mt-4">
+                                <Button
+                                    variant="outline"
+                                    className="w-full text-xs h-8"
+                                    onClick={handleClear}
+                                >
+                                    Clear
+                                </Button>
+                                <Button
+                                    className="w-full text-sm h-8"
+                                    onClick={handleApply}
+                                >
+                                    Apply Filter
+                                </Button>
+                            </div>
                         </div>
                     </CardContent>
-
-                    {/* Action / Summary Footer */}
-                    <CardFooter className="flex flex-col items-stretch gap-3 border-t m-0 bg-slate-50/50 px-4 py-3">
-
-
-                        <div className="flex items-center gap-2 mt-2">
-                            <Button
-                                variant="outline"
-                                className="w-1/3"
-                                onClick={() => {
-                                    setDateRange({ from: undefined, to: undefined });
-                                    onApply({ from: null, to: null });
-                                }}
-                            >
-                                Clear
-                            </Button>
-                            <Button className="w-2/3" onClick={() => {
-                                onApply(dateRange);
-                                setOpen(false);
-                            }}>
-                                Apply Filter
-                            </Button>
-                        </div>
-                    </CardFooter>
-
                 </Card>
             </PopoverContent>
         </Popover>

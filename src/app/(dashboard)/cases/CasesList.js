@@ -618,8 +618,6 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
         </div>
       </div>
 
-
-
       {/* Main Table */}
       <div className="flex-1 overflow-y-auto px-3 sm:px-6 pb-4">
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
