@@ -31,7 +31,7 @@ export function ReportButton({ posts, project, className }) {
         <FileDown className="w-4 h-4 shrink-0" />
       )}
       <span className="whitespace-pre-line text-left leading-snug">
-        {loading ? statusText || 'Preparing...' : 'Export Summary Report'}
+        {loading ? statusText || 'Preparing...' : 'Export Summary PDF'}
       </span>
     </button>
   );

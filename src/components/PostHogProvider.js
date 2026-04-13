@@ -6,7 +6,8 @@ import { useEffect } from 'react'
 
 export function PostHogProvider({ children }) {
     useEffect(() => {
-        if (typeof window !== 'undefined' && process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN) {
+        const isProd = process.env.NODE_ENV === 'production'
+        if (typeof window !== 'undefined' && process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN && isProd) {
             posthog.init(process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN, {
                 api_host: process.env.NEXT_PUBLIC_POSTHOG_HOST,
                 ui_host: 'https://eu.posthog.com',

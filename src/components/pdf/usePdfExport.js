@@ -1,20 +1,21 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { sendGAEvent } from '@next/third-parties/google';
-import { getReportDownloadUrl } from '@/app/(dashboard)/cases/pdf_actions';
-
-function getProgressMessage(progress) {
-    if (!progress) return "Waiting in queue...";
-    if (progress < 30) return "Fetching case data...";
-    if (progress < 50) return "Processing images...";
-    if (progress < 70) return "Rendering PDF...please wait";
-    if (progress < 90) return "Uploading to secure storage...";
-    if (progress < 100) return "Finalizing report...";
-    return "Complete!";
-}
+import { getReportDownloadUrl, getOrCreateReportJob } from '@/app/(dashboard)/cases/pdf_actions';
+import { createClient } from '@/utils/supabase/client';
 
 export function usePdfExport() {
     const [loading, setLoading] = useState(false);
     const [statusText, setStatusText] = useState('');
+
+    useEffect(() => {
+        if (!loading || !statusText || statusText.includes('(please wait...)') || statusText.includes('Complete!')) return;
+        
+        const timer = setTimeout(() => {
+            setStatusText(prev => prev + '\n(please wait...)');
+        }, 30000);
+        
+        return () => clearTimeout(timer);
+    }, [statusText, loading]);
 
     const exportPdf = async ({ posts, project, profile, reportType, fileNamePrefix, gaEventName }) => {
         if (!posts || posts.length === 0) return;
@@ -23,82 +24,88 @@ export function usePdfExport() {
             setLoading(true);
             setStatusText('Initializing...');
 
-            const postIds = posts.map(p => p._id);
-            const pdfServiceUrl = process.env.NEXT_PUBLIC_PDF_SERVICE_URL || 'https://overwatch-pdf.contrails.ai';
-
-            // 1. Trigger job
-            const generateResponse = await fetch(`${pdfServiceUrl}/generate`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    projectId: project?.project_name || 'unknown',
-                    reportType: reportType,
-                    database_name: project?.mongo_db_map,
-                    postIds: postIds,
-                    project: project,
-                    profile: profile
-                })
-            });
-
-            if (!generateResponse.ok) {
+            // 1. Get or create the report job in the database
+            const jobData = await getOrCreateReportJob({ posts, project, profile, reportType });
+            
+            if (!jobData || !jobData.jobId) {
                 throw new Error('Failed to initiate PDF generation');
             }
 
-            const generateData = await generateResponse.json();
-            
-            let s3Url = null;
+            let s3Url = jobData.s3Path;
 
-            if (generateData.status === 'completed' && generateData.url) {
-                // Cache hit
-                s3Url = generateData.url;
-            } else if (generateData.status === 'processing' && generateData.jobId) {
-                // Poll for completion
-                setStatusText('Waiting in queue...');
-                let jobStatus = 'processing';
+            // 2. If not already complete, listen for realtime updates
+            if (!s3Url) {
+                setStatusText(jobData.status || 'Waiting in queue...');
                 
-                while (jobStatus === 'processing' || jobStatus === 'active' || jobStatus === 'waiting') {
-                    await new Promise(resolve => setTimeout(resolve, 1000)); // Poll every 1s
+                const supabase = createClient();
+                s3Url = await new Promise((resolve, reject) => {
+                    let retryCount = 0;
                     
-                    const statusResponse = await fetch(`${pdfServiceUrl}/job-status/${generateData.jobId}`);
-                    if (!statusResponse.ok) throw new Error('Failed to check job status');
-                    
-                    const statusData = await statusResponse.json();
-                    jobStatus = statusData.status;
-                    
-                    if (jobStatus === 'processing' || jobStatus === 'active' || jobStatus === 'waiting') {
-                        const prog = statusData.progress || 0;
-                        setStatusText(`${prog}% - ${getProgressMessage(prog)}`);
-                    }
-                    
-                    if (jobStatus === 'completed') {
-                        setStatusText(`100% - Complete!`);
-                        s3Url = statusData.url;
-                        break;
-                    } else if (jobStatus === 'failed') {
-                        throw new Error(statusData.error || 'PDF generation failed on server');
-                    }
-                }
-            } else {
-                throw new Error('Unexpected response from PDF service');
+                    const subscribeToChannel = () => {
+                        const channel = supabase.channel(`report-${jobData.jobId}-${retryCount}`)
+                            .on(
+                                'postgres_changes',
+                                {
+                                    event: 'UPDATE',
+                                    schema: 'public',
+                                    table: 'reports_generation',
+                                    filter: `id=eq.${jobData.jobId}`
+                                },
+                                (payload) => {
+                                    const newStatus = payload.new.status;
+                                    if (newStatus) {
+                                        setStatusText(newStatus);
+                                    }
+                                    
+                                    if (payload.new.s3_path) {
+                                        setStatusText('100% - Complete!');
+                                        supabase.removeChannel(channel);
+                                        resolve(payload.new.s3_path);
+                                    } else if (newStatus && newStatus.toLowerCase().includes('failed')) {
+                                        supabase.removeChannel(channel);
+                                        reject(new Error('An error occurred while creating the PDF'));
+                                    }
+                                }
+                            )
+                            .subscribe((status) => {
+                                if (status === 'CHANNEL_ERROR') {
+                                    console.error('Subscription failed, retrying...');
+                                    supabase.removeChannel(channel);
+                                    if (retryCount < 3) {
+                                        retryCount++;
+                                        setTimeout(subscribeToChannel, 1000 * retryCount);
+                                    } else {
+                                        reject(new Error('An error occurred while creating the PDF'));
+                                    }
+                                }
+                            });
+                            
+                        // Add a timeout fallback just in case Lambda dies without updating status (wait 5 minutes)
+                        setTimeout(() => {
+                            supabase.removeChannel(channel);
+                            reject(new Error('An error occurred while creating the PDF'));
+                        }, 5 * 60 * 1000);
+                    };
+
+                    subscribeToChannel();
+                });
             }
 
             if (!s3Url) {
-                throw new Error('No valid PDF URL returned');
+                throw new Error('An error occurred while creating the PDF');
             }
 
             setStatusText('Preparing download...');
             const fileName = `${fileNamePrefix}_${new Date().toISOString().split('T')[0]}.pdf`;
             
-            // 2. Sign URL for download
+            // 3. Sign URL for download
             const signedUrl = await getReportDownloadUrl(s3Url, fileName);
 
             if (!signedUrl) {
                 throw new Error('Failed to sign download URL');
             }
 
-            // 3. Trigger download
+            // 4. Trigger download
             const a = document.createElement('a');
             a.href = signedUrl;
             a.download = fileName;
@@ -115,7 +122,7 @@ export function usePdfExport() {
 
         } catch (error) {
             console.error('Report Generation Error:', error);
-            alert('Failed to generate report: ' + error.message);
+            alert('Failed to generate report: ' + (error.message || 'An error occurred while creating the PDF'));
         } finally {
             setLoading(false);
             setStatusText('');
