@@ -1,6 +1,9 @@
 import { Outfit } from "next/font/google";
 import "@/app/globals.css";
 import { GoogleAnalytics } from '@next/third-parties/google'
+import { PostHogProvider } from '@/components/PostHogProvider'
+import { PostHogPageView } from '@/components/PostHogPageView'
+import { Suspense } from 'react'
 
 const outfit = Outfit({
     subsets: ["latin"],
@@ -33,7 +36,12 @@ export default async function RootLayout({ children }) {
                 )}
             </head>
             <body className={`${outfit.className} antialiased bg-slate-50 text-slate-900 h-full`}>
-                {children}
+                <PostHogProvider>
+                    <Suspense fallback={null}>
+                        <PostHogPageView />
+                    </Suspense>
+                    {children}
+                </PostHogProvider>
             </body>
         </html>
     );

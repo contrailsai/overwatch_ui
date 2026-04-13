@@ -4,6 +4,7 @@ import React from 'react';
 import { FileDown, Loader2 } from 'lucide-react';
 import { Button } from "@/components/ui/button"
 import { usePdfExport } from './usePdfExport';
+import posthog from 'posthog-js';
 
 export function CaseExportButton({ post, project }) {
     const { exportPdf, loading, statusText } = usePdfExport();
@@ -11,6 +12,7 @@ export function CaseExportButton({ post, project }) {
     if (!post) return null;
 
     const handleDownload = () => {
+        posthog.capture('Report Downloaded', { type: 'Single Case Report', format: 'pdf', caseId: post._id });
         exportPdf({
             posts: [post],
             project,

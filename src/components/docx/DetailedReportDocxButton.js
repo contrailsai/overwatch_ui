@@ -7,6 +7,7 @@ import { fetchAndCompressImage } from './CaseExportDocxButton';
 import { getPostsByIds } from '@/app/(dashboard)/cases/actions';
 import { generateDetailedCasesDocx } from './DetailedCasesReportDocx';
 import { useClient } from '@/context/ClientContext';
+import posthog from 'posthog-js';
 
 export function DetailedReportDocxButton({ posts, project, className }) {
     const { clientDetails } = useClient();
@@ -103,6 +104,7 @@ export function DetailedReportDocxButton({ posts, project, className }) {
     const handleDownload = async () => {
         setIsGenerating(true);
         try {
+            posthog.capture('Report Downloaded', { type: 'Detailed Case Report', format: 'docx', count: posts?.length || 0 });
             sendGAEvent('event', 'download_detailed_cases_report_docx', {
                 event_id: 'detailed_cases_report_docx',
                 status: 'downloading'

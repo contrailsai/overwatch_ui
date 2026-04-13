@@ -3,6 +3,7 @@ import { getClientandProjectDetails } from '@/app/(dashboard)/actions'
 import { Sidebar } from '@/components/Sidebar'
 import { redirect } from 'next/navigation'
 import { GoogleAnalyticsConfig } from '@/components/GoogleAnalyticsConfig'
+import { PostHogIdentify } from '@/components/PostHogIdentify'
 import { ClientProvider } from '@/context/ClientContext'
 import { trackClientActivity } from '@/utils/supabase/metrics'
 
@@ -35,6 +36,7 @@ export default async function DashboardLayout({ children }) {
           <GoogleAnalyticsConfig userId={user?.id} />
         )
       }
+      <PostHogIdentify user={user} clientDetails={clientDetails} project={project} />
       <Sidebar user={user} clientDetails={clientDetails} project={project} />
       <ClientProvider initialClientDetails={clientDetails}>
         <main className="flex-1 relative overflow-y-auto focus:outline-none">

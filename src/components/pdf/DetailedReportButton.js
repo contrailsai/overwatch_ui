@@ -3,11 +3,13 @@
 import React from 'react';
 import { FileDown, Loader2 } from 'lucide-react';
 import { usePdfExport } from './usePdfExport';
+import posthog from 'posthog-js';
 
 export function DetailedReportButton({ posts, project, className }) {
     const { exportPdf, loading, statusText } = usePdfExport();
 
     const handleDownload = () => {
+        posthog.capture('Report Downloaded', { type: 'Detailed Case Report', format: 'pdf', count: posts?.length || 0 });
         exportPdf({
             posts,
             project,

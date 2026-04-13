@@ -5,12 +5,27 @@ import { createClient, getAuthenticatedUser } from '@/utils/supabase/server'
 import clientPromise from '@/utils/mongodb/client'
 import { getSignedImageUrl } from '@/utils/aws/s3'
 import { traceAction } from '@/utils/tracing'
+import { posthogServer } from '@/utils/posthog'
 
 export const getDashboardData = traceAction('getDashboardData', async (project, queryParams) => {
   const supabase = await createClient()
   const projectName = typeof project === 'string' ? project : project?.project_name
 
   const { days, from, to } = queryParams || {}
+  
+  // Track this server action with PostHog
+  const user = await getAuthenticatedUser()
+  if (user) {
+    posthogServer.capture({
+      distinctId: user.email || user.id,
+      event: 'server_action_called',
+      properties: {
+        action_name: 'getDashboardData',
+        project: projectName,
+        days_range: days
+      }
+    })
+  }
   
   // Compute date range
   const now = new Date()

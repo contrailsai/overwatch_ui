@@ -8,6 +8,7 @@ import { generateProfileDocx } from './ProfileReportDocx';
 import { fetchAndCompressImage } from './CaseExportDocxButton';
 import { getPostsByIds } from '@/app/(dashboard)/cases/actions';
 import { useClient } from '@/context/ClientContext';
+import posthog from 'posthog-js';
 
 export function ProfileExportDocxButton({ profile, project, className }) {
     const { clientDetails } = useClient();
@@ -101,6 +102,7 @@ export function ProfileExportDocxButton({ profile, project, className }) {
     const handleDownload = async () => {
         setIsGenerating(true);
         try {
+            posthog.capture('Report Downloaded', { type: 'Profile Report', format: 'docx', profileId: profile?._id });
             sendGAEvent('event', 'download_profile_report_docx', {
                 event_id: 'profile_report_docx',
                 status: 'downloading',

@@ -3,11 +3,13 @@
 import React from 'react';
 import { Download, Loader2 } from 'lucide-react';
 import { usePdfExport } from './usePdfExport';
+import posthog from 'posthog-js';
 
 export function ProfileExportButton({ profile, project, className }) {
     const { exportPdf, loading, statusText } = usePdfExport();
 
     const handleDownload = () => {
+        posthog.capture('Report Downloaded', { type: 'Profile Report', format: 'pdf', profileId: profile?._id });
         // profile.posts contains the array of post IDs
         // We pass the profile object so the server can extract metadata like profile pic
         exportPdf({

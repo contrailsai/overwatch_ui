@@ -7,6 +7,7 @@ import { sendGAEvent } from '@next/third-parties/google';
 import { generateSingleCaseDocx } from './SingleCaseReportDocx';
 
 import { useClient } from '@/context/ClientContext';
+import posthog from 'posthog-js';
 
 export const fetchAndCompressImage = async (imageUrl, maxWidth = 800) => {
     try {
@@ -87,6 +88,7 @@ export function CaseExportDocxButton({ post, project }) {
     const handleDownload = async () => {
         setIsGenerating(true);
         try {
+            posthog.capture('Report Downloaded', { type: 'Single Case Report', format: 'docx', caseId: post._id });
             sendGAEvent('event', 'download_single_case_report_docx', {
                 event_id: 'single_case_report_docx',
                 status: 'downloading'
