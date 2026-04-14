@@ -65,7 +65,22 @@ const buildTakedownMatchQuery = (filters = {}) => {
 
   // Status Filter
   if (filters.status && filters.status !== 'all') {
-    query['takedown_info.status'] = filters.status
+    const statusMap = {
+      'takedown successful': ['takedown successful', 'takedown_successful'],
+      'takedown_successful': ['takedown successful', 'takedown_successful'],
+      'takedown failed': ['takedown failed', 'takedown_failed'],
+      'takedown_failed': ['takedown failed', 'takedown_failed'],
+      'appealed again': ['appealed again', 're_appeal_takedown'],
+      're_appeal_takedown': ['appealed again', 're_appeal_takedown'],
+      'under process': ['under process', 'under_review'],
+      'under_review': ['under process', 'under_review']
+    };
+    
+    if (statusMap[filters.status]) {
+      query['takedown_info.status'] = { $in: statusMap[filters.status] }
+    } else {
+      query['takedown_info.status'] = filters.status
+    }
   }
 
   // Platform Filter
@@ -246,7 +261,7 @@ export const getTakedowns = traceAction('getTakedowns', async (filters = {}) => 
 
 export const getTakedownMetrics = traceAction('getTakedownMetrics', async (filters = {}) => {
   const projectDetails = await getProjectDetails()
-  if (!projectDetails?.projectName) return { inProgress: 0, successful: 0, reAppeal: 0 }
+  if (!projectDetails?.projectName) return { inProgress: 0, successful: 0, reAppeal: 0, failed: 0 }
 
   try {
     const client = await clientPromise
@@ -334,12 +349,13 @@ export const getTakedownMetrics = traceAction('getTakedownMetrics', async (filte
       if (['initiated', 'under_review'].includes(status)) acc.inProgress += curr.count;
       else if (status === 'takedown_successful' || status === 'takedown successful') acc.successful += curr.count;
       else if (status === 're_appeal_takedown' || status === 'appealed again') acc.reAppeal += curr.count;
+      else if (status === 'takedown_failed' || status === 'takedown failed') acc.failed += curr.count;
       return acc;
-    }, { inProgress: 0, successful: 0, reAppeal: 0 });
+    }, { inProgress: 0, successful: 0, reAppeal: 0, failed: 0 });
     
   } catch (error) {
     console.error('Error fetching takedown metrics:', error)
-    return { inProgress: 0, successful: 0, reAppeal: 0 }
+    return { inProgress: 0, successful: 0, reAppeal: 0, failed: 0 }
   }
 })
 

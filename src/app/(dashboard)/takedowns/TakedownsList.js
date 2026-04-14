@@ -6,7 +6,7 @@ import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import {
   Filter, Search, ChevronRight, AlertTriangle, CheckCircle,
   Clock, Mail, ArrowUpRight, ShieldAlert, User, ImageIcon, X, Loader2,
-  Youtube, Instagram, Facebook
+  Youtube, Instagram, Facebook, XCircle
 } from 'lucide-react'
 import { Twitter, Reddit } from '@/utils/icons'
 import { Badge } from "@/components/ui/badge"
@@ -34,10 +34,14 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
   const getStatusColor = (status) => {
     const s = status?.toLowerCase() || '';
     switch (s) {
-      case 'takedown successful': return 'bg-emerald-50 text-emerald-700 border-emerald-200'
-      case 'takedown failed': return 'bg-rose-50 text-rose-700 border-rose-200'
-      case 'under process': return 'bg-blue-50 text-blue-700 border-blue-200'
-      case 'appealed again': return 'bg-amber-50 text-amber-700 border-amber-200'
+      case 'takedown successful':
+      case 'takedown_successful': return 'bg-emerald-50 text-emerald-700 border-emerald-200'
+      case 'takedown failed':
+      case 'takedown_failed': return 'bg-rose-50 text-rose-700 border-rose-200'
+      case 'under process':
+      case 'under_review': return 'bg-blue-50 text-blue-700 border-blue-200'
+      case 'appealed again':
+      case 're_appeal_takedown': return 'bg-amber-50 text-amber-700 border-amber-200'
       case 'initiated': return 'bg-indigo-50 text-indigo-700 border-indigo-200'
       default: return 'bg-slate-100 text-slate-700 border-slate-200'
     }
@@ -63,16 +67,16 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
     router.push(pathname)
   }
 
-  const hasActiveFilters = initialFilters.status !== 'all' || 
-                           initialFilters.platform !== 'all' || 
-                           (initialFilters.violations && initialFilters.violations !== 'all') || 
-                           initialFilters.risk_priority !== 'all' || 
-                           initialFilters.original_date_from || 
-                           initialFilters.original_date_to ||
-                           initialFilters.processed_from ||
-                           initialFilters.processed_to ||
-                           initialFilters.takedown_date_from ||
-                           initialFilters.takedown_date_to;
+  const hasActiveFilters = initialFilters.status !== 'all' ||
+    initialFilters.platform !== 'all' ||
+    (initialFilters.violations && initialFilters.violations !== 'all') ||
+    initialFilters.risk_priority !== 'all' ||
+    initialFilters.original_date_from ||
+    initialFilters.original_date_to ||
+    initialFilters.processed_from ||
+    initialFilters.processed_to ||
+    initialFilters.takedown_date_from ||
+    initialFilters.takedown_date_to;
 
   const totalCount = takedowns.length;
 
@@ -81,10 +85,10 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
 
       {/* Filters & Controls */}
       <div className="px-8 py-6 shrink-0 space-y-4">
-        
+
         {/* Metric Cards */}
         {metrics && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-2">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-2">
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex items-center gap-5">
               <div className="bg-blue-50 p-3.5 rounded-xl">
                 <Clock className="w-6 h-6 text-blue-600" />
@@ -112,6 +116,15 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
                 <p className="text-2xl font-bold text-slate-900">{metrics.reAppeal}</p>
               </div>
             </div>
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex items-center gap-5">
+              <div className="bg-rose-50 p-3.5 rounded-xl">
+                <XCircle className="w-6 h-6 text-rose-600" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-slate-500 mb-0.5">Takedowns Failed</p>
+                <p className="text-2xl font-bold text-slate-900">{metrics.failed}</p>
+              </div>
+            </div>
           </div>
         )}
 
@@ -119,21 +132,32 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
           <div className="flex flex-col xl:flex-row items-start xl:items-center justify-between gap-6">
 
             {/* Left: Filters */}
-            <div className="flex flex-col xl:flex-row items-start xl:items-center gap-6 w-full flex-wrap pb-2 xl:pb-0">
-              <div className="flex flex-col justify-center items-start w-full lg:w-48 gap-1.5 shrink-0">
-                <div className="flex items-center gap-2">
-                  <div className="bg-slate-100 p-1.5 rounded-md text-slate-600">
-                    <Filter className="w-4 h-4" />
+            <div className="flex flex-col xl:flex-row items-start xl:items-center gap-3 w-full flex-wrap pb-2 xl:pb-0">
+              <div className="flex flex-row justify-between items-start w-full gap-1.5 shrink-0">
+                <div className="flex flex-row justify-center items-start w-full lg:w-fit gap-1.5 shrink-0">
+                  <div className="flex items-center gap-2">
+                    <div className="bg-slate-100 p-1.5 rounded-md text-slate-600">
+                      <Filter className="w-4 h-4" />
+                    </div>
+                    <span className="text-sm font-bold text-slate-700 tracking-wide">Filters</span>
                   </div>
-                  <span className="text-sm font-bold text-slate-700 tracking-wide">Filters</span>
+                  <div className="text-sm font-medium text-slate-500 flex items-center gap-1.5 pl-5">
+                    <span className="font-bold text-slate-900 text-lg">{totalCount}</span>
+                    cases found
+                  </div>
                 </div>
-                <div className="text-sm font-medium text-slate-500 flex items-center gap-1.5">
-                  <span className="font-bold text-slate-900 text-lg">{totalCount}</span>
-                  cases found
-                </div>
+
+
+                {hasActiveFilters && (
+                  <div className="shrink-0 mb-[1px]">
+                    <Button variant="ghost" size="sm" onClick={clearFilters} className="h-9 px-3 text-rose-600 hover:text-rose-700 hover:bg-rose-50 font-bold text-xs rounded-md">
+                      <X className="w-3.5 h-3.5 mr-1.5" /> Clear All
+                    </Button>
+                  </div>
+                )}
               </div>
 
-              <Separator orientation="vertical" className="h-10 bg-slate-200 hidden xl:block" />
+              {/* <Separator orientation="vertical" className="h-10 bg-slate-200 hidden xl:block" /> */}
 
               <div className="flex items-end gap-4 flex-wrap w-full justify-evenly">
                 <div className="space-y-1 w-fit min-w-[130px]">
@@ -148,10 +172,10 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
                     <SelectContent>
                       <SelectItem value="all">All Statuses</SelectItem>
                       <SelectItem value="initiated">Initiated</SelectItem>
-                      <SelectItem value="under process">Under Process</SelectItem>
-                      <SelectItem value="appealed again">Appealed Again</SelectItem>
-                      <SelectItem value="takedown successful">Takedown Successful</SelectItem>
-                      <SelectItem value="takedown failed">Takedown Failed</SelectItem>
+                      <SelectItem value="under_review">Under Review</SelectItem>
+                      <SelectItem value="re_appeal_takedown">Appealed Again</SelectItem>
+                      <SelectItem value="takedown_successful">Takedown Successful</SelectItem>
+                      <SelectItem value="takedown_failed">Takedown Failed</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -205,9 +229,9 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
 
                 <div className="space-y-1 w-fit min-w-[140px]">
                   <Label className="text-[10px] uppercase font-bold text-slate-400">Alert Date</Label>
-                  <DateFilterPopover 
-                    title="Alert Date" 
-                    initialFrom={initialFilters.processed_from} 
+                  <DateFilterPopover
+                    title="Alert Date"
+                    initialFrom={initialFilters.processed_from}
                     initialTo={initialFilters.processed_to}
                     onApply={(range) => {
                       updateQueryParams({
@@ -220,9 +244,9 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
 
                 <div className="space-y-1 w-fit min-w-[140px]">
                   <Label className="text-[10px] uppercase font-bold text-slate-400">Publish Date</Label>
-                  <DateFilterPopover 
-                    title="Publish Date" 
-                    initialFrom={initialFilters.original_date_from} 
+                  <DateFilterPopover
+                    title="Publish Date"
+                    initialFrom={initialFilters.original_date_from}
                     initialTo={initialFilters.original_date_to}
                     onApply={(range) => {
                       updateQueryParams({
@@ -232,12 +256,12 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
                     }}
                   />
                 </div>
-                
+
                 <div className="space-y-1 w-fit min-w-[140px]">
                   <Label className="text-[10px] uppercase font-bold text-slate-400">Takedown Date</Label>
-                  <DateFilterPopover 
-                    title="Takedown start Date" 
-                    initialFrom={initialFilters.takedown_date_from} 
+                  <DateFilterPopover
+                    title="Takedown start Date"
+                    initialFrom={initialFilters.takedown_date_from}
                     initialTo={initialFilters.takedown_date_to}
                     onApply={(range) => {
                       updateQueryParams({
@@ -247,14 +271,6 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
                     }}
                   />
                 </div>
-
-                {hasActiveFilters && (
-                  <div className="shrink-0 mb-[1px]">
-                    <Button variant="ghost" size="sm" onClick={clearFilters} className="h-9 px-3 text-rose-600 hover:text-rose-700 hover:bg-rose-50 font-bold text-xs rounded-md">
-                      <X className="w-3.5 h-3.5 mr-1.5" /> Clear All
-                    </Button>
-                  </div>
-                )}
               </div>
             </div>
           </div>
@@ -262,7 +278,7 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
       </div>
 
       {/* List */}
-      <div className="flex-1 overflow-y-auto px-8 pb-8">
+      <div className="flex-1 px-8 pb-8">
         {takedowns.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-24 text-slate-400">
             <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mb-6 border border-slate-100">
@@ -277,7 +293,7 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
             )}
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-4">
+          <div className="grid grid-cols-1 gap-4 w-fit h-fit">
             {takedowns.map((item) => (
               <Link
                 key={item.id}
@@ -302,10 +318,10 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
                     <div className="absolute top-2 left-2 bg-white/90 backdrop-blur-sm p-1.5 rounded shadow-sm border border-white/20 flex items-center justify-center">
                       {item.platform?.toLowerCase() === 'instagram' ? <Instagram className="w-3.5 h-3.5 text-pink-500" />
                         : item.platform?.toLowerCase() === 'facebook' ? <Facebook className="w-3.5 h-3.5 text-blue-600" />
-                        : item.platform?.toLowerCase() === 'x' ? <Twitter className="w-3.5 h-3.5 text-slate-900" />
-                        : item.platform?.toLowerCase() === 'youtube' ? <Youtube className="w-3.5 h-3.5 text-red-600" />
-                        : item.platform?.toLowerCase() === 'reddit' ? <Reddit className="w-3.5 h-3.5 text-orange-600" />
-                        : <span className="text-[10px] font-bold uppercase tracking-wider text-slate-700">{item.platform?.slice(0, 1)}</span>
+                          : item.platform?.toLowerCase() === 'x' ? <span className='max-w-4 max-h-4' ><Twitter className="w-3.5 h-3.5 text-slate-900" /></span>
+                            : item.platform?.toLowerCase() === 'youtube' ? <Youtube className="w-3.5 h-3.5 text-red-600" />
+                              : item.platform?.toLowerCase() === 'reddit' ? <span className='max-w-4 max-h-4' > <Reddit className="w-3.5 h-3.5 text-orange-600" /> </span>
+                                : <span className="text-[10px] font-bold uppercase tracking-wider text-slate-700">{item.platform?.slice(0, 1)}</span>
                       }
                     </div>
                   </div>
@@ -332,10 +348,10 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
                         <div className={cn("w-2 h-2 rounded-full", item.risk_score >= 96 ? 'bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.4)]' : item.risk_score >= 76 ? 'bg-orange-500' : item.risk_score >= 41 ? 'bg-amber-500' : 'bg-slate-400')} />
                         Risk: <span className="font-bold text-slate-700">{item.risk_score >= 96 ? 'High' : item.risk_score >= 76 ? 'Medium' : item.risk_score >= 41 ? 'Low' : 'Safe'}</span>
                       </span>
-                      <span className="flex items-center gap-1.5">
+                      {/* <span className="flex items-center gap-1.5">
                         <ShieldAlert className="w-3.5 h-3.5 text-slate-400" />
                         <span className="font-semibold text-slate-700 capitalize">{item.threat_type?.replace(/_/g, ' ')}</span>
-                      </span>
+                      </span> */}
                       <div className="flex flex-wrap items-center gap-4 sm:ml-auto">
                         {item.takedown_date && (
                           <span className="text-slate-500 flex items-center gap-1.5 font-medium">
