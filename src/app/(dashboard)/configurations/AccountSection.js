@@ -9,7 +9,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
-import { Loader2, Mail, Slack, MessageCircle, Settings, Bell, CheckCircle2, AlertCircle } from 'lucide-react'
+import { Loader2, Mail, Slack, MessageCircle, Settings, Bell, CheckCircle2, AlertCircle, Building2, User, Shield } from 'lucide-react'
 import { format } from 'date-fns'
 
 export default function AccountSection({ clientDetails }) {
@@ -68,9 +68,40 @@ export default function AccountSection({ clientDetails }) {
                                 <div className="text-lg font-bold text-slate-900">{clientDetails?.email || 'N/A'}</div>
                                 <p className="text-sm text-slate-500">Member since {clientDetails?.created_at ? format(new Date(clientDetails.created_at), 'MMMM d, yyyy') : 'N/A'}</p>
                             </div>
-                            <Badge variant="secondary" className="bg-blue-50 text-blue-700 border-blue-100 px-3 py-1">
-                                {clientDetails?.permission === 'client' ? 'Client Access' : 'Full Access'}
-                            </Badge>
+                            <div className="flex flex-col items-end gap-2">
+                                <Badge variant="secondary" className="bg-blue-50 text-blue-700 border-blue-100 px-3 py-1 flex items-center gap-1.5">
+                                    <Shield className="w-3.5 h-3.5" />
+                                    {clientDetails?.permission === 'client' ? 'Analyst' : 
+                                     clientDetails?.permission === 'client-admin' ? 'Admin' : 
+                                     clientDetails?.permission === 'reviewer' ? 'Reviewer' : 'Client Access'}
+                                </Badge>
+                            </div>
+                        </div>
+
+                        <Separator className="bg-slate-100" />
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+                            <div className="space-y-1">
+                                <Label className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                                    <Building2 className="w-3.5 h-3.5" />
+                                    Organization
+                                </Label>
+                                <div className="text-base font-medium text-slate-800">
+                                    {clientDetails?.organization || 'Not set'}
+                                </div>
+                            </div>
+                            
+                            {clientDetails?.alias && (
+                                <div className="space-y-1">
+                                    <Label className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                                        <User className="w-3.5 h-3.5" />
+                                        Alias
+                                    </Label>
+                                    <div className="text-base font-medium text-slate-800">
+                                        {clientDetails.alias}
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </CardContent>
                 </Card>

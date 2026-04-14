@@ -210,3 +210,55 @@ export const delete_client = traceAction('delete_client', async (userId) => {
     revalidatePath('/admin')
     return { success: true }
 })
+
+export const update_client_alias = traceAction('update_client_alias', async (userId, alias) => {
+    const supabaseAdmin = createSupabaseClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL,
+        process.env.SUPABASE_SERVICE_ROLE_KEY,
+        {
+            auth: {
+                autoRefreshToken: false,
+                persistSession: false
+            }
+        }
+    )
+
+    const { error: dbError } = await supabaseAdmin
+        .from('client_details')
+        .update({ alias: alias })
+        .eq('id', userId)
+
+    if (dbError) {
+        console.error("DB Update Alias Error:", dbError)
+        return { error: dbError.message }
+    }
+
+    revalidatePath('/admin')
+    return { success: true }
+})
+
+export const update_client_organization = traceAction('update_client_organization', async (userId, organization) => {
+    const supabaseAdmin = createSupabaseClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL,
+        process.env.SUPABASE_SERVICE_ROLE_KEY,
+        {
+            auth: {
+                autoRefreshToken: false,
+                persistSession: false
+            }
+        }
+    )
+
+    const { error: dbError } = await supabaseAdmin
+        .from('client_details')
+        .update({ organization: organization })
+        .eq('id', userId)
+
+    if (dbError) {
+        console.error("DB Update Organization Error:", dbError)
+        return { error: dbError.message }
+    }
+
+    revalidatePath('/admin')
+    return { success: true }
+})

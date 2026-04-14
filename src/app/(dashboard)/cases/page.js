@@ -39,7 +39,7 @@ export default async function CasesPage({ searchParams }) {
     initialCase = await getPostById(project, resolvedParams.case_id);
   }
 
-  const emails = await fetch_clients_in_project(clientDetails.project_name);
+  const email_n_alias = await fetch_clients_in_project(clientDetails.project_name);
 
   // console.log("got clients in project as: ", emails)
 
@@ -57,7 +57,7 @@ export default async function CasesPage({ searchParams }) {
           currentPage={currentPage}
           itemsPerPage={itemsPerPage}
           initialCase={initialCase}
-          projectEmails={emails}
+          projectEmails={email_n_alias}
         />
       </div>
     </main>

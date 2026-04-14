@@ -522,9 +522,9 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                           className="w-full bg-white border border-slate-200 rounded-md px-3 h-9 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
                         >
                           <option value="">Select team member to assign these cases</option>
-                          {projectEmails?.map((email) => (
-                            <option key={email} value={email}>
-                              {email}
+                          {projectEmails?.map((userObj) => (
+                            <option key={userObj.email} value={userObj.email}>
+                              {userObj.alias || userObj.email}
                             </option>
                           ))}
                         </select>

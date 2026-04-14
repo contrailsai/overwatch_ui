@@ -13,7 +13,7 @@ export async function getConfiguration() {
 
   const { data, error } = await supabase
     .from('client_details')
-    .select('email, notification_config')
+    .select('email, notification_config, permission, organization, alias, created_at')
     .eq('id', user.id)
     .single()
 

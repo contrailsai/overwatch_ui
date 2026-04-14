@@ -655,9 +655,9 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
                                                                 className="w-full bg-white border border-slate-200 rounded-md px-3 h-10 text-sm font-medium focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
                                                             >
                                                                 <option value="">Select an email</option>
-                                                                {projectEmails?.map((email) => (
-                                                                    <option key={email} value={email}>
-                                                                        {email}
+                                                                {projectEmails?.map((userObj) => (
+                                                                    <option key={userObj.email} value={userObj.email}>
+                                                                        {userObj.alias || userObj.email}
                                                                     </option>
                                                                 ))}
                                                             </select>
@@ -765,7 +765,22 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
                                             <div className="space-y-6 relative before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-[0.5px] before:bg-slate-200">
                                                 {Array.isArray(post.update_history) && post.update_history.length > 0 ? (
                                                     post.update_history.slice().reverse().map((entry, idx) => {
-                                                        const isEmail = /\S+@\S+\.\S+/.test(entry.updated_by);
+
+                                                        const cleanEmail = entry.updated_by?.trim().toLowerCase();
+                                                        const isEmail = /\S+@\S+\.\S+/.test(cleanEmail);
+
+                                                        const projectUser = isEmail
+                                                            ? projectEmails?.find(u => u.email?.trim().toLowerCase() === cleanEmail)
+                                                            : null;
+
+                                                        const shouldShowEmail = isEmail && projectUser;
+                                                        const displayIdentifier = projectUser?.alias || entry.updated_by;
+                                                        console.log(projectUser, displayIdentifier, entry.updated_by)
+
+                                                        const displaySummary = entry.changes_summary === "Manual ingestion from simplified JSON"
+                                                            ? "Content was sourced and ingested into the system."
+                                                            : entry.changes_summary.replace(/client/g, "user").replace(/Client/g, "User");
+
                                                         return (
                                                             <div key={idx} className="relative pl-8 group">
                                                                 <div className="absolute left-0 top-1.5 h-[22px] w-[22px] rounded-full bg-white border border-slate-200 flex items-center justify-center z-10 group-hover:border-blue-400 transition-colors">
@@ -777,19 +792,18 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
                                                                             <SafeDate date={entry.updated_at} formatStr="dd/MM/yyyy HH:mm" />
                                                                         </span>
                                                                         {/* DONT SHOW EMAILS FOR CASE ALERTING  */}
-                                                                        {isEmail && !entry.changes_summary.includes("Case Alerted") && (
-                                                                            <span className="text-[10px] font-bold text-blue-600 bg-blue-50/50 border border-blue-100/50 px-2 py-0.5 rounded-full truncate max-w-[150px]" title={entry.updated_by}>
-                                                                                {entry.updated_by}
-                                                                            </span>
-                                                                        )}
+                                                                        {
+                                                                            shouldShowEmail
+                                                                            &&
+                                                                            !entry.changes_summary.includes("Case Alerted")
+                                                                            && (
+                                                                                <span className="text-[10px] font-bold text-blue-600 bg-blue-50/50 border border-blue-100/50 px-2 py-0.5 rounded-full truncate max-w-[150px]" title={entry.updated_by}>
+                                                                                    {displayIdentifier}
+                                                                                </span>
+                                                                            )}
                                                                     </div>
                                                                     <p className="text-sm text-slate-600 font-medium leading-snug">
-                                                                        {
-                                                                            entry.changes_summary === "Manual ingestion from simplified JSON" ?
-                                                                                "Content was sourced and ingested into the system."
-                                                                                :
-                                                                                entry.changes_summary
-                                                                        }
+                                                                        {displaySummary}
                                                                     </p>
                                                                 </div>
                                                             </div>

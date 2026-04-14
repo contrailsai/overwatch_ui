@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useMemo } from 'react'
-import { Plus, Users, CheckCircle2, UserCheck, Search, Mail, ShieldCheck, ArrowUpRight, Activity, Trash2, Loader2, Clock, CalendarDays, Calendar } from 'lucide-react'
+import { Plus, Users, CheckCircle2, UserCheck, Search, Mail, ShieldCheck, ArrowUpRight, Activity, Trash2, Loader2, Clock, CalendarDays, Calendar, Edit2, Building2 } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -24,7 +24,7 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog"
 import { CreateUserModal } from './CreateUserModal'
-import { delete_client } from './actions'
+import { delete_client, update_client_alias, update_client_organization } from './actions'
 import { useRouter } from 'next/navigation'
 
 // Helper to format timetz strings (e.g. "14:30:00Z" or "14:30:00+00") to local time
@@ -64,6 +64,78 @@ const AdminDashboard = ({ project_name, clients }) => {
     const [notification, setNotification] = useState(null)
     const [clientToDelete, setClientToDelete] = useState(null)
     const [isDeleting, setIsDeleting] = useState(false)
+    const [clientToEditAlias, setClientToEditAlias] = useState(null)
+    const [newAlias, setNewAlias] = useState('')
+    const [isUpdatingAlias, setIsUpdatingAlias] = useState(false)
+    const [clientToEditOrg, setClientToEditOrg] = useState(null)
+    const [newOrg, setNewOrg] = useState('')
+    const [isUpdatingOrg, setIsUpdatingOrg] = useState(false)
+
+    const handleUpdateOrg = async () => {
+        if (!clientToEditOrg) return
+
+        setIsUpdatingOrg(true)
+        try {
+            const result = await update_client_organization(clientToEditOrg.id, newOrg || null)
+            if (result.error) {
+                setNotification({
+                    title: 'Error Updating Organization',
+                    message: result.error,
+                    isError: true
+                })
+            } else {
+                setNotification({
+                    title: 'Organization Updated',
+                    message: `Organization for ${clientToEditOrg.email} has been updated.`
+                })
+                router.refresh()
+            }
+        } catch (error) {
+            setNotification({
+                title: 'Error Updating Organization',
+                message: 'An unexpected error occurred.',
+                isError: true
+            })
+        } finally {
+            setIsUpdatingOrg(false)
+            setClientToEditOrg(null)
+
+            setTimeout(() => setNotification(null), 5000)
+        }
+    }
+
+    const handleUpdateAlias = async () => {
+        if (!clientToEditAlias) return
+
+        setIsUpdatingAlias(true)
+        try {
+            const result = await update_client_alias(clientToEditAlias.id, newAlias || null)
+            if (result.error) {
+                setNotification({
+                    title: 'Error Updating Alias',
+                    message: result.error,
+                    isError: true
+                })
+            } else {
+                setNotification({
+                    title: 'Alias Updated',
+                    message: `Alias for ${clientToEditAlias.email} has been updated.`
+                })
+                router.refresh()
+            }
+        } catch (error) {
+            setNotification({
+                title: 'Error Updating Alias',
+                message: 'An unexpected error occurred.',
+                isError: true
+            })
+        } finally {
+            setIsUpdatingAlias(false)
+            setClientToEditAlias(null)
+
+            setTimeout(() => setNotification(null), 5000)
+        }
+    }
 
     const handleDeleteClient = async () => {
         if (!clientToDelete) return
@@ -214,6 +286,17 @@ const AdminDashboard = ({ project_name, clients }) => {
                                                     <div className="font-medium text-slate-900 truncate" title={client.email}>
                                                         {client.email}
                                                     </div>
+                                                    {client.organization && (
+                                                        <div className="text-xs text-slate-500 truncate mt-0.5 flex items-center gap-1" title={client.organization}>
+                                                            <Building2 className="w-3 h-3" />
+                                                            <span className="font-medium text-slate-700">{client.organization}</span>
+                                                        </div>
+                                                    )}
+                                                    {client.alias && (
+                                                        <div className="text-xs text-slate-500 truncate mt-0.5" title={client.alias}>
+                                                            Alias: <span className="font-medium text-slate-700">{client.alias}</span>
+                                                        </div>
+                                                    )}
                                                     <Badge variant={client.permission === 'client-admin' ? 'default' : 'secondary'} className="capitalize mt-0.5 px-1.5 py-0 text-[9px] font-semibold">
                                                         {
                                                             client.permission === 'client-admin' ? 'Admin' :
@@ -289,18 +372,47 @@ const AdminDashboard = ({ project_name, clients }) => {
                                             </div>
                                         </TableCell>
                                         <TableCell className="text-right">
-                                            {client.permission !== 'client-admin' ? (
+                                            <div className="flex items-center justify-end gap-2">
                                                 <Button
                                                     variant="ghost"
                                                     size="icon"
-                                                    className="h-8 w-8 text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                                                    onClick={() => setClientToDelete(client)}
+                                                    className="h-8 w-8 text-slate-400 hover:text-purple-600 hover:bg-purple-50 transition-colors"
+                                                    onClick={() => {
+                                                        setClientToEditOrg(client)
+                                                        setNewOrg(client.organization || '')
+                                                    }}
+                                                    title="Edit Organization"
                                                 >
-                                                    <Trash2 className="h-4 w-4" />
+                                                    <Building2 className="h-4 w-4" />
                                                 </Button>
-                                            ) : (
-                                                <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wider pr-2">Admin</span>
-                                            )}
+
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-8 w-8 text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                                                    onClick={() => {
+                                                        setClientToEditAlias(client)
+                                                        setNewAlias(client.alias || '')
+                                                    }}
+                                                    title="Edit Alias"
+                                                >
+                                                    <Edit2 className="h-4 w-4" />
+                                                </Button>
+
+                                                {client.permission !== 'client-admin' ? (
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="h-8 w-8 text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                                                        onClick={() => setClientToDelete(client)}
+                                                        title="Delete Member"
+                                                    >
+                                                        <Trash2 className="h-4 w-4" />
+                                                    </Button>
+                                                ) : (
+                                                    <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wider pr-2">Admin</span>
+                                                )}
+                                            </div>
                                         </TableCell>
                                     </TableRow>
                                 )
@@ -388,6 +500,80 @@ const AdminDashboard = ({ project_name, clients }) => {
                         >
                             {isDeleting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                             Yes, delete member
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Edit Alias Dialog */}
+            <Dialog open={!!clientToEditAlias} onOpenChange={(open) => !open && !isUpdatingAlias && setClientToEditAlias(null)}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Edit Alias</DialogTitle>
+                        <DialogDescription>
+                            Set an alias for <span className="font-semibold text-slate-900">{clientToEditAlias?.email}</span>. This will be visible in reports and logs.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="py-4">
+                        <Input
+                            placeholder="e.g. John Doe"
+                            value={newAlias}
+                            onChange={(e) => setNewAlias(e.target.value)}
+                            className="w-full"
+                        />
+                    </div>
+                    <DialogFooter>
+                        <Button
+                            variant="outline"
+                            onClick={() => setClientToEditAlias(null)}
+                            disabled={isUpdatingAlias}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            className="bg-blue-600 hover:bg-blue-700 text-white"
+                            onClick={handleUpdateAlias}
+                            disabled={isUpdatingAlias}
+                        >
+                            {isUpdatingAlias && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                            Save Alias
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Edit Organization Dialog */}
+            <Dialog open={!!clientToEditOrg} onOpenChange={(open) => !open && !isUpdatingOrg && setClientToEditOrg(null)}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Edit Organization</DialogTitle>
+                        <DialogDescription>
+                            Set the organization name for <span className="font-semibold text-slate-900">{clientToEditOrg?.email}</span>.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="py-4">
+                        <Input
+                            placeholder="e.g. Acme Corp"
+                            value={newOrg}
+                            onChange={(e) => setNewOrg(e.target.value)}
+                            className="w-full"
+                        />
+                    </div>
+                    <DialogFooter>
+                        <Button
+                            variant="outline"
+                            onClick={() => setClientToEditOrg(null)}
+                            disabled={isUpdatingOrg}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            className="bg-blue-600 hover:bg-blue-700 text-white"
+                            onClick={handleUpdateOrg}
+                            disabled={isUpdatingOrg}
+                        >
+                            {isUpdatingOrg && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                            Save Organization
                         </Button>
                     </DialogFooter>
                 </DialogContent>

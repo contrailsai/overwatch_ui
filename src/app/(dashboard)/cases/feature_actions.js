@@ -225,19 +225,19 @@ export const fetch_clients_in_project = traceAction('fetch_clients_in_project', 
     // Fetch
     const { data: client_details, error: dbError } = await supabase
         .from('client_details')
-        .select('email')
+        .select('email, alias')
         .eq('project_name', project_name)
-        .eq('permission', 'client');
+        .neq('permission', 'reviewer'); // anyone except reviewers
 
     if (dbError) {
         console.error(`[fetch_clients_in_project] Database Error:`, dbError.message);
         return { data: null, error: 'Failed to fetch project clients' };
     }
 
-    const emails = client_details?.map((client) => client.email) || [];
-    // console.log("CLEINT EMAILS = ", emails)
+    const emails_and_aliases = client_details?.map((client) => ({ email: client.email, alias: client.alias })) || [];
+    // console.log("CLEINT EMAILS = ", emails_and_aliases)
 
-    return emails;
+    return emails_and_aliases;
 });
 
 // ASSIGN TO OTHER CLIENTS (emails)
