@@ -208,7 +208,7 @@ const AdminDashboard = ({ project_name, clients }) => {
     }, [clients, searchTerm])
 
     return (
-        <div className="p-6 h-full overflow-y-auto space-y-8 animate-in fade-in duration-500">
+        <div className="p-4 md:p-6 h-full overflow-y-auto overflow-x-hidden space-y-6 md:space-y-8 animate-in fade-in duration-500">
             {/* Header section with Stats */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 {stats.map((stat, i) => (
@@ -236,19 +236,19 @@ const AdminDashboard = ({ project_name, clients }) => {
                         <p className="text-sm text-slate-500">Manage and monitor team performance for <span className="text-blue-600 font-medium">{project_name}</span></p>
                     </div>
 
-                    <div className="flex items-center gap-3 w-full md:w-auto">
-                        <div className="relative flex-1 md:w-80">
+                    <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
+                        <div className="relative w-full sm:w-80">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                             <Input
                                 placeholder="Search by email..."
-                                className="pl-10 bg-white border-slate-200 focus:border-blue-300 transition-colors"
+                                className="pl-10 w-full bg-white border-slate-200 focus:border-blue-300 transition-colors shadow-sm"
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
                             />
                         </div>
                         <Button
                             onClick={() => setIsCreateModalOpen(true)}
-                            className="bg-blue-600 hover:bg-blue-700 text-white shrink-0"
+                            className="bg-blue-600 hover:bg-blue-700 text-white w-full sm:w-auto shrink-0 shadow-sm"
                         >
                             <Plus className="w-4 h-4 mr-2" />
                             Add Member
@@ -256,18 +256,130 @@ const AdminDashboard = ({ project_name, clients }) => {
                     </div>
                 </div>
 
-                {/* Client Table */}
-                <Card className="border-slate-200 bg-white shadow-sm overflow-hidden">
+                {/* Mobile Card View */}
+                <div className="md:hidden space-y-4">
+                    {filteredClients.map((client) => {
+                        const stats = client.activityStats || {}
+                        const isActiveToday = !!stats.todayLastActivity
+
+                        return (
+                            <Card key={client.id} className="border-slate-200 bg-white shadow-sm overflow-hidden">
+                                <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 sm:gap-3">
+                                    <div className="flex items-start gap-3 min-w-0 w-full sm:flex-1">
+                                        <div className="p-2 rounded-xl bg-slate-50 text-slate-500 shrink-0 mt-0.5">
+                                            <Mail className="w-5 h-5 text-blue-600" />
+                                        </div>
+                                        <div className="min-w-0 flex-1">
+                                            <div className="flex flex-col gap-1.5 mb-1.5">
+                                                <div className="font-medium text-slate-900 break-words break-all leading-snug">{client.email}</div>
+                                                {client.alias && (
+                                                    <div className="text-[10px] text-blue-600 font-medium flex items-center gap-1 bg-blue-50/80 px-1.5 py-0.5 rounded-md border border-blue-100/50 w-fit max-w-full" title={`Alias: ${client.alias}`}>
+                                                        <UserCheck className="w-3 h-3 text-blue-500 shrink-0" />
+                                                        <span className="truncate">{client.alias}</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                            {client.organization && (
+                                                <div className="text-xs text-slate-500 mt-1 flex items-start gap-1.5 w-full">
+                                                    <Building2 className="w-3.5 h-3.5 shrink-0 text-purple-500 mt-0.5" />
+                                                    <span className="leading-snug break-words">{client.organization}</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <div className="flex flex-row sm:flex-col items-center sm:items-end justify-between w-full sm:w-auto gap-2 shrink-0 pl-12 sm:pl-0">
+                                        <Badge variant={client.permission === 'client-admin' ? 'default' : 'secondary'} className="capitalize text-[10px] font-semibold shrink-0">
+                                            {client.permission === 'client-admin' ? 'Admin' : client.permission === 'client-reviewer' ? 'Reviewer' : "Analyst"}
+                                        </Badge>
+                                        {isActiveToday ? (
+                                            <span className="inline-flex items-center gap-1.5 text-[10px] text-emerald-600 font-medium bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100 shrink-0">
+                                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0"></span>
+                                                <span className="whitespace-nowrap">Active Today</span>
+                                            </span>
+                                        ) : (
+                                            <span className="inline-flex items-center gap-1.5 text-[10px] text-slate-500 font-medium bg-slate-50 px-2 py-0.5 rounded-full border border-slate-200 shrink-0">
+                                                <span className="w-1.5 h-1.5 rounded-full bg-slate-400 shrink-0"></span>
+                                                <span className="whitespace-nowrap">Offline</span>
+                                            </span>
+                                        )}
+                                    </div>
+                                </div>
+                                <div className="p-4 grid grid-cols-2 gap-4 bg-slate-50/50">
+                                    <div className="space-y-1 min-w-0">
+                                        <p className="text-xs text-slate-500 font-medium">Activity</p>
+                                        <div className="text-sm font-medium text-slate-700 flex flex-col gap-0.5">
+                                            <span className="flex items-center gap-1.5 truncate"><Clock className="w-3 h-3 text-slate-400 shrink-0" /> <span className="truncate">In: {formatTime(stats.todayLoginTime)}</span></span>
+                                            <span className="flex items-center gap-1.5 truncate"><Activity className="w-3 h-3 text-slate-400 shrink-0" /> <span className="truncate">Last: {formatTime(stats.todayLastActivity)}</span></span>
+                                        </div>
+                                    </div>
+                                    <div className="space-y-1 min-w-0">
+                                        <p className="text-xs text-slate-500 font-medium">Today's Reviews</p>
+                                        <div className="flex flex-wrap gap-2">
+                                            <Badge variant="outline" className="bg-white px-2 py-1 flex gap-1 items-center font-medium">
+                                                <ShieldCheck className="w-3 h-3 text-emerald-600 shrink-0" /> {stats.todayCases || 0}
+                                            </Badge>
+                                            <Badge variant="outline" className="bg-white px-2 py-1 flex gap-1 items-center font-medium">
+                                                <Users className="w-3 h-3 text-blue-600 shrink-0" /> {stats.todayProfiles || 0}
+                                            </Badge>
+                                        </div>
+                                    </div>
+                                    <div className="space-y-1 min-w-0">
+                                        <p className="text-xs text-slate-500 font-medium">Last 7 Days</p>
+                                        <div className="flex flex-wrap gap-2 text-sm font-semibold text-slate-700">
+                                            <span>{stats.last7DaysCases || 0} <span className="text-[10px] text-slate-400 font-normal">cases</span></span>
+                                            <span className="text-slate-300">|</span>
+                                            <span>{stats.last7DaysProfiles || 0} <span className="text-[10px] text-slate-400 font-normal">profiles</span></span>
+                                        </div>
+                                    </div>
+                                    <div className="space-y-1 min-w-0">
+                                        <p className="text-xs text-slate-500 font-medium">Last 30 Days</p>
+                                        <div className="flex flex-wrap gap-2 text-sm font-semibold text-slate-700">
+                                            <span>{stats.last30DaysCases || 0} <span className="text-[10px] text-slate-400 font-normal">cases</span></span>
+                                            <span className="text-slate-300">|</span>
+                                            <span>{stats.last30DaysProfiles || 0} <span className="text-[10px] text-slate-400 font-normal">profiles</span></span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="p-3 bg-slate-100/50 flex flex-wrap justify-end gap-2 border-t border-slate-100">
+                                    <Button variant="outline" size="sm" className="h-8 text-xs bg-white text-slate-600 hover:text-purple-600" onClick={() => { setClientToEditOrg(client); setNewOrg(client.organization || '') }}>
+                                        <Building2 className="h-3.5 w-3.5 mr-1" /> Org
+                                    </Button>
+                                    <Button variant="outline" size="sm" className="h-8 text-xs bg-white text-slate-600 hover:text-blue-600" onClick={() => { setClientToEditAlias(client); setNewAlias(client.alias || '') }}>
+                                        <Edit2 className="h-3.5 w-3.5 mr-1" /> Alias
+                                    </Button>
+                                    {client.permission !== 'client-admin' ? (
+                                        <Button variant="outline" size="sm" className="h-8 text-xs bg-white text-red-600 hover:bg-red-50" onClick={() => setClientToDelete(client)}>
+                                            <Trash2 className="h-3.5 w-3.5 mr-1" /> Delete
+                                        </Button>
+                                    ) : (
+                                        <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wider flex items-center px-2">Admin</span>
+                                    )}
+                                </div>
+                            </Card>
+                        )
+                    })}
+                    {filteredClients.length === 0 && (
+                        <div className="py-12 flex flex-col items-center justify-center text-slate-500 bg-white rounded-xl border border-slate-200 border-dashed">
+                            <div className="p-3 rounded-full bg-slate-50 mb-3">
+                                <Users className="w-8 h-8 text-slate-300" />
+                            </div>
+                            <p className="font-medium text-slate-900">No members found</p>
+                            <p className="text-sm">We couldn't find any team members matching your search.</p>
+                        </div>
+                    )}
+                </div>
+
+                {/* Desktop Table View */}
+                <Card className="hidden md:block border-slate-200 bg-white shadow-sm overflow-hidden">
                     <Table>
-                        <TableHeader className="bg-slate-50/50">
-                            <TableRow>
-                                <TableHead className="w-[250px]">Member</TableHead>
-                                <TableHead>Status</TableHead>
-                                <TableHead>Today&apos;s Activity</TableHead>
-                                <TableHead className="text-center">Today&apos;s Reviews</TableHead>
-                                <TableHead className="text-center">Last 7 Days</TableHead>
-                                <TableHead className="text-center">Last 30 Days</TableHead>
-                                <TableHead className="text-right">Actions</TableHead>
+                        <TableHeader className="bg-slate-50/80 border-b border-slate-100">
+                            <TableRow className="hover:bg-transparent">
+                                <TableHead className="w-[300px] font-semibold text-slate-700">Member Details</TableHead>
+                                <TableHead className="font-semibold text-slate-700">Status & Activity</TableHead>
+                                <TableHead className="text-center font-semibold text-slate-700">Today's Impact</TableHead>
+                                <TableHead className="text-center font-semibold text-slate-700">Last 7 Days</TableHead>
+                                <TableHead className="text-center font-semibold text-slate-700">Last 30 Days</TableHead>
+                                <TableHead className="text-right font-semibold text-slate-700">Manage</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -276,107 +388,113 @@ const AdminDashboard = ({ project_name, clients }) => {
                                 const isActiveToday = !!stats.todayLastActivity
 
                                 return (
-                                    <TableRow key={client.id} className="group">
-                                        <TableCell>
-                                            <div className="flex items-center gap-3">
-                                                <div className="p-2 rounded-lg bg-slate-50 text-slate-500 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors shrink-0">
+                                    <TableRow key={client.id} className="group hover:bg-slate-50/50 transition-colors">
+                                        <TableCell className="py-4">
+                                            <div className="flex items-start gap-3">
+                                                <div className="mt-0.5 p-2 rounded-xl bg-blue-50/50 text-blue-600 border border-blue-100/50 group-hover:bg-blue-100 group-hover:border-blue-200 transition-colors shrink-0">
                                                     <Mail className="w-4 h-4" />
                                                 </div>
-                                                <div className="min-w-0">
-                                                    <div className="font-medium text-slate-900 truncate" title={client.email}>
-                                                        {client.email}
+                                                <div className="min-w-0 flex-1">
+                                                    <div className="flex items-center gap-2 flex-wrap">
+                                                        <span className="font-semibold text-slate-900 break-all" title={client.email}>
+                                                            {client.email}
+                                                        </span>
+                                                        {client.alias && (
+                                                            <div className="text-[10px] text-blue-600 font-medium flex items-center gap-1 bg-blue-50/80 px-1.5 py-0.5 rounded-md border border-blue-100/50" title={`Alias: ${client.alias}`}>
+                                                                <UserCheck className="w-3 h-3 text-blue-500" />
+                                                                <span className="truncate max-w-[100px]">{client.alias}</span>
+                                                            </div>
+                                                        )}
+                                                        <Badge variant={client.permission === 'client-admin' ? 'default' : 'secondary'} className="capitalize px-1.5 py-0 text-[9px] font-bold tracking-wide shrink-0">
+                                                            {client.permission === 'client-admin' ? 'Admin' : client.permission === 'client-reviewer' ? 'Reviewer' : "Analyst"}
+                                                        </Badge>
                                                     </div>
+                                                    
                                                     {client.organization && (
-                                                        <div className="text-xs text-slate-500 truncate mt-0.5 flex items-center gap-1" title={client.organization}>
-                                                            <Building2 className="w-3 h-3" />
-                                                            <span className="font-medium text-slate-700">{client.organization}</span>
+                                                        <div className="mt-1.5 text-[11px] text-slate-500 flex items-start gap-1.5 bg-slate-50 px-2 py-0.5 rounded-md border border-slate-100 max-w-full w-fit" title={client.organization}>
+                                                            <Building2 className="w-3 h-3 text-purple-500 shrink-0 mt-0.5" />
+                                                            <span className="font-medium text-slate-700 break-words leading-snug">{client.organization}</span>
                                                         </div>
                                                     )}
-                                                    {client.alias && (
-                                                        <div className="text-xs text-slate-500 truncate mt-0.5" title={client.alias}>
-                                                            Alias: <span className="font-medium text-slate-700">{client.alias}</span>
-                                                        </div>
-                                                    )}
-                                                    <Badge variant={client.permission === 'client-admin' ? 'default' : 'secondary'} className="capitalize mt-0.5 px-1.5 py-0 text-[9px] font-semibold">
-                                                        {
-                                                            client.permission === 'client-admin' ? 'Admin' :
-                                                                client.permission === 'client-reviewer' ? 'Reviewer' :
-                                                                    "analyst"
-                                                        }
-                                                    </Badge>
                                                 </div>
                                             </div>
                                         </TableCell>
-                                        <TableCell>
-                                            {isActiveToday ? (
-                                                <span className="inline-flex items-center gap-1.5 text-xs text-emerald-600 font-medium bg-emerald-50 px-2 py-1 rounded-full border border-emerald-100/50">
-                                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                                                    Active Today
-                                                </span>
-                                            ) : (
-                                                <span className="inline-flex items-center gap-1.5 text-xs text-slate-500 font-medium bg-slate-50 px-2 py-1 rounded-full border border-slate-200/50">
-                                                    <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
-                                                    Offline
-                                                </span>
-                                            )}
-                                        </TableCell>
-                                        <TableCell>
-                                            <div className="space-y-1">
-                                                <div className="flex items-center gap-1.5 text-xs text-slate-600">
-                                                    <span className="text-slate-400 w-10">Login:</span>
-                                                    <span className="font-medium">{formatTime(stats.todayLoginTime)}</span>
-                                                </div>
-                                                <div className="flex items-center gap-1.5 text-xs text-slate-600">
-                                                    <span className="text-slate-400 w-10">Last:</span>
-                                                    <span className="font-medium">{formatTime(stats.todayLastActivity)}</span>
-                                                </div>
-                                            </div>
-                                        </TableCell>
-                                        <TableCell>
-                                            <div className="flex items-center justify-center gap-3 text-sm">
-                                                <div className="text-center" title="Cases Reviewed Today">
-                                                    <span className="font-semibold text-slate-900">{stats.todayCases || 0}</span>
-                                                    <span className="text-[10px] text-slate-400 block -mt-1">cases</span>
-                                                </div>
-                                                <div className="w-px h-6 bg-slate-200"></div>
-                                                <div className="text-center" title="Profiles Reviewed Today">
-                                                    <span className="font-semibold text-slate-900">{stats.todayProfiles || 0}</span>
-                                                    <span className="text-[10px] text-slate-400 block -mt-1">profiles</span>
+                                        <TableCell className="py-4">
+                                            <div className="flex flex-col gap-2">
+                                                {isActiveToday ? (
+                                                    <span className="inline-flex w-fit items-center gap-1.5 text-[11px] text-emerald-700 font-semibold bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200/60 shadow-sm">
+                                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                                        Active Today
+                                                    </span>
+                                                ) : (
+                                                    <span className="inline-flex w-fit items-center gap-1.5 text-[11px] text-slate-600 font-semibold bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200/60 shadow-sm">
+                                                        <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+                                                        Offline
+                                                    </span>
+                                                )}
+                                                <div className="flex items-center gap-3 text-xs text-slate-500 font-medium pl-1">
+                                                    <div className="flex items-center gap-1" title="First Login">
+                                                        <Clock className="w-3 h-3 text-slate-400" />
+                                                        <span>{formatTime(stats.todayLoginTime)}</span>
+                                                    </div>
+                                                    <div className="w-1 h-1 rounded-full bg-slate-300"></div>
+                                                    <div className="flex items-center gap-1" title="Last Activity">
+                                                        <Activity className="w-3 h-3 text-slate-400" />
+                                                        <span>{formatTime(stats.todayLastActivity)}</span>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </TableCell>
-                                        <TableCell>
-                                            <div className="flex items-center justify-center gap-3 text-sm">
-                                                <div className="text-center" title="Cases Reviewed Last 7 Days">
-                                                    <span className="font-semibold text-slate-900">{stats.last7DaysCases || 0}</span>
-                                                    <span className="text-[10px] text-slate-400 block -mt-1">cases</span>
+                                        <TableCell className="py-4">
+                                            <div className="flex items-center justify-center gap-2">
+                                                <div className="flex flex-col items-center p-1.5 px-3 bg-emerald-50/50 rounded-lg border border-emerald-100/50" title="Cases Reviewed Today">
+                                                    <div className="flex items-center gap-1.5 text-emerald-700">
+                                                        <ShieldCheck className="w-3.5 h-3.5" />
+                                                        <span className="font-bold text-sm">{stats.todayCases || 0}</span>
+                                                    </div>
+                                                    <span className="text-[9px] font-semibold uppercase tracking-wider text-emerald-600/70">Cases</span>
                                                 </div>
-                                                <div className="w-px h-6 bg-slate-200"></div>
-                                                <div className="text-center" title="Profiles Reviewed Last 7 Days">
-                                                    <span className="font-semibold text-slate-900">{stats.last7DaysProfiles || 0}</span>
-                                                    <span className="text-[10px] text-slate-400 block -mt-1">profiles</span>
-                                                </div>
-                                            </div>
-                                        </TableCell>
-                                        <TableCell>
-                                            <div className="flex items-center justify-center gap-3 text-sm">
-                                                <div className="text-center" title="Cases Reviewed Last 30 Days">
-                                                    <span className="font-semibold text-slate-900">{stats.last30DaysCases || 0}</span>
-                                                    <span className="text-[10px] text-slate-400 block -mt-1">cases</span>
-                                                </div>
-                                                <div className="w-px h-6 bg-slate-200"></div>
-                                                <div className="text-center" title="Profiles Reviewed Last 30 Days">
-                                                    <span className="font-semibold text-slate-900">{stats.last30DaysProfiles || 0}</span>
-                                                    <span className="text-[10px] text-slate-400 block -mt-1">profiles</span>
+                                                <div className="flex flex-col items-center p-1.5 px-3 bg-blue-50/50 rounded-lg border border-blue-100/50" title="Profiles Reviewed Today">
+                                                    <div className="flex items-center gap-1.5 text-blue-700">
+                                                        <Users className="w-3.5 h-3.5" />
+                                                        <span className="font-bold text-sm">{stats.todayProfiles || 0}</span>
+                                                    </div>
+                                                    <span className="text-[9px] font-semibold uppercase tracking-wider text-blue-600/70">Profiles</span>
                                                 </div>
                                             </div>
                                         </TableCell>
-                                        <TableCell className="text-right">
-                                            <div className="flex items-center justify-end gap-2">
+                                        <TableCell className="py-4">
+                                            <div className="flex items-center justify-center gap-4 text-sm">
+                                                <div className="flex items-baseline gap-1" title="Cases Reviewed Last 7 Days">
+                                                    <span className="font-bold text-slate-800">{stats.last7DaysCases || 0}</span>
+                                                    <span className="text-[10px] font-medium text-slate-400 uppercase">c</span>
+                                                </div>
+                                                <div className="w-px h-4 bg-slate-200"></div>
+                                                <div className="flex items-baseline gap-1" title="Profiles Reviewed Last 7 Days">
+                                                    <span className="font-bold text-slate-800">{stats.last7DaysProfiles || 0}</span>
+                                                    <span className="text-[10px] font-medium text-slate-400 uppercase">p</span>
+                                                </div>
+                                            </div>
+                                        </TableCell>
+                                        <TableCell className="py-4">
+                                            <div className="flex items-center justify-center gap-4 text-sm">
+                                                <div className="flex items-baseline gap-1" title="Cases Reviewed Last 30 Days">
+                                                    <span className="font-bold text-slate-800">{stats.last30DaysCases || 0}</span>
+                                                    <span className="text-[10px] font-medium text-slate-400 uppercase">c</span>
+                                                </div>
+                                                <div className="w-px h-4 bg-slate-200"></div>
+                                                <div className="flex items-baseline gap-1" title="Profiles Reviewed Last 30 Days">
+                                                    <span className="font-bold text-slate-800">{stats.last30DaysProfiles || 0}</span>
+                                                    <span className="text-[10px] font-medium text-slate-400 uppercase">p</span>
+                                                </div>
+                                            </div>
+                                        </TableCell>
+                                        <TableCell className="py-4 text-right">
+                                            <div className="flex items-center justify-end gap-1 opacity-60 group-hover:opacity-100 transition-opacity">
                                                 <Button
                                                     variant="ghost"
                                                     size="icon"
-                                                    className="h-8 w-8 text-slate-400 hover:text-purple-600 hover:bg-purple-50 transition-colors"
+                                                    className="h-8 w-8 rounded-full text-slate-400 hover:text-purple-600 hover:bg-purple-50 transition-colors"
                                                     onClick={() => {
                                                         setClientToEditOrg(client)
                                                         setNewOrg(client.organization || '')
@@ -389,7 +507,7 @@ const AdminDashboard = ({ project_name, clients }) => {
                                                 <Button
                                                     variant="ghost"
                                                     size="icon"
-                                                    className="h-8 w-8 text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                                                    className="h-8 w-8 rounded-full text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
                                                     onClick={() => {
                                                         setClientToEditAlias(client)
                                                         setNewAlias(client.alias || '')
@@ -403,14 +521,16 @@ const AdminDashboard = ({ project_name, clients }) => {
                                                     <Button
                                                         variant="ghost"
                                                         size="icon"
-                                                        className="h-8 w-8 text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                                                        className="h-8 w-8 rounded-full text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
                                                         onClick={() => setClientToDelete(client)}
                                                         title="Delete Member"
                                                     >
                                                         <Trash2 className="h-4 w-4" />
                                                     </Button>
                                                 ) : (
-                                                    <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wider pr-2">Admin</span>
+                                                    <div className="h-8 flex items-center px-2">
+                                                        <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider">Admin</span>
+                                                    </div>
                                                 )}
                                             </div>
                                         </TableCell>
@@ -419,13 +539,13 @@ const AdminDashboard = ({ project_name, clients }) => {
                             })}
                             {filteredClients.length === 0 && (
                                 <TableRow>
-                                    <TableCell colSpan={7} className="h-48 text-center">
+                                    <TableCell colSpan={6} className="h-64 text-center">
                                         <div className="flex flex-col items-center justify-center text-slate-500">
-                                            <div className="p-3 rounded-full bg-slate-50 mb-3">
+                                            <div className="p-4 rounded-full bg-slate-50 mb-4 border border-slate-100">
                                                 <Users className="w-8 h-8 text-slate-300" />
                                             </div>
-                                            <p className="font-medium text-slate-900">No members found</p>
-                                            <p className="text-sm">We couldn&apos;t find any team members matching your search.</p>
+                                            <p className="text-lg font-semibold text-slate-900">No members found</p>
+                                            <p className="text-sm mt-1 max-w-sm">We couldn't find any team members matching your search criteria. Try a different term or add a new member.</p>
                                         </div>
                                     </TableCell>
                                 </TableRow>
@@ -477,105 +597,119 @@ const AdminDashboard = ({ project_name, clients }) => {
             )}
             {/* Delete Confirmation Dialog */}
             <Dialog open={!!clientToDelete} onOpenChange={(open) => !open && !isDeleting && setClientToDelete(null)}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Delete Team Member</DialogTitle>
-                        <DialogDescription>
-                            Are you sure you want to remove <span className="font-semibold text-slate-900">{clientToDelete?.email}</span> from the project? This action cannot be undone and will permanently delete their account.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <DialogFooter className="mt-4">
+                <DialogContent className="p-0 overflow-hidden bg-white shadow-2xl border-slate-100 rounded-2xl sm:max-w-[400px]">
+                    <div className="px-6 pt-6 pb-2">
+                        <DialogHeader>
+                            <DialogTitle className="text-xl font-bold text-slate-900 flex items-center gap-2">
+                                <Trash2 className="w-5 h-5 text-red-500" />
+                                Delete Team Member
+                            </DialogTitle>
+                            <DialogDescription className="text-slate-500 mt-2 leading-relaxed">
+                                Are you sure you want to remove <span className="font-semibold text-slate-900">{clientToDelete?.email}</span> from the project? This action cannot be undone.
+                            </DialogDescription>
+                        </DialogHeader>
+                    </div>
+                    <div className="px-6 py-4 bg-slate-50/80 border-t border-slate-100 flex justify-end gap-2 mt-4">
                         <Button
                             variant="outline"
                             onClick={() => setClientToDelete(null)}
                             disabled={isDeleting}
+                            className="bg-white hover:bg-slate-50 text-slate-600 border-slate-200"
                         >
                             Cancel
                         </Button>
                         <Button
                             variant="destructive"
-                            className="bg-red-600 hover:bg-red-700 text-white"
+                            className="bg-red-600 hover:bg-red-700 text-white shadow-sm"
                             onClick={handleDeleteClient}
                             disabled={isDeleting}
                         >
-                            {isDeleting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                            Yes, delete member
+                            {isDeleting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Trash2 className="w-4 h-4 mr-2" />}
+                            Delete member
                         </Button>
-                    </DialogFooter>
+                    </div>
                 </DialogContent>
             </Dialog>
 
             {/* Edit Alias Dialog */}
             <Dialog open={!!clientToEditAlias} onOpenChange={(open) => !open && !isUpdatingAlias && setClientToEditAlias(null)}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Edit Alias</DialogTitle>
-                        <DialogDescription>
-                            Set an alias for <span className="font-semibold text-slate-900">{clientToEditAlias?.email}</span>. This will be visible in reports and logs.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <div className="py-4">
+                <DialogContent className="p-0 overflow-hidden bg-white shadow-2xl border-slate-100 rounded-2xl sm:max-w-[425px]">
+                    <div className="px-6 pt-6 pb-0">
+                        <DialogHeader>
+                            <DialogTitle className="text-xl font-bold text-slate-900">Edit Alias</DialogTitle>
+                            <DialogDescription className="text-slate-500 mt-1.5 leading-relaxed">
+                                Set an alias for <span className="font-semibold text-slate-900">{clientToEditAlias?.email}</span>. This will be visible in reports and logs.
+                            </DialogDescription>
+                        </DialogHeader>
+                    </div>
+                    <div className="p-6">
                         <Input
                             placeholder="e.g. John Doe"
                             value={newAlias}
                             onChange={(e) => setNewAlias(e.target.value)}
-                            className="w-full"
+                            className="w-full bg-slate-50 border-slate-200 focus:bg-white focus:ring-2 focus:ring-blue-100 transition-all duration-200"
+                            autoFocus
                         />
                     </div>
-                    <DialogFooter>
+                    <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-2">
                         <Button
                             variant="outline"
                             onClick={() => setClientToEditAlias(null)}
                             disabled={isUpdatingAlias}
+                            className="bg-white hover:bg-slate-50 text-slate-600 border-slate-200"
                         >
                             Cancel
                         </Button>
                         <Button
-                            className="bg-blue-600 hover:bg-blue-700 text-white"
+                            className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm transition-all duration-200"
                             onClick={handleUpdateAlias}
                             disabled={isUpdatingAlias}
                         >
-                            {isUpdatingAlias && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                            {isUpdatingAlias ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <CheckCircle2 className="w-4 h-4 mr-2" />}
                             Save Alias
                         </Button>
-                    </DialogFooter>
+                    </div>
                 </DialogContent>
             </Dialog>
 
             {/* Edit Organization Dialog */}
             <Dialog open={!!clientToEditOrg} onOpenChange={(open) => !open && !isUpdatingOrg && setClientToEditOrg(null)}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Edit Organization</DialogTitle>
-                        <DialogDescription>
-                            Set the organization name for <span className="font-semibold text-slate-900">{clientToEditOrg?.email}</span>.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <div className="py-4">
+                <DialogContent className="p-0 overflow-hidden bg-white shadow-2xl border-slate-100 rounded-2xl sm:max-w-[425px]">
+                    <div className="px-6 pt-6 pb-0">
+                        <DialogHeader>
+                            <DialogTitle className="text-xl font-bold text-slate-900">Edit Organization</DialogTitle>
+                            <DialogDescription className="text-slate-500 mt-1.5 leading-relaxed">
+                                Set the organization name for <span className="font-semibold text-slate-900">{clientToEditOrg?.email}</span>.
+                            </DialogDescription>
+                        </DialogHeader>
+                    </div>
+                    <div className="p-6">
                         <Input
                             placeholder="e.g. Acme Corp"
                             value={newOrg}
                             onChange={(e) => setNewOrg(e.target.value)}
-                            className="w-full"
+                            className="w-full bg-slate-50 border-slate-200 focus:bg-white focus:ring-2 focus:ring-blue-100 transition-all duration-200"
+                            autoFocus
                         />
                     </div>
-                    <DialogFooter>
+                    <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-2">
                         <Button
                             variant="outline"
                             onClick={() => setClientToEditOrg(null)}
                             disabled={isUpdatingOrg}
+                            className="bg-white hover:bg-slate-50 text-slate-600 border-slate-200"
                         >
                             Cancel
                         </Button>
                         <Button
-                            className="bg-blue-600 hover:bg-blue-700 text-white"
+                            className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm transition-all duration-200"
                             onClick={handleUpdateOrg}
                             disabled={isUpdatingOrg}
                         >
-                            {isUpdatingOrg && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                            {isUpdatingOrg ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <CheckCircle2 className="w-4 h-4 mr-2" />}
                             Save Organization
                         </Button>
-                    </DialogFooter>
+                    </div>
                 </DialogContent>
             </Dialog>
         </div>
