@@ -376,7 +376,7 @@ const AdminDashboard = ({ project_name, clients }) => {
                             <TableRow className="hover:bg-transparent">
                                 <TableHead className="w-[300px] font-semibold text-slate-700">Member Details</TableHead>
                                 <TableHead className="font-semibold text-slate-700">Status & Activity</TableHead>
-                                <TableHead className="text-center font-semibold text-slate-700">Today's Impact</TableHead>
+                                <TableHead className="text-center font-semibold text-slate-700">Today</TableHead>
                                 <TableHead className="text-center font-semibold text-slate-700">Last 7 Days</TableHead>
                                 <TableHead className="text-center font-semibold text-slate-700">Last 30 Days</TableHead>
                                 <TableHead className="text-right font-semibold text-slate-700">Manage</TableHead>

@@ -1,5 +1,5 @@
 import { CasesList } from './CasesList'
-import { getPosts, getPostById } from './actions'
+import { getPosts, getPostById, getSimilarPosts, getSemanticSearchPosts } from './actions'
 import { fetch_clients_in_project } from './feature_actions'
 import { getClientandProjectDetails } from '@/app/(dashboard)/actions'
 import PageHeader from '@/components/PageHeader'
@@ -27,12 +27,34 @@ export default async function CasesPage({ searchParams }) {
     processed_to: resolvedParams.processed_to || null
   }
 
+  const isSimilaritySearch = !!resolvedParams.similar_to || !!resolvedParams.semantic_search;
+
   const sort = {
-    field: resolvedParams.sortField || 'threat_score',
+    field: resolvedParams.sortField || (isSimilaritySearch ? null : 'threat_score'),
     direction: resolvedParams.sortDirection || 'desc'
   }
 
-  const cases = await getPosts(project, currentPage, itemsPerPage, filters, sort)
+  let cases;
+  if (resolvedParams.semantic_search) {
+    cases = await getSemanticSearchPosts(
+      project,
+      resolvedParams.semantic_search,
+      itemsPerPage,
+      filters,
+      sort
+    )
+  } else if (resolvedParams.similar_to) {
+    cases = await getSimilarPosts(
+      project, 
+      resolvedParams.similar_to, 
+      resolvedParams.search_type || 'text', 
+      itemsPerPage,
+      filters,
+      sort
+    )
+  } else {
+    cases = await getPosts(project, currentPage, itemsPerPage, filters, sort)
+  }
 
   let initialCase = null;
   if (resolvedParams.case_id) {

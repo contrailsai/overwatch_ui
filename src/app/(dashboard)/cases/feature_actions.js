@@ -148,7 +148,10 @@ export const submitCaseReview = traceAction('submitCaseReview', async (project, 
         const collection = db.collection('Posts')
 
         // 1. Fetch existing post to get previous state
-        const existingPost = await collection.findOne({ _id: new ObjectId(mongoId) })
+        const existingPost = await collection.findOne(
+            { _id: new ObjectId(mongoId) },
+            { projection: { text_embedding: 0, image_embedding: 0 } }
+        )
         if (!existingPost) {
             return { success: false, error: 'Post not found' }
         }

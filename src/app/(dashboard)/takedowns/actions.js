@@ -183,6 +183,7 @@ export const getTakedowns = traceAction('getTakedowns', async (filters = {}) => 
 
     const posts = await collection.aggregate([
       { $match: matchStage },
+      { $project: { text_embedding: 0, image_embedding: 0 } },
       {
         $addFields: {
           sort_original_date: {
@@ -439,7 +440,10 @@ export const getTakedownDocuments = traceAction('getTakedownDocuments', async (t
     const client = await clientPromise
     const db = client.db(projectDetails.dbName)
     
-    const post = await db.collection('Posts').findOne({ _id: new ObjectId(takedownId) })
+    const post = await db.collection('Posts').findOne(
+      { _id: new ObjectId(takedownId) },
+      { projection: { text_embedding: 0, image_embedding: 0 } }
+    )
     if (!post || !post.takedown_info || !post.takedown_info.documents) {
       return []
     }
@@ -470,7 +474,10 @@ export const getDocumentDownloadUrl = traceAction('getDocumentDownloadUrl', asyn
     const client = await clientPromise
     const db = client.db(projectDetails.dbName)
     
-    const post = await db.collection('Posts').findOne({ 'takedown_info.documents.id': documentId })
+    const post = await db.collection('Posts').findOne(
+      { 'takedown_info.documents.id': documentId },
+      { projection: { text_embedding: 0, image_embedding: 0 } }
+    )
     if (!post) return null
 
     const doc = post.takedown_info.documents.find(d => d.id === documentId)
@@ -494,7 +501,10 @@ export const getTakedownDetails = traceAction('getTakedownDetails', async (id) =
     const client = await clientPromise
     const db = client.db(projectDetails.dbName)
 
-    let post = await db.collection('Posts').findOne({ _id: new ObjectId(id) })
+    let post = await db.collection('Posts').findOne(
+      { _id: new ObjectId(id) },
+      { projection: { text_embedding: 0, image_embedding: 0 } }
+    )
 
     if (!post) return null
 

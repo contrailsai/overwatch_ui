@@ -36,6 +36,8 @@ import { ViolationsFilter } from './ViolationsFilter'
 
 export function CasesList({ cases, project, clientDetails, initialFilters, initialSort, currentPage, itemsPerPage, initialCase, projectEmails }) {
 
+  console.log(cases)
+
   // console.log(project)
   const router = useRouter()
   const pathname = usePathname()
@@ -60,6 +62,22 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
 
   const [bulkAssignedEmail, setBulkAssignedEmail] = useState("")
   const [isBulkAssigning, setIsBulkAssigning] = useState(false)
+
+  // Search state
+  const [searchTerm, setSearchTerm] = useState(searchParams.get('semantic_search') || '')
+
+  useEffect(() => {
+    setSearchTerm(searchParams.get('semantic_search') || '')
+  }, [searchParams])
+
+  const handleSearchApply = () => {
+    const val = searchTerm.trim();
+    if (val) {
+      updateQueryParams({ semantic_search: val, similar_to: null, search_type: null });
+    } else {
+      updateQueryParams({ semantic_search: null });
+    }
+  }
 
   // Memoize the selected posts array to stabilize the reference passed to report buttons
   const selectedPostsArray = useMemo(() => Object.values(selectedCases), [selectedCases])
@@ -99,6 +117,7 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
   }
 
   const clearFilters = () => {
+    setSearchTerm('')
     router.push(pathname)
   }
 
@@ -322,221 +341,315 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
             {/* Left: Filters */}
             <div className="flex flex-col lg:flex-row gap-4 w-full">
 
-              {/* Header Row: Title & Loading State */}
-              <div className="flex flex-col justify-center items-center  w-full lg:max-w-48 gap-3 rounded-lg ">
-                <div className="flex items-center justify-between lg:justify-start w-full lg:w-auto">
-                  <div className="flex items-center gap-2 shrink-0">
-                    <div className="bg-blue-50 p-1.5 rounded-md text-blue-600">
-                      <Filter className="w-4 h-4" />
-                    </div>
-                    <span className="text-xs font-bold text-slate-600 uppercase tracking-wider hidden lg:block">
-                      Filters
+              {/* Header Row: Title & Summary Box */}
+              <div className="flex flex-col w-full lg:w-[160px] xl:w-[180px] shrink-0 rounded-xl p-3 relative ">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-1.5">
+                    <Filter className="w-3.5 h-3.5 text-blue-600" />
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                      Filter
                     </span>
-
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setIsMobileFiltersOpen(!isMobileFiltersOpen)}
-                      className="lg:hidden h-8 text-xs font-bold bg-blue-50 hover:bg-blue-100 text-blue-700 ml-1"
-                    >
-                      {isMobileFiltersOpen ? 'Hide Controls' : 'Show Controls'}
-                    </Button>
                   </div>
-
-                  {/* Loading Indicator */}
                   {isPending && (
-                    <div className="flex items-center gap-1.5 px-2 py-1 bg-blue-50 text-blue-600 rounded border border-blue-100 animate-pulse">
-                      <Loader2 className="h-3 w-3 animate-spin" />
-                      <span className="text-[10px] font-bold uppercase tracking-wider">
-                        Updating
-                      </span>
-                    </div>
+                    <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-600" />
                   )}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setIsMobileFiltersOpen(!isMobileFiltersOpen)}
+                    className="lg:hidden h-6 px-2 text-[10px] font-bold bg-white border border-slate-200 text-slate-700 shadow-sm"
+                  >
+                    {isMobileFiltersOpen ? 'Hide' : 'Filters'}
+                  </Button>
                 </div>
 
-                {/* Total Count */}
-                <div className="text-sm font-medium text-slate-500 w-full text-center">
-                  <span className="font-bold text-slate-900 text-base mr-1">
+                <div className="flex items-baseline gap-1.5 mb-3">
+                  <span className="text-2xl font-black text-slate-800 tracking-tight leading-none">
                     {totalCount}
                   </span>
-                  cases found
+                  <span className="text-[11px] font-bold text-slate-500 leading-none">
+                    cases found
+                  </span>
                 </div>
 
-                {/* Active Filters / Clear All Actions (Animated) */}
-                <div
-                  className={`grid transition-all duration-300 ease-in-out w-full ${selectedCount > 0
-                    ? "grid-rows-[1fr] opacity-100 mt-1"
-                    : "grid-rows-[0fr] opacity-0 mt-0"
-                    }`}
-                >
-                  {/* overflow-hidden is crucial here to clip the content while height is 0 */}
-                  <div className="overflow-hidden">
-                    <div className="flex flex-col gap-2 pt-3 border-t border-slate-100">
+                {/* Selection Controls */}
+                <div className="mt-auto border-t border-slate-200/80 pt-3">
+                  {selectedCount > 0 ? (
+                    <div className="flex flex-col gap-2">
                       <div className="flex items-center justify-between">
-                        <span className="inline-flex items-center text-xs font-bold text-blue-700 px-2 py-1 rounded-md">
+                        <span className="inline-flex items-center text-[10px] font-bold bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">
                           {isAllFilterSelected ? `All ${totalCount}` : selectedCount} Selected
                         </span>
+                        <button
+                          onClick={handleClearAllSelected}
+                          className="text-[10px] font-bold text-slate-400 hover:text-slate-700 transition-colors cursor-pointer underline underline-offset-2"
+                        >
+                          Clear
+                        </button>
+                      </div>
+
+                      {!isAllFilterSelected && totalCount > selectedCount && (
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={handleClearAllSelected}
-                          className="h-7 px-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 font-semibold text-xs transition-colors cursor-pointer"
-                        >
-                          Clear All
-                        </Button>
-                      </div>
-
-                      {/* Select All Filtered Option - Integrated here for better UX */}
-                      {isAllCurrentPageSelected && totalCount > mergedPosts.length && !isAllFilterSelected && (
-                        <Button
-                          variant="Ghost"
-                          size="sm"
                           onClick={handleSelectAllFiltered}
                           disabled={isSelectingAll}
-                          className=" cursor-pointer h-8 p-0 w-full border border-blue-200 bg-blue-50/50 text-blue-700 hover:bg-blue-50 hover:text-blue-800 font-bold transition-all"
+                          className="w-full h-7 text-[10px] bg-blue-600 text-white hover:bg-blue-700 font-bold shadow-sm cursor-pointer transition-colors"
                         >
-                          {isSelectingAll && (
+                          {isSelectingAll ? (
                             <Loader2 className="w-3 h-3 animate-spin mr-1.5" />
+                          ) : (
+                            <CheckCircle className="w-3 h-3 mr-1.5 opacity-70" />
                           )}
                           Select all {totalCount} cases
                         </Button>
                       )}
                     </div>
-                  </div>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleSelectAllFiltered}
+                      disabled={isSelectingAll || totalCount === 0}
+                      className="w-full h-7 text-[10px] bg-white text-slate-700 hover:bg-slate-100 font-bold shadow-none cursor-pointer transition-colors"
+                    >
+                      {isSelectingAll ? (
+                        <Loader2 className="w-3 h-3 animate-spin mr-1.5 text-blue-600" />
+                      ) : (
+                        <CheckCircle className="w-3 h-3 mr-1.5 text-slate-400" />
+                      )}
+                      Select all cases
+                    </Button>
+                  )}
                 </div>
               </div>
 
-              <Separator orientation="vertical" className="h-8 bg-slate-100 hidden lg:block" />
-
               {/* FILTERS & BULK ACTIONS */}
               <div className={cn("flex flex-col gap-4 w-full transition-all overflow-hidden", !isMobileFiltersOpen && "hidden lg:flex")}>
-                <div className=" flex flex-wrap items-start gap-4 lg:gap-6 w-full ">
+                <div className="flex flex-col gap-3 w-full">
+                  
+                  {/* Row 1: Dropdowns and Dates */}
+                  <div className="flex flex-wrap lg:flex-nowrap items-start gap-2.5 sm:gap-3 w-full">
 
-                  {/* RISK LEVEL */}
-                  <div className="space-y-1.5 w-fit min-w-32">
-                    <Label className="text-[10px] uppercase font-bold text-slate-400">Risk Severity</Label>
-                    <select
-                      value={initialFilters.risk_priority || 'all'}
-                      onChange={(e) => handleFilterChange('risk_priority', e.target.value)}
-                      className="w-full bg-white border border-slate-200 rounded-md px-3 h-9 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
-                    >
-                      <option value="all">All Risks</option>
-                      <option value="high">High Risk</option>
-                      <option value="medium">Medium Risk</option>
-                      <option value="low">Low Risk</option>
-                      <option value="safe">Safe</option>
-                    </select>
-                  </div>
-
-                  {/* PLATFORM */}
-                  <div className="space-y-1.5 w-fit min-w-32">
-                    <Label className="text-[10px] uppercase font-bold text-slate-400">Platform</Label>
-                    <select
-                      value={initialFilters.platform}
-                      onChange={(e) => handleFilterChange('platform', e.target.value)}
-                      className="w-full bg-white border border-slate-200 rounded-md px-3 h-9 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
-                    >
-                      <option value="all">All Platforms</option>
-                      <option value="instagram">Instagram</option>
-                      <option value="facebook">Facebook</option>
-                      <option value="reddit">Reddit</option>
-                      <option value="x">X (Twitter)</option>
-                      <option value="youtube">Youtube</option>
-                      <option value="website">Websites</option>
-                    </select>
-                  </div>
-
-                  {/* STATUS */}
-                  <div className="space-y-1.5 w-fit min-w-32">
-                    <Label className="text-[10px] uppercase font-bold text-slate-400">Status</Label>
-                    <select
-                      value={initialFilters.client_status}
-                      onChange={(e) => handleFilterChange('client_status', e.target.value)}
-                      className="w-full bg-white border border-slate-200 rounded-md px-3 h-9 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
-                    >
-                      <option value="all">All Statuses</option>
-                      <option value="To Be Reviewed">To Be Reviewed</option>
-                      <option value="No Action">No Action</option>
-                      <option value="Flag for Takedown">Flag for Takedown</option>
-                    </select>
-                  </div>
-
-                  {/* violations */}
-                  <div className="space-y-1.5 w-fit min-w-32">
-                    <ViolationsFilter
-                      projectLabels={project?.project_details?.labels || []}
-                      initialViolations={initialFilters.violations}
-                      onChange={(val) => handleFilterChange('violations', val)}
-                    />
-                  </div>
-
-                  {/* Alert date  */}
-                  <div className="space-y-1.5 w-fit min-w-32">
-                    <Label className="text-[10px] uppercase font-bold text-slate-400">Alert Date</Label>
-                    <DateFilterPopover
-                      title="Alert Date"
-                      initialFrom={initialFilters.processed_from}
-                      initialTo={initialFilters.processed_to}
-                      onApply={(range) => updateQueryParams({
-                        processed_from: range?.from ? format(range.from, "yyyy-MM-dd'T'HH:mm:ssXXX") : null,
-                        processed_to: range?.to ? format(range.to, "yyyy-MM-dd'T'HH:mm:ssXXX") : null
-                      })}
-                    />
-                  </div>
-
-                  {/* Publishing date  */}
-                  <div className="space-y-1.5 w-fit min-w-32">
-                    <Label className="text-[10px] uppercase font-bold text-slate-400">Publish Date</Label>
-                    <DateFilterPopover
-                      title="Publish Date"
-                      initialFrom={initialFilters.original_date_from}
-                      initialTo={initialFilters.original_date_to}
-                      onApply={(range) => updateQueryParams({
-                        original_date_from: range?.from ? format(range.from, "yyyy-MM-dd'T'HH:mm:ssXXX") : null,
-                        original_date_to: range?.to ? format(range.to, "yyyy-MM-dd'T'HH:mm:ssXXX") : null
-                      })}
-                    />
-                  </div>
-
-                  {(initialFilters.platform !== 'all' || initialFilters.risk_priority !== 'all' || initialFilters.client_status !== 'all' || (initialFilters.violations && initialFilters.violations !== 'all') || initialFilters.original_date_from || initialFilters.original_date_to || initialFilters.processed_from || initialFilters.processed_to) && (
-                    <div className=" mt-1">
-                      <Button variant="ghost" size="sm" onClick={clearFilters} className="h-9 px-2 text-rose-600 hover:text-rose-700 hover:bg-rose-50 font-bold text-xs">
-                        <X className="w-3.5 h-3.5 mr-1" /> Clear Filters
-                      </Button>
+                    {/* RISK LEVEL */}
+                    <div className="space-y-1 w-[calc(50%-5px)] sm:w-auto flex-1 max-w-[160px]">
+                      <Label className="text-[10px] uppercase font-bold text-slate-400">Risk Severity</Label>
+                      <select
+                        value={initialFilters.risk_priority || 'all'}
+                        onChange={(e) => handleFilterChange('risk_priority', e.target.value)}
+                        className="w-full bg-white border border-slate-200 rounded-md px-2 h-9 text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-sm"
+                      >
+                        <option value="all">All Risks</option>
+                        <option value="high">High Risk</option>
+                        <option value="medium">Medium Risk</option>
+                        <option value="low">Low Risk</option>
+                        <option value="safe">Safe</option>
+                      </select>
                     </div>
-                  )}
+
+                    {/* PLATFORM */}
+                    <div className="space-y-1 w-[calc(50%-5px)] sm:w-auto flex-1 max-w-[160px]">
+                      <Label className="text-[10px] uppercase font-bold text-slate-400">Platform</Label>
+                      <select
+                        value={initialFilters.platform}
+                        onChange={(e) => handleFilterChange('platform', e.target.value)}
+                        className="w-full bg-white border border-slate-200 rounded-md px-2 h-9 text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-sm"
+                      >
+                        <option value="all">All Platforms</option>
+                        <option value="instagram">Instagram</option>
+                        <option value="facebook">Facebook</option>
+                        <option value="reddit">Reddit</option>
+                        <option value="x">X (Twitter)</option>
+                        <option value="youtube">Youtube</option>
+                        <option value="website">Websites</option>
+                      </select>
+                    </div>
+
+                    {/* STATUS */}
+                    <div className="space-y-1 w-[calc(50%-5px)] sm:w-auto flex-1 max-w-[160px]">
+                      <Label className="text-[10px] uppercase font-bold text-slate-400">Status</Label>
+                      <select
+                        value={initialFilters.client_status}
+                        onChange={(e) => handleFilterChange('client_status', e.target.value)}
+                        className="w-full bg-white border border-slate-200 rounded-md px-2 h-9 text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-sm"
+                      >
+                        <option value="all">All Statuses</option>
+                        <option value="To Be Reviewed">To Be Reviewed</option>
+                        <option value="No Action">No Action</option>
+                        <option value="Flag for Takedown">Flag for Takedown</option>
+                      </select>
+                    </div>
+
+                    {/* violations */}
+                    <div className="space-y-1 w-[calc(50%-5px)] sm:w-auto flex-1 max-w-[160px]">
+                      <ViolationsFilter
+                        projectLabels={project?.project_details?.labels || []}
+                        initialViolations={initialFilters.violations}
+                        onChange={(val) => handleFilterChange('violations', val)}
+                      />
+                    </div>
+
+                    {/* Alert date  */}
+                    <div className="space-y-1 w-[calc(50%-5px)] sm:w-auto flex-1 max-w-[160px]">
+                      <Label className="text-[10px] uppercase font-bold text-slate-400">Alert Date</Label>
+                      <DateFilterPopover
+                        title="Alert Date"
+                        initialFrom={initialFilters.processed_from}
+                        initialTo={initialFilters.processed_to}
+                        onApply={(range) => updateQueryParams({
+                          processed_from: range?.from ? format(range.from, "yyyy-MM-dd'T'HH:mm:ssXXX") : null,
+                          processed_to: range?.to ? format(range.to, "yyyy-MM-dd'T'HH:mm:ssXXX") : null
+                        })}
+                      />
+                    </div>
+
+                    {/* Publishing date  */}
+                    <div className="space-y-1 w-[calc(50%-5px)] sm:w-auto flex-1 max-w-[160px]">
+                      <Label className="text-[10px] uppercase font-bold text-slate-400">Publish Date</Label>
+                      <DateFilterPopover
+                        title="Publish Date"
+                        initialFrom={initialFilters.original_date_from}
+                        initialTo={initialFilters.original_date_to}
+                        onApply={(range) => updateQueryParams({
+                          original_date_from: range?.from ? format(range.from, "yyyy-MM-dd'T'HH:mm:ssXXX") : null,
+                          original_date_to: range?.to ? format(range.to, "yyyy-MM-dd'T'HH:mm:ssXXX") : null
+                        })}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Row 2: Text Search & Active Filters */}
+                  <div className="flex flex-wrap xl:flex-nowrap items-end gap-3 pb-0.5 pl-0.5 w-full">
+                    
+                    {/* Search */}
+                    <div className="space-y-1 w-full sm:max-w-xs shrink-0">
+                      <Label className="text-[10px] uppercase font-bold text-slate-400">Search</Label>
+                      <div className="flex items-center gap-2">
+                        <div className="relative flex-1">
+                          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <Search className="h-4 w-4 text-slate-400" />
+                          </div>
+                          <input
+                            type="text"
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            placeholder="Search by text..."
+                            className="w-full bg-white border border-slate-200 rounded-md pl-9 pr-3 h-9 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal shadow-sm transition-all"
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                handleSearchApply();
+                              }
+                            }}
+                          />
+                        </div>
+                        <Button 
+                          onClick={handleSearchApply}
+                          className="h-9 w-9 p-0 shrink-0 bg-blue-600 hover:bg-blue-700 text-white shadow-sm cursor-pointer transition-colors"
+                          title="Search"
+                        >
+                          <Search className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Active Filters Info Bar */}
+                    {(initialFilters.platform !== 'all' || initialFilters.risk_priority !== 'all' || initialFilters.client_status !== 'all' || (initialFilters.violations && initialFilters.violations !== 'all') || initialFilters.original_date_from || initialFilters.original_date_to || initialFilters.processed_from || initialFilters.processed_to || searchParams.get('similar_to') || searchParams.get('semantic_search')) && (
+                      <div className="flex flex-wrap items-center gap-2 bg-slate-50/80 border border-slate-100 rounded-md px-3 h-9 shadow-sm shrink-0 w-full xl:w-auto mt-2 xl:mt-0">
+                        <span className="text-[10px] uppercase font-bold text-slate-400 mr-1">Active:</span>
+                        {searchParams.get('similar_to') && (
+                          <div className="flex items-center gap-1.5 px-2 py-0.5 bg-purple-50 text-purple-700 rounded font-bold text-[10px] uppercase tracking-wider border border-purple-100">
+                            <Info className="w-3 h-3" />
+                            Similarity: {searchParams.get('search_type')}
+                          </div>
+                        )}
+                        {searchParams.get('semantic_search') && (
+                          <div className="flex items-center gap-1.5 px-2 py-0.5 bg-purple-50 text-purple-700 rounded font-bold text-[10px] uppercase tracking-wider border border-purple-100">
+                            <Search className="w-3 h-3" />
+                            Text Search
+                          </div>
+                        )}
+                        <Button variant="ghost" size="sm" onClick={clearFilters} className="h-6 px-2 text-rose-600 hover:text-rose-700 hover:bg-rose-50 font-bold text-[10px] uppercase tracking-wider cursor-pointer transition-colors ml-auto">
+                          <X className="w-3.5 h-3.5 mr-1 text-rose-500" /> Clear Filters
+                        </Button>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {/* BULK ASSIGN FUNCTIONALITY */}
                 {
-                  selectedCount > 0 && clientDetails?.permission === "client-admin" && (
+                  selectedCount > 0 && (
                     <div className="flex items-center gap-4 pt-3 border-t border-slate-100 mt-2 animate-in fade-in slide-in-from-top-1">
-                      <div className="flex items-center gap-2 px-2.5 py-1.5 bg-blue-50 text-blue-700 rounded-md border border-blue-100 whitespace-nowrap">
-                        <UserPlus className="w-3.5 h-3.5" />
-                        <span className="text-[10px] font-bold uppercase tracking-wider">Bulk Assignment</span>
-                      </div>
-                      <div className="flex items-center gap-3 w-full max-w-lg">
-                        <select
-                          value={bulkAssignedEmail}
-                          onChange={(e) => setBulkAssignedEmail(e.target.value)}
-                          className="w-full bg-white border border-slate-200 rounded-md px-3 h-9 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
-                        >
-                          <option value="">Select team member to assign these cases</option>
-                          {projectEmails?.map((userObj) => (
-                            <option key={userObj.email} value={userObj.email}>
-                              {userObj.alias || userObj.email}
-                            </option>
-                          ))}
-                        </select>
-                        <Button
-                          onClick={handleBulkAssign}
-                          disabled={!bulkAssignedEmail || isBulkAssigning}
-                          className="h-9 px-6 cursor-pointer bg-blue-600 hover:bg-blue-700 text-white font-bold transition-all shadow-sm shrink-0"
-                        >
-                          {isBulkAssigning ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Check className="w-4 h-4 mr-2" />}
-                          Assign {selectedCount} {selectedCount === 1 ? 'Case' : 'Cases'}
-                        </Button>
-                      </div>
+                      {selectedCount === 1 && (
+                        <div className="flex items-center gap-2 pr-4 border-r border-slate-100">
+                          <Button
+                            variant={searchParams.get('similar_to') === Object.keys(selectedCases)[0] && searchParams.get('search_type') === 'text' ? 'default' : 'outline'}
+                            size="sm"
+                            onClick={() => {
+                              const id = Object.keys(selectedCases)[0]
+                              updateQueryParams({ similar_to: id, search_type: 'text', semantic_search: null })
+                            }}
+                            className={cn(
+                              "h-8 px-3 text-[10px] font-bold uppercase tracking-wider",
+                              searchParams.get('similar_to') === Object.keys(selectedCases)[0] && searchParams.get('search_type') === 'text' 
+                                ? "bg-blue-600 text-white hover:bg-blue-700" 
+                                : "border-blue-200 text-blue-700 hover:bg-blue-50"
+                            )}
+                          >
+                            <Search className="w-3 h-3 mr-1.5" />
+                            Find Similar (Text)
+                          </Button>
+                          <Button
+                            variant={searchParams.get('similar_to') === Object.keys(selectedCases)[0] && searchParams.get('search_type') === 'image' ? 'default' : 'outline'}
+                            size="sm"
+                            onClick={() => {
+                              const id = Object.keys(selectedCases)[0]
+                              updateQueryParams({ similar_to: id, search_type: 'image', semantic_search: null })
+                            }}
+                            className={cn(
+                              "h-8 px-3 text-[10px] font-bold uppercase tracking-wider",
+                              searchParams.get('similar_to') === Object.keys(selectedCases)[0] && searchParams.get('search_type') === 'image' 
+                                ? "bg-emerald-600 text-white hover:bg-emerald-700" 
+                                : "border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+                            )}
+                          >
+                            <Search className="w-3 h-3 mr-1.5" />
+                            Find Similar (Image)
+                          </Button>
+                        </div>
+                      )}
+
+                      {clientDetails?.permission === "client-admin" && (
+                        <>
+                          <div className="flex items-center gap-2 px-2.5 py-1.5 bg-blue-50 text-blue-700 rounded-md border border-blue-100 whitespace-nowrap">
+                            <UserPlus className="w-3.5 h-3.5" />
+                            <span className="text-[10px] font-bold uppercase tracking-wider">Bulk Assignment</span>
+                          </div>
+                          <div className="flex items-center gap-3 w-full max-w-lg">
+                            <select
+                              value={bulkAssignedEmail}
+                              onChange={(e) => setBulkAssignedEmail(e.target.value)}
+                              className="w-full bg-white border border-slate-200 rounded-md px-3 h-9 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
+                            >
+                              <option value="">Select team member to assign these cases</option>
+                              {projectEmails?.map((userObj) => (
+                                <option key={userObj.email} value={userObj.email}>
+                                  {userObj.alias || userObj.email}
+                                </option>
+                              ))}
+                            </select>
+                            <Button
+                              onClick={handleBulkAssign}
+                              disabled={!bulkAssignedEmail || isBulkAssigning}
+                              className="h-9 px-6 cursor-pointer bg-blue-600 hover:bg-blue-700 text-white font-bold transition-all shadow-sm shrink-0"
+                            >
+                              {isBulkAssigning ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Check className="w-4 h-4 mr-2" />}
+                              Assign {selectedCount} {selectedCount === 1 ? 'Case' : 'Cases'}
+                            </Button>
+                          </div>
+                        </>
+                      )}
                     </div>
                   )
                 }
@@ -764,6 +877,7 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
 
                   const isSelectedRow = !!selectedCases[currentPost._id];
                   const isPanelOpen = selectedPost?._id === currentPost._id;
+                  const isSourcePost = searchParams.get('similar_to') === currentPost._id;
 
                   return (
                     <tr
@@ -774,7 +888,8 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                         "transition-all cursor-pointer group",
                         isPanelOpen ? "bg-blue-50/60 ring-1 ring-inset ring-blue-200 z-10 relative" : "hover:bg-slate-50",
                         // Optional: lightly highlight rows that are checked
-                        isSelectedRow && !isPanelOpen && "bg-slate-50"
+                        isSelectedRow && !isPanelOpen && "bg-slate-50",
+                        isSourcePost && "border-l-4 border-l-blue-600 bg-blue-50/30"
                       )}
                     >
                       {/* SELECTED OR NOT  */}
@@ -817,7 +932,7 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
 
                       {/* Content */}
                       <td className="px-2 sm:px-4 py-3 overflow-hidden align-middle">
-                        <div className="flex gap-3 sm:gap-4 max-w-96">
+                        <div className="flex gap-3 sm:gap-4">
                           <div className="shrink-0 relative">
                             {post.signedImageUrl ? (
                               <div className="h-12 w-12 sm:h-16 sm:w-16 rounded-lg overflow-hidden border border-slate-200 shadow-sm bg-slate-200 group-hover:shadow-md transition-all">
@@ -853,6 +968,11 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                               <span className="font-bold text-slate-900 text-xs sm:text-sm truncate transition-colors max-w-[80px] sm:max-w-none">
                                 {post.user?.username ? `@${post.user.username}` : 'Unknown User'}
                               </span>
+                              {isSourcePost && (
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black bg-blue-600 text-white uppercase tracking-tighter shadow-sm">
+                                  Source Case
+                                </span>
+                              )}
                               <span className="text-xs text-slate-400 hidden sm:inline">•</span>
                               <span className="text-xs text-slate-500 font-mono hidden sm:inline">
                                 <a

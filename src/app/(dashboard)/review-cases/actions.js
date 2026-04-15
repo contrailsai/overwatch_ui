@@ -170,6 +170,7 @@ export const getPosts = traceAction('getPosts_review', async (project_mongo_db_m
 
     const posts = await collection.aggregate([
       { $match: matchStage },
+      { $project: { text_embedding: 0, image_embedding: 0 } },
       {
         $addFields: {
           sort_posted_at: {
@@ -249,7 +250,10 @@ export const getPostById = traceAction('getPostById', async (project, case_id) =
     const db = client.db(project.mongo_db_map)
     const collection = db.collection('Posts')
 
-    const post = await collection.findOne({ _id: new ObjectId(case_id) })
+    const post = await collection.findOne(
+      { _id: new ObjectId(case_id) },
+      { projection: { text_embedding: 0, image_embedding: 0 } }
+    )
 
     // Serialize and Sign URLs - use new unified schema
     const processedPost = await normalized_S3_post(post);
@@ -338,6 +342,7 @@ export const getAllPostsForExport = traceAction('getAllPostsForExport', async (p
 
     const pipeline = [
       { $match: matchStage },
+      { $project: { text_embedding: 0, image_embedding: 0 } },
       {
         $addFields: {
           sort_posted_at: {
@@ -550,7 +555,10 @@ export const submitCaseReview = traceAction('submitCaseReview', async (project, 
     const collection = db.collection('Posts')
 
     // 1. Fetch existing post to get previous state
-    const existingPost = await collection.findOne({ _id: new ObjectId(mongoId) })
+    const existingPost = await collection.findOne(
+      { _id: new ObjectId(mongoId) },
+      { projection: { text_embedding: 0, image_embedding: 0 } }
+    )
     if (!existingPost) {
       return { success: false, error: 'Post not found' }
     }
@@ -649,7 +657,10 @@ export const getCaseMetadata = traceAction('getCaseMetadata', async (postId) => 
     const db = client.db(process.env.MONGO_DB_NAME)
     const collection = db.collection('Posts')
 
-    const post = await collection.findOne({ post_id: postId })
+    const post = await collection.findOne(
+      { post_id: postId },
+      { projection: { text_embedding: 0, image_embedding: 0 } }
+    )
 
     if (!post || (!post.review_details && !post.takedown_info)) {
       return null

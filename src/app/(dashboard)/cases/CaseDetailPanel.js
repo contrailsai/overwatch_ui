@@ -39,7 +39,6 @@ const getRiskLabel = (score) => {
 }
 
 export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose, onNavigate, hasPrev, hasNext, onUpdateStatus, onUpdatePost, projectEmails }) {
-    // console.log(post);
     const [isProcessing, setIsProcessing] = useState(false)
     const [imgError, setImgError] = useState(false)
     const router = useRouter()
@@ -292,8 +291,6 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
             setIsProcessing(false);
         }
     }
-
-    // console.log(post);
 
     return (
         <div className="fixed inset-0 z-50 flex justify-end font-sans">
@@ -775,7 +772,6 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
 
                                                         const shouldShowEmail = isEmail && projectUser;
                                                         const displayIdentifier = projectUser?.alias || entry.updated_by;
-                                                        console.log(projectUser, displayIdentifier, entry.updated_by)
 
                                                         const displaySummary = entry.changes_summary === "Manual ingestion from simplified JSON"
                                                             ? "Content was sourced and ingested into the system."

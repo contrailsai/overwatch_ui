@@ -49,7 +49,10 @@ export const initiateTakedown = traceAction('initiateTakedown', async (caseId, s
         const collection = db.collection('Posts')
 
         // 1. Fetch post data
-        const post = await collection.findOne({ _id: new ObjectId(caseId) })
+        const post = await collection.findOne(
+            { _id: new ObjectId(caseId) },
+            { projection: { text_embedding: 0, image_embedding: 0 } }
+        )
         if (!post) {
             return { success: false, error: "Case not found" }
         }
@@ -147,9 +150,10 @@ export const getPriorityTakedowns = traceAction('getPriorityTakedowns', async ()
         const collection = db.collection('Posts')
 
         // Fetch all requested takedowns (priority)
-        const posts = await collection.find({
-            'takedown_info.takedown_status': 'requested'
-        })
+        const posts = await collection.find(
+            { 'takedown_info.takedown_status': 'requested' },
+            { projection: { text_embedding: 0, image_embedding: 0 } }
+        )
             .sort({ 'metadata.created_at': -1 })
             .toArray()
 

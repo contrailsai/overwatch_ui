@@ -112,7 +112,7 @@ export const getProfiles = traceAction('getProfiles', async (project, page = 1, 
             }
         }
 
-        const profiles = await collection.find(query)
+        const profiles = await collection.find(query, { projection: { text_embedding: 0, image_embedding: 0 } })
             .sort({ 'review_details.reviewed_at': -1 })
             .skip(skip)
             .limit(limit)
@@ -171,7 +171,7 @@ export const getProfileCases = traceAction('getProfileCases', async (project, po
         if (objectIds.length === 0) return []
 
         const posts = await collection
-            .find({ _id: { $in: objectIds } })
+            .find({ _id: { $in: objectIds } }, { projection: { text_embedding: 0, image_embedding: 0 } })
             .toArray()
 
         return Promise.all(
