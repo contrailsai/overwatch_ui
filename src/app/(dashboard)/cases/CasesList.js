@@ -26,6 +26,11 @@ import { ReportButton } from '@/components/pdf/ReportButton'
 import { DetailedReportButton } from '@/components/pdf/DetailedReportButton'
 import { DetailedReportDocxButton } from '@/components/docx/DetailedReportDocxButton'
 import { Button } from "@/components/ui/button"
+import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from "@/components/ui/hover-card"
 // import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Label } from "@/components/ui/label"
@@ -755,15 +760,15 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                   </th>
                   <th
                     scope="col"
-                    className="w-24 sm:w-30 px-2 sm:px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100 transition-colors group select-none hidden sm:table-cell"
+                    className="w-16 sm:w-20 px-2 sm:px-3 py-3 text-center text-xs font-bold text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100 transition-colors group select-none hidden sm:table-cell"
                     onClick={() => handleSortChange('threat_score')}
                   >
-                    <div className="flex items-center">
+                    <div className="flex items-center justify-center">
                       Risk
                       <SortIcon field="threat_score" />
                     </div>
                   </th>
-                  <th scope="col" className="w-28 sm:w-37.5 px-2 sm:px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider hidden md:table-cell">Status</th>
+                  <th scope="col" className="w-14 sm:w-16 px-2 sm:px-3 py-3 text-center text-xs font-bold text-slate-500 uppercase tracking-wider hidden md:table-cell">Status</th>
                   <th
                     scope="col"
                     className="px-2 sm:px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider w-full min-w-[200px]"
@@ -903,31 +908,40 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                       </td>
 
                       {/* Priority */}
-                      <td className="px-2 sm:px-4 py-3 whitespace-nowrap align-middle hidden sm:table-cell">
-                        <span className={cn("inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold border shadow-sm", risk.color)}>
-
+                      <td className="px-2 sm:px-3 py-3 whitespace-nowrap align-middle hidden sm:table-cell">
+                        <div className={cn("flex flex-col items-center justify-center p-1.5 rounded-lg text-[10px] font-black tracking-wide border shadow-sm mx-auto w-12", risk.color)}>
                           {
                             risk.label === "High" ? (
-                              <Siren className="w-3.5 h-3.5 sm:mr-1.5" />
+                              <Siren className="w-4 h-4 mb-1" />
                             ) : risk.label === "Medium" ? (
-                              <TriangleAlert className="w-3.5 h-3.5 sm:mr-1.5" />
+                              <TriangleAlert className="w-4 h-4 mb-1" />
                             ) : risk.label === "Low" ? (
-                              <TrendingDown className="w-3.5 h-3.5 sm:mr-1.5" />
+                              <TrendingDown className="w-4 h-4 mb-1" />
                             ) : (
-                              <Smile className="w-3.5 h-3.5 sm:mr-1.5" />
+                              <Smile className="w-4 h-4 mb-1" />
                             )
                           }
-
-                          <span className="hidden sm:inline">{risk.label}</span>
-                        </span>
+                          <span className="uppercase text-[8px] leading-none">{risk.label}</span>
+                        </div>
                       </td>
 
                       {/* Status */}
-                      <td className="px-2 sm:px-4 py-3 whitespace-nowrap align-middle hidden md:table-cell">
-                        <span className={cn("inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold border shadow-sm", statusConfig.color)}>
-                          <StatusIcon className="w-3.5 h-3.5 mr-1.5" />
-                          {statusConfig.label}
-                        </span>
+                      <td className="px-2 sm:px-3 py-3 whitespace-nowrap align-middle hidden md:table-cell text-center">
+                        <HoverCard openDelay={0} closeDelay={50}>
+                          <HoverCardTrigger asChild>
+                            <div 
+                              className={cn("inline-flex items-center justify-center w-8 h-8 rounded-full border shadow-sm cursor-pointer transition-transform hover:scale-110", statusConfig.color)}
+                            >
+                              <StatusIcon className="w-4 h-4" />
+                            </div>
+                          </HoverCardTrigger>
+                          <HoverCardContent 
+                            className="w-auto px-3 py-2 text-xs font-bold text-slate-700 bg-white border border-slate-200 shadow-xl rounded-lg"
+                            sideOffset={8}
+                          >
+                            {statusConfig.label}
+                          </HoverCardContent>
+                        </HoverCard>
                       </td>
 
                       {/* Content */}
