@@ -293,411 +293,403 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
     }
 
     return (
-        <div className="fixed inset-0 z-50 flex justify-end font-sans">
-            {/* Backdrop */}
-            <div
-                className="absolute inset-0 bg-slate-900/20 backdrop-blur-sm transition-opacity duration-300"
-                onClick={onClose}
-            />
+        <div className="flex-1 min-w-0 h-full bg-white z-50 font-sans flex flex-col border-l border-slate-200 animate-in slide-in-from-right duration-300 overflow-hidden">
+            {/* Main Content Area */}
+            <div className="flex-1 overflow-y-auto lg:overflow-hidden flex flex-col lg:flex-row lg:divide-x divide-slate-100">
 
-            {/* Panel */}
-            <div className="relative w-full max-w-7xl bg-white h-full shadow-2xl overflow-hidden flex flex-col animate-in slide-in-from-right duration-300 border-l border-slate-200">
-
-
-                {/* Main Content Area */}
-                <div className="flex-1 overflow-y-auto lg:overflow-hidden flex flex-col lg:flex-row lg:divide-x divide-slate-100">
-
-                    {/* Left: Source Content (Scrollable) */}
-                    <div className="flex-none lg:flex-1 lg:overflow-y-auto space-y-4 bg-slate-50/50">
-                        {/* Header */}
-                        <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-100 flex items-center justify-between bg-white/80 backdrop-blur-md sticky top-0 z-20">
-                            <div className="flex items-center gap-3 sm:gap-4 min-w-0">
-                                <div className="h-8 w-8 sm:h-10 sm:w-10 shrink-0 bg-slate-50 rounded-full flex items-center justify-center border border-slate-100">
-                                    <Siren className="w-4 h-4 sm:w-5 sm:h-5 text-slate-500" />
-                                </div>
-                                <div className="min-w-0">
-                                    <h2 className="text-base sm:text-lg font-bold text-slate-900 leading-tight truncate">Content Review</h2>
-                                    <p className="text-[10px] sm:text-xs font-mono text-slate-400 truncate">ID: {post._id}</p>
-                                </div>
-                            </div>
-
-                            <div className="flex items-center gap-1 sm:gap-3 shrink-0">
-                                {onNavigate && (
-                                    <div className="flex items-center gap-0.5 sm:gap-1 mr-1 sm:mr-2 border-r border-slate-200 pr-1 sm:pr-3">
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            onClick={() => onNavigate('prev')}
-                                            disabled={!hasPrev}
-                                            className="h-7 w-7 sm:h-8 sm:w-8 text-slate-500 hover:text-blue-600"
-                                        >
-                                            <ChevronLeft className="w-4 h-4 sm:w-5 sm:h-5" />
-                                        </Button>
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            onClick={() => onNavigate('next')}
-                                            disabled={!hasNext}
-                                            className="h-7 w-7 sm:h-8 sm:w-8 text-slate-500 hover:text-blue-600"
-                                        >
-                                            <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5" />
-                                        </Button>
-                                    </div>
-                                )}
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={handleCopyLink}
-                                    className="h-7 w-7 sm:h-9 sm:w-9 text-slate-500 hover:text-blue-600 rounded-full"
-                                    title="Copy case link"
-                                >
-                                    {copied ? <Check className="w-4 h-4 sm:w-5 sm:h-5 text-green-500" /> : <LinkIcon className="w-4 h-4 sm:w-5 sm:h-5" />}
-                                </Button>
-
-                                {isRequested && (
-                                    <Badge className="bg-orange-50 text-orange-700 border-orange-200 gap-1.5 pl-2 animate-pulse hidden sm:inline-flex">
-                                        <Siren className="w-3.5 h-3.5" /> Takedown Requested
-                                    </Badge>
-                                )}
-                                <Button variant="ghost" size="icon" onClick={onClose} className="h-8 w-8 sm:h-10 sm:w-10 rounded-full hover:bg-slate-100 text-slate-400">
-                                    <X className="w-5 h-5 sm:w-6 sm:h-6" />
-                                </Button>
+                {/* LEFT PANEL (Source Content) */}
+                <div className="flex-none lg:flex-1 lg:overflow-y-auto space-y-4 bg-slate-50/50">
+                    {/* Header */}
+                    <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-100 flex items-center justify-between bg-white/80 backdrop-blur-md sticky top-0 z-20">
+                        <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+                            <Button variant="ghost" title="Close" size="icon" onClick={onClose} className="h-8 w-8 sm:h-10 sm:w-10 rounded-full cursor-pointer bg-slate-100 text-slate-700">
+                                <X className="w-5 h-5 sm:w-6 sm:h-6" />
+                            </Button>
+                            {/* <div className="h-8 w-8 sm:h-10 sm:w-10 shrink-0 bg-slate rounded-full flex items-center justify-center border border-slate-100">
+                                <Siren className="w-4 h-4 sm:w-5 sm:h-5 text-slate-500" />
+                            </div> */}
+                            <div className="min-w-0">
+                                <h2 className="text-base sm:text-lg font-bold text-slate-900 leading-tight truncate">Content Review</h2>
+                                <p className="text-[10px] sm:text-xs font-mono text-slate-400 truncate">ID: {post._id}</p>
                             </div>
                         </div>
 
-                        <div className=" flex flex-col gap-6 sm:gap-8 px-4 sm:px-8 pb-8 pt-4 sm:pt-0 ">
-                            {/* Media Display */}
-                            <div className="bg-slate-900 rounded-xl sm:rounded-2xl overflow-hidden shadow-lg border border-slate-800 relative group flex items-center justify-center min-h-[300px] sm:min-h-[400px]">
-                                <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-slate-800/50 to-slate-950 pointer-events-none" />
-                                {post.signedImageUrl ? (
-                                    <img
-                                        src={post.signedImageUrl}
-                                        alt="Evidence"
-                                        className="max-w-full h-auto max-h-[400px] sm:max-h-[600px] object-contain relative z-10"
-                                    />
-                                ) : (
-                                    <div className="text-center p-8 sm:p-12 relative z-10">
-                                        <Quote className="w-12 h-12 sm:w-16 sm:h-16 text-slate-700 mx-auto mb-3 sm:mb-4" />
-                                        <p className="text-slate-500 font-medium text-base sm:text-lg">Text-Only Content</p>
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Unified User Context & Caption Card */}
-                            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
-                                <div className="p-4 sm:p-5 flex items-start sm:items-center gap-3 sm:gap-5">
-                                    <div className="relative shrink-0 mt-1 sm:mt-0">
-                                        {(post.user?.profile_pic_url && !imgError) ? (
-                                            <img
-                                                src={post.user.profile_pic_url}
-                                                onError={() => setImgError(true)}
-                                                alt=""
-                                                className="w-12 h-12 sm:w-16 sm:h-16 rounded-full object-cover border-2 sm:border-4 border-slate-50"
-                                            />
-                                        ) : (
-                                            <div className="scale-75 sm:scale-100 origin-top-left sm:origin-center">
-                                                <ProfilePic user={post.user?.username || 'Unknown'} size={64} />
-                                            </div>
-                                        )}
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                        <h3 className="text-lg sm:text-xl font-bold text-slate-900 truncate flex items-center gap-1.5 sm:gap-2">
-                                            <div className="">
-                                                {/* platform */}
-                                                <div className="flex-1 min-w-4">
-                                                    {
-                                                        post.platform === "x" || post.platform === "twitter" ? (
-                                                            <span className="inline-block size-4 text-black">
-                                                                <Twitter className="w-3.5 h-3.5 text-slate-900" />
-                                                            </span>
-                                                        ) : post.platform === "reddit" ? (
-                                                            <span className="inline-block size-4 text-black">
-                                                                <Reddit className="w-3.5 h-3.5 text-slate-900" />
-                                                            </span>
-                                                        ) : post.platform?.toLowerCase() === "instagram" ? (
-                                                            <Instagram className="w-6 h-6 text-pink-500" />
-                                                        ) : post.platform?.toLowerCase() === "facebook" ? (
-                                                            <Facebook className="w-6 h-6 text-blue-500" />
-                                                        ) : post.platform?.toLowerCase() === "youtube" ? (
-                                                            <Youtube className="w-6 h-6 text-red-500" />
-                                                        ) : (
-                                                            <p className="text-slate-500 font-medium truncate">{post.platform}</p>
-                                                        )
-                                                    }
-                                                </div>
-                                            </div>
-                                            {post.user?.username || 'Unknown User'}
-                                            {post.user?.is_verified && <BadgeCheck className="w-5 h-5 text-blue-500 fill-blue-50" />}
-                                        </h3>
-                                        <p className="text-slate-500 font-medium truncate">{post.user?.full_name}</p>
-                                    </div>
-                                    <a
-                                        href={post.url || post.original_url || '#'}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-sm font-bold transition-colors flex items-center gap-2"
+                        <div className="flex items-center gap-1 sm:gap-3 shrink-0">
+                            {onNavigate && (
+                                <div className="flex items-center gap-0.5 sm:gap-1 mr-1 sm:mr-2 border-r border-slate-200 pr-1 sm:pr-3">
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        title="Previous"
+                                        onClick={() => onNavigate('prev')}
+                                        disabled={!hasPrev}
+                                        className="h-7 w-7 sm:h-8 sm:w-8 text-slate-500 hover:text-blue-600"
                                     >
-                                        <ExternalLink className="w-4 h-4" />
-                                        <span className="hidden sm:inline">View Source</span>
-                                    </a>
+                                        <ChevronLeft className="w-4 h-4 sm:w-5 sm:h-5" />
+                                    </Button>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        title="Next"
+                                        onClick={() => onNavigate('next')}
+                                        disabled={!hasNext}
+                                        className="h-7 w-7 sm:h-8 sm:w-8 text-slate-500 hover:text-blue-600"
+                                    >
+                                        <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5" />
+                                    </Button>
                                 </div>
+                            )}
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={handleCopyLink}
+                                className="h-7 w-7 sm:h-9 sm:w-9 text-slate-500 hover:text-blue-600 rounded-full cursor-pointer"
+                                title="Copy case link"
+                            >
+                                {copied ? <Check className="w-4 h-4 sm:w-5 sm:h-5 text-green-500" /> : <LinkIcon className="w-4 h-4 sm:w-5 sm:h-5" />}
+                            </Button>
 
-                                <div className="px-5 pb-5 pt-0">
-                                    <div className="bg-slate-50/50 rounded-lg p-4 border border-slate-100">
-                                        <h4 className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">
-                                            <MessageCircle className="w-3 h-3" />  {post.platform.toLowerCase() === "website" ? "Post Content" : "Post Caption"}
-                                        </h4>
-                                        <div className="text-slate-800 leading-relaxed whitespace-pre-wrap font-medium text-sm font-sans">
-                                            {post.caption || <span className="italic text-slate-400">No caption content available.</span>}
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {
-                                post.platform.toLowerCase() !== "website" && (
-                                    <>
-                                        {/* Stats & Dates */}
-                                        <div className="space-y-4 sm:space-y-6">
-                                            <div className="grid grid-cols-2 sm:flex sm:flex-row gap-3 sm:gap-4">
-                                                <div className="w-full bg-white p-3 sm:p-4 rounded-xl border border-slate-200 shadow-sm flex flex-row justify-between items-center gap-1">
-                                                    <span className="text-[10px] sm:text-xs font-bold text-slate-500 uppercase flex items-center gap-1.5 sm:gap-2"><Heart className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-rose-500" /> Likes</span>
-                                                    <span className="font-bold text-sm sm:text-lg text-slate-900">{post.stats?.like_count?.toLocaleString() || 0}</span>
-                                                </div>
-                                                <div className="w-full bg-white p-3 sm:p-4 rounded-xl border border-slate-200 shadow-sm flex flex-row justify-between items-center gap-1">
-                                                    <span className="text-[10px] sm:text-xs font-bold text-slate-500 uppercase flex items-center gap-1.5 sm:gap-2"><MessageCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-blue-500" /> Comments</span>
-                                                    <span className="font-bold text-sm sm:text-lg text-slate-900">{post.stats?.comment_count?.toLocaleString() || 0}</span>
-                                                </div>
-                                                <div className="w-full bg-white p-3 sm:p-4 rounded-xl border border-slate-200 shadow-sm flex flex-row justify-between items-center gap-1">
-                                                    <span className="text-[10px] sm:text-xs font-bold text-slate-500 uppercase flex items-center gap-1.5 sm:gap-2"><Share2 className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-green-500" /> Shares</span>
-                                                    <span className="font-bold text-sm sm:text-lg text-slate-900">{post.stats?.share_count?.toLocaleString() || 0}</span>
-                                                </div>
-                                                {
-                                                    post.stats?.view_count > 0 && (
-                                                        <div className="w-full bg-white p-3 sm:p-4 rounded-xl border border-slate-200 shadow-sm flex flex-row justify-between items-center gap-1">
-                                                            <span className="text-[10px] sm:text-xs font-bold text-slate-500 uppercase flex items-center gap-1.5 sm:gap-2"><Eye className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-violet-600" /> Views</span>
-                                                            <span className="font-bold text-sm sm:text-lg text-slate-900">{post.stats?.view_count?.toLocaleString() || 0}</span>
-                                                        </div>
-                                                    )
-                                                }
-                                            </div>
-                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-10">
-                                                <div className="bg-white p-3 sm:p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between gap-1">
-                                                    <span className="text-[10px] sm:text-xs font-bold text-slate-500 uppercase flex items-center gap-1.5 sm:gap-2"><Calendar className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-slate-500" /> Publish Date</span>
-                                                    <span className="font-bold text-xs sm:text-sm text-slate-900">{posted_date}</span>
-                                                </div>
-                                                <div className="bg-white p-3 sm:p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between gap-1">
-                                                    <span className="text-[10px] sm:text-xs font-bold text-slate-500 uppercase flex items-center gap-1.5 sm:gap-2"><History className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-slate-500" /> Alert Date</span>
-                                                    <span className="font-bold text-xs sm:text-sm text-slate-900">{sourced_date}</span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </>
-                                )
-                            }
+                            {isRequested && (
+                                <Badge className="bg-orange-50 text-orange-700 border-orange-200 gap-1.5 pl-2 animate-pulse hidden sm:inline-flex">
+                                    <Siren className="w-3.5 h-3.5" /> Takedown Requested
+                                </Badge>
+                            )}
                         </div>
                     </div>
 
-                    {/* RIGHT PANEL */}
-                    {
-                        isEditing ? (
-                            <div className="hidden sm:flex flex-row w-full lg:w-[500px] shrink-0">
-                                <EditForm
-                                    post={post}
-                                    project={project}
-                                    clientDetails={clientDetails}
-                                    setIsEditing={setIsEditing}
-                                    onUpdatePost={onUpdatePost}
+                    <div className=" flex flex-col gap-6 sm:gap-8 px-4 sm:px-8 pb-8 pt-4 sm:pt-0 ">
+                        {/* Media Display */}
+                        <div className="bg-slate-900 rounded-xl sm:rounded-2xl overflow-hidden shadow-lg border border-slate-800 relative group flex items-center justify-center min-h-[300px] sm:min-h-[400px]">
+                            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-slate-800/50 to-slate-950 pointer-events-none" />
+                            {post.signedImageUrl ? (
+                                <img
+                                    src={post.signedImageUrl}
+                                    alt="Evidence"
+                                    className="max-w-full h-auto max-h-[400px] sm:max-h-[600px] object-contain relative z-10"
                                 />
-                            </div>
-                        ) : (
-                            <div className="relative w-full lg:w-[500px] bg-white flex flex-col lg:h-full shrink-0 border-t lg:border-t-0 border-slate-100">
-
-                                {/* EDIT BUTTON HERE */}
-                                <div className="hidden sm:block">
-                                    <Button
-                                        onClick={() => setIsEditing(true)}
-                                        variant="ghost"
-                                        className=" absolute top-4 right-4 z-10 w-fit h-fit bg-white text-slate-600 hover:text-slate-900 font-bold cursor-pointer border border-slate-200 hover:border-slate-200 "
-                                    >
-                                        <Pencil className="w-4 h-4 mr-1" />
-                                        Edit
-                                    </Button>
+                            ) : (
+                                <div className="text-center p-8 sm:p-12 relative z-10">
+                                    <Quote className="w-12 h-12 sm:w-16 sm:h-16 text-slate-700 mx-auto mb-3 sm:mb-4" />
+                                    <p className="text-slate-500 font-medium text-base sm:text-lg">Text-Only Content</p>
                                 </div>
+                            )}
+                        </div>
 
-                                <div className="flex-none lg:flex-1 lg:overflow-y-auto p-4 sm:p-6">
-
-                                    {/* Legal Framework Section */}
-                                    {legalCodes.length > 0 && (
-                                        <div className="space-y-4 py-3 first:pt-0 border-b border-slate-100 ">
-                                            <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Legal Violations</h4>
-                                            <div className="flex flex-col gap-3">
-                                                {legalCodes.map((item, idx) => {
-                                                    const code = typeof item === 'string' ? item : item.code;
-                                                    const reasoning = typeof item === 'string' ? '' : item.reasoning;
-                                                    const projectCode = project?.project_details?.legal_codes?.find(pc => pc.name === code);
-                                                    
-                                                    const bgClass = idx % 2 === 0 ? "bg-rose-50/50 border-rose-100" : "bg-orange-50/50 border-orange-100";
-                                                    const textClass = idx % 2 === 0 ? "text-rose-800" : "text-orange-800";
-                                                    
-                                                    return (
-                                                        <div key={idx} className={cn("p-4 rounded-xl border flex flex-col gap-2", bgClass)}>
-                                                            <div className="flex items-center gap-2">
-                                                                {/* <Badge className="bg-purple-100 text-purple-700 hover:bg-purple-100 border-none text-[9px] px-1.5 py-0 uppercase">Code</Badge> */}
-                                                                <span className={cn("font-bold text-sm", textClass)}>{code}</span>
-                                                            </div>
-                                                            {reasoning && (
-                                                                <p className={cn("text-sm font-medium leading-relaxed", textClass)}>
-                                                                    {reasoning}
-                                                                </p>
-                                                            )}
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
+                        {/* Unified User Context & Caption Card */}
+                        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+                            <div className="p-4 sm:p-5 flex items-start sm:items-center gap-3 sm:gap-5">
+                                <div className="relative shrink-0 mt-1 sm:mt-0">
+                                    {(post.user?.profile_pic_url && !imgError) ? (
+                                        <img
+                                            src={post.user.profile_pic_url}
+                                            onError={() => setImgError(true)}
+                                            alt=""
+                                            className="w-12 h-12 sm:w-16 sm:h-16 rounded-full object-cover border-2 sm:border-4 border-slate-50"
+                                        />
+                                    ) : (
+                                        <div className="scale-75 sm:scale-100 origin-top-left sm:origin-center">
+                                            <ProfilePic user={post.user?.username || 'Unknown'} size={64} />
                                         </div>
                                     )}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <h3 className="text-lg sm:text-xl font-bold text-slate-900 truncate flex items-center gap-1.5 sm:gap-2">
+                                        <div className="">
+                                            {/* platform */}
+                                            <div className="flex-1 min-w-4">
+                                                {
+                                                    post.platform === "x" || post.platform === "twitter" ? (
+                                                        <span className="inline-block size-4 text-black">
+                                                            <Twitter className="w-3.5 h-3.5 text-slate-900" />
+                                                        </span>
+                                                    ) : post.platform === "reddit" ? (
+                                                        <span className="inline-block size-4 text-black">
+                                                            <Reddit className="w-3.5 h-3.5 text-slate-900" />
+                                                        </span>
+                                                    ) : post.platform?.toLowerCase() === "instagram" ? (
+                                                        <Instagram className="w-6 h-6 text-pink-500" />
+                                                    ) : post.platform?.toLowerCase() === "facebook" ? (
+                                                        <Facebook className="w-6 h-6 text-blue-500" />
+                                                    ) : post.platform?.toLowerCase() === "youtube" ? (
+                                                        <Youtube className="w-6 h-6 text-red-500" />
+                                                    ) : (
+                                                        <p className="text-slate-500 font-medium truncate">{post.platform}</p>
+                                                    )
+                                                }
+                                            </div>
+                                        </div>
+                                        {post.user?.username || 'Unknown User'}
+                                        {post.user?.is_verified && <BadgeCheck className="w-5 h-5 text-blue-500 fill-blue-50" />}
+                                    </h3>
+                                    <p className="text-slate-500 font-medium truncate">{post.user?.full_name}</p>
+                                </div>
+                                <a
+                                    href={post.url || post.original_url || '#'}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-sm font-bold transition-colors flex items-center gap-2"
+                                >
+                                    <ExternalLink className="w-4 h-4" />
+                                    <span className="hidden sm:inline">View Source</span>
+                                </a>
+                            </div>
 
-                                    {/* Reasoning */}
-                                    <div className="space-y-3 py-3 first:pt-0 border-b border-slate-100">
-                                        <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Content Reasoning</h4>
-                                        <div className="w-full text-slate-700 leading-relaxed text-sm font-medium whitespace-pre-wrap">
-                                            {reasoning}
+                            <div className="px-5 pb-5 pt-0">
+                                <div className="bg-slate-50/50 rounded-lg p-4 border border-slate-100">
+                                    <h4 className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">
+                                        <MessageCircle className="w-3 h-3" />  {post.platform.toLowerCase() === "website" ? "Post Content" : "Post Caption"}
+                                    </h4>
+                                    <div className="text-slate-800 leading-relaxed whitespace-pre-wrap font-medium text-sm font-sans">
+                                        {post.caption || <span className="italic text-slate-400">No caption content available.</span>}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {
+                            post.platform.toLowerCase() !== "website" && (
+                                <>
+                                    {/* Stats & Dates */}
+                                    <div className="space-y-4 sm:space-y-6">
+                                        <div className="grid grid-cols-2 sm:flex sm:flex-row gap-3 sm:gap-4">
+                                            <div className="w-full bg-white p-3 sm:p-4 rounded-xl border border-slate-200 shadow-sm flex flex-row justify-between items-center gap-1">
+                                                <span className="text-[10px] sm:text-xs font-bold text-slate-500 uppercase flex items-center gap-1.5 sm:gap-2"><Heart className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-rose-500" /> Likes</span>
+                                                <span className="font-bold text-sm sm:text-lg text-slate-900">{post.stats?.like_count?.toLocaleString() || 0}</span>
+                                            </div>
+                                            <div className="w-full bg-white p-3 sm:p-4 rounded-xl border border-slate-200 shadow-sm flex flex-row justify-between items-center gap-1">
+                                                <span className="text-[10px] sm:text-xs font-bold text-slate-500 uppercase flex items-center gap-1.5 sm:gap-2"><MessageCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-blue-500" /> Comments</span>
+                                                <span className="font-bold text-sm sm:text-lg text-slate-900">{post.stats?.comment_count?.toLocaleString() || 0}</span>
+                                            </div>
+                                            <div className="w-full bg-white p-3 sm:p-4 rounded-xl border border-slate-200 shadow-sm flex flex-row justify-between items-center gap-1">
+                                                <span className="text-[10px] sm:text-xs font-bold text-slate-500 uppercase flex items-center gap-1.5 sm:gap-2"><Share2 className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-green-500" /> Shares</span>
+                                                <span className="font-bold text-sm sm:text-lg text-slate-900">{post.stats?.share_count?.toLocaleString() || 0}</span>
+                                            </div>
+                                            {
+                                                post.stats?.view_count > 0 && (
+                                                    <div className="w-full bg-white p-3 sm:p-4 rounded-xl border border-slate-200 shadow-sm flex flex-row justify-between items-center gap-1">
+                                                        <span className="text-[10px] sm:text-xs font-bold text-slate-500 uppercase flex items-center gap-1.5 sm:gap-2"><Eye className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-violet-600" /> Views</span>
+                                                        <span className="font-bold text-sm sm:text-lg text-slate-900">{post.stats?.view_count?.toLocaleString() || 0}</span>
+                                                    </div>
+                                                )
+                                            }
+                                        </div>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-10">
+                                            <div className="bg-white p-3 sm:p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between gap-1">
+                                                <span className="text-[10px] sm:text-xs font-bold text-slate-500 uppercase flex items-center gap-1.5 sm:gap-2"><Calendar className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-slate-500" /> Publish Date</span>
+                                                <span className="font-bold text-xs sm:text-sm text-slate-900">{posted_date}</span>
+                                            </div>
+                                            <div className="bg-white p-3 sm:p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between gap-1">
+                                                <span className="text-[10px] sm:text-xs font-bold text-slate-500 uppercase flex items-center gap-1.5 sm:gap-2"><History className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-slate-500" /> Alert Date</span>
+                                                <span className="font-bold text-xs sm:text-sm text-slate-900">{sourced_date}</span>
+                                            </div>
                                         </div>
                                     </div>
+                                </>
+                            )
+                        }
+                    </div>
+                </div>
 
-                                    {/* Violation Labels / AI Labels */}
-                                    <div className="space-y-4 py-3 first:pt-0 border-b border-slate-100">
-                                        <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">AI Labels Detected</h4>
-                                        <div className="flex flex-wrap gap-2">
-                                            {isPoiPresent && <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-50 text-xs shadow-none px-3 py-1.5">POI Detected</Badge>}
-                                            {isAigc && <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-50 text-xs shadow-none px-3 py-1.5">AI Generated</Badge>}
+                {/* RIGHT PANEL */}
+                {
+                    isEditing ? (
+                        <div className="hidden sm:flex flex-row w-full lg:w-[500px] shrink-0">
+                            <EditForm
+                                post={post}
+                                project={project}
+                                clientDetails={clientDetails}
+                                setIsEditing={setIsEditing}
+                                onUpdatePost={onUpdatePost}
+                            />
+                        </div>
+                    ) : (
+                        <div className="relative w-full lg:w-[500px] bg-white flex flex-col lg:h-full shrink-0 border-t lg:border-t-0 border-slate-100">
 
-                                            {activeLabels.map((label, idx) => {
-                                                const colorMap = {
-                                                    purple: "bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-50",
-                                                    rose: "bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-50",
-                                                    orange: "bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-50",
-                                                    indigo: "bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-50",
-                                                    red: "bg-red-50 text-red-700 border-red-200 hover:bg-red-50",
-                                                    violet: "bg-violet-50 text-violet-700 border-violet-200 hover:bg-violet-50",
-                                                    yellow: "bg-yellow-50 text-yellow-700 border-yellow-200 hover:bg-yellow-50",
-                                                    blue: "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-50",
-                                                    emerald: "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-50",
-                                                    amber: "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-50",
-                                                }[label.color] || "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-50";
+                            {/* EDIT BUTTON HERE */}
+                            <div className="hidden sm:block">
+                                <Button
+                                    onClick={() => setIsEditing(true)}
+                                    variant="ghost"
+                                    className=" absolute top-4 right-4 z-10 w-fit h-fit bg-white text-slate-600 hover:text-slate-900 font-bold cursor-pointer border border-slate-200 hover:border-slate-200 "
+                                >
+                                    <Pencil className="w-4 h-4 mr-1" />
+                                    Edit
+                                </Button>
+                            </div>
+
+                            <div className="flex-none lg:flex-1 lg:overflow-y-auto p-4 sm:p-6">
+
+                                {/* Legal Framework Section */}
+                                {legalCodes.length > 0 && (
+                                    <div className="space-y-4 py-3 first:pt-0 border-b border-slate-100 ">
+                                        <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Legal Violations</h4>
+                                        <div className="flex flex-col gap-3">
+                                            {legalCodes.map((item, idx) => {
+                                                const code = typeof item === 'string' ? item : item.code;
+                                                const reasoning = typeof item === 'string' ? '' : item.reasoning;
+                                                const projectCode = project?.project_details?.legal_codes?.find(pc => pc.name === code);
+
+                                                const bgClass = idx % 2 === 0 ? "bg-rose-50/50 border-rose-100" : "bg-orange-50/50 border-orange-100";
+                                                const textClass = idx % 2 === 0 ? "text-rose-800" : "text-orange-800";
 
                                                 return (
-                                                    <Badge key={idx} variant="outline" className={cn("text-xs shadow-none px-3 py-1.5", colorMap)}>
-                                                        {label.title}
-                                                    </Badge>
+                                                    <div key={idx} className={cn("p-4 rounded-xl border flex flex-col gap-2", bgClass)}>
+                                                        <div className="flex items-center gap-2">
+                                                            {/* <Badge className="bg-purple-100 text-purple-700 hover:bg-purple-100 border-none text-[9px] px-1.5 py-0 uppercase">Code</Badge> */}
+                                                            <span className={cn("font-bold text-sm", textClass)}>{code}</span>
+                                                        </div>
+                                                        {reasoning && (
+                                                            <p className={cn("text-sm font-medium leading-relaxed", textClass)}>
+                                                                {reasoning}
+                                                            </p>
+                                                        )}
+                                                    </div>
                                                 );
                                             })}
                                         </div>
                                     </div>
+                                )}
 
-                                    {/* Threat Score Card / Risk Assessment */}
-                                    <div className="space-y-4 py-3 first:pt-0 border-b border-slate-100">
-                                        <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Current AI Generated Risk</h4>
-                                        <div>
-                                            <Badge variant="outline" className={cn("text-xs shadow-none font-bold px-3 py-1.5", getRiskLabel(riskScore).color.replace('bg-', 'bg-').replace('border-', 'border-').replace('text-', 'text-').replace('500', '700'))}>
-                                                {getRiskLabel(riskScore).label} Risk
-                                            </Badge>
-                                        </div>
+                                {/* Reasoning */}
+                                <div className="space-y-3 py-3 first:pt-0 border-b border-slate-100">
+                                    <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Content Reasoning</h4>
+                                    <div className="w-full text-slate-700 leading-relaxed text-sm font-medium whitespace-pre-wrap">
+                                        {reasoning}
                                     </div>
+                                </div>
 
-                                    {/* ASSIGN THE CASE TO A USER */}
-                                    {
-                                        clientDetails.role === "client-admin" && (
-                                            <div className="space-y-4 py-3 first:pt-0 border-b border-slate-100 hidden sm:block">
-                                                <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Assignment</h4>
-                                                <div className="w-full bg-slate-50 p-4 rounded-xl border border-slate-100 flex items-center gap-3">
-                                                    {!isAssignEditMode ? (
-                                                        <>
-                                                            <div className="flex-1 flex items-center gap-2">
-                                                                <span className="text-sm text-slate-500 font-medium">Assigned to:</span>
-                                                                <Badge variant="secondary" className="font-bold text-slate-700 bg-white border-slate-200">
-                                                                    {assignedEmail}
-                                                                </Badge>
-                                                            </div>
-                                                            <Button variant="ghost" size="sm" onClick={() => setIsAssignEditMode(true)} className="h-8 text-slate-500 hover:text-slate-900">
-                                                                <Pencil className="w-4 h-4 mr-1.5" /> Edit
+                                {/* Violation Labels / AI Labels */}
+                                <div className="space-y-4 py-3 first:pt-0 border-b border-slate-100">
+                                    <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">AI Labels Detected</h4>
+                                    <div className="flex flex-wrap gap-2">
+                                        {isPoiPresent && <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-50 text-xs shadow-none px-3 py-1.5">POI Detected</Badge>}
+                                        {isAigc && <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-50 text-xs shadow-none px-3 py-1.5">AI Generated</Badge>}
+
+                                        {activeLabels.map((label, idx) => {
+                                            const colorMap = {
+                                                purple: "bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-50",
+                                                rose: "bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-50",
+                                                orange: "bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-50",
+                                                indigo: "bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-50",
+                                                red: "bg-red-50 text-red-700 border-red-200 hover:bg-red-50",
+                                                violet: "bg-violet-50 text-violet-700 border-violet-200 hover:bg-violet-50",
+                                                yellow: "bg-yellow-50 text-yellow-700 border-yellow-200 hover:bg-yellow-50",
+                                                blue: "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-50",
+                                                emerald: "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-50",
+                                                amber: "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-50",
+                                            }[label.color] || "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-50";
+
+                                            return (
+                                                <Badge key={idx} variant="outline" className={cn("text-xs shadow-none px-3 py-1.5", colorMap)}>
+                                                    {label.title}
+                                                </Badge>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+
+                                {/* Threat Score Card / Risk Assessment */}
+                                <div className="space-y-4 py-3 first:pt-0 border-b border-slate-100">
+                                    <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Current AI Generated Risk</h4>
+                                    <div>
+                                        <Badge variant="outline" className={cn("text-xs shadow-none font-bold px-3 py-1.5", getRiskLabel(riskScore).color.replace('bg-', 'bg-').replace('border-', 'border-').replace('text-', 'text-').replace('500', '700'))}>
+                                            {getRiskLabel(riskScore).label} Risk
+                                        </Badge>
+                                    </div>
+                                </div>
+
+                                {/* ASSIGN THE CASE TO A USER */}
+                                {
+                                    clientDetails.role === "client-admin" && (
+                                        <div className="space-y-4 py-3 first:pt-0 border-b border-slate-100 hidden sm:block">
+                                            <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Assignment</h4>
+                                            <div className="w-full bg-slate-50 p-4 rounded-xl border border-slate-100 flex items-center gap-3">
+                                                {!isAssignEditMode ? (
+                                                    <>
+                                                        <div className="flex-1 flex items-center gap-2">
+                                                            <span className="text-sm text-slate-500 font-medium">Assigned to:</span>
+                                                            <Badge variant="secondary" className="font-bold text-slate-700 bg-white border-slate-200">
+                                                                {assignedEmail}
+                                                            </Badge>
+                                                        </div>
+                                                        <Button variant="ghost" size="sm" onClick={() => setIsAssignEditMode(true)} className="h-8 text-slate-500 hover:text-slate-900">
+                                                            <Pencil className="w-4 h-4 mr-1.5" /> Edit
+                                                        </Button>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <span className="text-sm text-slate-500 font-medium whitespace-nowrap">Assign to:</span>
+                                                        <select
+                                                            value={assignedEmail}
+                                                            onChange={(e) => setAssignedEmail(e.target.value)}
+                                                            className="w-full bg-white border border-slate-200 rounded-md px-3 h-10 text-sm font-medium focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
+                                                        >
+                                                            <option value="">Select an email</option>
+                                                            {projectEmails?.map((userObj) => (
+                                                                <option key={userObj.email} value={userObj.email}>
+                                                                    {userObj.alias || userObj.email}
+                                                                </option>
+                                                            ))}
+                                                        </select>
+
+                                                        <Button
+                                                            onClick={handleAssign}
+                                                            disabled={!assignedEmail || isAssigning || assignedEmail === post?.assigned_to}
+                                                            size="sm"
+                                                            className=" cursor-pointer disabled:cursor-not-allowed shrink-0 bg-blue-600 hover:bg-blue-700 text-white"
+                                                        >
+                                                            {isAssigning ? <Loader2 className="w-4 h-4 animate-spin mr-1.5" /> : <Check className="w-4 h-4 mr-1.5" />}
+                                                            Assign
+                                                        </Button>
+
+                                                        {post?.assigned_to && (
+                                                            <Button variant="ghost" size="sm"
+                                                                onClick={() => {
+                                                                    setAssignedEmail(post.assigned_to);
+                                                                    setIsAssignEditMode(false);
+                                                                }}>
+                                                                Cancel
                                                             </Button>
-                                                        </>
-                                                    ) : (
-                                                        <>
-                                                            <span className="text-sm text-slate-500 font-medium whitespace-nowrap">Assign to:</span>
-                                                            <select
-                                                                value={assignedEmail}
-                                                                onChange={(e) => setAssignedEmail(e.target.value)}
-                                                                className="w-full bg-white border border-slate-200 rounded-md px-3 h-10 text-sm font-medium focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
-                                                            >
-                                                                <option value="">Select an email</option>
-                                                                {projectEmails?.map((userObj) => (
-                                                                    <option key={userObj.email} value={userObj.email}>
-                                                                        {userObj.alias || userObj.email}
-                                                                    </option>
-                                                                ))}
-                                                            </select>
-
-                                                            <Button
-                                                                onClick={handleAssign}
-                                                                disabled={!assignedEmail || isAssigning || assignedEmail === post?.assigned_to}
-                                                                size="sm"
-                                                                className=" cursor-pointer disabled:cursor-not-allowed shrink-0 bg-blue-600 hover:bg-blue-700 text-white"
-                                                            >
-                                                                {isAssigning ? <Loader2 className="w-4 h-4 animate-spin mr-1.5" /> : <Check className="w-4 h-4 mr-1.5" />}
-                                                                Assign
-                                                            </Button>
-
-                                                            {post?.assigned_to && (
-                                                                <Button variant="ghost" size="sm"
-                                                                    onClick={() => {
-                                                                        setAssignedEmail(post.assigned_to);
-                                                                        setIsAssignEditMode(false);
-                                                                    }}>
-                                                                    Cancel
-                                                                </Button>
-                                                            )}
-                                                        </>
-                                                    )}
-                                                </div>
+                                                        )}
+                                                    </>
+                                                )}
                                             </div>
-                                        )
-                                    }
+                                        </div>
+                                    )
+                                }
 
-                                    {/* Audit Log / Update History */}
-                                    {((Array.isArray(post.update_history) && post.update_history.length > 0) || post.content_reviewed_by) && (
-                                        <div className="space-y-4 py-3 first:pt-0 border-b border-slate-100">
-                                            <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Action Logs</h4>
+                                {/* Audit Log / Update History */}
+                                {((Array.isArray(post.update_history) && post.update_history.length > 0) || post.content_reviewed_by) && (
+                                    <div className="space-y-4 py-3 first:pt-0 border-b border-slate-100">
+                                        <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Action Logs</h4>
 
-                                            <div className="space-y-6 relative before:absolute before:left-[15px] before:top-2 before:bottom-2 before:w-[1px] before:bg-slate-100">
-                                                {Array.isArray(post.update_history) && post.update_history.length > 0 ? (
-                                                    post.update_history.slice().reverse().map((entry, idx) => {
+                                        <div className="space-y-6 relative before:absolute before:left-[15px] before:top-2 before:bottom-2 before:w-[1px] before:bg-slate-100">
+                                            {Array.isArray(post.update_history) && post.update_history.length > 0 ? (
+                                                post.update_history.slice().reverse().map((entry, idx) => {
 
-                                                        const cleanEmail = entry.updated_by?.trim().toLowerCase();
-                                                        const isEmail = /\S+@\S+\.\S+/.test(cleanEmail);
+                                                    const cleanEmail = entry.updated_by?.trim().toLowerCase();
+                                                    const isEmail = /\S+@\S+\.\S+/.test(cleanEmail);
 
-                                                        const projectUser = isEmail
-                                                            ? projectEmails?.find(u => u.email?.trim().toLowerCase() === cleanEmail)
-                                                            : null;
+                                                    const projectUser = isEmail
+                                                        ? projectEmails?.find(u => u.email?.trim().toLowerCase() === cleanEmail)
+                                                        : null;
 
-                                                        const shouldShowEmail = isEmail && projectUser;
-                                                        const displayIdentifier = projectUser?.alias || entry.updated_by;
+                                                    const shouldShowEmail = isEmail && projectUser;
+                                                    const displayIdentifier = projectUser?.alias || entry.updated_by;
 
-                                                        const displaySummary = entry.changes_summary === "Manual ingestion from simplified JSON"
-                                                            ? "Content was sourced and ingested into the system."
-                                                            : entry.changes_summary.replace(/client/g, "user").replace(/Client/g, "User");
+                                                    const displaySummary = entry.changes_summary === "Manual ingestion from simplified JSON"
+                                                        ? "Content was sourced and ingested into the system."
+                                                        : entry.changes_summary.replace(/client/g, "user").replace(/Client/g, "User");
 
-                                                        return (
-                                                            <div key={idx} className="relative pl-12 group">
-                                                                <div className="absolute left-0 top-0 h-8 w-8 rounded-full bg-slate-50 border border-slate-200 flex items-center justify-center z-10">
-                                                                    <User className="w-4 h-4 text-slate-400" />
-                                                                </div>
-                                                                <div className="flex flex-col gap-0.5 pt-1.5">
-                                                                    <div className="flex items-center gap-2">
-                                                                        {
-                                                                            shouldShowEmail
+                                                    return (
+                                                        <div key={idx} className="relative pl-12 group">
+                                                            <div className="absolute left-0 top-0 h-8 w-8 rounded-full bg-slate-50 border border-slate-200 flex items-center justify-center z-10">
+                                                                <User className="w-4 h-4 text-slate-400" />
+                                                            </div>
+                                                            <div className="flex flex-col gap-0.5 pt-1.5">
+                                                                <div className="flex items-center gap-2">
+                                                                    {
+                                                                        shouldShowEmail
                                                                             &&
                                                                             !entry.changes_summary.includes("Case Alerted")
                                                                             ? (
@@ -709,194 +701,193 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
                                                                                     System
                                                                                 </span>
                                                                             )}
-                                                                        <span className="text-[11px] text-slate-400">
-                                                                            <SafeDate date={entry.updated_at} formatStr="dd/MM/yyyy HH:mm" />
-                                                                        </span>
-                                                                    </div>
-                                                                    <p className="text-sm text-slate-600">
-                                                                        {displaySummary}
-                                                                    </p>
+                                                                    <span className="text-[11px] text-slate-400">
+                                                                        <SafeDate date={entry.updated_at} formatStr="dd/MM/yyyy HH:mm" />
+                                                                    </span>
                                                                 </div>
+                                                                <p className="text-sm text-slate-600">
+                                                                    {displaySummary}
+                                                                </p>
                                                             </div>
-                                                        );
-                                                    })
-                                                ) : (
-                                                    <div className="relative pl-12 group">
-                                                        <div className="absolute left-0 top-0 h-8 w-8 rounded-full bg-slate-50 border border-slate-200 flex items-center justify-center z-10">
-                                                            <User className="w-4 h-4 text-slate-400" />
                                                         </div>
-                                                        <div className="flex flex-col gap-0.5 pt-1.5">
-                                                            <div className="flex items-center gap-2">
-                                                                <span className="text-sm font-bold text-slate-900">
-                                                                    {post.content_reviewed_by}
-                                                                </span>
-                                                                <span className="text-[11px] text-slate-400">
-                                                                    Last Review
-                                                                </span>
-                                                            </div>
-                                                            <p className="text-sm text-slate-600">
-                                                                Case reviewed and finalized.
-                                                            </p>
-                                                        </div>
+                                                    );
+                                                })
+                                            ) : (
+                                                <div className="relative pl-12 group">
+                                                    <div className="absolute left-0 top-0 h-8 w-8 rounded-full bg-slate-50 border border-slate-200 flex items-center justify-center z-10">
+                                                        <User className="w-4 h-4 text-slate-400" />
                                                     </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {/* Client Notes Section */}
-                                    <div className="space-y-4 pt-6 first:pt-0 hidden sm:block">
-                                        <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Comments</h4>
-
-                                        {localNotes && localNotes.length > 0 ? (
-                                            <div className="space-y-3 max-h-60 overflow-y-auto pr-2">
-                                                {localNotes.map((note, idx) => (
-                                                    <div key={idx} className="bg-slate-50 border border-slate-100 p-4 rounded-xl">
-                                                        <div className="flex justify-between items-start mb-3">
-                                                            <span className="text-[10px] font-bold text-slate-400">{note.email || 'Unknown User'}</span>
-                                                            <span className="text-[10px] text-slate-400">
-                                                                <SafeDate date={note.created_at} />
+                                                    <div className="flex flex-col gap-0.5 pt-1.5">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-sm font-bold text-slate-900">
+                                                                {post.content_reviewed_by}
+                                                            </span>
+                                                            <span className="text-[11px] text-slate-400">
+                                                                Last Review
                                                             </span>
                                                         </div>
-                                                        <p className="text-sm text-slate-700 font-medium whitespace-pre-wrap">
-                                                            {note.text}
+                                                        <p className="text-sm text-slate-600">
+                                                            Case reviewed and finalized.
                                                         </p>
                                                     </div>
-                                                ))}
-                                            </div>
-                                        ) : null}
-
-                                        <div className="relative mt-2">
-                                            <Textarea
-                                                placeholder="Comments"
-                                                className="min-h-[100px] pr-12 text-sm resize-none bg-white border-slate-200 focus-visible:ring-blue-500"
-                                                value={noteText}
-                                                onChange={(e) => setNoteText(e.target.value)}
-                                                onKeyDown={(e) => {
-                                                    if (e.key === 'Enter' && !e.shiftKey) {
-                                                        e.preventDefault();
-                                                        handleAddNote();
-                                                    }
-                                                }}
-                                            />
-                                            <Button
-                                                size="icon"
-                                                variant="ghost"
-                                                className="absolute cursor-pointer bottom-2 right-2 h-8 w-8 hover:text-blue-600 bg-white transition-colors duration-200 disabled:opacity-50"
-                                                onClick={handleAddNote}
-                                                disabled={!noteText.trim() || isSubmittingNote}
-                                            >
-                                                {isSubmittingNote ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                                            </Button>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
+                                )}
+
+                                {/* Client Notes Section */}
+                                <div className="space-y-4 pt-6 first:pt-0 hidden sm:block">
+                                    <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Comments</h4>
+
+                                    {localNotes && localNotes.length > 0 ? (
+                                        <div className="space-y-3 max-h-60 overflow-y-auto pr-2">
+                                            {localNotes.map((note, idx) => (
+                                                <div key={idx} className="bg-slate-50 border border-slate-100 p-4 rounded-xl">
+                                                    <div className="flex justify-between items-start mb-3">
+                                                        <span className="text-[10px] font-bold text-slate-400">{note.email || 'Unknown User'}</span>
+                                                        <span className="text-[10px] text-slate-400">
+                                                            <SafeDate date={note.created_at} />
+                                                        </span>
+                                                    </div>
+                                                    <p className="text-sm text-slate-700 font-medium whitespace-pre-wrap">
+                                                        {note.text}
+                                                    </p>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ) : null}
+
+                                    <div className="relative mt-2">
+                                        <Textarea
+                                            placeholder="Comments"
+                                            className="min-h-[100px] pr-12 text-sm resize-none bg-white border-slate-200 focus-visible:ring-blue-500"
+                                            value={noteText}
+                                            onChange={(e) => setNoteText(e.target.value)}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter' && !e.shiftKey) {
+                                                    e.preventDefault();
+                                                    handleAddNote();
+                                                }
+                                            }}
+                                        />
+                                        <Button
+                                            size="icon"
+                                            variant="ghost"
+                                            className="absolute cursor-pointer bottom-2 right-2 h-8 w-8 hover:text-blue-600 bg-white transition-colors duration-200 disabled:opacity-50"
+                                            onClick={handleAddNote}
+                                            disabled={!noteText.trim() || isSubmittingNote}
+                                        >
+                                            {isSubmittingNote ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                                        </Button>
+                                    </div>
                                 </div>
+                            </div>
 
-                                {/* Footer Action Area */}
-                                <div className=" border-t border-slate-100 bg-white sticky bottom-0 z-10">
+                            {/* Footer Action Area */}
+                            <div className=" border-t border-slate-100 bg-white sticky bottom-0 z-10">
 
 
 
-                                    {(isRequested) && (
-                                        <div className="flex items-start gap-3 mb-4 p-4 bg-orange-50 rounded-xl border border-orange-100">
-                                            <Info className="w-5 h-5 text-orange-600 mt-0.5 shrink-0" />
+                                {(isRequested) && (
+                                    <div className="flex items-start gap-3 mb-4 p-4 bg-orange-50 rounded-xl border border-orange-100">
+                                        <Info className="w-5 h-5 text-orange-600 mt-0.5 shrink-0" />
+                                        <div>
+                                            <p className="text-sm font-bold text-orange-800">Takedown Suggested</p>
+                                            <p className="text-xs text-orange-700 mt-1">Reviewer flagged this for immediate removal.</p>
+                                        </div>
+                                    </div>
+                                )}
+                                {
+                                    showProcessed === post._id && (
+                                        <div className="flex items-start gap-3 mb-4 p-4 bg-green-50 rounded-xl border border-green-100">
+                                            <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 shrink-0" />
                                             <div>
-                                                <p className="text-sm font-bold text-orange-800">Takedown Suggested</p>
-                                                <p className="text-xs text-orange-700 mt-1">Reviewer flagged this for immediate removal.</p>
+                                                <p className="text-sm font-bold text-green-800">Case Processed</p>
+                                                <p className="text-xs text-green-700 mt-1">This case has been processed.</p>
                                             </div>
+                                        </div>
+                                    )
+                                }
+
+                                <div className="flex flex-col items-center pb-4 pt-1 px-4">
+
+                                    {isRaised ? (
+                                        <div className="w-full flex flex-row gap-3 py-2">
+                                            <div className="w-full h-12 font-bold text-white shadow-rose-900/20 bg-rose-600 opacity-100 cursor-default ring-2 ring-rose-700 ring-offset-2 flex items-center justify-center rounded-md">
+                                                <CheckCircle className="w-5 h-5 mr-2" />
+                                                Takedown in Progress
+                                            </div>
+                                            <a
+                                                href={`/takedowns/case/${post._id.toString()}`}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="w-full"
+                                            >
+                                                <Button
+                                                    variant="outline"
+                                                    className="w-full h-12 border-slate-200 text-slate-700 hover:bg-slate-50 font-bold"
+                                                >
+                                                    <ExternalLink className="w-4 h-4 mr-2 text-slate-500" />
+                                                    Check Takedown Status
+                                                </Button>
+                                            </a>
+
+                                        </div>
+                                    ) : (
+                                        <div className="w-full flex flex-col sm:flex-row gap-3 sm:gap-4 py-2" >
+                                            <Button
+                                                onClick={() => { if (clientStatus !== 'No Action' && clientStatus !== 'Pass') handleUpdateStatus('No Action') }}
+                                                disabled={isProcessing === 'No Action'}
+                                                className={cn(
+                                                    "flex-1 h-12 font-bold text-white transition-all duration-200 shadow-emerald-900/20 bg-emerald-500",
+                                                    (clientStatus === 'No Action' || clientStatus === 'Pass') ? "opacity-100 cursor-default ring-2 ring-emerald-600 ring-offset-2" : "opacity-50 hover:opacity-100 cursor-pointer hover:bg-emerald-600"
+                                                )}
+                                            >
+                                                {isProcessing === 'No Action' && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
+                                                No Action
+                                            </Button>
+                                            <Button
+                                                onClick={() => { if (clientStatus !== 'Flag for Takedown') handleUpdateStatus('Flag for Takedown') }}
+                                                disabled={isProcessing === 'Flag for Takedown'}
+                                                className={cn(
+                                                    "flex-1 h-12 font-bold text-white transition-all duration-200",
+                                                    allowDoTakedown ? "shadow-amber-900/20 bg-amber-500" : "shadow-rose-900/20 bg-rose-600",
+                                                    clientStatus === 'Flag for Takedown'
+                                                        ? cn("opacity-100 cursor-default ring-2 ring-offset-2", allowDoTakedown ? "ring-amber-600" : "ring-rose-700")
+                                                        : cn("opacity-50 hover:opacity-100 cursor-pointer", allowDoTakedown ? "hover:bg-amber-600" : "hover:bg-rose-700")
+                                                )}
+                                            >
+                                                {isProcessing === 'Flag for Takedown' ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <AlertTriangle className="w-4 h-4 mr-2" />}
+                                                Flag for Takedown
+                                            </Button>
+                                            {allowDoTakedown && (
+                                                <Button
+                                                    onClick={handleTakedown}
+                                                    disabled={isProcessing === 'Takedown'}
+                                                    className={cn(
+                                                        "flex-1 h-12 font-bold text-white transition-all duration-200 shadow-rose-900/20 bg-rose-600",
+                                                        cn("opacity-50 hover:opacity-100 cursor-pointer hover:bg-rose-700", clientStatus === 'To Be Reviewed' ? "opacity-100" : "")
+                                                    )}
+                                                >
+                                                    {isProcessing === 'Takedown' ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <ShieldAlert className="w-4 h-4 mr-2" />}
+                                                    Do Takedown
+                                                </Button>
+                                            )}
                                         </div>
                                     )}
-                                    {
-                                        showProcessed === post._id && (
-                                            <div className="flex items-start gap-3 mb-4 p-4 bg-green-50 rounded-xl border border-green-100">
-                                                <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 shrink-0" />
-                                                <div>
-                                                    <p className="text-sm font-bold text-green-800">Case Processed</p>
-                                                    <p className="text-xs text-green-700 mt-1">This case has been processed.</p>
-                                                </div>
-                                            </div>
-                                        )
-                                    }
-
-                                    <div className="flex flex-col items-center pb-4 pt-1 px-4">
-
-                                        {isRaised ? (
-                                            <div className="w-full flex flex-row gap-3 py-2">
-                                                <div className="w-full h-12 font-bold text-white shadow-rose-900/20 bg-rose-600 opacity-100 cursor-default ring-2 ring-rose-700 ring-offset-2 flex items-center justify-center rounded-md">
-                                                    <CheckCircle className="w-5 h-5 mr-2" />
-                                                    Takedown in Progress
-                                                </div>
-                                                <a
-                                                    href={`/takedowns/case/${post._id.toString()}`}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    className="w-full"
-                                                >
-                                                    <Button
-                                                        variant="outline"
-                                                        className="w-full h-12 border-slate-200 text-slate-700 hover:bg-slate-50 font-bold"
-                                                    >
-                                                        <ExternalLink className="w-4 h-4 mr-2 text-slate-500" />
-                                                        Check Takedown Status
-                                                    </Button>
-                                                </a>
-
-                                            </div>
-                                        ) : (
-                                            <div className="w-full flex flex-col sm:flex-row gap-3 sm:gap-4 py-2" >
-                                                <Button
-                                                    onClick={() => { if (clientStatus !== 'No Action' && clientStatus !== 'Pass') handleUpdateStatus('No Action') }}
-                                                    disabled={isProcessing === 'No Action'}
-                                                    className={cn(
-                                                        "flex-1 h-12 font-bold text-white transition-all duration-200 shadow-emerald-900/20 bg-emerald-500",
-                                                        (clientStatus === 'No Action' || clientStatus === 'Pass') ? "opacity-100 cursor-default ring-2 ring-emerald-600 ring-offset-2" : "opacity-50 hover:opacity-100 cursor-pointer hover:bg-emerald-600"
-                                                    )}
-                                                >
-                                                    {isProcessing === 'No Action' && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
-                                                    No Action
-                                                </Button>
-                                                <Button
-                                                    onClick={() => { if (clientStatus !== 'Flag for Takedown') handleUpdateStatus('Flag for Takedown') }}
-                                                    disabled={isProcessing === 'Flag for Takedown'}
-                                                    className={cn(
-                                                        "flex-1 h-12 font-bold text-white transition-all duration-200",
-                                                        allowDoTakedown ? "shadow-amber-900/20 bg-amber-500" : "shadow-rose-900/20 bg-rose-600",
-                                                        clientStatus === 'Flag for Takedown'
-                                                            ? cn("opacity-100 cursor-default ring-2 ring-offset-2", allowDoTakedown ? "ring-amber-600" : "ring-rose-700")
-                                                            : cn("opacity-50 hover:opacity-100 cursor-pointer", allowDoTakedown ? "hover:bg-amber-600" : "hover:bg-rose-700")
-                                                    )}
-                                                >
-                                                    {isProcessing === 'Flag for Takedown' ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <AlertTriangle className="w-4 h-4 mr-2" />}
-                                                    Flag for Takedown
-                                                </Button>
-                                                {allowDoTakedown && (
-                                                    <Button
-                                                        onClick={handleTakedown}
-                                                        disabled={isProcessing === 'Takedown'}
-                                                        className={cn(
-                                                            "flex-1 h-12 font-bold text-white transition-all duration-200 shadow-rose-900/20 bg-rose-600",
-                                                            cn("opacity-50 hover:opacity-100 cursor-pointer hover:bg-rose-700", clientStatus === 'To Be Reviewed' ? "opacity-100" : "")
-                                                        )}
-                                                    >
-                                                        {isProcessing === 'Takedown' ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <ShieldAlert className="w-4 h-4 mr-2" />}
-                                                        Do Takedown
-                                                    </Button>
-                                                )}
-                                            </div>
-                                        )}
-                                        <div onClick={() => trackClientClick('download_case_report', { page: 'CaseDetailPanel' })} className="flex gap-2">
-                                            <CaseExportButton post={post} project={project} />
-                                            <CaseExportDocxButton post={post} project={project} />
-                                        </div>
+                                    <div onClick={() => trackClientClick('download_case_report', { page: 'CaseDetailPanel' })} className="flex gap-2">
+                                        <CaseExportButton post={post} project={project} />
+                                        <CaseExportDocxButton post={post} project={project} />
                                     </div>
                                 </div>
-
                             </div>
-                        )
-                    }
-                </div>
+
+                        </div>
+                    )
+                }
             </div>
-        </div >
+        </div>
     )
 }
 
