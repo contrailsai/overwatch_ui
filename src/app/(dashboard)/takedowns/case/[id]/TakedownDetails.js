@@ -715,18 +715,29 @@ export default function TakedownDetails({ takedownId, initialData, initialDocume
                       <h5 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
                         <Scale className="w-3 h-3" /> Legal Framework
                       </h5>
-                      <div className="flex gap-2 flex-wrap">
-                        {legalCodes.map((code, idx) => {
+                      <div className="flex flex-col gap-3">
+                        {legalCodes.map((item, idx) => {
+                          const code = typeof item === 'string' ? item : item.code;
+                          const reasoning = typeof item === 'string' ? '' : item.reasoning;
                           const projectCode = project?.project_details?.legal_codes?.find(pc => pc.name === code);
                           return (
-                            <ViolationCard
-                              key={idx}
-                              active={true}
-                              title={code}
-                              icon={Scale}
-                              color="purple"
-                              referenceLink={projectCode?.referenceLink}
-                            />
+                            <div key={idx} className="flex flex-col gap-2">
+                              <div className="w-fit">
+                                <ViolationCard
+                                  active={true}
+                                  title={code}
+                                  icon={Scale}
+                                  color="purple"
+                                  referenceLink={projectCode?.referenceLink}
+                                />
+                              </div>
+                              {reasoning && (
+                                <div className="bg-purple-50 p-3 rounded-lg border border-purple-100 text-sm text-purple-900 leading-relaxed">
+                                  <span className="font-bold mr-2">Reasoning:</span>
+                                  {reasoning}
+                                </div>
+                              )}
+                            </div>
                           );
                         })}
                       </div>

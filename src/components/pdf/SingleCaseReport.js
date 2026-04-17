@@ -588,11 +588,14 @@ export const SingleCasePage = ({ post, project, compressedImage }) => {
                             <Text style={styles.sectionLabel}>Legal Framework</Text>
                             <View style={styles.analysisBox}>
                                 <View style={styles.violationGrid}>
-                                    {legalCodes.map((code, i) => (
-                                        <View key={i} style={[styles.violationBadge, { borderColor: '#8B5CF6', backgroundColor: '#8B5CF615' }]}>
-                                            <Text style={[styles.violationText, { color: '#8B5CF6' }]}>{code}</Text>
-                                        </View>
-                                    ))}
+                                    {legalCodes.map((item, i) => {
+                                        const code = typeof item === 'string' ? item : item.code;
+                                        return (
+                                            <View key={i} style={[styles.violationBadge, { borderColor: '#8B5CF6', backgroundColor: '#8B5CF615' }]}>
+                                                <Text style={[styles.violationText, { color: '#8B5CF6' }]}>{code}</Text>
+                                            </View>
+                                        );
+                                    })}
                                 </View>
                             </View>
                         </View>

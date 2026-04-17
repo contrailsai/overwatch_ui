@@ -1,84 +1,135 @@
 {
-    "_id": "6981117c3c24564a2cb284c6",
-    "created_at": "2026-02-02T21:04:58.694Z",
-    "platform": "facebook",
-    "processed": true,
-    "caption": "Free Reacharge tricks kannada\n#freerecharge #kannada #reacharge",
-    "signedImageUrl": "https://cxo-demo.s3.ap-south-1.amazonaws.com/facebook_data/1538766563312138/0.jpg?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=AKIA6ODU4O3VBDPTBBP6%2F20260205%2Fap-south-1%2Fs3%2Faws4_request&X-Amz-Date=20260205T121349Z&X-Amz-Expires=3600&X-Amz-Signature=bd3880b4ca8e07d14c688019a2b4ea1067e32ad90cb24627b92176820c438b84&X-Amz-SignedHeaders=host&x-amz-checksum-mode=ENABLED&x-id=GetObject",
-    "user": {
-        "username": "Deepu Smiley",
-        "full_name": "Deepu Smiley",
-        "profile_pic_url": "https://www.facebook.com/sudeepn.hiriyur",
-        "is_verified": false
+  "_id": {
+    "$oid": "69e064620c0f75905556ee78"
+  },
+  "code": "2044401999618191360",
+  "analysis_results": {},
+  "author": {
+    "name": "AmedJ.",
+    "url": "https://twitter.com/ajxcav"
+  },
+  "caption": "🚨 🇮🇳 INDIAN ARMY RUNNING OUT OF MANIPUR  Indian Army troops illegally entering Manipur have been kicked out, with locals pelting stones at them. They have been completely driven out by the brave locals.   They are firing bullets and gas bombs while leaving in their bulletproof https://t.co/sILJyKBnCR",
+  "content": "🚨 🇮🇳 INDIAN ARMY RUNNING OUT OF MANIPUR  Indian Army troops illegally entering Manipur have been kicked out, with locals pelting stones at them. They have been completely driven out by the brave locals.   They are firing bullets and gas bombs while leaving in their bulletproof https://t.co/sILJyKBnCR",
+  "created_at": "2026-04-15T13:10:34+00:00",
+  "engagement": {
+    "likes": 0,
+    "comments": 0,
+    "shares": 0,
+    "retweets": 0,
+    "quotes": 0,
+    "replies": 0,
+    "views": 0,
+    "posted_at": "2026-04-15T13:10:34+00:00"
+  },
+  "id": "2044401999618191360",
+  "media_urls": [
+    {
+      "type": "image",
+      "original_url": "https://pbs.twimg.com/ext_tw_video_thumb/2044401999618191360/pu/img/CoDtjgAaEeYeOnKQ.jpg?name=orig",
+      "s3_url": "https://cxo-demo.s3.ap-south-1.amazonaws.com/facebook_data/2044401999618191360/0.jpg"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-04-16T13:36:36.358052+00:00",
+    "updated_at": "2026-04-17T12:28:20.565Z",
+    "sourcing_date": "2026-04-16T13:36:36.358052+00:00",
+    "update_history": [
+      {
+        "updated_at": "2026-04-16T13:36:36.358052+00:00",
+        "updated_by": "manual_ingest_script",
+        "changes_summary": "Manual ingestion from simplified JSON"
+      },
+      {
+        "updated_at": {
+          "$date": "2026-04-17T12:28:20.565Z"
+        },
+        "updated_by": "akshay@pmo-data.com",
+        "changes_summary": "Case Alerted "
+      }
+    ],
+    "schema_version": 1
+  },
+  "original_url": "https://x.com/ajxcav/status/2044403005479391286",
+  "platform": "X",
+  "post_content": {
+    "caption": "🚨 🇮🇳 INDIAN ARMY RUNNING OUT OF MANIPUR  Indian Army troops illegally entering Manipur have been kicked out, with locals pelting stones at them. They have been completely driven out by the brave locals.   They are firing bullets and gas bombs while leaving in their bulletproof https://t.co/sILJyKBnCR",
+    "media_urls": [
+      {
+        "type": "image",
+        "original_url": "https://pbs.twimg.com/ext_tw_video_thumb/2044401999618191360/pu/img/CoDtjgAaEeYeOnKQ.jpg?name=orig",
+        "s3_url": "https://cxo-demo.s3.ap-south-1.amazonaws.com/facebook_data/2044401999618191360/0.jpg"
+      }
+    ],
+    "post_type": "post",
+    "language": null
+  },
+  "post_id": "2044401999618191360",
+  "processed": true,
+  "processed_at": {
+    "$date": "2026-04-17T12:28:20.565Z"
+  },
+  "profile": {
+    "platform_user_id": null,
+    "username": "AmedJ.",
+    "display_name": "AmedJ.",
+    "profile_url": "https://twitter.com/ajxcav",
+    "is_verified": false
+  },
+  "result_origin": {
+    "type": "manual_upload",
+    "source_url": "https://x.com/ajxcav/status/2044403005479391286"
+  },
+  "review_details": {
+    "threat_score": 96,
+    "threat_types": [
+      "Anti-India-Propaganda",
+      "Misinformation"
+    ],
+    "legal_codes": [
+      "BNS - Sec 152",
+      "IT Rules - 3(1)(b)(vii)"
+    ],
+    "is_aigc": false,
+    "flags": {
+      "Defamation": false,
+      "Anti-India-Propaganda": true,
+      "Hate-speech": false,
+      "Misinformation": true,
+      "Obscene": false,
+      "Fraud": false,
+      "asset-misuse": false,
+      "Terrorism": false,
+      "Violence": false
     },
-    "review_details": {
-        "threat_score": 90,
-        "threat_types": [
-            "scam",
-            "fake_news"
-        ],
-        "flags": {
-            "poi_confirmed": true,
-            "is_hate_speech": false,
-            "is_nsfw": false,
-            "is_fake_news": true,
-            "is_aigc": false
-        },
-        "poi_names": [
-            "Jio"
-        ],
-        "reasoning": "Flags: scam, misinformation. The content promotes 'Free Recharge tricks,' which is a common tactic used in scams or fraudulent schemes. Such claims typically involve misleading users into providing personal or financial information, clicking malicious links, or engaging in activities that may lead to unauthorized charges or data breaches. The presence of telecom company logos (Airtel, Jio) without official endorsement further suggests an attempt to exploit trust in legitimate brands.",
-        "reviewer_comments": "",
-        "face_present": true,
-        "name_present": false,
-        "reviewed_at": "2026-02-05T10:48:26.728Z"
-    },
-    "takedown_info": {
-        "takedown_status": "raised",
-        "client_approval_date": "2026-02-05T12:13:23.506Z",
-        "supabase_id": "886329aa-3794-46fb-bac1-f42ef9306024"
-    },
-    "analysis_results": {
-        "risk_score": 100,
-        "category": "High Risk",
-        "categorization_reason": "Flags: scam, misinformation. The content promotes 'Free Recharge tricks,' which is a common tactic used in scams or fraudulent schemes. Such claims typically involve misleading users into providing personal or financial information, clicking malicious links, or engaging in activities that may lead to unauthorized charges or data breaches. The presence of telecom company logos (Airtel, Jio) without official endorsement further suggests an attempt to exploit trust in legitimate brands.",
-        "poi_check": {
-            "face_present": false,
-            "poi_name_found": true,
-            "poi_names": [
-                "Mukesh Ambani"
-            ],
-            "face_bbox": [],
-            "confidence": 0
-        },
-        "truth_check": {
-            "is_credible": false,
-            "explanation": "The claim promotes 'free recharge tricks,' which is highly unlikely and typically associated with scams, fraudulent schemes, or misleading content. Legitimate recharge services require payment, and such claims often violate terms of service or may involve illegal activities like phishing or data theft.",
-            "sources": []
-        },
-        "aigc_check": {
-            "is_aigc": false,
-            "score": 0.3905608057975769,
-            "provider": "local_ensemble"
-        },
-        "nsfw_check": {
-            "is_safe": false,
-            "reasoning": "The content promotes 'Free Recharge tricks,' which is a common tactic used in scams or fraudulent schemes. Such claims typically involve misleading users into providing personal or financial information, clicking malicious links, or engaging in activities that may lead to unauthorized charges or data breaches. The presence of telecom company logos (Airtel, Jio) without official endorsement further suggests an attempt to exploit trust in legitimate brands.",
-            "category": "scam",
-            "risk_level": "High"
-        },
-        "hate_speech_check": {
-            "is_safe": false,
-            "reasoning": "The content promotes 'Free Recharge tricks,' which is a common tactic used in scams or fraudulent schemes. Such claims typically involve misleading users into providing personal or financial information, clicking malicious links, or engaging in activities that may lead to unauthorized charges or data breaches. The presence of telecom company logos (Airtel, Jio) without official endorsement further suggests an attempt to exploit trust in legitimate brands.",
-            "category": "scam",
-            "risk_level": "High"
-        },
-        "analyzed_at": "2026-02-03T14:43:54.071Z"
-    },
-    "stats": {
-        "like_count": 162,
-        "comment_count": 6,
-        "share_count": 8
-    },
-    "isPriority": true
+    "poi_names": [],
+    "reasoning": "Description: The post shows a blurry video still of an armored vehicle. The caption makes extreme, secessionist claims: \"INDIAN ARMY RUNNING OUT OF MANIPUR,\" alleging troops \"illegally entering\" Manipur were kicked out by locals, and explicitly concluding with the demand to \"FREE MANIPUR.\"\r\n\r\nIT Act and Rules: This is a critical violation of Rule 3(1)(b)(vii). A foreign network explicitly advocating for the secession of a state (\"FREE MANIPUR\") while simultaneously framing the national army as an illegal, fleeing occupation force is a direct, hostile attack on the sovereignty and territorial integrity of the nation.\r\n\r\nBNS & Other Laws: Section 152 (Act endangering sovereignty) and Section 353 (Statements conducing to public mischief).\r\n\r\nTake Down: Expedited Standard Takedown. Foreign information operations explicitly advocating for secession require rapid network-level neutralization.",
+    "reviewer_comments": "",
+    "face_present": false,
+    "name_present": false,
+    "reviewed_at": "2026-04-17T12:28:20.563Z"
+  },
+  "s3_stored": true,
+  "sourcing_date": "2026-04-16T13:36:36.358052+00:00",
+  "stats": {
+    "likes": 0,
+    "comments": 0,
+    "shares": 0
+  },
+  "supabase_refs": {
+    "case_id": null,
+    "alert_ids": [],
+    "chat_thread_ids": []
+  },
+  "takedown_info": {
+    "takedown_status": "None"
+  },
+  "timestamp": "2026-04-15T13:10:34+00:00",
+  "type": "post",
+  "url": "https://x.com/ajxcav/status/2044403005479391286",
+  "user": {
+    "name": "AmedJ.",
+    "url": "https://twitter.com/ajxcav"
+  },
+  "client_status": "Flag for Takedown",
+  "content_reviewed_by": "dipanjalingmib@gmail.com"
 }

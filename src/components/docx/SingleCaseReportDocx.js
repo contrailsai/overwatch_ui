@@ -324,7 +324,7 @@ export const generateCaseSections = async (post, project, compressedImage, caseN
         docChildren.push(sectionHeading("Legal Framework"));
         docChildren.push(
             new Paragraph({
-                children: [new TextRun({ text: legalCodes.join("  ·  "), color: "374151", size: 20 })],
+                children: [new TextRun({ text: legalCodes.map(c => typeof c === 'string' ? c : c.code).join("  ·  "), color: "374151", size: 20 })],
             })
         );
         docChildren.push(sectionDivider(200));

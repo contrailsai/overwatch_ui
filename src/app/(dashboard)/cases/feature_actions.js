@@ -90,7 +90,10 @@ export const submitCaseReview = traceAction('submitCaseReview', async (project, 
             const codeName = key.replace('legal_code_', '')
             const isActive = value === 'on'
             if (isActive) {
-                legal_codes.push(codeName)
+                legal_codes.push({
+                    code: codeName,
+                    reasoning: formData.get(`legal_reasoning_${codeName}`) || ''
+                })
             }
         }
     }

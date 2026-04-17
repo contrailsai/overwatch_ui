@@ -525,88 +525,33 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
                                     </Button>
                                 </div>
 
-                                <div className="flex-none lg:flex-1 lg:overflow-y-auto p-4 sm:p-6 space-y-6 sm:space-y-8">
-
-                                    {/* Threat Score Card */}
-                                    <div>
-                                        <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Risk Assessment</h4>
-                                        <div className={cn(
-                                            "rounded-2xl p-6 border relative overflow-hidden shadow-lg transition-all",
-                                            getRiskLabel(riskScore).color.replace('text-', 'bg-').replace('bg-', 'border-').replace('500', '600').replace('50', '500'),
-                                            riskScore >= 76 ? "text-white" : "text-slate-900",
-                                            riskScore >= 96 ? "bg-rose-600 border-rose-500 text-white" :
-                                                riskScore >= 76 ? "bg-orange-500 border-orange-400 text-white" :
-                                                    riskScore >= 41 ? "bg-amber-500 border-amber-400 text-white" :
-                                                        "bg-slate-500 border-slate-400 text-white"
-                                        )}>
-                                            <div className="absolute top-0 right-0 p-32 bg-white/10 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none" />
-
-                                            <div className="relative z-10 flex justify-between items-end">
-                                                <div>
-                                                    <p className="text-white/80 font-bold text-xs uppercase tracking-wide mb-1">Total Risk Score</p>
-                                                    <div className="text-5xl font-black tracking-tighter flex items-baseline gap-2">
-                                                        {getRiskLabel(riskScore).label}
-                                                    </div>
-                                                </div>
-                                                {/* <div className="text-right">
-                                            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/20 backdrop-blur-md text-[10px] font-bold uppercase mb-2 border border-white/10">
-                                                <Activity className="w-3 h-3" /> AI Analysis
-                                            </div>
-                                            <p className="font-bold text-base leading-tight max-w-[120px] capitalize">{category}</p>
-                                        </div> */}
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* Violation Grid */}
-                                    <div>
-                                        <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Violations</h4>
-                                        <div className="grid grid-cols-2 gap-3">
-                                            <ViolationCard
-                                                active={isPoiPresent}
-                                                title="POI Detected"
-                                                icon={ScanFace}
-                                                color="indigo"
-                                            />
-                                            <ViolationCard
-                                                active={isAigc}
-                                                title="AI Generated"
-                                                icon={Bot}
-                                                color="purple"
-                                            />
-
-                                            {activeLabels.map((label, idx) => (
-                                                <ViolationCard
-                                                    key={idx}
-                                                    active={true}
-                                                    title={label.title}
-                                                    icon={label.icon}
-                                                    color={label.color}
-                                                />
-                                            ))}
-
-
-                                        </div>
-                                    </div>
+                                <div className="flex-none lg:flex-1 lg:overflow-y-auto p-4 sm:p-6">
 
                                     {/* Legal Framework Section */}
                                     {legalCodes.length > 0 && (
-                                        <div className="space-y-4">
-                                            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                                                <Scale className="w-3.5 h-3.5" /> Legal Framework
-                                            </h4>
-                                            <div className="flex gap-2 flex-wrap">
-                                                {legalCodes.map((code, idx) => {
+                                        <div className="space-y-4 py-3 first:pt-0 border-b border-slate-100 ">
+                                            <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Legal Violations</h4>
+                                            <div className="flex flex-col gap-3">
+                                                {legalCodes.map((item, idx) => {
+                                                    const code = typeof item === 'string' ? item : item.code;
+                                                    const reasoning = typeof item === 'string' ? '' : item.reasoning;
                                                     const projectCode = project?.project_details?.legal_codes?.find(pc => pc.name === code);
+                                                    
+                                                    const bgClass = idx % 2 === 0 ? "bg-rose-50/50 border-rose-100" : "bg-orange-50/50 border-orange-100";
+                                                    const textClass = idx % 2 === 0 ? "text-rose-800" : "text-orange-800";
+                                                    
                                                     return (
-                                                        <ViolationCard
-                                                            key={idx}
-                                                            active={true}
-                                                            title={code}
-                                                            icon={Scale}
-                                                            color="purple"
-                                                            referenceLink={projectCode?.referenceLink}
-                                                        />
+                                                        <div key={idx} className={cn("p-4 rounded-xl border flex flex-col gap-2", bgClass)}>
+                                                            <div className="flex items-center gap-2">
+                                                                {/* <Badge className="bg-purple-100 text-purple-700 hover:bg-purple-100 border-none text-[9px] px-1.5 py-0 uppercase">Code</Badge> */}
+                                                                <span className={cn("font-bold text-sm", textClass)}>{code}</span>
+                                                            </div>
+                                                            {reasoning && (
+                                                                <p className={cn("text-sm font-medium leading-relaxed", textClass)}>
+                                                                    {reasoning}
+                                                                </p>
+                                                            )}
+                                                        </div>
                                                     );
                                                 })}
                                             </div>
@@ -614,22 +559,58 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
                                     )}
 
                                     {/* Reasoning */}
-                                    <div className="space-y-3">
-                                        <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                                            <Eye className="w-3.5 h-3.5" /> Review Analysis
-                                        </h4>
-                                        <div className="w-full bg-slate-50 p-5 rounded-xl border border-slate-100 text-slate-600 leading-relaxed text-sm font-medium whitespace-pre-wrap">
+                                    <div className="space-y-3 py-3 first:pt-0 border-b border-slate-100">
+                                        <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Content Reasoning</h4>
+                                        <div className="w-full text-slate-700 leading-relaxed text-sm font-medium whitespace-pre-wrap">
                                             {reasoning}
+                                        </div>
+                                    </div>
+
+                                    {/* Violation Labels / AI Labels */}
+                                    <div className="space-y-4 py-3 first:pt-0 border-b border-slate-100">
+                                        <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">AI Labels Detected</h4>
+                                        <div className="flex flex-wrap gap-2">
+                                            {isPoiPresent && <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-50 text-xs shadow-none px-3 py-1.5">POI Detected</Badge>}
+                                            {isAigc && <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-50 text-xs shadow-none px-3 py-1.5">AI Generated</Badge>}
+
+                                            {activeLabels.map((label, idx) => {
+                                                const colorMap = {
+                                                    purple: "bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-50",
+                                                    rose: "bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-50",
+                                                    orange: "bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-50",
+                                                    indigo: "bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-50",
+                                                    red: "bg-red-50 text-red-700 border-red-200 hover:bg-red-50",
+                                                    violet: "bg-violet-50 text-violet-700 border-violet-200 hover:bg-violet-50",
+                                                    yellow: "bg-yellow-50 text-yellow-700 border-yellow-200 hover:bg-yellow-50",
+                                                    blue: "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-50",
+                                                    emerald: "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-50",
+                                                    amber: "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-50",
+                                                }[label.color] || "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-50";
+
+                                                return (
+                                                    <Badge key={idx} variant="outline" className={cn("text-xs shadow-none px-3 py-1.5", colorMap)}>
+                                                        {label.title}
+                                                    </Badge>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+
+                                    {/* Threat Score Card / Risk Assessment */}
+                                    <div className="space-y-4 py-3 first:pt-0 border-b border-slate-100">
+                                        <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Current AI Generated Risk</h4>
+                                        <div>
+                                            <Badge variant="outline" className={cn("text-xs shadow-none font-bold px-3 py-1.5", getRiskLabel(riskScore).color.replace('bg-', 'bg-').replace('border-', 'border-').replace('text-', 'text-').replace('500', '700'))}>
+                                                {getRiskLabel(riskScore).label} Risk
+                                            </Badge>
                                         </div>
                                     </div>
 
                                     {/* ASSIGN THE CASE TO A USER */}
                                     {
                                         clientDetails.role === "client-admin" && (
-                                            <div className="space-y-3 hidden sm:block">
-                                                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                                                    <UserPlus className="w-3.5 h-3.5" /> Assignment
-                                                </h4>
+                                            <div className="space-y-4 py-3 first:pt-0 border-b border-slate-100 hidden sm:block">
+                                                <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Assignment</h4>
                                                 <div className="w-full bg-slate-50 p-4 rounded-xl border border-slate-100 flex items-center gap-3">
                                                     {!isAssignEditMode ? (
                                                         <>
@@ -663,18 +644,14 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
                                                                 onClick={handleAssign}
                                                                 disabled={!assignedEmail || isAssigning || assignedEmail === post?.assigned_to}
                                                                 size="sm"
-                                                                // variant="ghost"
                                                                 className=" cursor-pointer disabled:cursor-not-allowed shrink-0 bg-blue-600 hover:bg-blue-700 text-white"
                                                             >
                                                                 {isAssigning ? <Loader2 className="w-4 h-4 animate-spin mr-1.5" /> : <Check className="w-4 h-4 mr-1.5" />}
                                                                 Assign
                                                             </Button>
 
-                                                            {/* Show a Cancel button only if it was already assigned previously to allow backing out of edit mode */}
                                                             {post?.assigned_to && (
                                                                 <Button variant="ghost" size="sm"
-
-                                                                    className=""
                                                                     onClick={() => {
                                                                         setAssignedEmail(post.assigned_to);
                                                                         setIsAssignEditMode(false);
@@ -689,23 +666,87 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
                                         )
                                     }
 
-                                    {/* Reviewer Note (MADE THIS REVIEWER ONLY FOR NOW) */}
-                                    {/* {reviewerNote && (
-                                        <div className="bg-amber-50 border border-amber-100 p-5 rounded-xl">
-                                            <h4 className="text-xs font-bold text-amber-700 uppercase tracking-widest mb-2 flex items-center">
-                                                <User className="w-3.5 h-3.5 mr-1.5" /> Analyst Note
-                                            </h4>
-                                            <p className="text-amber-900/80 font-medium text-sm">
-                                                {reviewerNote}
-                                            </p>
+                                    {/* Audit Log / Update History */}
+                                    {((Array.isArray(post.update_history) && post.update_history.length > 0) || post.content_reviewed_by) && (
+                                        <div className="space-y-4 py-3 first:pt-0 border-b border-slate-100">
+                                            <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Action Logs</h4>
+
+                                            <div className="space-y-6 relative before:absolute before:left-[15px] before:top-2 before:bottom-2 before:w-[1px] before:bg-slate-100">
+                                                {Array.isArray(post.update_history) && post.update_history.length > 0 ? (
+                                                    post.update_history.slice().reverse().map((entry, idx) => {
+
+                                                        const cleanEmail = entry.updated_by?.trim().toLowerCase();
+                                                        const isEmail = /\S+@\S+\.\S+/.test(cleanEmail);
+
+                                                        const projectUser = isEmail
+                                                            ? projectEmails?.find(u => u.email?.trim().toLowerCase() === cleanEmail)
+                                                            : null;
+
+                                                        const shouldShowEmail = isEmail && projectUser;
+                                                        const displayIdentifier = projectUser?.alias || entry.updated_by;
+
+                                                        const displaySummary = entry.changes_summary === "Manual ingestion from simplified JSON"
+                                                            ? "Content was sourced and ingested into the system."
+                                                            : entry.changes_summary.replace(/client/g, "user").replace(/Client/g, "User");
+
+                                                        return (
+                                                            <div key={idx} className="relative pl-12 group">
+                                                                <div className="absolute left-0 top-0 h-8 w-8 rounded-full bg-slate-50 border border-slate-200 flex items-center justify-center z-10">
+                                                                    <User className="w-4 h-4 text-slate-400" />
+                                                                </div>
+                                                                <div className="flex flex-col gap-0.5 pt-1.5">
+                                                                    <div className="flex items-center gap-2">
+                                                                        {
+                                                                            shouldShowEmail
+                                                                            &&
+                                                                            !entry.changes_summary.includes("Case Alerted")
+                                                                            ? (
+                                                                                <span className="text-sm font-bold text-slate-900" title={entry.updated_by}>
+                                                                                    {displayIdentifier}
+                                                                                </span>
+                                                                            ) : (
+                                                                                <span className="text-sm font-bold text-slate-900" title={entry.updated_by}>
+                                                                                    System
+                                                                                </span>
+                                                                            )}
+                                                                        <span className="text-[11px] text-slate-400">
+                                                                            <SafeDate date={entry.updated_at} formatStr="dd/MM/yyyy HH:mm" />
+                                                                        </span>
+                                                                    </div>
+                                                                    <p className="text-sm text-slate-600">
+                                                                        {displaySummary}
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })
+                                                ) : (
+                                                    <div className="relative pl-12 group">
+                                                        <div className="absolute left-0 top-0 h-8 w-8 rounded-full bg-slate-50 border border-slate-200 flex items-center justify-center z-10">
+                                                            <User className="w-4 h-4 text-slate-400" />
+                                                        </div>
+                                                        <div className="flex flex-col gap-0.5 pt-1.5">
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="text-sm font-bold text-slate-900">
+                                                                    {post.content_reviewed_by}
+                                                                </span>
+                                                                <span className="text-[11px] text-slate-400">
+                                                                    Last Review
+                                                                </span>
+                                                            </div>
+                                                            <p className="text-sm text-slate-600">
+                                                                Case reviewed and finalized.
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
                                         </div>
-                                    )} */}
+                                    )}
 
                                     {/* Client Notes Section */}
-                                    <div className="space-y-4 hidden sm:block">
-                                        <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 flex items-center">
-                                            <MessageCircle className="w-3.5 h-3.5 mr-1.5" /> Review Notes
-                                        </h4>
+                                    <div className="space-y-4 pt-6 first:pt-0 hidden sm:block">
+                                        <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Comments</h4>
 
                                         {localNotes && localNotes.length > 0 ? (
                                             <div className="space-y-3 max-h-60 overflow-y-auto pr-2">
@@ -723,14 +764,12 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
                                                     </div>
                                                 ))}
                                             </div>
-                                        ) : (
-                                            <p className="text-sm text-slate-400 italic">No notes added yet.</p>
-                                        )}
+                                        ) : null}
 
                                         <div className="relative mt-2">
                                             <Textarea
-                                                placeholder="Add a note..."
-                                                className="min-h-[80px] pr-12 text-sm resize-none bg-white border-slate-200 focus-visible:ring-blue-500"
+                                                placeholder="Comments"
+                                                className="min-h-[100px] pr-12 text-sm resize-none bg-white border-slate-200 focus-visible:ring-blue-500"
                                                 value={noteText}
                                                 onChange={(e) => setNoteText(e.target.value)}
                                                 onKeyDown={(e) => {
@@ -751,107 +790,6 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
                                             </Button>
                                         </div>
                                     </div>
-
-                                    {/* Audit Log / Update History */}
-                                    {((Array.isArray(post.update_history) && post.update_history.length > 0) || post.content_reviewed_by) && (
-                                        <div className="mt-4 p-4 border-t border-slate-100">
-                                            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                                                <History className="w-3.5 h-3.5" /> Action Log
-                                            </h4>
-
-                                            <div className="space-y-6 relative before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-[0.5px] before:bg-slate-200">
-                                                {Array.isArray(post.update_history) && post.update_history.length > 0 ? (
-                                                    post.update_history.slice().reverse().map((entry, idx) => {
-
-                                                        const cleanEmail = entry.updated_by?.trim().toLowerCase();
-                                                        const isEmail = /\S+@\S+\.\S+/.test(cleanEmail);
-
-                                                        const projectUser = isEmail
-                                                            ? projectEmails?.find(u => u.email?.trim().toLowerCase() === cleanEmail)
-                                                            : null;
-
-                                                        const shouldShowEmail = isEmail && projectUser;
-                                                        const displayIdentifier = projectUser?.alias || entry.updated_by;
-
-                                                        const displaySummary = entry.changes_summary === "Manual ingestion from simplified JSON"
-                                                            ? "Content was sourced and ingested into the system."
-                                                            : entry.changes_summary.replace(/client/g, "user").replace(/Client/g, "User");
-
-                                                        return (
-                                                            <div key={idx} className="relative pl-8 group">
-                                                                <div className="absolute left-0 top-1.5 h-[22px] w-[22px] rounded-full bg-white border border-slate-200 flex items-center justify-center z-10 group-hover:border-blue-400 transition-colors">
-                                                                    <div className="h-1.5 w-1.5 rounded-full bg-slate-300 group-hover:bg-blue-500 transition-colors" />
-                                                                </div>
-                                                                <div className="flex flex-col gap-1">
-                                                                    <div className="flex items-center justify-between gap-2">
-                                                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">
-                                                                            <SafeDate date={entry.updated_at} formatStr="dd/MM/yyyy HH:mm" />
-                                                                        </span>
-                                                                        {/* DONT SHOW EMAILS FOR CASE ALERTING  */}
-                                                                        {
-                                                                            shouldShowEmail
-                                                                            &&
-                                                                            !entry.changes_summary.includes("Case Alerted")
-                                                                            && (
-                                                                                <span className="text-[10px] font-bold text-blue-600 bg-blue-50/50 border border-blue-100/50 px-2 py-0.5 rounded-full truncate max-w-[150px]" title={entry.updated_by}>
-                                                                                    {displayIdentifier}
-                                                                                </span>
-                                                                            )}
-                                                                    </div>
-                                                                    <p className="text-sm text-slate-600 font-medium leading-snug">
-                                                                        {displaySummary}
-                                                                    </p>
-                                                                </div>
-                                                            </div>
-                                                        );
-                                                    })
-                                                ) : (
-                                                    /* Fallback for legacy content_reviewed_by if no update_history exists */
-                                                    <div className="relative pl-8 group">
-                                                        <div className="absolute left-0 top-1.5 h-[22px] w-[22px] rounded-full bg-white border border-slate-200 flex items-center justify-center z-10">
-                                                            <div className="h-1.5 w-1.5 rounded-full bg-blue-500" />
-                                                        </div>
-                                                        <div className="flex flex-col gap-1">
-                                                            <div className="flex items-center justify-between gap-2">
-                                                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">
-                                                                    Last Review
-                                                                </span>
-                                                                <span className="text-[10px] font-bold text-blue-600 bg-blue-50/50 border border-blue-100/50 px-2 py-0.5 rounded-full">
-                                                                    {post.content_reviewed_by}
-                                                                </span>
-                                                            </div>
-                                                            <p className="text-sm text-slate-600 font-medium">
-                                                                Case reviewed and finalized.
-                                                            </p>
-                                                        </div>
-                                                    </div>
-                                                )}
-
-                                                {/* Original Publishing Date */}
-                                                {(post.posted_date || post.metadata?.posted_date || post.timestamp || post.sourcing_date) && (
-                                                    <div className="relative pl-8 group">
-                                                        <div className="absolute left-0 top-1.5 h-[22px] w-[22px] rounded-full bg-slate-50 border border-slate-100 flex items-center justify-center z-10 group-hover:border-slate-300 transition-colors">
-                                                            <div className="h-1.5 w-1.5 rounded-full bg-slate-300" />
-                                                        </div>
-                                                        <div className="flex flex-col gap-1">
-                                                            <div className="flex items-center justify-between gap-2">
-                                                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">
-                                                                    <SafeDate date={post.posted_date || post.metadata?.posted_date || post.timestamp || post.sourcing_date} formatStr="dd/MM/yyyy HH:mm" />
-                                                                </span>
-                                                                <span className="text-[10px] font-bold text-slate-400 bg-slate-100/50 border border-slate-100 px-2 py-0.5 rounded-full uppercase tracking-tighter">
-                                                                    Published
-                                                                </span>
-                                                            </div>
-                                                            <p className="text-xs text-slate-500 font-medium leading-snug italic">
-                                                                Original content published on {post.platform || "source"}.
-                                                            </p>
-                                                        </div>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    )}
-
                                 </div>
 
                                 {/* Footer Action Area */}

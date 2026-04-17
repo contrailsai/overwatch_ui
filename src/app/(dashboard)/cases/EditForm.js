@@ -54,7 +54,19 @@ export default function EditForm({ post, project, clientDetails, setIsEditing, o
 
     const savedAigc = review.is_aigc === true
     const savedScore = review.threat_score ?? 0
-    const savedLegalCodes = review.legal_codes || []
+
+    const getSavedLegalCodes = () => {
+        const codes = [];
+        for (const item of (review.legal_codes || [])) {
+            const codeName = typeof item === 'string' ? item : item.code;
+            const reasoning = typeof item === 'string' ? '' : item.reasoning || '';
+            if (!codes.some(c => c.code === codeName)) {
+                codes.push({ code: codeName, reasoning });
+            }
+        }
+        return codes;
+    }
+    const savedLegalCodes = getSavedLegalCodes()
 
     let savedTypes = review.threat_types || []
 
@@ -100,9 +112,20 @@ export default function EditForm({ post, project, clientDetails, setIsEditing, o
     }
 
     const toggleLegalCode = (code) => {
-        setSelectedLegalCodes(prev => prev.includes(code) ? prev.filter(c => c !== code) : [...prev, code])
+        setSelectedLegalCodes(prev => {
+            if (prev.some(c => c.code === code)) {
+                return prev.filter(c => c.code !== code)
+            } else {
+                return [...prev, { code, reasoning: '' }]
+            }
+        })
     }
 
+    const updateLegalCodeReasoning = (code, reasoning) => {
+        setSelectedLegalCodes(prev => prev.map(c => 
+            c.code === code ? { ...c, reasoning } : c
+        ))
+    }
 
     return (
         <div className="w-[500px] shrink-0 overflow-y-auto bg-white relative">
@@ -122,10 +145,16 @@ export default function EditForm({ post, project, clientDetails, setIsEditing, o
                 {
                     Array.from(new Set([
                         ...(project_details.legal_codes || []).map(c => c.name),
-                        ...selectedLegalCodes
-                    ])).map((codeName, index) => (
-                        <input key={`legal_${index}`} type="hidden" name={`legal_code_${codeName}`} value={selectedLegalCodes.includes(codeName) ? 'on' : 'off'} />
-                    ))
+                        ...selectedLegalCodes.map(c => c.code)
+                    ])).map((codeName, index) => {
+                        const selected = selectedLegalCodes.find(c => c.code === codeName);
+                        return (
+                            <React.Fragment key={`legal_${index}`}>
+                                <input type="hidden" name={`legal_code_${codeName}`} value={selected ? 'on' : 'off'} />
+                                {selected && <input type="hidden" name={`legal_reasoning_${codeName}`} value={selected.reasoning} />}
+                            </React.Fragment>
+                        );
+                    })
                 }
                 <input type="hidden" name="mongo_id" value={post._id || ''} />
                 <input type="hidden" name="platform" value={post.platform || 'Instagram'} />
@@ -263,28 +292,41 @@ export default function EditForm({ post, project, clientDetails, setIsEditing, o
                         {(project_details.legal_codes || []).length > 0 && (
                             <div className="pt-4 space-y-3">
                                 <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Legal Framework Codes</h4>
-                                <div className="grid grid-cols-2 gap-3">
-                                    {project_details.legal_codes.map((item) => (
+                                <div className="grid grid-cols-1 gap-3">
+                                    {project_details.legal_codes.map((item) => {
+                                        const selected = selectedLegalCodes.find(c => c.code === item.name);
+                                        const isSelected = !!selected;
+                                        return (
                                         <div
                                             key={item.name}
-                                            onClick={() => toggleLegalCode(item.name)}
                                             className={cn(
-                                                "flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all hover:shadow-sm",
-                                                selectedLegalCodes.includes(item.name)
+                                                "flex flex-col gap-2 p-3 rounded-lg border transition-all hover:shadow-sm",
+                                                isSelected
                                                     ? "bg-purple-50 border-purple-200 ring-1 ring-purple-200"
                                                     : "bg-white border-slate-200 hover:border-purple-200"
                                             )}
                                         >
-                                            <Checkbox
-                                                checked={selectedLegalCodes.includes(item.name)}
-                                                onCheckedChange={() => { }}
-                                                className="border-slate-300 data-[state=checked]:bg-purple-600 data-[state=checked]:border-purple-600"
-                                            />
-                                            <span className={cn("text-xs font-bold uppercase", selectedLegalCodes.includes(item.name) ? "text-purple-700" : "text-slate-600")}>
-                                                {item.name}
-                                            </span>
+                                            <div onClick={() => toggleLegalCode(item.name)} className="flex items-center gap-3 cursor-pointer">
+                                                <Checkbox
+                                                    checked={isSelected}
+                                                    onCheckedChange={() => { }}
+                                                    className="border-slate-300 data-[state=checked]:bg-purple-600 data-[state=checked]:border-purple-600"
+                                                />
+                                                <span className={cn("text-xs font-bold uppercase", isSelected ? "text-purple-700" : "text-slate-600")}>
+                                                    {item.name}
+                                                </span>
+                                            </div>
+                                            {isSelected && (
+                                                <Textarea 
+                                                    value={selected.reasoning}
+                                                    onChange={(e) => updateLegalCodeReasoning(item.name, e.target.value)}
+                                                    placeholder={`Provide reasoning for selecting ${item.name}...`}
+                                                    className="mt-2 text-sm bg-white border-purple-200 min-h-[60px]"
+                                                />
+                                            )}
                                         </div>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
                             </div>
                         )}
