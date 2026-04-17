@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { List, ShieldAlert, Settings, UserStar, LogOut, LayoutDashboard, ShieldCheck, GitPullRequestCreateArrow, Users, Menu, X } from 'lucide-react'
+import { List, ShieldAlert, Settings, UserStar, LogOut, LayoutDashboard, ShieldCheck, GitPullRequestCreateArrow, Users, Menu, X, ScanEye, UserRoundPen } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export function Sidebar({ user, clientDetails, project }) {
@@ -30,9 +30,9 @@ export function Sidebar({ user, clientDetails, project }) {
   // All nav items.
   const allNavItems = [
     { name: 'Analytics', href: '/', icon: LayoutDashboard, show: true },
-    { name: 'Review Cases', href: '/review-cases', icon: ShieldCheck, show: clientDetails?.permission === 'reviewer' },
+    { name: 'Review Cases', href: '/review-cases', icon: ScanEye, show: clientDetails?.permission === 'reviewer' },
     { name: 'Content List', href: '/cases', icon: List, show: true },
-    { name: 'Review Profiles', href: '/review-profiles', icon: ShieldCheck, show: clientDetails?.permission === 'reviewer' },
+    { name: 'Review Profiles', href: '/review-profiles', icon: UserRoundPen, show: clientDetails?.permission === 'reviewer' },
     { name: 'Profile List', href: '/profiles', icon: Users, show: true },
     { name: 'Takedowns', href: '/takedowns', icon: ShieldAlert, show: true },
     { name: 'Upload Content', href: '/upload-content', icon: GitPullRequestCreateArrow, show: true },
@@ -58,17 +58,17 @@ export function Sidebar({ user, clientDetails, project }) {
   const SidebarContent = () => (
     <>
       {/* Brand Header */}
-      <div className="flex items-center justify-between h-16 px-6 border-b border-slate-100 shrink-0">
-        <div className="flex items-center">
+      <div className="flex items-center justify-between h-16 px-6 border-b border-slate-100 shrink-0 overflow-hidden">
+        <div className="flex items-center w-full">
           <ShieldCheck className="h-6 w-6 text-blue-600 shrink-0" strokeWidth={2.5} />
-          <span className="ml-3 text-lg font-bold tracking-tight text-slate-900 uppercase">
+          <span className="ml-3 text-lg font-bold tracking-tight text-slate-900 uppercase whitespace-nowrap transition-all duration-300 md:opacity-0 md:group-hover:opacity-100">
             Overwatch
           </span>
         </div>
         {/* Mobile Close Button */}
         <button 
           onClick={() => setIsOpen(false)}
-          className="md:hidden p-2 -mr-2 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
+          className="md:hidden p-2 -mr-2 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors shrink-0"
           aria-label="Close menu"
         >
           <X className="h-5 w-5" />
@@ -76,7 +76,7 @@ export function Sidebar({ user, clientDetails, project }) {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto px-3 py-6 space-y-1">
+      <nav className="flex-1 overflow-y-auto overflow-x-hidden px-3 py-6 space-y-1">
         {navigation.map((item) => {
           const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href))
 
@@ -87,7 +87,7 @@ export function Sidebar({ user, clientDetails, project }) {
               <div
                 key={item.name}
                 className={cn(
-                  "flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 group relative",
+                  "flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 group relative overflow-hidden",
                   "text-slate-400 cursor-not-allowed"
                 )}
               >
@@ -98,7 +98,7 @@ export function Sidebar({ user, clientDetails, project }) {
                   )}
                   strokeWidth={2}
                 />
-                <span className="truncate">{item.name}</span>
+                <span className="truncate whitespace-nowrap transition-all duration-300 md:opacity-0 md:group-hover:opacity-100">{item.name}</span>
               </div>
             )
           }
@@ -108,7 +108,7 @@ export function Sidebar({ user, clientDetails, project }) {
               key={item.name}
               href={item.href}
               className={cn(
-                "flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 group relative",
+                "flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 group/nav relative overflow-hidden",
                 isActive
                   ? "bg-blue-50 text-blue-700"
                   : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
@@ -120,30 +120,30 @@ export function Sidebar({ user, clientDetails, project }) {
               <item.icon
                 className={cn(
                   "h-5 w-5 shrink-0 mr-3 transition-colors",
-                  isActive ? "text-blue-600" : "text-slate-400 group-hover:text-slate-600"
+                  isActive ? "text-blue-600" : "text-slate-400 group-hover/nav:text-slate-600"
                 )}
                 strokeWidth={isActive ? 2.5 : 2}
               />
-              <span className="truncate">{item.name}</span>
+              <span className="truncate whitespace-nowrap transition-all duration-300 md:opacity-0 md:group-hover:opacity-100">{item.name}</span>
             </Link>
           )
         })}
       </nav>
 
       {/* Footer / User Info */}
-      <div className="p-4 border-t border-slate-100 space-y-4">
+      <div className="px-3 py-4 border-t border-slate-100 space-y-4 overflow-hidden">
         {/* Powered By */}
-        <div className="px-2">
+        <div className="px-3 transition-all duration-300 md:opacity-0 md:group-hover:opacity-100">
           <div className="flex flex-col space-y-1 opacity-70 transition-opacity">
-            <span className="text-[10px] uppercase tracking-wider font-semibold text-slate-400">Powered by</span>
+            <span className="text-[10px] uppercase tracking-wider font-semibold text-slate-400 whitespace-nowrap">Powered by</span>
             <div
-              className="h-6 w-32 bg-gray-400"
+              className="h-6 w-32 bg-gray-400 shrink-0"
               style={{
                 maskImage: 'url(/logo_txt.svg)',
                 WebkitMaskImage: 'url(/logo_txt.svg)',
                 maskRepeat: 'no-repeat',
                 maskSize: 'contain',
-                maskPosition: 'center',
+                maskPosition: 'left',
               }}
             />
           </div>
@@ -153,10 +153,10 @@ export function Sidebar({ user, clientDetails, project }) {
         <form action="/auth/signout" method="post">
           <button
             type="submit"
-            className=" cursor-pointer flex w-full items-center px-3 py-2.5 text-sm font-medium text-slate-500 rounded-lg hover:bg-red-50 hover:text-red-600 transition-colors group"
+            className=" cursor-pointer flex w-full items-center px-3 py-2.5 text-sm font-medium text-slate-500 rounded-lg hover:bg-red-50 hover:text-red-600 transition-colors group/btn overflow-hidden"
           >
-            <LogOut className="h-5 w-5 mr-3 shrink-0 text-slate-400 group-hover:text-red-500 transition-colors" />
-            <span>Sign out</span>
+            <LogOut className="h-5 w-5 mr-3 shrink-0 text-slate-400 group-hover/btn:text-red-500 transition-colors" />
+            <span className="whitespace-nowrap transition-all duration-300 md:opacity-0 md:group-hover:opacity-100">Sign out</span>
           </button>
         </form>
       </div>
@@ -198,8 +198,15 @@ export function Sidebar({ user, clientDetails, project }) {
         <SidebarContent />
       </div>
 
-      {/* Desktop Sidebar */}
-      <div className="hidden md:flex flex-col w-64 h-full bg-white border-r border-slate-200 shadow-sm shrink-0 z-40">
+      {/* Desktop Sidebar Placeholder */}
+      <div className="hidden md:block w-20 shrink-0 bg-transparent" />
+
+      {/* Desktop Sidebar Floating Container */}
+      <div className={cn(
+        "hidden md:flex flex-col h-full bg-white border-r border-slate-200 shadow-sm z-40 fixed left-0 top-0",
+        "transition-all duration-300 ease-in-out overflow-hidden group",
+        "w-20 hover:w-64 hover:shadow-xl"
+      )}>
         <SidebarContent />
       </div>
     </>
