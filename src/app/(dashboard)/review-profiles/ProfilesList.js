@@ -639,7 +639,7 @@ function ProfileDetailPanel({ profile, profiles = [], project, isOpen, onClose, 
                                             const risk = getRiskLabel(c.review_details?.threat_score)
                                             const statusCfg = getStatusConfig(c.client_status)
                                             const StatusIcon = statusCfg.icon
-                                            console.log(c)
+                                            // console.log(c)
 
                                             let posted_date = ""
                                             let sourced_date = ""
@@ -667,7 +667,7 @@ function ProfileDetailPanel({ profile, profiles = [], project, isOpen, onClose, 
                                             else if (c.review_details?.reviewed_at)
                                                 processed_date = format(new Date(c.review_details.reviewed_at), "dd/MM/yyyy hh:mm a");
                                             
-                                            console.log("posted date = ", posted_date, "sourced date = ", sourced_date, "processed date = ", processed_date)
+                                            // console.log("posted date = ", posted_date, "sourced date = ", sourced_date, "processed date = ", processed_date)
 
                                             return (
                                                 <div

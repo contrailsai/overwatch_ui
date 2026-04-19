@@ -41,7 +41,7 @@ import { ViolationsFilter } from './ViolationsFilter'
 
 export function CasesList({ cases, project, clientDetails, initialFilters, initialSort, currentPage, itemsPerPage, initialCase, projectEmails }) {
 
-  console.log(cases)
+  // console.log(cases)
 
   // console.log(project)
   const router = useRouter()

@@ -206,7 +206,7 @@ export default function ProfileDetailPanel({ profile, project, isOpen, onClose, 
         if (val === 'low' || (val >= 41 && val < 76)) return "bg-amber-500 border-amber-400 text-white";
         return "bg-emerald-500 border-emerald-400 text-white shadow-sm";
     }
-    console.log(profile)
+    // console.log(profile)
     return (
         <>
             <div

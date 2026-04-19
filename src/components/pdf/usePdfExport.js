@@ -40,9 +40,49 @@ export function usePdfExport() {
                 const supabase = createClient();
                 s3Url = await new Promise((resolve, reject) => {
                     let retryCount = 0;
+                    let isResolved = false;
+                    let pollInterval;
+                    let channel;
+                    
+                    const cleanup = () => {
+                        isResolved = true;
+                        if (pollInterval) clearInterval(pollInterval);
+                        if (channel) supabase.removeChannel(channel);
+                    };
+
+                    const checkStatus = async () => {
+                        if (isResolved) return;
+                        try {
+                            const { data, error } = await supabase
+                                .from('reports_generation')
+                                .select('status, s3_path')
+                                .eq('id', jobData.jobId)
+                                .single();
+                            
+                            if (data) {
+                                if (data.status) {
+                                    setStatusText(data.status);
+                                }
+                                if (data.s3_path) {
+                                    cleanup();
+                                    setStatusText('100% - Complete!');
+                                    resolve(data.s3_path);
+                                } else if (data.status && data.status.toLowerCase().includes('failed')) {
+                                    cleanup();
+                                    reject(new Error(data.status || 'An error occurred while creating the PDF'));
+                                }
+                            }
+                        } catch (err) {
+                            console.error('Error polling status:', err);
+                        }
+                    };
+
+                    // Start polling as a fallback every 3 seconds
+                    pollInterval = setInterval(checkStatus, 3000);
                     
                     const subscribeToChannel = () => {
-                        const channel = supabase.channel(`report-${jobData.jobId}-${retryCount}`)
+                        if (isResolved) return;
+                        channel = supabase.channel(`report-${jobData.jobId}-${retryCount}`)
                             .on(
                                 'postgres_changes',
                                 {
@@ -52,17 +92,18 @@ export function usePdfExport() {
                                     filter: `id=eq.${jobData.jobId}`
                                 },
                                 (payload) => {
+                                    if (isResolved) return;
                                     const newStatus = payload.new.status;
                                     if (newStatus) {
                                         setStatusText(newStatus);
                                     }
                                     
                                     if (payload.new.s3_path) {
+                                        cleanup();
                                         setStatusText('100% - Complete!');
-                                        supabase.removeChannel(channel);
                                         resolve(payload.new.s3_path);
                                     } else if (newStatus && newStatus.toLowerCase().includes('failed')) {
-                                        supabase.removeChannel(channel);
+                                        cleanup();
                                         reject(new Error('An error occurred while creating the PDF'));
                                     }
                                 }
@@ -70,20 +111,23 @@ export function usePdfExport() {
                             .subscribe((status) => {
                                 if (status === 'CHANNEL_ERROR') {
                                     console.error('Subscription failed, retrying...');
-                                    supabase.removeChannel(channel);
-                                    if (retryCount < 3) {
+                                    if (channel) supabase.removeChannel(channel);
+                                    if (retryCount < 3 && !isResolved) {
                                         retryCount++;
                                         setTimeout(subscribeToChannel, 1000 * retryCount);
-                                    } else {
-                                        reject(new Error('An error occurred while creating the PDF'));
+                                    } else if (!isResolved) {
+                                        // Just rely on polling if realtime completely fails
+                                        console.warn('Realtime connection failed, falling back completely to polling');
                                     }
                                 }
                             });
                             
                         // Add a timeout fallback just in case Lambda dies without updating status (wait 5 minutes)
                         setTimeout(() => {
-                            supabase.removeChannel(channel);
-                            reject(new Error('An error occurred while creating the PDF'));
+                            if (!isResolved) {
+                                cleanup();
+                                reject(new Error('An error occurred while creating the PDF'));
+                            }
                         }, 5 * 60 * 1000);
                     };
 

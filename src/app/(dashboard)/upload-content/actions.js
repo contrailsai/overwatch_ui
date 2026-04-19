@@ -6,8 +6,8 @@ import { traceAction } from '@/utils/tracing'
 
 export const bulkRequestLinks = traceAction('bulkRequestLinks', async (links, project_name) => {
 
-  console.log("LINKS LIST= ", links)
-  console.log("PROJECT_NAME= ", project_name)
+  // console.log("LINKS LIST= ", links)
+  // console.log("PROJECT_NAME= ", project_name)
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()

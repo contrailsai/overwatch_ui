@@ -76,7 +76,8 @@ export const getOrCreateReportJob = traceAction('getOrCreateReportJob', async ({
     database_name: project?.mongo_db_map,
     reportType: reportType,
     project: project,
-    profile: profile || null
+    profile: profile || null,
+    jobId: newJob.id
   };
 
   try {
