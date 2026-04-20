@@ -22,6 +22,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { cn } from '@/lib/utils'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { format } from 'date-fns'
+import { DateFilterPopover } from '@/app/(dashboard)/cases/DateFilterPopover'
 
 const PlatformIcon = ({ platform, className }) => {
     const p = platform?.toLowerCase()
@@ -807,7 +808,19 @@ export function ProfilesList({ profiles, project, initialFilters, currentPage })
 
     const clearFilters = () => router.push(pathname)
 
-    const hasActiveFilter = initialFilters.platform !== 'all' || initialFilters.is_verified !== 'all'
+    const hasActiveFilter = initialFilters.platform !== 'all' || initialFilters.is_verified !== 'all' || initialFilters.searchText || initialFilters.publish_date_from || initialFilters.publish_date_to
+
+    const [searchInput, setSearchInput] = useState(initialFilters.searchText || '')
+
+    useEffect(() => {
+        setSearchInput(initialFilters.searchText || '')
+    }, [initialFilters.searchText])
+
+    const handleSearchSubmit = (e) => {
+        if (e.key === 'Enter') {
+            updateQueryParams({ search: searchInput, page: 1 })
+        }
+    }
 
     const handleSelectProfile = (profile) => {
         setSelectedProfile(profile);
@@ -841,7 +854,32 @@ export function ProfilesList({ profiles, project, initialFilters, currentPage })
 
                             <Separator orientation="vertical" className="h-8 bg-slate-100 hidden sm:block" />
 
-                            <div className="flex flex-wrap items-center gap-4">
+                            <div className="flex flex-wrap items-center gap-4 flex-1">
+                                <div className="space-y-1 flex-1 min-w-[200px] max-w-[400px]">
+                                    <Label className="text-[10px] uppercase font-bold text-slate-400">Search URL</Label>
+                                    <div className="relative group/search">
+                                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 group-focus-within/search:text-blue-500 transition-colors" />
+                                        <input
+                                            type="text"
+                                            value={searchInput}
+                                            onChange={(e) => setSearchInput(e.target.value)}
+                                            onKeyDown={handleSearchSubmit}
+                                            placeholder="Search by profile URL..."
+                                            className="w-full bg-white border border-slate-200 rounded-md h-9 pl-9 pr-3 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                                        />
+                                        {searchInput && (
+                                            <button 
+                                                onClick={() => { setSearchInput(''); updateQueryParams({ search: '', page: 1 }) }}
+                                                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-slate-100 text-slate-400"
+                                            >
+                                                <X className="w-3 h-3" />
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <Separator orientation="vertical" className="h-8 bg-slate-100 hidden md:block" />
+
                                 <div className="space-y-1">
                                     <Label className="text-[10px] uppercase font-bold text-slate-400">Platform</Label>
                                     <Select value={initialFilters.platform} onValueChange={(val) => handleFilterChange('platform', val)}>
@@ -871,6 +909,22 @@ export function ProfilesList({ profiles, project, initialFilters, currentPage })
                                             <SelectItem value="false">Unverified</SelectItem>
                                         </SelectContent>
                                     </Select>
+                                </div>
+
+                                <div className="space-y-1">
+                                    <Label className="text-[10px] uppercase font-bold text-slate-400">Publish Date</Label>
+                                    <div className="w-[190px]">
+                                        <DateFilterPopover
+                                            title="Publish Date of ingested post"
+                                            initialFrom={initialFilters.publish_date_from}
+                                            initialTo={initialFilters.publish_date_to}
+                                            onApply={(range) => updateQueryParams({ 
+                                                publish_date_from: range?.from ? range.from.toISOString() : null, 
+                                                publish_date_to: range?.to ? range.to.toISOString() : null,
+                                                page: 1
+                                            })}
+                                        />
+                                    </div>
                                 </div>
 
                                 {hasActiveFilter && (

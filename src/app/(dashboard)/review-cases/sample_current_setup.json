@@ -1,98 +1,168 @@
 {
-  "_id": "69e0e3950c0f7590555d1ecb",
-  "created_at": "2026-04-16T13:26:45.530Z",
-  "sourcing_date": "2026-04-16T13:26:45.530Z",
-  "posted_date": "2026-04-16T04:34:25.000Z",
-  "taken_at": null,
-  "updated_at": "2026-04-19T05:42:40.191Z",
-  "reviewed_at": "2026-04-19T05:42:37.783Z",
-  "update_history": [
+  "_id": {
+    "$oid": "69cfbc2c88ea1e6548d81b95"
+  },
+  "code": "i1PDLjzke_E",
+  "analysis_results": {},
+  "author": {
+    "name": "NeoLab Studio",
+    "url": "https://www.youtube.com/@NeoLabStudio"
+  },
+  "caption": "A hilarious AI-generated short showing Narendra Modi and Shehbaz Sharif in a desert showdown!\nShehbaz Sharif carries a missile on his shoulder and a Pakistani water drum in hand, approaching the pipeline. Modi reacts with a shocked and funny expression, creating a playful desert parody.\nPerfect for comedy lovers and political parody fans!\n✅ Like, Comment & Share for more AI funny shorts!\n✅ Don’t forget to Subscribe for more viral 3D animations.\n#Shorts #FunnyAI #Modi #ShehbazSharif #PoliticalParody #ComedyShorts #AIAnimation #DesertFunny #ViralShorts #AIShorts2026",
+  "content": "A hilarious AI-generated short showing Narendra Modi and Shehbaz Sharif in a desert showdown!\nShehbaz Sharif carries a missile on his shoulder and a Pakistani water drum in hand, approaching the pipeline. Modi reacts with a shocked and funny expression, creating a playful desert parody.\nPerfect for comedy lovers and political parody fans!\n✅ Like, Comment & Share for more AI funny shorts!\n✅ Don’t forget to Subscribe for more viral 3D animations.\n#Shorts #FunnyAI #Modi #ShehbazSharif #PoliticalParody #ComedyShorts #AIAnimation #DesertFunny #ViralShorts #AIShorts2026",
+  "created_at": {
+    "$date": "2026-03-09T12:49:58.000Z"
+  },
+  "engagement": {
+    "likes": 2493,
+    "comments": 9,
+    "shares": 0,
+    "retweets": 0,
+    "quotes": 0,
+    "replies": 0,
+    "views": 227460,
+    "posted_at": {
+      "$date": "2026-03-09T12:49:58.000Z"
+    }
+  },
+  "id": "i1PDLjzke_E",
+  "media_urls": [
     {
-      "updated_at": "2026-04-16T13:26:45.530Z",
-      "updated_by": "manual_ingest_script",
-      "changes_summary": "Manual ingestion from simplified JSON"
-    },
-    {
-      "updated_at": "2026-04-17T05:32:04.071Z",
-      "updated_by": "akshay@pmo-data.com",
-      "changes_summary": "Case Alerted "
-    },
-    {
-      "updated_at": "2026-04-19T05:42:37.817Z",
-      "updated_by": "dipanjalingmib@gmail.com",
-      "changes_summary": "client edited case review details"
-    },
-    {
-      "updated_at": "2026-04-19T05:42:40.191Z",
-      "updated_by": "dipanjalingmib@gmail.com",
-      "changes_summary": "client status change to Flag for Takedown"
+      "type": "image",
+      "original_url": "https://i.ytimg.com/vi/i1PDLjzke_E/sd2.jpg?sqp=-oaymwEoCIAFEOAD8quKqQMcGADwAQH4AbYIgAKAD4oCDAgAEAEYSCBaKGUwDw==&rs=AOn4CLDNSyJ3yPvm6__lG5ZLgAvMbZJsHA",
+      "s3_url": "https://cxo-demo.s3.ap-south-1.amazonaws.com/facebook_data/i1PDLjzke_E/0.jpg"
     }
   ],
-  "platform": "x",
-  "processed": true,
-  "client_status": "Flag for Takedown",
-  "caption": "@official_dgar They appear to be more powerful than your Assam Rifles. Being stationed in Manipur’s border areas for Over 30 years - How this Foreign Infiltration #Chin_Kuki Poppy Defence Army are able to enter Manipur. In that case, what is the real purpose and value of your regiment? https://t.co/prb8Dmpl1N",
-  "signedImageUrl": "https://cxo-demo.s3.ap-south-1.amazonaws.com/facebook_data/2044635457754152960/0.jpg?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=AKIA6ODU4O3VKMTLAMQ5%2F20260419%2Fap-south-1%2Fs3%2Faws4_request&X-Amz-Date=20260419T063405Z&X-Amz-Expires=3600&X-Amz-Signature=5b2a1d9a76008daa6213fe44daca494e8eac922afa2f8613ba1248eaeddbcac5&X-Amz-SignedHeaders=host&x-amz-checksum-mode=ENABLED&x-id=GetObject",
-  "original_url": "https://x.com/SomchandraKNG/status/2044635502519931103/video/1",
-  "post_id": "2044635457754152960",
-  "user": {
-    "username": "Gurumayum Somchandra Sharma",
-    "full_name": "Gurumayum Somchandra Sharma",
-    "profile_pic_url": "https://twitter.com/SomchandraKNG",
-    "is_verified": false
-  },
-  "assigned_to": null,
-  "content_reviewed_by": "dipanjalingmib@gmail.com",
-  "score": null,
-  "review_details": {
-    "threat_score": 96,
-    "threat_types": [
-      "Anti-India-Propaganda"
-    ],
-    "legal_codes": [
+  "metadata": {
+    "created_at": {
+      "$date": "2026-04-03T13:10:04.429Z"
+    },
+    "updated_at": "2026-04-19T05:54:43.877Z",
+    "sourcing_date": {
+      "$date": "2026-04-03T13:10:04.429Z"
+    },
+    "update_history": [
       {
-        "code": "IT Rules - 3(1)(b)(viii)",
-        "reasoning": ""
+        "updated_at": {
+          "$date": "2026-04-03T13:10:04.429Z"
+        },
+        "updated_by": "manual_ingest_script",
+        "changes_summary": "Manual ingestion from simplified JSON"
       },
       {
-        "code": "BNS - Sec 353",
-        "reasoning": ""
+        "updated_at": {
+          "$date": "2026-04-03T16:39:48.997Z"
+        },
+        "updated_by": "akshay@pmo-data.com",
+        "changes_summary": "Case Alerted "
       },
       {
-        "code": "IT Rules - 3(1)(b)(vii)",
-        "reasoning": ""
+        "updated_at": {
+          "$date": "2026-04-03T16:40:27.741Z"
+        },
+        "updated_by": "akshay@pmo-data.com",
+        "changes_summary": "Case Alerted "
+      },
+      {
+        "updated_at": {
+          "$date": "2026-04-19T05:54:41.673Z"
+        },
+        "updated_by": "dipanjalingmib@gmail.com",
+        "changes_summary": "client edited case review details"
+      },
+      {
+        "updated_at": {
+          "$date": "2026-04-19T05:54:43.877Z"
+        },
+        "updated_by": "dipanjalingmib@gmail.com",
+        "changes_summary": "client status change to Flag for Takedown"
       }
     ],
-    "is_aigc": false,
+    "schema_version": 1
+  },
+  "original_url": "https://www.youtube.com/shorts/i1PDLjzke_E",
+  "platform": "YouTube",
+  "post_content": {
+    "caption": "A hilarious AI-generated short showing Narendra Modi and Shehbaz Sharif in a desert showdown!\nShehbaz Sharif carries a missile on his shoulder and a Pakistani water drum in hand, approaching the pipeline. Modi reacts with a shocked and funny expression, creating a playful desert parody.\nPerfect for comedy lovers and political parody fans!\n✅ Like, Comment & Share for more AI funny shorts!\n✅ Don’t forget to Subscribe for more viral 3D animations.\n#Shorts #FunnyAI #Modi #ShehbazSharif #PoliticalParody #ComedyShorts #AIAnimation #DesertFunny #ViralShorts #AIShorts2026",
+    "media_urls": [
+      {
+        "type": "image",
+        "original_url": "https://i.ytimg.com/vi/i1PDLjzke_E/sd2.jpg?sqp=-oaymwEoCIAFEOAD8quKqQMcGADwAQH4AbYIgAKAD4oCDAgAEAEYSCBaKGUwDw==&rs=AOn4CLDNSyJ3yPvm6__lG5ZLgAvMbZJsHA",
+        "s3_url": "https://cxo-demo.s3.ap-south-1.amazonaws.com/facebook_data/i1PDLjzke_E/0.jpg"
+      }
+    ],
+    "post_type": "post",
+    "language": null
+  },
+  "post_id": "i1PDLjzke_E",
+  "processed": true,
+  "processed_at": {
+    "$date": "2026-04-19T05:54:41.673Z"
+  },
+  "profile": {
+    "platform_user_id": null,
+    "username": "NeoLab Studio",
+    "display_name": "NeoLab Studio",
+    "profile_url": "https://www.youtube.com/@NeoLabStudio",
+    "is_verified": false
+  },
+  "result_origin": {
+    "type": "manual_upload",
+    "source_url": "https://www.youtube.com/shorts/i1PDLjzke_E"
+  },
+  "review_details": {
+    "threat_score": 76,
+    "threat_types": [
+      "Violence"
+    ],
+    "legal_codes": [],
+    "is_aigc": true,
     "flags": {
       "Defamation": false,
-      "Anti-India-Propaganda": true,
+      "Anti-India-Propaganda": false,
       "Hate-speech": false,
       "Misinformation": false,
       "Obscene": false,
       "Fraud": false,
       "asset-misuse": false,
       "Terrorism": false,
-      "Violence": false
+      "Violence": true
     },
     "poi_names": [],
-    "reasoning": "Description: The post features a video still of armed militants labeled \"UNITED KUKI NATIONAL ARMY.\" The caption aggressively mocks the national security apparatus, claiming the militants are \"more powerful than your Assam Rifles\" and questioning the \"real purpose and value\" of the Indian regiment in the face of this \"Foreign Infiltration.\"\r\n\r\nIT Act and Rules: This violates Rule 3(1)(b)(vii) and Rule 3(1)(b)(viii) for threatening the security of the state and public order. Propagating narratives that explicitly glorify armed militant groups as superior to the national army is a calculated tactic by foreign CIB networks to demoralize state security forces, legitimize armed insurgency, and incite public hostility against the military presence in the region.\r\n\r\nBNS & Other Laws: Section 353 (Statements conducing to public mischief) for circulating material intended to incite a class or community to commit offenses against the state or public tranquility.\r\n\r\nTake Down: Expedited Standard Takedown. Content deliberately designed to degrade the authority of the armed forces and glorify active insurgent groups requires prompt neutralization.",
+    "reasoning": "Description: The post utilizes Synthetically Generated Information (SGI) to fabricate a scenario featuring the Prime Minister of India and the Prime Minister of Pakistan manipulating an oil pipeline in a desert setting. Although the foreign account attempts to shield the post using an \"AI-generated short\" disclaimer in the text, it relies on the unauthorized digital replication and manipulation of the Head of State's likeness to drive geopolitical commentary.\r\n\r\nIT Act and Rules: This violates the strict provisions of the IT Rules 2021 (as amended 2026) regarding synthetic media. It is a violation of Rule 3(3)(a) for deploying unauthorized Synthetically Generated Information (SGI) utilizing the likeness of a high-profile individual. The 2026 amendments limit the unauthorized digital replication of Heads of State, meaning a caption disclaimer does not override the platform's obligation to restrict unverified, foreign-generated synthetic media of national leaders.\r\n\r\nBNS: Applicable codes could include Section 356(2) (Defamation against High functionaries) if the unauthorized caricature is deemed to intentionally compromise the dignity of the Prime Minister's office for international mockery, though the primary violation remains statutory SGI non-compliance.\r\n\r\nTake Down: This post qualifies for a 3 hour Emergency takedown for severe geopolitical defamation targeting the Head of State..",
     "reviewer_comments": null,
-    "face_present": false,
-    "name_present": false,
-    "reviewed_at": "2026-04-19T05:42:37.783Z"
+    "face_present": true,
+    "name_present": true,
+    "reviewed_at": "2026-04-19T05:54:41.665Z"
+  },
+  "s3_stored": true,
+  "sourcing_date": {
+    "$date": "2026-04-03T13:10:04.429Z"
+  },
+  "stats": {
+    "likes": 2493,
+    "comments": 9,
+    "shares": 0
+  },
+  "supabase_refs": {
+    "case_id": null,
+    "alert_ids": [],
+    "chat_thread_ids": []
   },
   "takedown_info": {
     "takedown_status": "None"
   },
-  "analysis_results": {},
-  "client_notes": [],
-  "stats": {
-    "like_count": 2,
-    "comment_count": 0,
-    "share_count": 0,
-    "view_count": 0
+  "timestamp": {
+    "$date": "2026-03-09T12:49:58.000Z"
   },
+  "type": "post",
+  "url": "https://www.youtube.com/shorts/i1PDLjzke_E",
+  "user": {
+    "name": "NeoLab Studio",
+    "url": "https://www.youtube.com/@NeoLabStudio"
+  },
+  "text_embedding": [],
   "image_embedding": [],
-  "text_embedding": []
+  "client_status": "Flag for Takedown",
+  "content_reviewed_by": "dipanjalingmib@gmail.com"
 }

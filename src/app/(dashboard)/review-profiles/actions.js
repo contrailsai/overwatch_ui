@@ -17,39 +17,85 @@ export const getProfiles = traceAction('getProfiles', async (project, page = 1, 
 
         const skip = (page - 1) * limit
 
-        const query = {}
+        const matchQuery = {}
 
         if (filters.platform && filters.platform !== 'all') {
-            query.platform = { $regex: new RegExp(`^${filters.platform}\$`, 'i') }
+            matchQuery.platform = { $regex: new RegExp(`^${filters.platform}\$`, 'i') }
         }
 
         if (filters.is_verified !== undefined && filters.is_verified !== 'all') {
-            query.is_verified = filters.is_verified === 'true'
+            matchQuery.is_verified = filters.is_verified === 'true'
         }
 
-        query.metadata = { $exists: true }
+        if (filters.publish_date_from || filters.publish_date_to) {
+            matchQuery.last_relevant_publish_date = {}
+            if (filters.publish_date_from) {
+                matchQuery.last_relevant_publish_date.$gte = new Date(filters.publish_date_from)
+            }
+            if (filters.publish_date_to) {
+                matchQuery.last_relevant_publish_date.$lte = new Date(filters.publish_date_to)
+            }
+        }
 
-        const profiles = await collection.aggregate([
-            { $match: query },
-            {
-                $addFields: {
-                    posts_count: { $size: { $ifNull: ["$posts", []] } }
+        matchQuery.metadata = { $exists: true }
+
+        let pipeline = []
+
+        if (filters.searchText) {
+            pipeline.push({
+                $search: {
+                    index: "default",
+                    compound: {
+                        should: [
+                            {
+                                autocomplete: {
+                                    query: filters.searchText,
+                                    path: "profile_url"
+                                }
+                            }
+                        ],
+                        minimumShouldMatch: 1
+                    }
                 }
-            },
-            { $sort: { posts_count: -1, _id: 1 } }, // -1 for descending (most posts first)
-            { $skip: skip },
-            { $limit: limit }
-        ]).toArray()
+            })
+        }
 
+        pipeline.push({ $match: matchQuery })
 
+        pipeline.push({
+            $addFields: {
+                posts_count: { $size: { $ifNull: ["$posts", []] } }
+            }
+        })
 
-        // const profiles = await collection.find(query)
-        //     .sort({ display_name: 1, _id: 1 })
-        //     .skip(skip)
-        //     .limit(limit)
-        //     .toArray()
+        if (filters.searchText) {
+            pipeline.push({
+                $addFields: {
+                    score: { $meta: "searchScore" }
+                }
+            })
+            pipeline.push({ $sort: { score: -1, posts_count: -1, _id: 1 } })
+        } else {
+            pipeline.push({ $sort: { posts_count: -1, _id: 1 } })
+        }
 
-        const totalCount = await collection.countDocuments(query)
+        const countPipeline = [...pipeline]
+
+        pipeline.push({ $skip: skip })
+        pipeline.push({ $limit: limit })
+
+        const profiles = await collection.aggregate(pipeline).toArray()
+
+        let totalCount = 0
+        if (filters.searchText) {
+            const countResult = await collection.aggregate([
+                ...countPipeline,
+                { $count: "total" }
+            ]).toArray()
+            totalCount = countResult[0]?.total || 0
+        } else {
+            totalCount = await collection.countDocuments(matchQuery)
+        }
 
         const serialized = await Promise.all(profiles.map(async (p) => {
             let signedProfilePic = null
