@@ -51,6 +51,7 @@ export const normalized_S3_post = traceAction('normalized_S3_post', async (post)
     signedImageUrl: signedUrl,
     original_url: post.original_url,
     post_id: post.post_id || post.code,
+    visibility_status: post.visibility_status || 'active',
 
     // Profile
     user: {
@@ -112,6 +113,21 @@ export const getPosts = traceAction('getPosts', async (project, page = 1, limit 
     // Platform filter
     if (filters.platform && filters.platform !== 'all') {
       query.platform = { $regex: new RegExp(`^${filters.platform}\$`, 'i') }
+    }
+
+    // Visibility status filter
+    if (filters.visibility_status && filters.visibility_status !== 'all') {
+      if (filters.visibility_status === 'down') {
+        query.visibility_status = 'down';
+      } else if (filters.visibility_status === 'active') {
+        andConditions.push({
+          $or: [
+            { visibility_status: 'active' },
+            { visibility_status: { $exists: false } },
+            { visibility_status: null }
+          ]
+        });
+      }
     }
 
     // Client Status filter

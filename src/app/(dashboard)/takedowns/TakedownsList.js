@@ -330,8 +330,13 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
                     <div>
                       <div className="flex items-start justify-between gap-4">
                         <div className="min-w-0">
-                          <h3 className="text-lg font-bold text-slate-900 truncate leading-tight group-hover:text-blue-600 transition-colors">
+                          <h3 className="text-lg font-bold text-slate-900 truncate leading-tight group-hover:text-blue-600 transition-colors flex items-center gap-2">
                             {item.enrichment?.username ? `@${item.enrichment.username}` : `Case #${item.id?.substring(0, 8) || 'Unknown'}`}
+                            {item.visibility_status === 'down' ? (
+                                <Badge variant="outline" className="bg-slate-100 text-slate-500 border-slate-200 uppercase text-[10px] h-5">Taken Down</Badge>
+                            ) : item.visibility_status === 'active' ? (
+                                <Badge variant="outline" className="bg-emerald-100 text-emerald-700 border-emerald-200 uppercase text-[10px] h-5">Online</Badge>
+                            ) : null}
                           </h3>
                           <p className="text-sm text-slate-500 truncate mt-1">
                             {item.enrichment?.caption || <span className="italic opacity-50">No caption content</span>}

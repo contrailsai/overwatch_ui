@@ -44,6 +44,7 @@ export const normalized_S3_post = traceAction('normalized_S3_post', async (post)
     signedImageUrl: signedUrl,
     original_url: post.original_url,
     post_id: post.post_id || post.code,
+    visibility_status: post.visibility_status || 'active',
 
     // Profile
     user: {

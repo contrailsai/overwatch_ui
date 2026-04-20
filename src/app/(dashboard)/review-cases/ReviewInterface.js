@@ -505,6 +505,15 @@ export function ReviewInterface({
                                 <span className="font-bold text-slate-900 text-sm truncate max-w-[150px]">
                                   {post.user?.username || 'Unknown User'}
                                 </span>
+                                {post.visibility_status === 'down' ? (
+                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black bg-slate-100 text-slate-500 uppercase tracking-tighter shadow-sm">
+                                    Taken Down
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black bg-emerald-100 text-emerald-700 uppercase tracking-tighter shadow-sm">
+                                    Online
+                                  </span>
+                                )}
                                 <span className="text-xs text-slate-400">•</span>
                                 <span className="text-xs text-slate-500">
                                   {post.taken_at ? format(new Date(post.taken_at * 1000), "dd/MM/yyyy") : 'N/A'}

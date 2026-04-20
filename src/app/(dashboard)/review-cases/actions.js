@@ -72,7 +72,8 @@ export const normalized_S3_post = traceAction('normalized_S3_post', async (post)
     updated_at: post.metadata?.updated_at ? new Date(post.metadata.updated_at).toISOString() : null,
 
     // Platform
-    platform: post.platform ? post.platform.toLowerCase() : 'instagram'
+    platform: post.platform ? post.platform.toLowerCase() : 'instagram',
+    visibility_status: post.visibility_status || 'active'
   };
 
   // Robust profile pic handling

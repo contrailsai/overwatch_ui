@@ -19,6 +19,7 @@ export default async function CasesPage({ searchParams }) {
   const filters = {
     platform: resolvedParams.platform || 'all',
     client_status: resolvedParams.status || 'all',
+    visibility_status: resolvedParams.visibility_status || 'all',
     risk_priority: resolvedParams.risk_priority || 'all',
     violations: resolvedParams.violations || 'all',
     original_date_from: resolvedParams.original_date_from || null,

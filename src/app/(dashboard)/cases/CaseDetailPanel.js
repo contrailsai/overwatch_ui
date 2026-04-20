@@ -420,6 +420,11 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
                                         </div>
                                         {post.user?.username || 'Unknown User'}
                                         {post.user?.is_verified && <BadgeCheck className="w-5 h-5 text-blue-500 fill-blue-50" />}
+                                        {post.visibility_status === 'down' ? (
+                                            <Badge variant="outline" className="bg-slate-100 text-slate-500 border-slate-200">Taken Down</Badge>
+                                        ) : (
+                                            <Badge variant="outline" className="bg-emerald-100 text-emerald-700 border-emerald-200">Online</Badge>
+                                        )}
                                     </h3>
                                     <p className="text-slate-500 font-medium truncate">{post.user?.full_name}</p>
                                 </div>

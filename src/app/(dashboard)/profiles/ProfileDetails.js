@@ -492,9 +492,16 @@ export default function ProfileDetailPanel({ profile, project, isOpen, onClose, 
                                                     )}
                                                 </div>
                                                 <div className="flex items-center justify-between mt-0.5 pt-2 border-t border-slate-50">
-                                                    {c.created_at && (
-                                                        <p className="text-[10px] text-slate-400 font-medium">{posted_date}</p>
-                                                    )}
+                                                    <div className="flex items-center gap-2">
+                                                        {c.created_at && (
+                                                            <p className="text-[10px] text-slate-400 font-medium">{posted_date}</p>
+                                                        )}
+                                                        {c.visibility_status === 'down' ? (
+                                                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black bg-slate-100 text-slate-500 uppercase tracking-tighter shadow-sm">Taken Down</span>
+                                                        ) : c.visibility_status === 'active' ? (
+                                                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black bg-emerald-100 text-emerald-700 uppercase tracking-tighter shadow-sm">Online</span>
+                                                        ) : null}
+                                                    </div>
                                                     <a href={`/cases/${c._id}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-[10px] font-bold text-slate-600 hover:text-blue-600 px-2 py-1 rounded-md border border-slate-100 group/link">
                                                         Inspect Case
                                                         <ArrowRight className="w-2.5 h-2.5 opacity-40 group-hover/link:opacity-100 group-hover/link:translate-x-0.5 transition-all" />

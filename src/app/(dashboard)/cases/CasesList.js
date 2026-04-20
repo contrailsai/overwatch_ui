@@ -489,6 +489,20 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                         </select>
                       </div>
 
+                      {/* VISIBILITY STATUS */}
+                      <div className="space-y-1 w-[calc(50%-5px)] sm:w-auto flex-1 max-w-[160px]">
+                        <Label className="text-[10px] uppercase font-bold text-slate-400">Visibility</Label>
+                        <select
+                          value={initialFilters.visibility_status || 'all'}
+                          onChange={(e) => handleFilterChange('visibility_status', e.target.value)}
+                          className="w-full bg-white border border-slate-200 rounded-md px-2 h-9 text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-sm"
+                        >
+                          <option value="all">All</option>
+                          <option value="active">Online</option>
+                          <option value="down">Taken Down</option>
+                        </select>
+                      </div>
+
                       {/* violations */}
                       <div className="space-y-1 w-[calc(50%-5px)] sm:w-auto flex-1 max-w-[160px]">
                         <ViolationsFilter
@@ -563,7 +577,7 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                       </div>
 
                       {/* Active Filters Info Bar */}
-                      {(initialFilters.platform !== 'all' || initialFilters.risk_priority !== 'all' || initialFilters.client_status !== 'all' || (initialFilters.violations && initialFilters.violations !== 'all') || initialFilters.original_date_from || initialFilters.original_date_to || initialFilters.processed_from || initialFilters.processed_to || searchParams.get('similar_to') || searchParams.get('semantic_search')) && (
+                      {(initialFilters.platform !== 'all' || initialFilters.risk_priority !== 'all' || initialFilters.client_status !== 'all' || (initialFilters.visibility_status && initialFilters.visibility_status !== 'all') || (initialFilters.violations && initialFilters.violations !== 'all') || initialFilters.original_date_from || initialFilters.original_date_to || initialFilters.processed_from || initialFilters.processed_to || searchParams.get('similar_to') || searchParams.get('semantic_search')) && (
                         <div className="flex flex-wrap items-center gap-2 bg-slate-50/80 border border-slate-100 rounded-md px-3 h-9 shadow-sm shrink-0 w-full xl:w-auto mt-2 xl:mt-0">
                           <span className="text-[10px] uppercase font-bold text-slate-400 mr-1">Active:</span>
                           {searchParams.get('similar_to') && (
@@ -931,21 +945,32 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
 
                         {/* Status */}
                         <td className="px-2 sm:px-3 py-3 whitespace-nowrap align-middle hidden md:table-cell text-center">
-                          <HoverCard openDelay={0} closeDelay={50}>
-                            <HoverCardTrigger asChild>
-                              <div
-                                className={cn("inline-flex items-center justify-center w-8 h-8 rounded-full border shadow-sm cursor-pointer transition-transform hover:scale-110", statusConfig.color)}
+                          <div className="flex flex-col items-center gap-1.5">
+                            <HoverCard openDelay={0} closeDelay={50}>
+                              <HoverCardTrigger asChild>
+                                <div
+                                  className={cn("inline-flex items-center justify-center w-8 h-8 rounded-full border shadow-sm cursor-pointer transition-transform hover:scale-110", statusConfig.color)}
+                                >
+                                  <StatusIcon className="w-4 h-4" />
+                                </div>
+                              </HoverCardTrigger>
+                              <HoverCardContent
+                                className="w-auto px-3 py-2 text-xs font-bold text-slate-700 bg-white border border-slate-200 shadow-xl rounded-lg"
+                                sideOffset={8}
                               >
-                                <StatusIcon className="w-4 h-4" />
-                              </div>
-                            </HoverCardTrigger>
-                            <HoverCardContent
-                              className="w-auto px-3 py-2 text-xs font-bold text-slate-700 bg-white border border-slate-200 shadow-xl rounded-lg"
-                              sideOffset={8}
-                            >
-                              {statusConfig.label}
-                            </HoverCardContent>
-                          </HoverCard>
+                                {statusConfig.label}
+                              </HoverCardContent>
+                            </HoverCard>
+                            {currentPost.visibility_status === 'down' ? (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black bg-slate-100 text-slate-500 uppercase tracking-tighter shadow-sm">
+                                Taken Down
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black bg-emerald-100 text-emerald-700 uppercase tracking-tighter shadow-sm">
+                                Online
+                              </span>
+                            )}
+                          </div>
                         </td>
 
                         {/* Content */}

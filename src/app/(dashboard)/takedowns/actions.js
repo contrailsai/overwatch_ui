@@ -540,6 +540,8 @@ export const getTakedownDetails = traceAction('getTakedownDetails', async (id) =
       view_count: post.stats?.view_count || post.engagement?.views || '-'
     }
 
+    post.visibility_status = post.visibility_status || 'active'
+
     // Prepare takedown object
     let takedownStartDate = post.takedown_info?.takedown_start_date || post.metadata?.updated_at || post.created_at || null
     if (takedownStartDate && takedownStartDate.$date) takedownStartDate = takedownStartDate.$date
