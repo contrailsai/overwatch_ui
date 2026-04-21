@@ -492,13 +492,13 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
 
                       {/* UNIQUE CLUSTERS TOGGLE */}
                       <div className="space-y-1 w-[calc(50%-5px)] sm:w-auto flex-1 max-w-[160px] flex flex-col justify-end">
-                        <Label className="text-[10px] uppercase font-bold text-slate-400 mb-1">Distinct Content</Label>
+                        <Label className="text-[10px] uppercase font-bold text-slate-400 mb-1">Unique Content</Label>
                         <div className="flex items-center gap-2 h-9 border border-slate-200 rounded-md px-2 bg-white shadow-sm">
                           <Switch 
                             checked={initialFilters.unique_clusters === 'true' || initialFilters.unique_clusters === true}
                             onCheckedChange={(checked) => handleFilterChange('unique_clusters', checked ? 'true' : 'false')}
                           />
-                          <span className="text-xs font-semibold text-slate-700"> Distinct</span>
+                          <span className="text-xs font-semibold text-slate-700"> Unique</span>
                         </div>
                       </div>
 
