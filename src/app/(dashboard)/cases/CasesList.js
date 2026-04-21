@@ -26,6 +26,7 @@ import { ReportButton } from '@/components/pdf/ReportButton'
 import { DetailedReportButton } from '@/components/pdf/DetailedReportButton'
 import { DetailedReportDocxButton } from '@/components/docx/DetailedReportDocxButton'
 import { Button } from "@/components/ui/button"
+import { Switch } from "@/components/ui/switch"
 import {
   HoverCard,
   HoverCardContent,
@@ -489,6 +490,18 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                         </select>
                       </div>
 
+                      {/* UNIQUE CLUSTERS TOGGLE */}
+                      <div className="space-y-1 w-[calc(50%-5px)] sm:w-auto flex-1 max-w-[160px] flex flex-col justify-end">
+                        <Label className="text-[10px] uppercase font-bold text-slate-400 mb-1">Distinct Content</Label>
+                        <div className="flex items-center gap-2 h-9 border border-slate-200 rounded-md px-2 bg-white shadow-sm">
+                          <Switch 
+                            checked={initialFilters.unique_clusters === 'true' || initialFilters.unique_clusters === true}
+                            onCheckedChange={(checked) => handleFilterChange('unique_clusters', checked ? 'true' : 'false')}
+                          />
+                          <span className="text-xs font-semibold text-slate-700"> Distinct</span>
+                        </div>
+                      </div>
+
                       {/* VISIBILITY STATUS */}
                       <div className="space-y-1 w-[calc(50%-5px)] sm:w-auto flex-1 max-w-[160px]">
                         <Label className="text-[10px] uppercase font-bold text-slate-400">Visibility</Label>
@@ -577,7 +590,7 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                       </div>
 
                       {/* Active Filters Info Bar */}
-                      {(initialFilters.platform !== 'all' || initialFilters.risk_priority !== 'all' || initialFilters.client_status !== 'all' || (initialFilters.visibility_status && initialFilters.visibility_status !== 'all') || (initialFilters.violations && initialFilters.violations !== 'all') || initialFilters.original_date_from || initialFilters.original_date_to || initialFilters.processed_from || initialFilters.processed_to || searchParams.get('similar_to') || searchParams.get('semantic_search')) && (
+                      {(initialFilters.unique_clusters === 'true' || initialFilters.unique_clusters === true || initialFilters.platform !== 'all' || initialFilters.risk_priority !== 'all' || initialFilters.client_status !== 'all' || (initialFilters.visibility_status && initialFilters.visibility_status !== 'all') || (initialFilters.violations && initialFilters.violations !== 'all') || initialFilters.original_date_from || initialFilters.original_date_to || initialFilters.processed_from || initialFilters.processed_to || searchParams.get('similar_to') || searchParams.get('semantic_search')) && (
                         <div className="flex flex-wrap items-center gap-2 bg-slate-50/80 border border-slate-100 rounded-md px-3 h-9 shadow-sm shrink-0 w-full xl:w-auto mt-2 xl:mt-0">
                           <span className="text-[10px] uppercase font-bold text-slate-400 mr-1">Active:</span>
                           {searchParams.get('similar_to') && (

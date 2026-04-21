@@ -77,13 +77,39 @@ export const normalized_S3_post = traceAction('normalized_S3_post', async (post)
       comment_count: post.engagement?.comments || 0,
       share_count: post.engagement?.shares || 0,
       view_count: post.engagement?.views || 0
-    }
+    },
+
+    // Clusters
+    cluster_id: post.cluster_id ? post.cluster_id.toString() : null
   };
 
   return normalized;
 })
 
 // GET POSTS WITH PAGINATIONS AND FILTERS
+const buildUniqueClustersStage = (filters) => {
+  if (filters.unique_clusters === 'true' || filters.unique_clusters === true) {
+    return [
+      {
+        $lookup: {
+          from: 'unique_clusters',
+          localField: 'cluster_id',
+          foreignField: '_id',
+          as: 'cluster_info'
+        }
+      },
+      {
+        $match: {
+          $expr: {
+            $eq: [{ $toString: "$_id" }, { $arrayElemAt: ["$cluster_info.representative_post_id", 0] }]
+          }
+        }
+      }
+    ];
+  }
+  return [];
+};
+
 export const getPosts = traceAction('getPosts', async (project, page = 1, limit = 20, filters = {}, sort = { field: 'created_at', direction: 'desc' }) => {
   try {
     if (!project?.mongo_db_map) {
@@ -254,6 +280,7 @@ export const getPosts = traceAction('getPosts', async (project, page = 1, limit 
 
     const posts = await collection.aggregate([
       { $match: matchStage },
+      ...buildUniqueClustersStage(filters),
       { $project: { text_embedding: 0, image_embedding: 0 } },
       {
         $addFields: {
@@ -285,6 +312,7 @@ export const getPosts = traceAction('getPosts', async (project, page = 1, limit 
     if (hasDateFilters) {
       const countResult = await collection.aggregate([
         { $match: matchStage },
+        ...buildUniqueClustersStage(filters),
         {
           $addFields: {
             sort_original_date: {
@@ -306,7 +334,16 @@ export const getPosts = traceAction('getPosts', async (project, page = 1, limit 
       ]).toArray();
       totalCount = countResult[0]?.total || 0;
     } else {
-      totalCount = await collection.countDocuments(query)
+      if (filters.unique_clusters === 'true' || filters.unique_clusters === true) {
+        const countResult = await collection.aggregate([
+          { $match: matchStage },
+          ...buildUniqueClustersStage(filters),
+          { $count: "total" }
+        ]).toArray();
+        totalCount = countResult[0]?.total || 0;
+      } else {
+        totalCount = await collection.countDocuments(query);
+      }
     }
 
     return {
@@ -444,6 +481,7 @@ export const getAllPostIds = traceAction('getAllPostIds', async (project, filter
 
     const pipeline = [
       { $match: matchStage },
+      ...buildUniqueClustersStage(filters),
       ...(hasDateFilters ? [
         {
           $addFields: {
@@ -469,6 +507,28 @@ export const getAllPostIds = traceAction('getAllPostIds', async (project, filter
 })
 
 // USEFUL FOR PDFs
+export const getIdenticalPosts = traceAction('getIdenticalPosts', async (project, clusterId, currentPostId) => {
+  try {
+    if (!project?.mongo_db_map || !clusterId) return [];
+    const client = await clientPromise;
+    const db = client.db(project.mongo_db_map);
+    
+    const cluster = await db.collection('unique_clusters').findOne({ _id: new ObjectId(clusterId) });
+    if (!cluster || !cluster.member_ids) return [];
+    
+    const otherMemberIds = cluster.member_ids.filter(id => id !== currentPostId && id.toString() !== currentPostId);
+    if (otherMemberIds.length === 0) return [];
+    
+    const objectIds = otherMemberIds.map(id => new ObjectId(id));
+    const posts = await db.collection('Posts').find({ _id: { $in: objectIds } }).toArray();
+    
+    return await Promise.all(posts.map(normalized_S3_post));
+  } catch (e) {
+    console.error('getIdenticalPosts Error:', e);
+    return [];
+  }
+});
+
 export const getPostsByIds = traceAction('getPostsByIds', async (project, ids) => {
   try {
     if (!project?.mongo_db_map || !ids || ids.length === 0) {
@@ -620,6 +680,7 @@ export const getSimilarPosts = traceAction('getSimilarPosts', async (project, so
       {
         $match: matchQuery
       },
+      ...buildUniqueClustersStage(filters),
       {
         $addFields: {
           score: { $meta: "vectorSearchScore" },
@@ -816,6 +877,7 @@ export const getSemanticSearchPosts = traceAction('getSemanticSearchPosts', asyn
           }
         },
         { $match: matchQuery },
+        ...buildUniqueClustersStage(filters),
         {
           $addFields: {
             score: { $meta: "vectorSearchScore" },
@@ -856,6 +918,7 @@ export const getSemanticSearchPosts = traceAction('getSemanticSearchPosts', asyn
         }
       },
       { $match: matchQuery },
+      ...buildUniqueClustersStage(filters),
       {
         $addFields: {
           score: { $meta: "searchScore" },

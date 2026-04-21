@@ -1,6 +1,6 @@
 'use client'
 
-import { updateClientStatus, trackClientClick } from './actions'
+import { updateClientStatus, trackClientClick, getIdenticalPosts } from './actions'
 import { addReviewNote, assignCaseTo } from './feature_actions'
 import { initiateTakedown, } from './takedown_actions'
 import EditForm from "./EditForm"
@@ -17,7 +17,7 @@ import {
     ScanFace, MessageSquareWarning, Fingerprint, AlertCircle, ShieldQuestion,
     FishingHook,
     UserRound,
-    UserRoundX, Pencil, UserPlus, Scale
+    UserRoundX, Pencil, UserPlus, Scale, ChevronDown
 } from 'lucide-react'
 import { Twitter, Reddit } from '@/utils/icons'
 import ProfilePic from '@/components/ProfilePic'
@@ -52,6 +52,10 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
     const [isAssignEditMode, setIsAssignEditMode] = useState(!post?.assigned_to);
     const [isAssigning, setIsAssigning] = useState(false);
 
+    const [identicalPosts, setIdenticalPosts] = useState(null);
+    const [isFetchingIdentical, setIsFetchingIdentical] = useState(false);
+    const [showIdentical, setShowIdentical] = useState(false);
+
     const [isEditing, setIsEditing] = useState(false);
 
     let allowDoTakedown = false;
@@ -85,6 +89,8 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
     useEffect(() => {
         setLocalNotes(post?.client_notes || []);
         setNoteText('');
+        setShowIdentical(false);
+        setIdenticalPosts(null);
     }, [post]);
 
     //MOVE TO THE NEXT CASE AFTER 1.5 SECONDS IF CASE IF SUBMITTED
@@ -123,6 +129,27 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
         navigator.clipboard.writeText(url);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
+    };
+
+    const handleToggleIdentical = async () => {
+        if (!showIdentical) {
+            setShowIdentical(true);
+            if (identicalPosts === null && post.cluster_id) {
+                setIsFetchingIdentical(true);
+                try {
+                    const result = await getIdenticalPosts(project, post.cluster_id, post._id);
+                    setIdenticalPosts(result);
+                } catch (e) {
+                    setIdenticalPosts([]);
+                } finally {
+                    setIsFetchingIdentical(false);
+                }
+            } else if (identicalPosts === null && !post.cluster_id) {
+                 setIdenticalPosts([]);
+            }
+        } else {
+            setShowIdentical(false);
+        }
     };
 
     // Handler function
@@ -492,6 +519,88 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
                                 </>
                             )
                         }
+
+                        {/* IDENTICAL POSTS TOGGLE */}
+                        {post.cluster_id && (
+                            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col mt-2 sm:mt-4">
+                                <button 
+                                    onClick={handleToggleIdentical}
+                                    className="w-full px-4 sm:px-5 py-3 sm:py-4 flex items-center justify-between hover:bg-slate-50 transition-colors cursor-pointer"
+                                >
+                                    <div className="flex items-center gap-2">
+                                        <Quote className="w-4 h-4 text-slate-500" />
+                                        <span className="font-bold text-slate-700 text-sm sm:text-base">Identical Posts</span>
+                                    </div>
+                                    <ChevronDown className={`w-4 h-4 sm:w-5 sm:h-5 text-slate-400 transition-transform ${showIdentical ? 'rotate-180' : ''}`} />
+                                </button>
+                                
+                                {showIdentical && (
+                                    <div className="px-4 sm:px-5 pb-4 sm:pb-5 pt-0 border-t border-slate-100 bg-slate-50/50">
+                                        {isFetchingIdentical ? (
+                                            <div className="flex items-center justify-center p-4">
+                                                <Loader2 className="w-5 h-5 text-blue-500 animate-spin" />
+                                            </div>
+                                        ) : identicalPosts && identicalPosts.length > 0 ? (
+                                            <div className="space-y-3 mt-4">
+                                                {identicalPosts.map((p, i) => (
+                                                    <div key={i} className="flex gap-3 bg-white p-3 rounded-lg border border-slate-200 shadow-sm items-start">
+                                                        {/* Left: Thumbnail or placeholder */}
+                                                        <div className="shrink-0 w-16 h-16 bg-slate-100 rounded border border-slate-200 overflow-hidden flex items-center justify-center">
+                                                            {p.signedImageUrl ? (
+                                                                <img src={p.signedImageUrl} alt="Post media" className="w-full h-full object-cover" />
+                                                            ) : (
+                                                                <Quote className="w-6 h-6 text-slate-400" />
+                                                            )}
+                                                        </div>
+
+                                                        {/* Middle: Content & Metadata */}
+                                                        <div className="flex-1 min-w-0 flex flex-col gap-1.5">
+                                                            <div className="flex items-center justify-between gap-2">
+                                                                <div className="flex items-center gap-1.5 truncate">
+                                                                    <ProfilePic user={p.user?.username || 'Unknown'} size={16} />
+                                                                    <span className="text-xs font-bold text-slate-900 truncate">{p.user?.username}</span>
+                                                                    <span className="text-[10px] font-medium text-slate-500 capitalize px-1.5 py-0.5 bg-slate-100 rounded-sm shrink-0">{p.platform}</span>
+                                                                    {p.visibility_status === 'down' ? (
+                                                                        <span className="text-[10px] font-bold text-slate-500 px-1.5 py-0.5 border border-slate-200 rounded-sm bg-slate-50 shrink-0">Taken Down</span>
+                                                                    ) : (
+                                                                        <span className="text-[10px] font-bold text-emerald-700 px-1.5 py-0.5 border border-emerald-200 rounded-sm bg-emerald-50 shrink-0">Online</span>
+                                                                    )}
+                                                                </div>
+                                                                <a 
+                                                                    href={`/cases/${p._id}`} 
+                                                                    target="_blank" 
+                                                                    rel="noreferrer"
+                                                                    className="shrink-0 text-[10px] font-bold text-blue-600 hover:text-blue-700 px-2 py-1 bg-blue-50 hover:bg-blue-100 rounded transition-colors flex items-center gap-1"
+                                                                >
+                                                                    View <ExternalLink className="w-3 h-3" />
+                                                                </a>
+                                                            </div>
+                                                            
+                                                            {/* Caption snippet */}
+                                                            <p className="text-[10px] sm:text-xs text-slate-600 truncate">
+                                                                {p.caption || <span className="italic text-slate-400">No caption</span>}
+                                                            </p>
+                                                            
+                                                            {/* Footer: Date & Metrics */}
+                                                            <div className="flex flex-wrap items-center gap-3 text-[10px] font-medium text-slate-500">
+                                                                <span className="flex items-center gap-1"><Calendar className="w-3 h-3" /> {p.posted_date ? format(new Date(p.posted_date), "MMM d, yyyy") : (p.sourcing_date ? format(new Date(p.sourcing_date), "MMM d, yyyy") : 'Unknown')}</span>
+                                                                {p.stats?.like_count !== undefined && <span className="flex items-center gap-1"><Heart className="w-3 h-3 text-rose-400" /> {p.stats?.like_count?.toLocaleString()}</span>}
+                                                                {p.stats?.comment_count !== undefined && <span className="flex items-center gap-1"><MessageCircle className="w-3 h-3 text-blue-400" /> {p.stats?.comment_count?.toLocaleString()}</span>}
+                                                                {p.stats?.share_count !== undefined && <span className="flex items-center gap-1"><Share2 className="w-3 h-3 text-green-400" /> {p.stats?.share_count?.toLocaleString()}</span>}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <div className="p-4 text-center text-sm font-medium text-slate-500 mt-2 bg-white rounded-lg border border-slate-100">
+                                                No identical posts
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </div>
                 </div>
 

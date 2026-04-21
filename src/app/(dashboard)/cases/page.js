@@ -25,7 +25,8 @@ export default async function CasesPage({ searchParams }) {
     original_date_from: resolvedParams.original_date_from || null,
     original_date_to: resolvedParams.original_date_to || null,
     processed_from: resolvedParams.processed_from || null,
-    processed_to: resolvedParams.processed_to || null
+    processed_to: resolvedParams.processed_to || null,
+    unique_clusters: resolvedParams.unique_clusters === 'true' || false
   }
 
   const isSimilaritySearch = !!resolvedParams.similar_to || !!resolvedParams.semantic_search;
