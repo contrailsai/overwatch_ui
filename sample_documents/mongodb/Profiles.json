@@ -1,0 +1,45 @@
+{
+  "_id": {
+    "$oid": "69b7a5bbea265518a0391cfc"
+  },
+  "username": "Hermes1901",
+  "platform": "x",
+  "display_name": "Hermes1901",
+  "is_verified": false,
+  "platform_user_id": null,
+  "posts": [
+    "69a5c7af0cadf6de30bf274d",
+    "69a5c7cc0cadf6de30bf274e",
+    "69a5c7e40cadf6de30bf2750"
+  ],
+  "profile_url": "https://x.com/Hermes1901",
+  "last_updated": 1775563136.369786,
+  "metadata": {
+    "username": "Hermes1901",
+    "display_name": "HERMES VAN BRACHT",
+    "account_creation_date": "Sat Nov 05 13:27:54 +0000 2022",
+    "full_name": "HERMES VAN BRACHT",
+    "profile_url": "https://twitter.com/Hermes1901",
+    "profile_pic": "https://pbs.twimg.com/profile_images/1588885819758366720/0iBPSkIQ_normal.jpg",
+    "is_business": false,
+    "bio_links": [],
+    "biography": "Hermes\n\nDe Stem van het Licht\n💥💥💥\n\nPhilosophy of Science M.A. 1978\n\nTai Chi ☯️ \nChi Kung☯️ \nMeditation🕉 \nTantra🕉",
+    "follower_count": 342,
+    "following_count": 1097,
+    "media_count": 202,
+    "location": "India ",
+    "address_street": "",
+    "city_name": "",
+    "zip": "",
+    "country": "",
+    "category": "",
+    "is_verified": false,
+    "withheld_in_countries": [],
+    "regulated_news_in_locations": "",
+    "s3_url": "https://cxo-demo.s3.ap-south-1.amazonaws.com/profiles/x/Hermes1901/0.jpg"
+  },
+  "last_synced_from_post": 1773650466.092354,
+  "last_relevant_publish_date": {
+    "$date": "2026-03-02T16:06:11.000Z"
+  }
+}

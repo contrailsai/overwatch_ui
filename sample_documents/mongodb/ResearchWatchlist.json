@@ -1,0 +1,16 @@
+{
+  "_id": {
+    "$oid": "69dcbb0b5fd2f56b17872b47"
+  },
+  "title": "PMO",
+  "description": "monitoring PM related harmful posts",
+  "keywords": [
+    {
+      "keyword": "national scheme YSS",
+      "priority": "high",
+      "added_at": "2026-04-13T09:45:00.900Z"
+    }
+  ],
+  "profiles": [],
+  "created_at": "2026-04-13T09:44:43.386Z"
+}

@@ -619,7 +619,7 @@ export const submitCaseReview = traceAction('submitCaseReview', async (project, 
       // client_details is already fetched at the top
 
       // GET THE CLIENT'S NOTIFICATION CONFIG CONNECTED TO THIS PROJECT
-      const {notification_config} = client_details;
+      // const {notification_config} = client_details;
       // const { data: notification_data } = await supabase
       //   .from('client_details')
       //   .select('notification_config')
@@ -630,13 +630,13 @@ export const submitCaseReview = traceAction('submitCaseReview', async (project, 
       // const notification_config = notification_data?.notification_config
 
       // SEND NOTIFICATION TO CLIENT
-      const { success, error } = await sendNotification(notification_config, "takedown_request")
-      if (!success) {
-        console.error('Failed to send notification:', error)
-      }
-      else {
-        console.log('Notification sent successfully')
-      }
+      // const { success, error } = await sendNotification(notification_config, "takedown_request")
+      // if (!success) {
+      //   console.error('Failed to send notification:', error)
+      // }
+      // else {
+      //   console.log('Notification sent successfully')
+      // }
 
     }
 

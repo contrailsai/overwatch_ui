@@ -1,167 +1,204 @@
 
-# Overwatch
+# 🛡️ Overwatch
 
-Overwatch is a threat detection and case management platform built with Next.js 16. The application enables content moderators to review potentially harmful social media posts, classify threats, assign risk scores, and manage takedown workflows.
+**Overwatch** is a high-performance threat detection and case management platform built for modern content moderation teams. It streamlines the lifecycle of identifying, reviewing, and neutralizing harmful social media content through an AI-assisted workflow.
 
-## Development Commands
+Built with a **"Calm Focus"** design philosophy, Overwatch minimizes cognitive load for moderators while providing powerful intelligence tools for clients.
 
-```bash
-# Start development server (runs on http://localhost:3000)
-npm run dev
+---
 
-# Build for production
-npm build
+## 🌟 Key Features
 
-# Start production server
-npm start
+### 🔍 Intelligence & Review
+- **Multi-Platform Support:** Unified interface for reviewing content from Facebook, Instagram, and X (Twitter).
+- **AI-Powered Analysis:** Pre-processed risk scoring, threat classification, and Point of Interest (POI) detection.
+- **Infinite Review Stream:** Specialized reviewer interface optimized for processing high volumes of posts with minimal friction.
+- **Media Previews:** Secure, high-speed image and video previews served via AWS S3 presigned URLs.
 
-# Run linter
-npm run lint
+### 📈 Case Management & Analytics
+- **Role-Based Workflows:** Distinct interfaces and permissions for **Reviewers** (analysts) and **Clients** (decision-makers).
+- **Executive Dashboard:** Real-time KPI cards and trend charts visualizing threat landscapes.
+- **Takedown Lifecycle:** End-to-end tracking from "Suggested" by reviewers to "Approved" and "Resolved" by clients.
+- **Automated Alerts:** Instant Slack notifications triggered upon client approval of takedowns.
 
-# Run database migrations (requires DATABASE_URL in .env.local)
-node scripts/setup_db.js
-node scripts/setup_client_details.js
-```
+### 📄 Professional Reporting
+- **PDF & DOCX Exports:** Generate high-quality, branded reports for single cases or comprehensive profile summaries.
+- **Detailed Audit Trails:** Track every action from discovery to resolution.
 
-## Environment Setup
+---
 
-Required environment variables in `.env.local`:
+## 🛠️ Tech Stack
 
-```
-NEXT_PUBLIC_SUPABASE_URL=<your-supabase-project-url>
-NEXT_PUBLIC_SUPABASE_ANON_KEY=<your-supabase-anon-key>
-DATABASE_URL=<postgresql-connection-string>  # For migrations only
-
-MONGO_URI=<mongodb-connection-string>
-MONGO_DB_NAME=<database-name>
-
-AWS_REGION=<aws-region>
-AWS_ACCESS_KEY_ID=<access-key>
-AWS_SECRET_ACCESS_KEY=<secret-key>
-AWS_BUCKET_NAME=<s3-bucket-name>
-```
-
-## Architecture Overview
-
-### Tech Stack
-- **Framework:** Next.js 16.1.6 with App Router
-- **Frontend:** React 19, Tailwind CSS 4, Lucide icons, Recharts
-- **Authentication:** Supabase Auth (email/password + OAuth)
+- **Framework:** [Next.js 15+](https://nextjs.org/) (App Router) & [React 19](https://react.dev/)
+- **Styling:** [Tailwind CSS 4](https://tailwindcss.com/) & [Radix UI](https://www.radix-ui.com/)
+- **Authentication:** [Supabase Auth](https://supabase.com/auth)
 - **Databases:**
-  - Supabase (PostgreSQL) - User auth, case metadata
-  - MongoDB - Raw social media post data
-- **Storage:** AWS S3 (presigned URLs with 1-hour expiry)
+  - **Supabase (PostgreSQL):** Relational metadata, RBAC, and case status tracking.
+  - **MongoDB:** Scalable storage for raw social media posts and AI analysis results.
+- **Storage:** [AWS S3](https://aws.amazon.com/s3/) (Presigned URL architecture)
+- **Observability:** [OpenTelemetry](https://opentelemetry.io/) (via Vercel OTEL), [PostHog](https://posthog.com/), and [Vercel Analytics](https://vercel.com/analytics)
+- **Integrations:** [Slack Webhooks](https://api.slack.com/messaging/webhooks), [Nodemailer](https://nodemailer.com/)
 
-### Directory Structure
+---
 
+## 🚀 Getting Started
+
+### 1. Prerequisites
+- Node.js 20+
+- A Supabase Project
+- A MongoDB Instance (Atlas or Local)
+- AWS S3 Bucket
+
+### 2. Environment Variables
+Create a `.env.local` file with the following:
+
+```env
+# Supabase (Auth & Metadata)
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+
+# MongoDB (Raw Post Data)
+MONGO_URI=your_mongodb_connection_string
+MONGO_DB_NAME=overwatch
+
+# AWS (Media Storage)
+AWS_REGION=your_region
+AWS_ACCESS_KEY_ID=your_key_id
+AWS_SECRET_ACCESS_KEY=your_secret_access_key
+AWS_BUCKET_NAME=your_bucket_name
+
+# Integrations
+SLACK_WEBHOOK_URL=your_slack_webhook
+POSTHOG_API_KEY=your_posthog_key
+NEXT_PUBLIC_POSTHOG_HOST=https://app.posthog.com
 ```
-/src
-├── /app                    # Next.js App Router
-│   ├── page.js            # Dashboard with metrics & threat chart
-│   ├── actions.js         # Server actions for dashboard data
-│   ├── /login             # Authentication page
-│   ├── /auth/callback     # OAuth callback handler
-│   └── /review-cases      # Content moderation interface (reviewer-only)
-├── /components            # Reusable UI components
-│   ├── Sidebar.js         # Navigation sidebar
-│   ├── MetricsCards.js    # Dashboard KPI cards
-│   ├── ThreatChart.js     # Recharts bar chart
-│   ├── ProfilePic.js      # Avatar with hash-based colors
-│   └── ReviewInterface.js # Infinite scroll case review table
-├── /utils
-│   ├── /supabase          # Auth & database clients
-│   │   ├── server.js      # SSR client with cookie management
-│   │   ├── client.js      # Browser client
-│   │   └── middleware.js  # Session validation
-│   ├── /mongodb
-│   │   └── client.js      # MongoDB connection & queries
-│   └── /aws
-│       └── s3.js          # S3 presigned URL generator
-└── proxy.js               # Request middleware for auth refresh
 
-/scripts
-├── setup_db.js                    # Run cases_metadata migration
-└── setup_client_details.js        # Run client_details migration
+### 3. Installation & Setup
+```bash
+# Install dependencies
+npm install
 
-/supabase/migrations
-├── 20240202_create_cases_metadata.sql    # Main cases table + RLS policies
-└── 20240202_create_client_details.sql    # User permissions table + RLS
+# Initialize MongoDB Indexes (Required for performance)
+node scripts/ensure_indexes.js
+
+# Run development server
+npm run dev
 ```
 
-Path alias: `@/*` maps to `./src/*` (configured in jsconfig.json)
+---
+
+## 🏗️ Architecture & Data Flow
+
+Overwatch uses a **hybrid database strategy** to balance relational integrity with document flexibility and tenant isolation:
+
+### 1. The Hybrid Database Pattern
+- **Supabase (PostgreSQL):** Acts as the **System of Record**. It manages global state, including user authentication, RBAC permissions, project configurations, aggregated dashboard metrics, and long-running task states (like report generation).
+- **MongoDB (Per-Tenant Data):** Acts as the **Intelligence Store**. To ensure data isolation and scalability, each project (tenant) is mapped to a specific MongoDB database via the `mongo_db_map` field in the Supabase `project` table. This is where high-volume raw social media posts and AI analysis results reside.
+
+### 2. Data Lifecycle
+1.  **Ingestion:** External crawlers or user-submitted links (via `client_requested_links`) are processed and stored in the project's dedicated **MongoDB** instance.
+2.  **Review:** Analysts use the `(dashboard)/review-cases` route to fetch data directly from MongoDB.
+3.  **State Sync:** Once a reviewer suggests an action, the status is tracked in **Supabase** to handle complex multi-step workflows and client-facing dashboards.
+4.  **Reporting:** When a report is requested, a record is created in `reports_generation`. The resulting file is stored in S3, and the metadata is updated in Supabase.
+
+```mermaid
+graph TD
+    User((User)) -- Auth --> SA[Next.js Server Actions]
+    SA -- RLS --> Supa[(Supabase: Global State)]
+    Supa -- "mongo_db_map" --> Mongo[(MongoDB: Project Data)]
+    SA -- Query --> Mongo
+    SA -- Notify --> Slack[Slack API]
+```
+
+---
+
+## 🔐 Authentication & Data Fetching
+
+### Server-Side First
+Overwatch leverages **Next.js Server Actions** and **React Server Components (RSC)** for all data operations. This ensures:
+- **Security:** API keys and database credentials never leave the server.
+- **Performance:** Reduced client-side JavaScript and faster initial loads.
+- **Type Safety:** Seamless data flow from the database to the UI.
 
 ### Authentication Flow
+1. **Middleware:** `src/proxy.js` and Supabase middleware validate the user session on every request.
+2. **Permission Check:** The `getUserPermission()` utility (in `src/utils/permissions.js`) fetches the user's role from the `client_details` table to gate access to specific routes (e.g., only Reviewers can see `review-cases`).
+3. **Session Management:** Auth is handled via Supabase GoTrue, with sessions persisted in secure, HTTP-only cookies.
 
-1. User submits credentials on `/login` page
-2. Server action calls `supabase.auth.signInWithPassword()`
-3. Session stored in httpOnly cookies
-4. Middleware (`src/proxy.js`) validates session on every request
-5. Unauthenticated users redirected to `/login` for protected routes
-6. OAuth flows handled via `/auth/callback` (code exchange)
+---
 
-**Role-Based Access:**
-- User permissions stored in `client_details` table (`permission` column)
-- `/review-cases` requires `permission = 'reviewer'`
-- Checked server-side before rendering page
+## 📊 Database Schema Reference
 
-### Database Schema
+### 1. Supabase (Relational & Global)
 
-**Supabase Tables:**
+| Table | Description |
+| :--- | :--- |
+| `project` | The root configuration for each client/tenant. Contains `mongo_db_map` for DB routing. |
+| `client_details` | Extends Supabase Auth with app-specific metadata (permissions, project assignment, alias). |
+| `client_logs` | Daily audit logs tracking user activity, logins, and cases reviewed for performance metrics. |
+| `client_requested_links` | Queue for user-submitted URLs waiting for ingestion into the system. |
+| `daily_case_metrics` | Aggregated statistics (risk, platform, categories) used for dashboard visualizations. |
+| `daily_reviewed_metrics` | Tracks client-side review progress and outcomes for trend analysis. |
+| `notifications` | In-app notification system for alerting users to system actions or approvals. |
+| `reports_generation` | Management table for PDF/Docx exports, tracking status, hashes, and S3 paths. |
+| `watchlist` | Stores profiles or links that require ongoing monitoring and automated checks. |
 
-```sql
--- cases_metadata: Reviewed/classified threat cases
-id (uuid, PK)
-created_at (timestamptz)
-platform (text)                    # e.g., "instagram"
-threat_type (text)                 # scam, hate_speech, violence, etc.
-threat_score (int)                 # 0-100
-sourcing_date (timestamptz)
-is_in_takedown (boolean)
-takedown_status (text)             # None, Reviewer Checked, Sent to Platform, Under Investigation
-caption (text)
-image_key (text)                   # S3 object key
-profile_username (text)
-posting_time (timestamptz)
+### 2. MongoDB (Intelligence & Tenant-Specific)
 
--- client_details: User permissions
-id (uuid, FK to auth.users, PK)
-permission (text, default 'user')  # 'user' or 'reviewer'
-created_at (timestamptz)
-```
+Each project has its own isolated database with the following primary collections:
 
-**MongoDB Collection:**
-- **Database:** Specified in `MONGO_DB_NAME`
-- **Collection:** `Posts`
-- **Purpose:** Raw unreviewed social media posts with media URLs, engagement stats, user verification status
-- **Access Pattern:** Paginated queries for review interface (20 items/page)
+| Collection | Description |
+| :--- | :--- |
+| `Posts` | The main repository for social media content. Stores raw data, engagement metrics, and AI-driven risk analysis. |
+| `Profiles` | Detailed metadata for monitored social media accounts, including follower counts and platform history. |
+| `Keywords` | List of active search terms and phrases used by ingestion engines to discover new content. |
+| `ResearchWatchlist` | Groups of keywords and profiles organized by "Topic" for targeted intelligence research. |
+| `unique_clusters` | AI-generated groupings of related posts, used to identify emerging trends or coordinated campaigns. |
 
-### Data Flow Patterns
+---
 
-**Server Actions (Next.js 15+ Pattern):**
-All data fetching and mutations use `'use server'` directive for type-safe backend operations:
+## � Sample Data
 
-```javascript
-// Define server action
-export async function getDashboardData() {
-  'use server'
-  const supabase = await createClient()
-  const { data } = await supabase.from('cases_metadata').select('*')
-  return processedData
-}
+To understand the exact data structures used in the system, refer to the `sample_documents/` directory:
+- **MongoDB Samples:** `sample_documents/mongodb/` contains real-world JSON exports for `Posts`, `Profiles`, and `ResearchWatchlist`.
+- **Supabase Definitions:** `supabase/tables info` contains the SQL DDL for the relational schema.
 
-// Call from client/server component
-const data = await getDashboardData()
-```
+---
 
-**Infinite Scroll Implementation:**
-- Client-side `IntersectionObserver` detects when last item is visible
-- Triggers server action to fetch next page: `getUnreviewedPosts(pageNumber)`
-- New posts appended to existing state
-- Used in `/review-cases` interface
+## �📁 Project Structure
 
-**S3 Image Handling:**
-- Images stored in S3 bucket (path in MongoDB as `s3_url` or `media_urls[]`)
-- `utils/aws/s3.js` extracts S3 key from URL (handles AWS default + custom domains)
+- `src/app/`: Next.js App Router (Dashboard, Auth, Actions).
+- `src/components/`: Reusable UI components (PDF/Docx logic, Charts, Tables).
+- `src/utils/`: Core logic for Supabase, MongoDB, AWS, and Tracing.
+- `src/instrumentation.js`: OpenTelemetry registration for server-side monitoring.
+- `scripts/`: Maintenance utilities (migrations, index management, debug tools).
+
+---
+
+## 🛠️ Maintenance Scripts
+
+| Script | Purpose |
+| :--- | :--- |
+| `ensure_indexes.js` | Configures required MongoDB indexes for fast filtering. |
+| `backup_mongodb.js` | Local backup utility for MongoDB collections. |
+| `migrate_v2.js` | Schema migration tool for moving from V1 to V2 data structures. |
+| `debug_ai_filter.js` | Utility to test and debug AI risk scoring logic. |
+
+---
+
+## 🎨 Design System: "Calm Focus"
+
+The UI is built to reduce "Moderator Fatigue":
+- **Cool Palette:** Heavy use of Slate and Trustworthy Blues.
+- **Typography:** [Outfit](https://fonts.google.com/specimen/Outfit) for high readability.
+- **Soft Precision:** 12px border radius and subtle shadows.
+
+---
+
+## 📄 License
+Internal Property - All Rights Reserved.
+
 - Generates presigned URL valid for 1 hour
 - Graceful fallback for missing/invalid images
 

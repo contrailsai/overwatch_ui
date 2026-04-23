@@ -1,0 +1,151 @@
+{
+  "_id": {
+    "$oid": "69ea2dec0c0f75905583c656"
+  },
+  "post_id": "2047278145745592320",
+  "analysis_results": {},
+  "author": {
+    "name": "Rimland Intelligence",
+    "url": "https://twitter.com/Rimland_Intel"
+  },
+  "caption": "Breaking  Following a crushing defeat in the battle for truth, India's journey of diplomatic isolation and global humiliation continues.  Due to Modi's violent and extremist policies based on the Hindutva ideology, India's global image has been severely tarnished.  U.S. President https://t.co/yojeLHtmyT",
+  "code": "2047278145745592320",
+  "content": "Breaking  Following a crushing defeat in the battle for truth, India's journey of diplomatic isolation and global humiliation continues.  Due to Modi's violent and extremist policies based on the Hindutva ideology, India's global image has been severely tarnished.  U.S. President https://t.co/yojeLHtmyT",
+  "created_at": {
+    "$date": "2026-04-23T11:35:47.000Z"
+  },
+  "engagement": {
+    "likes": 2,
+    "comments": 1,
+    "shares": 1,
+    "retweets": 0,
+    "quotes": 0,
+    "replies": 0,
+    "views": 0,
+    "posted_at": "2026-04-23T11:35:47+00:00"
+  },
+  "id": "2047278145745592320",
+  "media_urls": [
+    {
+      "type": "image",
+      "original_url": "https://pbs.twimg.com/ext_tw_video_thumb/2047278145745592320/pu/img/mhIEKo2L0rVtR4Ik.jpg?name=orig",
+      "s3_url": "https://cxo-demo.s3.ap-south-1.amazonaws.com/facebook_data/2047278145745592320/0.jpg"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-04-23T14:34:20.616270+00:00",
+    "updated_at": "2026-04-23T16:29:10.498Z",
+    "sourcing_date": "2026-04-23T14:34:20.616270+00:00",
+    "update_history": [
+      {
+        "updated_at": "2026-04-23T14:34:20.616270+00:00",
+        "updated_by": "manual_ingest_script",
+        "changes_summary": "Manual ingestion from simplified JSON"
+      },
+      {
+        "updated_at": {
+          "$date": "2026-04-23T16:29:10.498Z"
+        },
+        "updated_by": "akshay@pmo-data.com",
+        "changes_summary": "Case Alerted "
+      }
+    ],
+    "schema_version": 1
+  },
+  "original_url": "https://x.com/Rimland_Intel/status/2047278255867089222",
+  "platform": "X",
+  "post_content": {
+    "caption": "Breaking  Following a crushing defeat in the battle for truth, India's journey of diplomatic isolation and global humiliation continues.  Due to Modi's violent and extremist policies based on the Hindutva ideology, India's global image has been severely tarnished.  U.S. President https://t.co/yojeLHtmyT",
+    "media_urls": [
+      {
+        "type": "image",
+        "original_url": "https://pbs.twimg.com/ext_tw_video_thumb/2047278145745592320/pu/img/mhIEKo2L0rVtR4Ik.jpg?name=orig",
+        "s3_url": "https://cxo-demo.s3.ap-south-1.amazonaws.com/facebook_data/2047278145745592320/0.jpg"
+      }
+    ],
+    "post_type": "post",
+    "language": null
+  },
+  "processed": true,
+  "processed_at": {
+    "$date": "2026-04-23T16:29:10.498Z"
+  },
+  "profile": {
+    "platform_user_id": null,
+    "username": "Rimland Intelligence",
+    "display_name": "Rimland Intelligence",
+    "profile_url": "https://twitter.com/Rimland_Intel",
+    "is_verified": false
+  },
+  "result_origin": {
+    "type": "manual_upload",
+    "source_url": "https://x.com/Rimland_Intel/status/2047278255867089222"
+  },
+  "review_details": {
+    "threat_score": 96,
+    "threat_types": [
+      "Anti-India-Propaganda",
+      "Misinformation"
+    ],
+    "legal_codes": [
+      {
+        "code": "BNS - Sec 353",
+        "reasoning": "Statements conducing to public mischief intended to undermine the state's international standing and promote enmity."
+      },
+      {
+        "code": "IT Rules - 3(1)(b)(vii)",
+        "reasoning": "Threatening international relations and state security by executing coordinated psychological operations (leveraging foreign state media narratives) designed to project India as diplomatically isolated and extremist."
+      }
+    ],
+    "is_aigc": true,
+    "flags": {
+      "Defamation": false,
+      "Anti-India-Propaganda": true,
+      "Hate-speech": false,
+      "Misinformation": true,
+      "Obscene": false,
+      "Fraud": false,
+      "asset-misuse": false,
+      "Terrorism": false,
+      "Violence": false
+    },
+    "poi_names": [],
+    "reasoning": "Description: A post amplifying a narrative of India's \"diplomatic isolation\" and \"global humiliation.\" While the inciting event is based on a real occurrence (U.S. President Donald Trump reposting a podcast transcript on Truth Social that referred to India as a \"hellhole\"), the text in this post is a verbatim copy of a broadcast by Radio Pakistan. It weaponizes this real-world diplomatic friction by layering it with state-sponsored propaganda, claiming India suffered a \"crushing defeat\" and attributing the diplomatic rift to the Prime Minister's \"violent and extremist policies based on the Hindutva ideology\".\r\n\r\nTake Down: Expedited Standard Takedown. While discussing the U.S. President's social media activity and the domestic opposition's reaction is normally protected speech, this specific post is laundering verbatim state-sponsored foreign propaganda (Radio Pakistan) to project national humiliation, diplomatic collapse, and state extremism. This elevates it from domestic political commentary to a hostile psychological operation.",
+    "reviewer_comments": "",
+    "face_present": false,
+    "name_present": false,
+    "reviewed_at": "2026-04-23T16:29:10.494Z"
+  },
+  "s3_stored": true,
+  "sourcing_date": {
+    "$date": "2026-04-23T14:34:20.616Z"
+  },
+  "stats": {
+    "likes": 2,
+    "comments": 1,
+    "shares": 1
+  },
+  "supabase_refs": {
+    "case_id": null,
+    "alert_ids": [],
+    "chat_thread_ids": []
+  },
+  "takedown_info": {
+    "takedown_status": "None"
+  },
+  "text_embedding": [ "<Array of 384 elements>" ],
+  "image_embedding": [ "<Array of 512 elements>" ],
+  "timestamp": {
+    "$date": "2026-04-23T11:35:47.000Z"
+  },
+  "type": "post",
+  "url": "https://x.com/Rimland_Intel/status/2047278255867089222",
+  "user": {
+    "name": "Rimland Intelligence",
+    "url": "https://twitter.com/Rimland_Intel"
+  },
+  "visibility_status": "available",
+  "cluster_id": {
+    "$oid": "69ea3253c24419bf6d26c733"
+  }
+}
