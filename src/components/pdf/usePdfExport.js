@@ -43,6 +43,7 @@ export function usePdfExport() {
                     let isResolved = false;
                     let pollInterval;
                     let channel;
+                    let consecutiveErrors = 0;
                     
                     const cleanup = () => {
                         isResolved = true;
@@ -59,6 +60,11 @@ export function usePdfExport() {
                                 .eq('id', jobData.jobId)
                                 .single();
                             
+                            if (error) throw error;
+                            
+                            // Reset consecutive errors on a successful fetch
+                            consecutiveErrors = 0;
+                            
                             if (data) {
                                 if (data.status) {
                                     setStatusText(data.status);
@@ -74,6 +80,14 @@ export function usePdfExport() {
                             }
                         } catch (err) {
                             console.error('Error polling status:', err);
+                            consecutiveErrors++;
+                            
+                            if (consecutiveErrors >= 5) {
+                                cleanup();
+                                reject(new Error('Network connection lost or server unreachable. Please check your connection and try again.'));
+                            } else if (consecutiveErrors >= 2) {
+                                setStatusText(`Network issue, retrying... (${consecutiveErrors}/5)`);
+                            }
                         }
                     };
 
@@ -109,8 +123,8 @@ export function usePdfExport() {
                                 }
                             )
                             .subscribe((status) => {
-                                if (status === 'CHANNEL_ERROR') {
-                                    console.error('Subscription failed, retrying...');
+                                if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+                                    console.error(`Subscription failed with status: ${status}, retrying...`);
                                     if (channel) supabase.removeChannel(channel);
                                     if (retryCount < 3 && !isResolved) {
                                         retryCount++;
