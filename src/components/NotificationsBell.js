@@ -34,7 +34,7 @@ export default function NotificationsBell() {
             <PopoverContent
                 align="end"
                 sideOffset={12}
-                className="w-[400px] p-0 border-2 border-slate-200/60 shadow-2xl shadow-blue-900/20 rounded-2xl overflow-hidden bg-white"
+                className="w-[calc(100vw-64px)] max-w-[400px] sm:w-[400px] p-0 border-2 border-slate-200/60 shadow-2xl shadow-blue-900/20 rounded-2xl overflow-hidden bg-white"
             >
                 {/* Header */}
                 <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">

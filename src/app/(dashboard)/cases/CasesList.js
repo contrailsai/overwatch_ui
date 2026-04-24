@@ -1151,8 +1151,8 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
         {/* Pagination Controls */}
         {totalCount > 0 && (
           <div className="px-3 sm:px-6 pb-2 pt-2">
-            <div className="bg-white rounded-xl shadow-sm border border-slate-200 px-3 sm:px-4 py-3 flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-0">
-              <div className="flex items-center justify-between w-full sm:w-auto gap-4 sm:gap-6">
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 px-3 sm:px-4 py-3 flex flex-col lg:flex-row items-center justify-between gap-3 lg:gap-0">
+              <div className="flex items-center justify-between w-full lg:w-auto gap-4 sm:gap-6">
                 <div className="flex items-center gap-2 sm:gap-3">
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap hidden sm:inline">Show:</span>
                   <div className="flex bg-slate-50 border border-slate-200 rounded-lg p-0.5">
@@ -1180,7 +1180,7 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
               </div>
 
               {totalPages > 1 && (
-                <div className="flex items-center gap-1 sm:gap-2 w-full sm:w-auto justify-between sm:justify-end mt-2 sm:mt-0">
+                <div className="flex items-center gap-1 sm:gap-2 w-full lg:w-auto justify-between lg:justify-end mt-2 lg:mt-0">
                   <Button
                     variant="outline"
                     size="sm"
