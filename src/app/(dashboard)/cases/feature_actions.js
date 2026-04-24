@@ -2,7 +2,7 @@
 
 import { createClient, getAuthenticatedUser } from '@/utils/supabase/server'
 import clientPromise from '@/utils/mongodb/client'
-import { getSignedImageUrl } from '@/utils/aws/s3'
+import { getSignedImageUrl, uploadFileToS3 } from '@/utils/aws/s3'
 import { sendSlackNotification } from '@/utils/slack'
 import { updateClientReviewedMetrics, updateDailyMetrics } from '@/utils/supabase/metrics'
 import { ObjectId } from 'mongodb'
@@ -357,6 +357,78 @@ export const bulkAssignCasesTo = traceAction('bulkAssignCasesTo', async (project
         }
     } catch (error) {
         console.error('MongoDB Bulk Update Error:', error)
+        return { success: false, error: error.message }
+    }
+})
+
+// UPLOAD IMAGE FOR A CASE (when no media exists)
+export const uploadCaseImage = traceAction('uploadCaseImage', async (postId, project, clientDetails, formData) => {
+    try {
+        if (!project?.mongo_db_map) {
+            return { success: false, error: 'Project database configuration missing' }
+        }
+
+        if (!postId) {
+            return { success: false, error: 'Missing Post ID' }
+        }
+
+        const file = formData.get('file')
+        if (!file) return { success: false, error: 'No file provided' }
+
+        // Validate file type
+        if (!file.type.startsWith('image/')) {
+            return { success: false, error: 'Only image files are allowed' }
+        }
+
+        // Validate file size (max 10MB)
+        const MAX_SIZE = 10 * 1024 * 1024
+        if (file.size > MAX_SIZE) {
+            return { success: false, error: 'File size exceeds 10MB limit' }
+        }
+
+        const buffer = Buffer.from(await file.arrayBuffer())
+        const fileName = file.name
+        const fileType = file.type
+        const s3Key = `case-images/${project.mongo_db_map}/${postId}/${Date.now()}-${fileName}`
+
+        // 1. Upload to S3
+        await uploadFileToS3(buffer, s3Key, fileType)
+
+        // 2. Construct the full S3 URL
+        const s3Url = `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${s3Key}`
+
+        // 3. Update MongoDB — set post_content.media_urls with the new image
+        const client = await clientPromise
+        const db = client.db(project.mongo_db_map)
+        const collection = db.collection('Posts')
+
+        await collection.updateOne(
+            { _id: new ObjectId(postId) },
+            {
+                $set: {
+                    'post_content.media_urls': [{
+                        s3_url: s3Url,
+                        media_type: fileType,
+                        uploaded_manually: true
+                    }],
+                    'metadata.updated_at': new Date().toISOString()
+                },
+                $push: {
+                    'metadata.update_history': {
+                        updated_at: new Date(),
+                        updated_by: clientDetails.email,
+                        changes_summary: 'Image uploaded manually for case'
+                    }
+                }
+            }
+        )
+
+        // 4. Generate signed URL for immediate display
+        const signedUrl = await getSignedImageUrl(s3Url)
+
+        return { success: true, signedUrl }
+    } catch (error) {
+        console.error('uploadCaseImage Error:', error)
         return { success: false, error: error.message }
     }
 })

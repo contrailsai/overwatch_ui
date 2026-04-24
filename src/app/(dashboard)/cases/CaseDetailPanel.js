@@ -1,16 +1,16 @@
 'use client'
 
 import { updateClientStatus, trackClientClick, getIdenticalPosts } from './actions'
-import { addReviewNote, assignCaseTo } from './feature_actions'
+import { addReviewNote, assignCaseTo, uploadCaseImage } from './feature_actions'
 import { initiateTakedown, } from './takedown_actions'
 import EditForm from "./EditForm"
 
 // UI IMPORTS BELOW
 import { format } from "date-fns"
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import {
     X, User, Heart, MessageCircle, Share2, AlertTriangle,
-    Activity, BadgeCheck, Quote, ShieldAlert, CheckCircle,
+    Activity, BadgeCheck, Quote, ShieldAlert, CheckCircle, Upload,
     ExternalLink, Calendar, Info, Siren, Eye, Link as LinkIcon,
     ChevronLeft, ChevronRight, History, Facebook, Instagram, Youtube,
     Loader2, Send, Copy, Check, TrendingUp, ShieldX, EyeOff, Laugh, Bot,
@@ -58,6 +58,20 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
 
     const [isEditing, setIsEditing] = useState(false);
 
+    // Image upload state
+    const [isUploadingImage, setIsUploadingImage] = useState(false);
+    const [uploadedImageUrl, setUploadedImageUrl] = useState(null);
+    const [mediaError, setMediaError] = useState(false);
+    const fileInputRef = useRef(null);
+
+    // Toast Notification State
+    const [toast, setToast] = useState(null); // { message, type: 'success' | 'error' }
+
+    const showToast = (message, type = 'error') => {
+        setToast({ message, type });
+        setTimeout(() => setToast(null), 3000);
+    };
+
     let allowDoTakedown = false;
     try {
         if (project && project.project_details) {
@@ -91,6 +105,8 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
         setNoteText('');
         setShowIdentical(false);
         setIdenticalPosts(null);
+        setUploadedImageUrl(null);
+        setMediaError(false);
     }, [post]);
 
     //MOVE TO THE NEXT CASE AFTER 1.5 SECONDS IF CASE IF SUBMITTED
@@ -121,6 +137,43 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
             alert("Failed to add note");
         } finally {
             setIsSubmittingNote(false);
+        }
+    };
+
+    const handleImageUpload = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        // Client-side validation
+        if (!file.type.startsWith('image/')) {
+            showToast('Please select an image file.');
+            return;
+        }
+        if (file.size > 10 * 1024 * 1024) {
+            showToast('File size must be under 10MB.');
+            return;
+        }
+
+        setIsUploadingImage(true);
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+            const result = await uploadCaseImage(post._id, project, clientDetails, formData);
+            if (result.success) {
+                setUploadedImageUrl(result.signedUrl);
+                if (onUpdatePost) {
+                    onUpdatePost({ ...post, signedImageUrl: result.signedUrl });
+                }
+                showToast("Image uploaded successfully", "success");
+            } else {
+                showToast('Upload failed: ' + result.error);
+            }
+        } catch (error) {
+            showToast('Upload failed. Please try again.');
+        } finally {
+            setIsUploadingImage(false);
+            // Reset file input so the same file can be uploaded again
+            if (fileInputRef.current) fileInputRef.current.value = '';
         }
     };
 
@@ -388,12 +441,46 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
                         {/* Media Display */}
                         <div className="bg-slate-900 rounded-xl sm:rounded-2xl overflow-hidden shadow-lg border border-slate-800 relative group flex items-center justify-center min-h-[300px] sm:min-h-[400px]">
                             <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-slate-800/50 to-slate-950 pointer-events-none" />
-                            {post.signedImageUrl ? (
+                            {uploadedImageUrl ? (
+                                <img
+                                    src={uploadedImageUrl}
+                                    alt="Evidence"
+                                    className="max-w-full h-auto max-h-[400px] sm:max-h-[600px] object-contain relative z-10"
+                                />
+                            ) : post.signedImageUrl && !mediaError ? (
                                 <img
                                     src={post.signedImageUrl}
                                     alt="Evidence"
                                     className="max-w-full h-auto max-h-[400px] sm:max-h-[600px] object-contain relative z-10"
+                                    onError={() => setMediaError(true)}
                                 />
+                            ) : post.signedImageUrl && mediaError ? (
+                                <div
+                                    className="text-center p-8 sm:p-12 relative z-10 cursor-pointer group/upload"
+                                    onClick={() => !isUploadingImage && fileInputRef.current?.click()}
+                                >
+                                    <input
+                                        ref={fileInputRef}
+                                        type="file"
+                                        accept="image/*"
+                                        className="hidden"
+                                        onChange={handleImageUpload}
+                                    />
+                                    <div className="border-2 border-dashed border-slate-600 group-hover/upload:border-blue-500 rounded-xl p-8 sm:p-12 transition-colors duration-200">
+                                        {isUploadingImage ? (
+                                            <>
+                                                <Loader2 className="w-12 h-12 sm:w-16 sm:h-16 text-blue-400 mx-auto mb-3 sm:mb-4 animate-spin" />
+                                                <p className="text-slate-400 font-medium text-base sm:text-lg">Uploading...</p>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Upload className="w-12 h-12 sm:w-16 sm:h-16 text-slate-600 group-hover/upload:text-blue-400 mx-auto mb-3 sm:mb-4 transition-colors duration-200" />
+                                                <p className="text-slate-400 group-hover/upload:text-slate-300 font-medium text-base sm:text-lg transition-colors duration-200">Click to upload image</p>
+                                                <p className="text-slate-600 text-xs sm:text-sm mt-2">PNG, JPG, WEBP up to 10MB</p>
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
                             ) : (
                                 <div className="text-center p-8 sm:p-12 relative z-10">
                                     <Quote className="w-12 h-12 sm:w-16 sm:h-16 text-slate-700 mx-auto mb-3 sm:mb-4" />
@@ -1001,6 +1088,25 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
                     )
                 }
             </div>
+
+            {/* Floating Toast Notification */}
+            {toast && (
+                <div 
+                    className={cn(
+                        "fixed bottom-8 left-1/2 -translate-x-1/2 z-[100] px-6 py-3 rounded-full shadow-2xl flex items-center gap-3 animate-in slide-in-from-bottom-4 duration-300 border backdrop-blur-md",
+                        toast.type === 'success' 
+                            ? "bg-emerald-500/90 text-white border-emerald-400" 
+                            : "bg-rose-500/90 text-white border-rose-400"
+                    )}
+                >
+                    {toast.type === 'success' ? (
+                        <CheckCircle className="w-5 h-5 text-white" />
+                    ) : (
+                        <AlertCircle className="w-5 h-5 text-white" />
+                    )}
+                    <span className="font-bold text-sm">{toast.message}</span>
+                </div>
+            )}
         </div>
     )
 }
