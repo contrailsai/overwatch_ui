@@ -79,7 +79,7 @@ export const normalized_S3_post = traceAction('normalized_S3_post', async (post)
   // Robust profile pic handling
   normalized.user.profile_pic_url = post.profile?.profile_pic_url || post.profile?.profile_url || post.profile?.profile_pic || '';
 
-  return normalized;
+  return JSON.parse(JSON.stringify(normalized));
 })
 
 export const getPosts = traceAction('getPosts_review', async (project_mongo_db_map, page = 1, limit = 20, filters = {}) => {

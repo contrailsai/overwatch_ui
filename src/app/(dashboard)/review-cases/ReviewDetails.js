@@ -74,16 +74,25 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
     const analysisPoi = analysis.poi_check || {}
     const hasReview = Object.keys(review).length > 0
 
-    const initialThreatTypes = Array.from(new Set([
-        ...(review.threat_types || []),
-        ...(hasReview && review.flags
-            ? project_details.labels.filter(l => review.flags[l.name]).map(l => l.name)
-            : [])
-    ]))
+    const getInitialThreatTypes = () => {
+        if (hasReview) {
+            return Array.from(new Set([
+                ...(review.threat_types || []),
+                ...(review.flags ? project_details.labels.filter(l => review.flags[l.name]).map(l => l.name) : [])
+            ]));
+        }
+        return Array.from(new Set([
+            ...(analysis.threat_types || []),
+            ...(analysis.flags ? project_details.labels.filter(l => analysis.flags[l.name]).map(l => l.name) : [])
+        ]));
+    };
+
+    const initialThreatTypes = getInitialThreatTypes();
 
     const getInitialLegalCodes = () => {
+        const sourceCodes = hasReview ? review.legal_codes : analysis.legal_codes;
         const codes = [];
-        for (const item of (review.legal_codes || [])) {
+        for (const item of (sourceCodes || [])) {
             const codeName = typeof item === 'string' ? item : item.code;
             const reasoning = typeof item === 'string' ? '' : item.reasoning || '';
             if (!codes.some(c => c.code === codeName)) {
@@ -95,14 +104,14 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
     const initialLegalCodes = getInitialLegalCodes();
 
     // State
-    const [facePresent, setFacePresent] = useState(hasReview ? !!review.face_present : !!analysisPoi.face_present)
-    const [namePresent, setNamePresent] = useState(hasReview ? !!review.name_present : !!analysisPoi.poi_name_found)
-    const [poiNames, setPoiNames] = useState((hasReview ? review.poi_names : analysisPoi.poi_names) || [])
+    const [facePresent, setFacePresent] = useState(hasReview ? !!review.face_present : (analysis.face_present ?? !!analysisPoi.face_present))
+    const [namePresent, setNamePresent] = useState(hasReview ? !!review.name_present : (analysis.name_present ?? !!analysisPoi.poi_name_found))
+    const [poiNames, setPoiNames] = useState((hasReview ? review.poi_names : (analysis.poi_names || analysisPoi.poi_names)) || [])
     const [newPoiInput, setNewPoiInput] = useState('')
-    const [threatScore, setThreatScore] = useState(review.threat_score ?? 0)
+    const [threatScore, setThreatScore] = useState(hasReview ? (review.threat_score ?? 0) : (analysis.threat_score ?? 0))
     const [threatTypes, setThreatTypes] = useState(initialThreatTypes)
     const [selectedLegalCodes, setSelectedLegalCodes] = useState(initialLegalCodes)
-    const [isAIGC, setIsAIGC] = useState(!!review.is_aigc)
+    const [isAIGC, setIsAIGC] = useState(hasReview ? !!review.is_aigc : !!analysis.is_aigc)
 
     const poiPresent = facePresent || namePresent
 
@@ -114,11 +123,12 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
 
     const full_analysis_reasonning = hasReview ? review.reasoning : [
         analysis.reasoning,
+        analysis.misinformation_explanation ? `Misinformation: ${analysis.misinformation_explanation}` : "",
         analysis.categorization_reason,
         analysis.threat_category ? `Category: ${analysis.threat_category}` : "",
         analysis.nsfw_check?.reasoning ? `NSFW: ${analysis.nsfw_check.reasoning}` : "",
         analysis.hate_speech_check?.reasoning ? `Hate Speech: ${analysis.hate_speech_check.reasoning}` : ""
-    ].filter(Boolean).join('\n').trim()
+    ].filter(Boolean).join('\n\n').trim()
 
     // --- Handlers ---
     const handleAddPoi = () => {
