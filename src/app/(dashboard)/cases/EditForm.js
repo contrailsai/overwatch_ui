@@ -233,11 +233,11 @@ export default function EditForm({ post, project, clientDetails, setIsEditing, o
                         </div>
 
                         <div className="grid grid-cols-2 gap-3">
-                            {/* AIGC NOT EDITABLE  */}
+                            {/* AIGC EDITABLE  */}
                             <div
-                                // onClick={() => setIsAIGC(!isAIGC)}
+                                onClick={() => setIsAIGC(!isAIGC)}
                                 className={cn(
-                                    "cursor-not-allowed col-span-2 flex items-center justify-between p-4 rounded-xl border-2 transition-all duration-200 group",
+                                    "cursor-pointer col-span-2 flex items-center justify-between p-4 rounded-xl border-2 transition-all duration-200 group",
                                     isAIGC
                                         ? "bg-blue-50/50 border-blue-200 shadow-sm ring-1 ring-blue-100"
                                         : "bg-slate-50/30 border-slate-200 hover:border-blue-200 hover:bg-white"
@@ -256,10 +256,9 @@ export default function EditForm({ post, project, clientDetails, setIsEditing, o
                                 </div>
                                 <Checkbox
                                     checked={isAIGC}
-                                    disabled // NOT APPLICABLE FOR EDITING
-                                    // onCheckedChange={() => { }}
+                                    onCheckedChange={() => { }}
                                     className={cn(
-                                        "w-5 h-5 border-2 transition-all disabled:cursor-not-allowed ",
+                                        "w-5 h-5 border-2 transition-all",
                                         isAIGC
                                             ? "bg-blue-600 border-blue-600 data-[state=checked]:bg-blue-600"
                                             : "border-slate-300 group-hover:border-blue-300"
