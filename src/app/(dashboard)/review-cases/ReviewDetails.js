@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from "react"
-import { useState, useEffect, useActionState } from 'react'
+import { useState, useEffect, useActionState, useRef } from 'react'
 import { format } from "date-fns"
 import { submitCaseReview } from './actions'
 import {
@@ -9,7 +9,7 @@ import {
     ChevronLeft, ChevronRight, Calendar, Plus,
     Instagram, Facebook, Youtube,
     Globe, MessageCircle, Quote,
-    BadgeCheck, History, Bot, Siren, LinkIcon, Heart, Share2, Eye, Check
+    BadgeCheck, History, Bot, Siren, LinkIcon, Heart, Share2, Eye, Check, RotateCcw
 } from 'lucide-react'
 import { Twitter, Reddit } from '@/utils/icons'
 import ProfilePic from '@/components/ProfilePic'
@@ -113,6 +113,9 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
     const [selectedLegalCodes, setSelectedLegalCodes] = useState(initialLegalCodes)
     const [isAIGC, setIsAIGC] = useState(hasReview ? !!review.is_aigc : !!analysis.is_aigc)
 
+    const reasoningRef = useRef(null)
+    const reviewerCommentsRef = useRef(null)
+
     const poiPresent = facePresent || namePresent
 
     // Dates
@@ -161,6 +164,19 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
         setSelectedLegalCodes(prev => prev.map(c => 
             c.code === code ? { ...c, reasoning } : c
         ))
+    }
+
+    const handleReset = () => {
+        setFacePresent(false)
+        setNamePresent(false)
+        setPoiNames([])
+        setNewPoiInput('')
+        setThreatScore(0)
+        setThreatTypes([])
+        setSelectedLegalCodes([])
+        setIsAIGC(false)
+        if (reasoningRef.current) reasoningRef.current.value = ''
+        if (reviewerCommentsRef.current) reviewerCommentsRef.current.value = ''
     }
 
     const handleCopyLink = () => {
@@ -438,7 +454,14 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
                         <input type="hidden" name="threat_score" value={threatScore} />
                         <input type="hidden" name="takedown_status" value={localPost.takedown_info?.takedown_status || 'None'} />
 
-                        <div className="p-5 md:p-6 space-y-6 flex-1 relative flex flex-col max-w-4xl mx-auto w-full">
+                        <div className="p-5 md:p-6 space-y-6 flex-1 relative flex flex-col mx-auto w-full">
+                            
+                            <div className="flex justify-end -mb-2">
+                                <Button type="button" variant="ghost" size="sm" onClick={handleReset} className="h-8 text-slate-500 hover:text-slate-700 hover:bg-slate-100">
+                                    <RotateCcw className="w-3.5 h-3.5 mr-1.5" />
+                                    Reset Form
+                                </Button>
+                            </div>
 
                             {/* 1. VERDICT & RISK LEVEL (Moved to Top) */}
                             <section className="space-y-3">
@@ -629,6 +652,7 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
                                             <span>Detailed Analysis</span>
                                         </Label>
                                         <Textarea
+                                            ref={reasoningRef}
                                             name="reasoning"
                                             defaultValue={full_analysis_reasonning}
                                             placeholder="Enter full analysis reasoning here..."
@@ -642,6 +666,7 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
                                             <Badge variant="outline" className="text-[10px] uppercase bg-amber-50 text-amber-700 border-amber-200">Internal Only &nbsp; | &nbsp; Not visible to end users</Badge>
                                         </Label>
                                         <Textarea
+                                            ref={reviewerCommentsRef}
                                             name="reviewer_comments"
                                             defaultValue={review.reviewer_comments || ''}
                                             placeholder="Add private context or notes for other reviewers..."
