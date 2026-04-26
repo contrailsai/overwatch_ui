@@ -5,7 +5,7 @@ import * as React from "react"
 import { useState, useActionState } from 'react'
 import { submitCaseReview } from './feature_actions'
 import {
-    Loader2, X, Plus, Bot
+    Loader2, X, Plus, Bot, ExternalLink
 } from 'lucide-react'
 
 import { Input } from "@/components/ui/input"
@@ -305,15 +305,29 @@ export default function EditForm({ post, project, clientDetails, setIsEditing, o
                                                     : "bg-white border-slate-200 hover:border-purple-200"
                                             )}
                                         >
-                                            <div onClick={() => toggleLegalCode(item.name)} className="flex items-center gap-3 cursor-pointer">
-                                                <Checkbox
-                                                    checked={isSelected}
-                                                    onCheckedChange={() => { }}
-                                                    className="border-slate-300 data-[state=checked]:bg-purple-600 data-[state=checked]:border-purple-600"
-                                                />
-                                                <span className={cn("text-xs font-bold uppercase", isSelected ? "text-purple-700" : "text-slate-600")}>
-                                                    {item.name}
-                                                </span>
+                                            <div className="flex items-center justify-between">
+                                                <div onClick={() => toggleLegalCode(item.name)} className="flex items-center gap-3 cursor-pointer">
+                                                    <Checkbox
+                                                        checked={isSelected}
+                                                        onCheckedChange={() => { }}
+                                                        className="border-slate-300 data-[state=checked]:bg-purple-600 data-[state=checked]:border-purple-600"
+                                                    />
+                                                    <span className={cn("text-xs font-bold uppercase", isSelected ? "text-purple-700" : "text-slate-600")}>
+                                                        {item.name}
+                                                    </span>
+                                                </div>
+                                                {item.referenceLink && (
+                                                    <a
+                                                        href={item.referenceLink}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="p-1.5 rounded-md hover:bg-black/5 transition-colors shrink-0"
+                                                        title="View Reference"
+                                                        onClick={(e) => e.stopPropagation()}
+                                                    >
+                                                        <ExternalLink className="w-4 h-4 text-slate-500 opacity-70 hover:opacity-100 transition-opacity" />
+                                                    </a>
+                                                )}
                                             </div>
                                             {isSelected && (
                                                 <Textarea 

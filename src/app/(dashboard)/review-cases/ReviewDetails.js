@@ -566,16 +566,30 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
                                                         isSelected ? "bg-purple-50 border-purple-200 ring-1 ring-purple-200" : "bg-white border-slate-200 hover:border-purple-200"
                                                     )}
                                                 >
-                                                    <label className="flex items-center gap-3 cursor-pointer">
-                                                        <Checkbox
-                                                            checked={isSelected}
-                                                            onCheckedChange={() => toggleLegalCode(item.name)}
-                                                            className="border-slate-300 data-[state=checked]:bg-purple-600 data-[state=checked]:border-purple-600"
-                                                        />
-                                                        <span className={cn("text-xs font-bold uppercase", isSelected ? "text-purple-700" : "text-slate-600")}>
-                                                            {item.name}
-                                                        </span>
-                                                    </label>
+                                                    <div className="flex items-center justify-between">
+                                                        <label className="flex items-center gap-3 cursor-pointer">
+                                                            <Checkbox
+                                                                checked={isSelected}
+                                                                onCheckedChange={() => toggleLegalCode(item.name)}
+                                                                className="border-slate-300 data-[state=checked]:bg-purple-600 data-[state=checked]:border-purple-600"
+                                                            />
+                                                            <span className={cn("text-xs font-bold uppercase", isSelected ? "text-purple-700" : "text-slate-600")}>
+                                                                {item.name}
+                                                            </span>
+                                                        </label>
+                                                        {item.referenceLink && (
+                                                            <a
+                                                                href={item.referenceLink}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="p-1.5 rounded-md hover:bg-black/5 transition-colors shrink-0"
+                                                                title="View Reference"
+                                                                onClick={(e) => e.stopPropagation()}
+                                                            >
+                                                                <ExternalLink className="w-4 h-4 text-slate-500 opacity-70 hover:opacity-100 transition-opacity" />
+                                                            </a>
+                                                        )}
+                                                    </div>
                                                     {isSelected && (
                                                         <Textarea 
                                                             value={selected.reasoning}
