@@ -1,5 +1,5 @@
 
-# 🛡️ Overwatch
+# Overwatch
 
 **Overwatch** is a high-performance threat detection and case management platform built for modern content moderation teams. It streamlines the lifecycle of identifying, reviewing, and neutralizing harmful social media content through an AI-assisted workflow.
 
