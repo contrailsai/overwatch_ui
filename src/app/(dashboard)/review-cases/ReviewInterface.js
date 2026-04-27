@@ -10,7 +10,7 @@ import {
   Loader2, X, Filter, Download, ChevronLeft, ChevronRight,
   Search, Sparkles, Calendar, Database,
   Instagram, Facebook, Youtube,
-  AlertCircle, Quote, Globe,
+  AlertCircle, Quote, Globe, FileJson
 } from 'lucide-react'
 import { Twitter, Reddit } from "@/utils/icons"
 
@@ -44,7 +44,7 @@ export function ReviewInterface({
   // UI States
   const [selectedPost, setSelectedPost] = useState(initialCase || null)
   const [posts, setPosts] = useState(initialPosts)
-  const [isExporting, setIsExporting] = useState(false) // Renamed for clarity
+  const [exportingType, setExportingType] = useState(null) // 'csv' | 'json' | null
 
   // useTransition gives us a loading state when Next.js is fetching new URL params!
   const [isPending, startTransition] = useTransition()
@@ -86,7 +86,7 @@ export function ReviewInterface({
   }
 
   const handleExportCSV = async () => {
-    setIsExporting(true)
+    setExportingType('csv')
     try {
       const { posts: allPosts } = await getAllPostsForExport(project.mongo_db_map, initialFilters)
 
@@ -144,7 +144,51 @@ export function ReviewInterface({
       console.error('Export Error:', error)
       alert('Failed to export CSV. Please try again.')
     } finally {
-      setIsExporting(false)
+      setExportingType(null)
+    }
+  }
+
+  const handleExportJSON = async () => {
+    setExportingType('json')
+    try {
+      const { posts: allPosts } = await getAllPostsForExport(project.mongo_db_map, initialFilters)
+
+      if (!allPosts || allPosts.length === 0) {
+        alert("No posts found to export.")
+        return
+      }
+
+      const jsonString = JSON.stringify(allPosts, null, 2)
+      const blob = new Blob([jsonString], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.setAttribute('download', `cases_export_${format(new Date(), 'yyyyMMdd_HHmmss')}.json`)
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+    } catch (error) {
+      console.error('Export Error:', error)
+      alert('Failed to export JSON. Please try again.')
+    } finally {
+      setExportingType(null)
+    }
+  }
+
+  const handleDownloadSingleJSON = (post) => {
+    try {
+      const jsonString = JSON.stringify([post], null, 2)
+      const blob = new Blob([jsonString], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.setAttribute('download', `case_${post._id}_${format(new Date(), 'yyyyMMdd_HHmmss')}.json`)
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+    } catch (error) {
+      console.error('Download Error:', error)
+      alert('Failed to download JSON. Please try again.')
     }
   }
 
@@ -205,7 +249,7 @@ export function ReviewInterface({
     <div className="flex h-full relative bg-slate-50">
 
       {/* Main Content Area */}
-      <div className="flex-1 overflow-y-auto px-8 py-6 transition-all duration-300">
+      <div className="flex-1 flex flex-col h-full overflow-hidden px-8 py-6 transition-all duration-300">
 
         {/* Filters Card */}
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 mb-8">
@@ -257,16 +301,38 @@ export function ReviewInterface({
 
               </div>
               <div className="flex items-center gap-3">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleExportCSV}
-                  disabled={isExporting || posts.length === 0}
-                  className="h-9 text-xs font-bold text-slate-600 hover:text-blue-600 border-slate-200 hover:bg-blue-50 transition-all"
+                <Select 
+                  disabled={!!exportingType || posts.length === 0}
+                  onValueChange={(val) => {
+                    if (val === 'csv') handleExportCSV()
+                    if (val === 'json') handleExportJSON()
+                  }}
                 >
-                  {isExporting ? <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" /> : <Download className="h-3.5 w-3.5 mr-2" />}
-                  Export CSV
-                </Button>
+                  <SelectTrigger className="h-9 w-[140px] text-xs font-bold text-slate-600 border-slate-200 hover:border-blue-300 transition-all focus:ring-0">
+                    <div className="flex items-center gap-2">
+                      {exportingType ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-600" />
+                      ) : (
+                        <Download className="h-3.5 w-3.5" />
+                      )}
+                      <SelectValue placeholder="Export Data" />
+                    </div>
+                  </SelectTrigger>
+                  <SelectContent position="popper" className="w-[var(--radix-select-trigger-width)]">
+                    <SelectItem value="csv" className="text-xs font-medium">
+                      <div className="flex items-center gap-2">
+                        <Download className="h-3.5 w-3.5" />
+                        <span>Export CSV</span>
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="json" className="text-xs font-medium">
+                      <div className="flex items-center gap-2">
+                        <FileJson className="h-3.5 w-3.5" />
+                        <span>Export JSON</span>
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 
@@ -399,10 +465,10 @@ export function ReviewInterface({
         </div>
 
         {/* Data Table */}
-        <div className={cn("bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden transition-opacity", isPending && "opacity-60")}>
-          <div className="overflow-x-auto">
+        <div className={cn("flex-1 min-h-0 bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden transition-opacity flex flex-col", isPending && "opacity-60")}>
+          <div className="overflow-auto flex-1">
             <table className="min-w-full divide-y divide-slate-100">
-              <thead className="bg-slate-50/80">
+              <thead className="bg-slate-50 sticky top-0 z-10 shadow-sm">
                 <tr>
                   {/* <th scope="col" className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Risk Level</th> */}
                   <th scope="col" className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Content</th>
@@ -413,7 +479,7 @@ export function ReviewInterface({
                   <th scope="col" className="px-6 py-4 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-slate-100">
+              <tbody className="bg-white divide-y divide-slate-100 ">
                 {isPending && posts.length === 0 ? (
                   Array.from({ length: 10 }).map((_, index) => (
                     <tr key={index}>
@@ -560,16 +626,33 @@ export function ReviewInterface({
 
                         {/* Actions */}
                         <td className="px-6 py-4 whitespace-nowrap text-right align-top">
-                          <Button
-                            size="sm"
-                            variant={isSelected ? "default" : "secondary"}
-                            className={cn(
-                              "font-bold transition-all shadow-sm",
-                              isSelected ? "bg-blue-600 hover:bg-blue-700" : "bg-white border border-slate-200 hover:bg-slate-50 hover:border-blue-300 text-slate-600"
-                            )}
-                          >
-                            {isSelected ? 'Reviewing...' : 'Review Case'}
-                          </Button>
+                          <div className="flex items-center justify-end gap-2">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleDownloadSingleJSON(post)
+                              }}
+                              className={cn(
+                                "font-bold transition-all shadow-sm",
+                                isSelected ? "bg-blue-600 hover:bg-blue-700" : "bg-white border border-slate-200 hover:bg-slate-50 hover:border-blue-300 text-slate-600"
+                              )}
+                              title="Download JSON"
+                            >
+                              Export JSON
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant={isSelected ? "default" : "secondary"}
+                              className={cn(
+                                "font-bold transition-all shadow-sm",
+                                isSelected ? "bg-blue-600 hover:bg-blue-700" : "bg-white border border-slate-200 hover:bg-slate-50 hover:border-blue-300 text-slate-600"
+                              )}
+                            >
+                              {isSelected ? 'Reviewing...' : 'Review Case'}
+                            </Button>
+                          </div>
                         </td>
                       </tr>
                     )
