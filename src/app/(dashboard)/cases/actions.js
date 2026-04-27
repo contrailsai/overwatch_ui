@@ -938,15 +938,9 @@ export const getSemanticSearchPosts = traceAction('getSemanticSearchPosts', asyn
       console.error("Atlas Text Search aggregation failed:", e);
     }
 
-    // 5. Merge Results: Semantic First, then Atlas Text Search
+    // 5. Merge Results: First Atlas Text Search then Semantic Search results, ensuring no duplicates and respecting the limit
     const mergedPosts = [];
     const seenIds = new Set();
-
-    // Add semantic results
-    for (const post of semanticPosts) {
-      mergedPosts.push(post);
-      seenIds.add(post._id.toString());
-    }
 
     // Add text search results if not already present
     for (const post of textPosts) {
@@ -954,6 +948,12 @@ export const getSemanticSearchPosts = traceAction('getSemanticSearchPosts', asyn
         mergedPosts.push(post);
         seenIds.add(post._id.toString());
       }
+    }
+
+    // Add semantic results
+    for (const post of semanticPosts) {
+      mergedPosts.push(post);
+      seenIds.add(post._id.toString());
     }
 
     // Apply the final threshold/limit
