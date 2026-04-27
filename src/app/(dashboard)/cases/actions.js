@@ -908,7 +908,7 @@ export const getSemanticSearchPosts = traceAction('getSemanticSearchPosts', asyn
           index: "default", // Replace with your actual Atlas Search index name if different
           text: {
             query: searchText,
-            path: ['content', 'profile.display_name'], // Searching the fields defined in the Atlas Search index
+            path: ['content', 'original_url', 'profile.display_name'], // Searching the fields defined in the Atlas Search index
             fuzzy: {
               maxEdits: 2, // Allows up to 2 typos/character changes per word
               prefixLength: 2, // First 2 characters must match exactly (improves performance and relevance)
