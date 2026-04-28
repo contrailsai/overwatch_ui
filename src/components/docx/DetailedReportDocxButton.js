@@ -9,7 +9,7 @@ import { generateDetailedCasesDocx } from './DetailedCasesReportDocx';
 import { useClient } from '@/context/ClientContext';
 import posthog from 'posthog-js';
 
-export function DetailedReportDocxButton({ posts, project, className }) {
+export function DetailedReportDocxButton({ posts, project, className, onStateChange }) {
     const { clientDetails } = useClient();
     const [imgState, setImgState] = useState({ compressedImages: [], loading: true });
     const [fetchingData, setFetchingData] = useState(false);
@@ -125,6 +125,13 @@ export function DetailedReportDocxButton({ posts, project, className }) {
     };
 
     const isLoading = imgState.loading || fetchingData || isGenerating;
+
+    useEffect(() => {
+        onStateChange?.({ 
+            loading: isLoading, 
+            statusText: isGenerating ? 'Generating DOCX...' : (fetchingData ? 'Fetching data...' : (imgState.loading ? 'Processing images...' : '')) 
+        });
+    }, [isLoading, isGenerating, fetchingData, imgState.loading, onStateChange]);
 
     return (
         <button
