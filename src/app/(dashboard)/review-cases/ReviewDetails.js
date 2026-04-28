@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from "react"
-import { useState, useEffect, useActionState } from 'react'
+import { useState, useEffect, useActionState, useRef } from 'react'
 import { format } from "date-fns"
 import { submitCaseReview } from './actions'
 import {
@@ -9,7 +9,7 @@ import {
     ChevronLeft, ChevronRight, Calendar, Plus,
     Instagram, Facebook, Youtube,
     Globe, MessageCircle, Quote,
-    BadgeCheck, History, Bot, Siren, LinkIcon, Heart, Share2, Eye, Check
+    BadgeCheck, History, Bot, Siren, LinkIcon, Heart, Share2, Eye, Check, RotateCcw
 } from 'lucide-react'
 import { Twitter, Reddit } from '@/utils/icons'
 import ProfilePic from '@/components/ProfilePic'
@@ -74,16 +74,25 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
     const analysisPoi = analysis.poi_check || {}
     const hasReview = Object.keys(review).length > 0
 
-    const initialThreatTypes = Array.from(new Set([
-        ...(review.threat_types || []),
-        ...(hasReview && review.flags
-            ? project_details.labels.filter(l => review.flags[l.name]).map(l => l.name)
-            : [])
-    ]))
+    const getInitialThreatTypes = () => {
+        if (hasReview) {
+            return Array.from(new Set([
+                ...(review.threat_types || []),
+                ...(review.flags ? project_details.labels.filter(l => review.flags[l.name]).map(l => l.name) : [])
+            ]));
+        }
+        return Array.from(new Set([
+            ...(analysis.threat_types || []),
+            ...(analysis.flags ? project_details.labels.filter(l => analysis.flags[l.name]).map(l => l.name) : [])
+        ]));
+    };
+
+    const initialThreatTypes = getInitialThreatTypes();
 
     const getInitialLegalCodes = () => {
+        const sourceCodes = hasReview ? review.legal_codes : analysis.legal_codes;
         const codes = [];
-        for (const item of (review.legal_codes || [])) {
+        for (const item of (sourceCodes || [])) {
             const codeName = typeof item === 'string' ? item : item.code;
             const reasoning = typeof item === 'string' ? '' : item.reasoning || '';
             if (!codes.some(c => c.code === codeName)) {
@@ -95,14 +104,17 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
     const initialLegalCodes = getInitialLegalCodes();
 
     // State
-    const [facePresent, setFacePresent] = useState(hasReview ? !!review.face_present : !!analysisPoi.face_present)
-    const [namePresent, setNamePresent] = useState(hasReview ? !!review.name_present : !!analysisPoi.poi_name_found)
-    const [poiNames, setPoiNames] = useState((hasReview ? review.poi_names : analysisPoi.poi_names) || [])
+    const [facePresent, setFacePresent] = useState(hasReview ? !!review.face_present : (analysis.face_present ?? !!analysisPoi.face_present))
+    const [namePresent, setNamePresent] = useState(hasReview ? !!review.name_present : (analysis.name_present ?? !!analysisPoi.poi_name_found))
+    const [poiNames, setPoiNames] = useState((hasReview ? review.poi_names : (analysis.poi_names || analysisPoi.poi_names)) || [])
     const [newPoiInput, setNewPoiInput] = useState('')
-    const [threatScore, setThreatScore] = useState(review.threat_score ?? 0)
+    const [threatScore, setThreatScore] = useState(hasReview ? (review.threat_score ?? 0) : (analysis.threat_score ?? 0))
     const [threatTypes, setThreatTypes] = useState(initialThreatTypes)
     const [selectedLegalCodes, setSelectedLegalCodes] = useState(initialLegalCodes)
-    const [isAIGC, setIsAIGC] = useState(!!review.is_aigc)
+    const [isAIGC, setIsAIGC] = useState(hasReview ? !!review.is_aigc : !!analysis.is_aigc)
+
+    const reasoningRef = useRef(null)
+    const reviewerCommentsRef = useRef(null)
 
     const poiPresent = facePresent || namePresent
 
@@ -114,11 +126,12 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
 
     const full_analysis_reasonning = hasReview ? review.reasoning : [
         analysis.reasoning,
+        analysis.misinformation_explanation ? `Misinformation: ${analysis.misinformation_explanation}` : "",
         analysis.categorization_reason,
         analysis.threat_category ? `Category: ${analysis.threat_category}` : "",
         analysis.nsfw_check?.reasoning ? `NSFW: ${analysis.nsfw_check.reasoning}` : "",
         analysis.hate_speech_check?.reasoning ? `Hate Speech: ${analysis.hate_speech_check.reasoning}` : ""
-    ].filter(Boolean).join('\n').trim()
+    ].filter(Boolean).join('\n\n').trim()
 
     // --- Handlers ---
     const handleAddPoi = () => {
@@ -151,6 +164,19 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
         setSelectedLegalCodes(prev => prev.map(c => 
             c.code === code ? { ...c, reasoning } : c
         ))
+    }
+
+    const handleReset = () => {
+        setFacePresent(false)
+        setNamePresent(false)
+        setPoiNames([])
+        setNewPoiInput('')
+        setThreatScore(0)
+        setThreatTypes([])
+        setSelectedLegalCodes([])
+        setIsAIGC(false)
+        if (reasoningRef.current) reasoningRef.current.value = ''
+        if (reviewerCommentsRef.current) reviewerCommentsRef.current.value = ''
     }
 
     const handleCopyLink = () => {
@@ -428,7 +454,14 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
                         <input type="hidden" name="threat_score" value={threatScore} />
                         <input type="hidden" name="takedown_status" value={localPost.takedown_info?.takedown_status || 'None'} />
 
-                        <div className="p-5 md:p-6 space-y-6 flex-1 relative flex flex-col max-w-4xl mx-auto w-full">
+                        <div className="p-5 md:p-6 space-y-6 flex-1 relative flex flex-col mx-auto w-full">
+                            
+                            <div className="flex justify-end -mb-2">
+                                <Button type="button" variant="ghost" size="sm" onClick={handleReset} className="h-8 text-slate-500 hover:text-slate-700 hover:bg-slate-100">
+                                    <RotateCcw className="w-3.5 h-3.5 mr-1.5" />
+                                    Reset Form
+                                </Button>
+                            </div>
 
                             {/* 1. VERDICT & RISK LEVEL (Moved to Top) */}
                             <section className="space-y-3">
@@ -533,16 +566,30 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
                                                         isSelected ? "bg-purple-50 border-purple-200 ring-1 ring-purple-200" : "bg-white border-slate-200 hover:border-purple-200"
                                                     )}
                                                 >
-                                                    <label className="flex items-center gap-3 cursor-pointer">
-                                                        <Checkbox
-                                                            checked={isSelected}
-                                                            onCheckedChange={() => toggleLegalCode(item.name)}
-                                                            className="border-slate-300 data-[state=checked]:bg-purple-600 data-[state=checked]:border-purple-600"
-                                                        />
-                                                        <span className={cn("text-xs font-bold uppercase", isSelected ? "text-purple-700" : "text-slate-600")}>
-                                                            {item.name}
-                                                        </span>
-                                                    </label>
+                                                    <div className="flex items-center justify-between">
+                                                        <label className="flex items-center gap-3 cursor-pointer">
+                                                            <Checkbox
+                                                                checked={isSelected}
+                                                                onCheckedChange={() => toggleLegalCode(item.name)}
+                                                                className="border-slate-300 data-[state=checked]:bg-purple-600 data-[state=checked]:border-purple-600"
+                                                            />
+                                                            <span className={cn("text-xs font-bold uppercase", isSelected ? "text-purple-700" : "text-slate-600")}>
+                                                                {item.name}
+                                                            </span>
+                                                        </label>
+                                                        {item.referenceLink && (
+                                                            <a
+                                                                href={item.referenceLink}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="p-1.5 rounded-md hover:bg-black/5 transition-colors shrink-0"
+                                                                title="View Reference"
+                                                                onClick={(e) => e.stopPropagation()}
+                                                            >
+                                                                <ExternalLink className="w-4 h-4 text-slate-500 opacity-70 hover:opacity-100 transition-opacity" />
+                                                            </a>
+                                                        )}
+                                                    </div>
                                                     {isSelected && (
                                                         <Textarea 
                                                             value={selected.reasoning}
@@ -619,6 +666,7 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
                                             <span>Detailed Analysis</span>
                                         </Label>
                                         <Textarea
+                                            ref={reasoningRef}
                                             name="reasoning"
                                             defaultValue={full_analysis_reasonning}
                                             placeholder="Enter full analysis reasoning here..."
@@ -632,6 +680,7 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
                                             <Badge variant="outline" className="text-[10px] uppercase bg-amber-50 text-amber-700 border-amber-200">Internal Only &nbsp; | &nbsp; Not visible to end users</Badge>
                                         </Label>
                                         <Textarea
+                                            ref={reviewerCommentsRef}
                                             name="reviewer_comments"
                                             defaultValue={review.reviewer_comments || ''}
                                             placeholder="Add private context or notes for other reviewers..."

@@ -79,7 +79,7 @@ export const normalized_S3_post = traceAction('normalized_S3_post', async (post)
   // Robust profile pic handling
   normalized.user.profile_pic_url = post.profile?.profile_pic_url || post.profile?.profile_url || post.profile?.profile_pic || '';
 
-  return normalized;
+  return JSON.parse(JSON.stringify(normalized));
 })
 
 export const getPosts = traceAction('getPosts_review', async (project_mongo_db_map, page = 1, limit = 20, filters = {}) => {
@@ -510,27 +510,6 @@ export const submitCaseReview = traceAction('submitCaseReview', async (project, 
     }
   }
 
-  const review_details = {
-    threat_score: parseInt(formData.get('threat_score') || '0'),
-    threat_types: threat_types.length > 0 ? threat_types : ['safe'],
-    legal_codes: legal_codes,
-    is_aigc: formData.get('is_aigc') === 'on',
-
-    // Flags
-    flags: flags,
-
-    // Text & Lists
-    poi_names: formData.get('poi_names') ? formData.get('poi_names').split(',').map(s => s.trim()).filter(Boolean) : [],
-    reasoning: formData.get('reasoning'),
-    reviewer_comments: formData.get('reviewer_comments'),
-
-    // POI
-    face_present: ["on", "yes", "true"].includes(formData.get('face_present')?.toLowerCase()),
-    name_present: ["on", "yes", "true"].includes(formData.get('name_present')?.toLowerCase()),
-
-    reviewed_at: new Date().toISOString()
-  }
-
   // Determine Takedown Status
   // If "is_in_takedown" is checked, default to 'raised' (Reviewer Checked)
   // This signals the Client to approve/start it.
@@ -565,6 +544,27 @@ export const submitCaseReview = traceAction('submitCaseReview', async (project, 
     )
     if (!existingPost) {
       return { success: false, error: 'Post not found' }
+    }
+
+    const review_details = {
+      threat_score: parseInt(formData.get('threat_score') || '0'),
+      threat_types: threat_types.length > 0 ? threat_types : ['safe'],
+      legal_codes: legal_codes,
+      is_aigc: formData.get('is_aigc') === 'on',
+
+      // Flags
+      flags: flags,
+
+      // Text & Lists
+      poi_names: formData.get('poi_names') ? formData.get('poi_names').split(',').map(s => s.trim()).filter(Boolean) : [],
+      reasoning: formData.get('reasoning'),
+      reviewer_comments: formData.get('reviewer_comments'),
+
+      // POI
+      face_present: ["on", "yes", "true"].includes(formData.get('face_present')?.toLowerCase()),
+      name_present: ["on", "yes", "true"].includes(formData.get('name_present')?.toLowerCase()),
+
+      reviewed_at: existingPost.review_details?.reviewed_at || new Date().toISOString()
     }
 
     // Check if it was previously reviewed to handle metrics updates correctly
