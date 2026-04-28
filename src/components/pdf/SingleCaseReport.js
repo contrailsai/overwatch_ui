@@ -590,9 +590,20 @@ export const SingleCasePage = ({ post, project, compressedImage }) => {
                                 <View style={styles.violationGrid}>
                                     {legalCodes.map((item, i) => {
                                         const code = typeof item === 'string' ? item : item.code;
-                                        return (
-                                            <View key={i} style={[styles.violationBadge, { borderColor: '#8B5CF6', backgroundColor: '#8B5CF615' }]}>
+                                        const projectCode = project?.project_details?.legal_codes?.find(pc => pc.name === code);
+                                        const badgeContent = (
+                                            <View style={[styles.violationBadge, { borderColor: '#8B5CF6', backgroundColor: '#8B5CF615' }]}>
                                                 <Text style={[styles.violationText, { color: '#8B5CF6' }]}>{code}</Text>
+                                            </View>
+                                        );
+
+                                        return (
+                                            <View key={i}>
+                                                {projectCode?.referenceLink ? (
+                                                    <Link src={projectCode.referenceLink} style={{ textDecoration: 'none' }}>
+                                                        {badgeContent}
+                                                    </Link>
+                                                ) : badgeContent}
                                             </View>
                                         );
                                     })}

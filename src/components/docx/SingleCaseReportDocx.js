@@ -322,9 +322,39 @@ export const generateCaseSections = async (post, project, compressedImage, caseN
     // ── 6. LEGAL FRAMEWORK (conditional) ─────────────────────────────────────
     if (legalCodes.length > 0) {
         docChildren.push(sectionHeading("Legal Framework"));
+        
+        const legalCodeChildren = [];
+        legalCodes.forEach((c, idx) => {
+            const codeName = typeof c === 'string' ? c : c.code;
+            const projectCode = project?.project_details?.legal_codes?.find(pc => pc.name === codeName);
+            
+            if (projectCode?.referenceLink) {
+                legalCodeChildren.push(
+                    new ExternalHyperlink({
+                        children: [
+                            new TextRun({
+                                text: codeName,
+                                color: "2563EB", // Tailwind blue-600
+                                size: 20,
+                                underline: { type: "single" }
+                            })
+                        ],
+                        link: projectCode.referenceLink
+                    })
+                );
+            } else {
+                legalCodeChildren.push(new TextRun({ text: codeName, color: "374151", size: 20 }));
+            }
+            
+            // Add separator if not last item
+            if (idx < legalCodes.length - 1) {
+                legalCodeChildren.push(new TextRun({ text: "  ·  ", color: "9CA3AF", size: 20 }));
+            }
+        });
+
         docChildren.push(
             new Paragraph({
-                children: [new TextRun({ text: legalCodes.map(c => typeof c === 'string' ? c : c.code).join("  ·  "), color: "374151", size: 20 })],
+                children: legalCodeChildren,
             })
         );
         docChildren.push(sectionDivider(200));

@@ -648,9 +648,22 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
 
                                                 return (
                                                     <div key={idx} className={cn("p-4 rounded-xl border flex flex-col gap-2", bgClass)}>
-                                                        <div className="flex items-center gap-2">
-                                                            {/* <Badge className="bg-purple-100 text-purple-700 hover:bg-purple-100 border-none text-[9px] px-1.5 py-0 uppercase">Code</Badge> */}
-                                                            <span className={cn("font-bold text-sm", textClass)}>{code}</span>
+                                                        <div className="flex items-center justify-between gap-2">
+                                                            <div className="flex items-center gap-2">
+                                                                {/* <Badge className="bg-purple-100 text-purple-700 hover:bg-purple-100 border-none text-[9px] px-1.5 py-0 uppercase">Code</Badge> */}
+                                                                <span className={cn("font-bold text-sm", textClass)}>{code}</span>
+                                                            </div>
+                                                            {projectCode?.referenceLink && (
+                                                                <a
+                                                                    href={projectCode.referenceLink}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    className={cn("p-1.5 rounded-md hover:bg-black/5 transition-colors shrink-0", textClass)}
+                                                                    title="View Reference"
+                                                                >
+                                                                    <ExternalLink className="w-4 h-4 opacity-70 hover:opacity-100 transition-opacity" />
+                                                                </a>
+                                                            )}
                                                         </div>
                                                         {reasoning && (
                                                             <p className={cn("text-sm font-medium leading-relaxed", textClass)}>

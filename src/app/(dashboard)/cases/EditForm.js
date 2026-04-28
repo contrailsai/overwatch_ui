@@ -5,7 +5,7 @@ import * as React from "react"
 import { useState, useActionState } from 'react'
 import { submitCaseReview } from './feature_actions'
 import {
-    Loader2, X, Plus, Bot
+    Loader2, X, Plus, Bot, ExternalLink
 } from 'lucide-react'
 
 import { Input } from "@/components/ui/input"
@@ -233,11 +233,11 @@ export default function EditForm({ post, project, clientDetails, setIsEditing, o
                         </div>
 
                         <div className="grid grid-cols-2 gap-3">
-                            {/* AIGC NOT EDITABLE  */}
+                            {/* AIGC EDITABLE  */}
                             <div
-                                // onClick={() => setIsAIGC(!isAIGC)}
+                                onClick={() => setIsAIGC(!isAIGC)}
                                 className={cn(
-                                    "cursor-not-allowed col-span-2 flex items-center justify-between p-4 rounded-xl border-2 transition-all duration-200 group",
+                                    "cursor-pointer col-span-2 flex items-center justify-between p-4 rounded-xl border-2 transition-all duration-200 group",
                                     isAIGC
                                         ? "bg-blue-50/50 border-blue-200 shadow-sm ring-1 ring-blue-100"
                                         : "bg-slate-50/30 border-slate-200 hover:border-blue-200 hover:bg-white"
@@ -256,10 +256,9 @@ export default function EditForm({ post, project, clientDetails, setIsEditing, o
                                 </div>
                                 <Checkbox
                                     checked={isAIGC}
-                                    disabled // NOT APPLICABLE FOR EDITING
-                                    // onCheckedChange={() => { }}
+                                    onCheckedChange={() => { }}
                                     className={cn(
-                                        "w-5 h-5 border-2 transition-all disabled:cursor-not-allowed ",
+                                        "w-5 h-5 border-2 transition-all",
                                         isAIGC
                                             ? "bg-blue-600 border-blue-600 data-[state=checked]:bg-blue-600"
                                             : "border-slate-300 group-hover:border-blue-300"
@@ -306,15 +305,29 @@ export default function EditForm({ post, project, clientDetails, setIsEditing, o
                                                     : "bg-white border-slate-200 hover:border-purple-200"
                                             )}
                                         >
-                                            <div onClick={() => toggleLegalCode(item.name)} className="flex items-center gap-3 cursor-pointer">
-                                                <Checkbox
-                                                    checked={isSelected}
-                                                    onCheckedChange={() => { }}
-                                                    className="border-slate-300 data-[state=checked]:bg-purple-600 data-[state=checked]:border-purple-600"
-                                                />
-                                                <span className={cn("text-xs font-bold uppercase", isSelected ? "text-purple-700" : "text-slate-600")}>
-                                                    {item.name}
-                                                </span>
+                                            <div className="flex items-center justify-between">
+                                                <div onClick={() => toggleLegalCode(item.name)} className="flex items-center gap-3 cursor-pointer">
+                                                    <Checkbox
+                                                        checked={isSelected}
+                                                        onCheckedChange={() => { }}
+                                                        className="border-slate-300 data-[state=checked]:bg-purple-600 data-[state=checked]:border-purple-600"
+                                                    />
+                                                    <span className={cn("text-xs font-bold uppercase", isSelected ? "text-purple-700" : "text-slate-600")}>
+                                                        {item.name}
+                                                    </span>
+                                                </div>
+                                                {item.referenceLink && (
+                                                    <a
+                                                        href={item.referenceLink}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="p-1.5 rounded-md hover:bg-black/5 transition-colors shrink-0"
+                                                        title="View Reference"
+                                                        onClick={(e) => e.stopPropagation()}
+                                                    >
+                                                        <ExternalLink className="w-4 h-4 text-slate-500 opacity-70 hover:opacity-100 transition-opacity" />
+                                                    </a>
+                                                )}
                                             </div>
                                             {isSelected && (
                                                 <Textarea 
