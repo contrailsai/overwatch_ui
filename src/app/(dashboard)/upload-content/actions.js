@@ -75,11 +75,12 @@ export const bulkRequestLinks = traceAction('bulkRequestLinks', async (links, pr
   // Notify Slack
   try {
     const SLACK_WEBHOOK_URL = process.env.SLACK_WEBHOOK_URL_NEW_LINK_REQUEST
+    const userIdentifier = user.email || user.id
     await fetch(SLACK_WEBHOOK_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        text: `Bulk content ingestion request from user ${user.id}: ${validLinks.length} link(s) queued.
+        text: `Bulk content ingestion request from user ${userIdentifier}: ${validLinks.length} link(s) queued.
         ${invalidLinks.length > 0 ? `${invalidLinks.length} invalid link(s) were skipped.` : ''}
         ${sqsFailures.length > 0 ? `${sqsFailures.length} link(s) failed to queue for ingestion.` : ''}
         `

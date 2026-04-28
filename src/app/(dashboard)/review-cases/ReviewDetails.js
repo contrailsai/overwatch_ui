@@ -90,29 +90,70 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
     const analysisPoi = analysis.poi_check || {}
     const hasReview = Object.keys(review).length > 0
 
+    const normalizeString = (str) => {
+        if (typeof str !== 'string') return '';
+        return str.toLowerCase().replace(/[-_]/g, ' ').replace(/\s+/g, ' ').trim();
+    };
+
     const getInitialThreatTypes = () => {
+        const projectLabels = project_details.labels || [];
+        
         if (hasReview) {
             return Array.from(new Set([
                 ...(review.threat_types || []),
-                ...(review.flags ? project_details.labels.filter(l => review.flags[l.name]).map(l => l.name) : [])
+                ...(review.flags ? projectLabels.filter(l => review.flags[l.name]).map(l => l.name) : [])
             ]));
         }
-        return Array.from(new Set([
-            ...(analysis.threat_types || []),
-            ...(analysis.flags ? project_details.labels.filter(l => analysis.flags[l.name]).map(l => l.name) : [])
-        ]));
+
+        const matchedThreatTypes = new Set();
+        
+        for (const t of (analysis.threat_types || [])) {
+            const normalizedT = normalizeString(t);
+            const match = projectLabels.find(l => normalizeString(l.name) === normalizedT);
+            if (match) matchedThreatTypes.add(match.name);
+        }
+
+        if (analysis.flags) {
+            Object.entries(analysis.flags).forEach(([flagKey, value]) => {
+                if (value) {
+                    const normalizedKey = normalizeString(flagKey);
+                    const match = projectLabels.find(l => normalizeString(l.name) === normalizedKey);
+                    if (match) matchedThreatTypes.add(match.name);
+                }
+            });
+        }
+        
+        return Array.from(matchedThreatTypes);
     };
 
     const initialThreatTypes = getInitialThreatTypes();
 
     const getInitialLegalCodes = () => {
-        const sourceCodes = hasReview ? review.legal_codes : analysis.legal_codes;
+        const projectLegalCodes = project_details.legal_codes || [];
         const codes = [];
-        for (const item of (sourceCodes || [])) {
-            const codeName = typeof item === 'string' ? item : item.code;
+        
+        if (hasReview) {
+            for (const item of (review.legal_codes || [])) {
+                const codeName = typeof item === 'string' ? item : item.code;
+                const reasoning = typeof item === 'string' ? '' : item.reasoning || '';
+                if (!codes.some(c => c.code === codeName)) {
+                    codes.push({ code: codeName, reasoning });
+                }
+            }
+            return codes;
+        }
+
+        for (const item of (analysis.legal_codes || [])) {
+            const rawCodeName = typeof item === 'string' ? item : item.code;
             const reasoning = typeof item === 'string' ? '' : item.reasoning || '';
-            if (!codes.some(c => c.code === codeName)) {
-                codes.push({ code: codeName, reasoning });
+            const normalizedRaw = normalizeString(rawCodeName);
+            
+            const match = projectLegalCodes.find(c => normalizeString(c.name) === normalizedRaw);
+            
+            if (match) {
+                if (!codes.some(c => c.code === match.name)) {
+                    codes.push({ code: match.name, reasoning });
+                }
             }
         }
         return codes;
@@ -710,30 +751,16 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
                                                         isSelected ? "bg-purple-50 border-purple-200 ring-1 ring-purple-200" : "bg-white border-slate-200 hover:border-purple-200"
                                                     )}
                                                 >
-                                                    <div className="flex items-center justify-between">
-                                                        <label className="flex items-center gap-3 cursor-pointer">
-                                                            <Checkbox
-                                                                checked={isSelected}
-                                                                onCheckedChange={() => toggleLegalCode(item.name)}
-                                                                className="border-slate-300 data-[state=checked]:bg-purple-600 data-[state=checked]:border-purple-600"
-                                                            />
-                                                            <span className={cn("text-xs font-bold uppercase", isSelected ? "text-purple-700" : "text-slate-600")}>
-                                                                {item.name}
-                                                            </span>
-                                                        </label>
-                                                        {item.referenceLink && (
-                                                            <a
-                                                                href={item.referenceLink}
-                                                                target="_blank"
-                                                                rel="noopener noreferrer"
-                                                                className="p-1.5 rounded-md hover:bg-black/5 transition-colors shrink-0"
-                                                                title="View Reference"
-                                                                onClick={(e) => e.stopPropagation()}
-                                                            >
-                                                                <ExternalLink className="w-4 h-4 text-slate-500 opacity-70 hover:opacity-100 transition-opacity" />
-                                                            </a>
-                                                        )}
-                                                    </div>
+                                                    <label className="flex items-center gap-3 cursor-pointer">
+                                                        <Checkbox
+                                                            checked={isSelected}
+                                                            onCheckedChange={() => toggleLegalCode(item.name)}
+                                                            className="border-slate-300 data-[state=checked]:bg-purple-600 data-[state=checked]:border-purple-600"
+                                                        />
+                                                        <span className={cn("text-xs font-bold uppercase", isSelected ? "text-purple-700" : "text-slate-600")}>
+                                                            {item.name}
+                                                        </span>
+                                                    </label>
                                                     {isSelected && (
                                                         <Textarea 
                                                             value={selected.reasoning}
