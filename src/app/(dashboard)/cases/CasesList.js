@@ -32,6 +32,12 @@ import {
   HoverCardContent,
   HoverCardTrigger,
 } from "@/components/ui/hover-card"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 // import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Label } from "@/components/ui/label"
@@ -434,334 +440,343 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                   </div>
                 </div>
 
-                {/* FILTERS & BULK ACTIONS */}
-                <div className={cn("flex flex-col gap-4 w-full transition-all overflow-hidden", !isMobileFiltersOpen && "hidden lg:flex")}>
-                  <div className="flex flex-col gap-3 w-full">
+                {(() => {
+                  const filterAndActionsContent = (
+                    <div className="flex flex-col lg:flex-row gap-6 lg:gap-4 w-full">
+                      {/* FILTERS & BULK ACTIONS */}
+                      <div className="flex flex-col gap-4 w-full lg:flex-1">
+                        <div className="flex flex-col gap-3 w-full">
 
-                    {/* Row 1: Dropdowns and Dates */}
-                    <div className="flex flex-wrap lg:flex-nowrap items-start gap-2.5 sm:gap-3 w-full">
+                          {/* Row 1: Dropdowns and Dates */}
+                          <div className="grid grid-cols-2 lg:flex lg:flex-wrap items-start gap-2.5 sm:gap-3 w-full">
 
-                      {/* RISK LEVEL */}
-                      <div className="space-y-1 w-[calc(50%-5px)] sm:w-auto flex-1 max-w-[160px]">
-                        <Label className="text-[10px] uppercase font-bold text-slate-400">Risk Severity</Label>
-                        <select
-                          value={initialFilters.risk_priority || 'all'}
-                          onChange={(e) => handleFilterChange('risk_priority', e.target.value)}
-                          className="w-full bg-white border border-slate-200 rounded-md px-2 h-9 text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-sm"
-                        >
-                          <option value="all">All Risks</option>
-                          <option value="high">High Risk</option>
-                          <option value="medium">Medium Risk</option>
-                          <option value="low">Low Risk</option>
-                          <option value="safe">Safe</option>
-                        </select>
-                      </div>
-
-                      {/* PLATFORM */}
-                      <div className="space-y-1 w-[calc(50%-5px)] sm:w-auto flex-1 max-w-[160px]">
-                        <Label className="text-[10px] uppercase font-bold text-slate-400">Platform</Label>
-                        <select
-                          value={initialFilters.platform}
-                          onChange={(e) => handleFilterChange('platform', e.target.value)}
-                          className="w-full bg-white border border-slate-200 rounded-md px-2 h-9 text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-sm"
-                        >
-                          <option value="all">All Platforms</option>
-                          <option value="instagram">Instagram</option>
-                          <option value="facebook">Facebook</option>
-                          <option value="reddit">Reddit</option>
-                          <option value="x">X (Twitter)</option>
-                          <option value="youtube">Youtube</option>
-                          <option value="website">Websites</option>
-                        </select>
-                      </div>
-
-                      {/* STATUS */}
-                      <div className="space-y-1 w-[calc(50%-5px)] sm:w-auto flex-1 max-w-[160px]">
-                        <Label className="text-[10px] uppercase font-bold text-slate-400">Status</Label>
-                        <select
-                          value={initialFilters.client_status}
-                          onChange={(e) => handleFilterChange('client_status', e.target.value)}
-                          className="w-full bg-white border border-slate-200 rounded-md px-2 h-9 text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-sm"
-                        >
-                          <option value="all">All Statuses</option>
-                          <option value="To Be Reviewed">To Be Reviewed</option>
-                          <option value="No Action">No Action</option>
-                          <option value="Flag for Takedown">Flag for Takedown</option>
-                        </select>
-                      </div>
-
-                      {/* UNIQUE CLUSTERS TOGGLE */}
-                      <div className="space-y-1 w-[calc(50%-5px)] sm:w-auto flex-1 max-w-[160px] flex flex-col justify-end">
-                        <Label className="text-[10px] uppercase font-bold text-slate-400 mb-1">Unique Content</Label>
-                        <div className="flex items-center gap-2 h-9 border border-slate-200 rounded-md px-2 bg-white shadow-sm">
-                          <Switch 
-                            checked={initialFilters.unique_clusters === 'true' || initialFilters.unique_clusters === true}
-                            onCheckedChange={(checked) => handleFilterChange('unique_clusters', checked ? 'true' : 'false')}
-                          />
-                          <span className="text-xs font-semibold text-slate-700"> Unique</span>
-                        </div>
-                      </div>
-
-                      {/* VISIBILITY STATUS */}
-                      <div className="space-y-1 w-[calc(50%-5px)] sm:w-auto flex-1 max-w-[160px]">
-                        <Label className="text-[10px] uppercase font-bold text-slate-400">Visibility</Label>
-                        <select
-                          value={initialFilters.visibility_status || 'all'}
-                          onChange={(e) => handleFilterChange('visibility_status', e.target.value)}
-                          className="w-full bg-white border border-slate-200 rounded-md px-2 h-9 text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-sm"
-                        >
-                          <option value="all">All</option>
-                          <option value="active">Online</option>
-                          <option value="down">Taken Down</option>
-                        </select>
-                      </div>
-
-                      {/* violations */}
-                      <div className="space-y-1 w-[calc(50%-5px)] sm:w-auto flex-1 max-w-[160px]">
-                        <ViolationsFilter
-                          projectLabels={project?.project_details?.labels || []}
-                          initialViolations={initialFilters.violations}
-                          onChange={(val) => handleFilterChange('violations', val)}
-                        />
-                      </div>
-
-                      {/* Alert date  */}
-                      <div className="space-y-1 w-[calc(50%-5px)] sm:w-auto flex-1 max-w-[160px]">
-                        <Label className="text-[10px] uppercase font-bold text-slate-400">Alert Date</Label>
-                        <DateFilterPopover
-                          title="Alert Date"
-                          initialFrom={initialFilters.processed_from}
-                          initialTo={initialFilters.processed_to}
-                          onApply={(range) => updateQueryParams({
-                            processed_from: range?.from ? format(range.from, "yyyy-MM-dd'T'HH:mm:ssXXX") : null,
-                            processed_to: range?.to ? format(range.to, "yyyy-MM-dd'T'HH:mm:ssXXX") : null
-                          })}
-                        />
-                      </div>
-
-                      {/* Publishing date  */}
-                      <div className="space-y-1 w-[calc(50%-5px)] sm:w-auto flex-1 max-w-[160px]">
-                        <Label className="text-[10px] uppercase font-bold text-slate-400">Publish Date</Label>
-                        <DateFilterPopover
-                          title="Publish Date"
-                          initialFrom={initialFilters.original_date_from}
-                          initialTo={initialFilters.original_date_to}
-                          onApply={(range) => updateQueryParams({
-                            original_date_from: range?.from ? format(range.from, "yyyy-MM-dd'T'HH:mm:ssXXX") : null,
-                            original_date_to: range?.to ? format(range.to, "yyyy-MM-dd'T'HH:mm:ssXXX") : null
-                          })}
-                        />
-                      </div>
-                    </div>
-
-                    {/* Row 2: Text Search & Active Filters */}
-                    <div className="flex flex-wrap xl:flex-nowrap items-end gap-3 pb-0.5 pl-0.5 w-full">
-
-                      {/* Search */}
-                      <div className="space-y-1 w-full sm:max-w-xs shrink-0">
-                        <Label className="text-[10px] uppercase font-bold text-slate-400">Search</Label>
-                        <div className="flex items-center gap-2">
-                          <div className="relative flex-1">
-                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                              <Search className="h-4 w-4 text-slate-400" />
-                            </div>
-                            <input
-                              type="text"
-                              value={searchTerm}
-                              onChange={(e) => setSearchTerm(e.target.value)}
-                              placeholder="Search by text..."
-                              className="w-full bg-white border border-slate-200 rounded-md pl-9 pr-3 h-9 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal shadow-sm transition-all"
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  e.preventDefault();
-                                  handleSearchApply();
-                                }
-                              }}
-                            />
-                          </div>
-                          <Button
-                            onClick={handleSearchApply}
-                            className="h-9 w-9 p-0 shrink-0 bg-blue-600 hover:bg-blue-700 text-white shadow-sm cursor-pointer transition-colors"
-                            title="Search"
-                          >
-                            <Search className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </div>
-
-                      {/* Active Filters Info Bar */}
-                      {(initialFilters.unique_clusters === 'true' || initialFilters.unique_clusters === true || initialFilters.platform !== 'all' || initialFilters.risk_priority !== 'all' || initialFilters.client_status !== 'all' || (initialFilters.visibility_status && initialFilters.visibility_status !== 'all') || (initialFilters.violations && initialFilters.violations !== 'all') || initialFilters.original_date_from || initialFilters.original_date_to || initialFilters.processed_from || initialFilters.processed_to || searchParams.get('similar_to') || searchParams.get('semantic_search')) && (
-                        <div className="flex flex-wrap items-center gap-2 bg-slate-50/80 border border-slate-100 rounded-md px-3 h-9 shadow-sm shrink-0 w-full xl:w-auto mt-2 xl:mt-0">
-                          <span className="text-[10px] uppercase font-bold text-slate-400 mr-1">Active:</span>
-                          {searchParams.get('similar_to') && (
-                            <div className="flex items-center gap-1.5 px-2 py-0.5 bg-purple-50 text-purple-700 rounded font-bold text-[10px] uppercase tracking-wider border border-purple-100">
-                              <Info className="w-3 h-3" />
-                              Similarity: {searchParams.get('search_type')}
-                            </div>
-                          )}
-                          {searchParams.get('semantic_search') && (
-                            <div className="flex items-center gap-1.5 px-2 py-0.5 bg-purple-50 text-purple-700 rounded font-bold text-[10px] uppercase tracking-wider border border-purple-100">
-                              <Search className="w-3 h-3" />
-                              Text Search
-                            </div>
-                          )}
-                          <Button variant="ghost" size="sm" onClick={clearFilters} className="h-6 px-2 text-rose-600 hover:text-rose-700 hover:bg-rose-50 font-bold text-[10px] uppercase tracking-wider cursor-pointer transition-colors ml-auto">
-                            <X className="w-3.5 h-3.5 mr-1 text-rose-500" /> Clear Filters
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* BULK ASSIGN FUNCTIONALITY */}
-                  {
-                    selectedCount > 0 && (
-                      <div className="flex items-center gap-4 pt-3 border-t border-slate-100 mt-2 animate-in fade-in slide-in-from-top-1">
-                        {selectedCount === 1 && (
-                          <div className="flex items-center gap-2 pr-4 border-r border-slate-100">
-                            <Button
-                              variant={searchParams.get('similar_to') === Object.keys(selectedCases)[0] && searchParams.get('search_type') === 'text' ? 'default' : 'outline'}
-                              size="sm"
-                              onClick={() => {
-                                const id = Object.keys(selectedCases)[0]
-                                updateQueryParams({ similar_to: id, search_type: 'text', semantic_search: null })
-                              }}
-                              className={cn(
-                                "h-8 px-3 text-[10px] font-bold uppercase tracking-wider",
-                                searchParams.get('similar_to') === Object.keys(selectedCases)[0] && searchParams.get('search_type') === 'text'
-                                  ? "bg-blue-600 text-white hover:bg-blue-700"
-                                  : "border-blue-200 text-blue-700 hover:bg-blue-50"
-                              )}
-                            >
-                              <Search className="w-3 h-3 mr-1.5" />
-                              Find Similar (Text)
-                            </Button>
-                            <Button
-                              variant={searchParams.get('similar_to') === Object.keys(selectedCases)[0] && searchParams.get('search_type') === 'image' ? 'default' : 'outline'}
-                              size="sm"
-                              onClick={() => {
-                                const id = Object.keys(selectedCases)[0]
-                                updateQueryParams({ similar_to: id, search_type: 'image', semantic_search: null })
-                              }}
-                              className={cn(
-                                "h-8 px-3 text-[10px] font-bold uppercase tracking-wider",
-                                searchParams.get('similar_to') === Object.keys(selectedCases)[0] && searchParams.get('search_type') === 'image'
-                                  ? "bg-emerald-600 text-white hover:bg-emerald-700"
-                                  : "border-emerald-200 text-emerald-700 hover:bg-emerald-50"
-                              )}
-                            >
-                              <Search className="w-3 h-3 mr-1.5" />
-                              Find Similar (Image)
-                            </Button>
-                          </div>
-                        )}
-
-                        {clientDetails?.permission === "client-admin" && (
-                          <>
-                            <div className="flex items-center gap-2 px-2.5 py-1.5 bg-blue-50 text-blue-700 rounded-md border border-blue-100 whitespace-nowrap">
-                              <UserPlus className="w-3.5 h-3.5" />
-                              <span className="text-[10px] font-bold uppercase tracking-wider">Bulk Assignment</span>
-                            </div>
-                            <div className="flex items-center gap-3 w-full max-w-lg">
+                            {/* RISK LEVEL */}
+                            <div className="space-y-1 w-full lg:w-auto lg:flex-1 lg:max-w-[160px]">
+                              <Label className="text-[10px] uppercase font-bold text-slate-400">Risk Severity</Label>
                               <select
-                                value={bulkAssignedEmail}
-                                onChange={(e) => setBulkAssignedEmail(e.target.value)}
-                                className="w-full bg-white border border-slate-200 rounded-md px-3 h-9 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
+                                value={initialFilters.risk_priority || 'all'}
+                                onChange={(e) => handleFilterChange('risk_priority', e.target.value)}
+                                className="w-full bg-white border border-slate-200 rounded-md px-2 h-9 text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-sm"
                               >
-                                <option value="">Select team member to assign these cases</option>
-                                {projectEmails?.map((userObj) => (
-                                  <option key={userObj.email} value={userObj.email}>
-                                    {userObj.alias || userObj.email}
-                                  </option>
-                                ))}
+                                <option value="all">All Risks</option>
+                                <option value="high">High Risk</option>
+                                <option value="medium">Medium Risk</option>
+                                <option value="low">Low Risk</option>
+                                <option value="safe">Safe</option>
                               </select>
-                              <Button
-                                onClick={handleBulkAssign}
-                                disabled={!bulkAssignedEmail || isBulkAssigning}
-                                className="h-9 px-6 cursor-pointer bg-blue-600 hover:bg-blue-700 text-white font-bold transition-all shadow-sm shrink-0"
-                              >
-                                {isBulkAssigning ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Check className="w-4 h-4 mr-2" />}
-                                Assign {selectedCount} {selectedCount === 1 ? 'Case' : 'Cases'}
-                              </Button>
                             </div>
-                          </>
-                        )}
+
+                            {/* PLATFORM */}
+                            <div className="space-y-1 w-full lg:w-auto lg:flex-1 lg:max-w-[160px]">
+                              <Label className="text-[10px] uppercase font-bold text-slate-400">Platform</Label>
+                              <select
+                                value={initialFilters.platform}
+                                onChange={(e) => handleFilterChange('platform', e.target.value)}
+                                className="w-full bg-white border border-slate-200 rounded-md px-2 h-9 text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-sm"
+                              >
+                                <option value="all">All Platforms</option>
+                                <option value="instagram">Instagram</option>
+                                <option value="facebook">Facebook</option>
+                                <option value="reddit">Reddit</option>
+                                <option value="x">X (Twitter)</option>
+                                <option value="youtube">Youtube</option>
+                                <option value="website">Websites</option>
+                              </select>
+                            </div>
+
+                            {/* STATUS */}
+                            <div className="space-y-1 w-full lg:w-auto lg:flex-1 lg:max-w-[160px]">
+                              <Label className="text-[10px] uppercase font-bold text-slate-400">Status</Label>
+                              <select
+                                value={initialFilters.client_status}
+                                onChange={(e) => handleFilterChange('client_status', e.target.value)}
+                                className="w-full bg-white border border-slate-200 rounded-md px-2 h-9 text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-sm"
+                              >
+                                <option value="all">All Statuses</option>
+                                <option value="To Be Reviewed">To Be Reviewed</option>
+                                <option value="No Action">No Action</option>
+                                <option value="Flag for Takedown">Flag for Takedown</option>
+                              </select>
+                            </div>
+
+                            {/* UNIQUE CLUSTERS TOGGLE */}
+                            <div className="space-y-1 w-full lg:w-auto lg:flex-1 lg:max-w-[160px] flex flex-col justify-end">
+                              <Label className="text-[10px] uppercase font-bold text-slate-400 mb-1">Unique Content</Label>
+                              <div className="flex items-center gap-2 h-9 border border-slate-200 rounded-md px-2 bg-white shadow-sm">
+                                <Switch 
+                                  checked={initialFilters.unique_clusters === 'true' || initialFilters.unique_clusters === true}
+                                  onCheckedChange={(checked) => handleFilterChange('unique_clusters', checked ? 'true' : 'false')}
+                                />
+                                <span className="text-xs font-semibold text-slate-700"> Unique</span>
+                              </div>
+                            </div>
+
+                            {/* VISIBILITY STATUS */}
+                            <div className="space-y-1 w-full lg:w-auto lg:flex-1 lg:max-w-[160px]">
+                              <Label className="text-[10px] uppercase font-bold text-slate-400">Visibility</Label>
+                              <select
+                                value={initialFilters.visibility_status || 'all'}
+                                onChange={(e) => handleFilterChange('visibility_status', e.target.value)}
+                                className="w-full bg-white border border-slate-200 rounded-md px-2 h-9 text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-sm"
+                              >
+                                <option value="all">All</option>
+                                <option value="active">Online</option>
+                                <option value="down">Taken Down</option>
+                              </select>
+                            </div>
+
+                            {/* violations */}
+                            <div className="space-y-1 w-full lg:w-auto lg:flex-1 lg:max-w-[160px]">
+                              <ViolationsFilter
+                                projectLabels={project?.project_details?.labels || []}
+                                initialViolations={initialFilters.violations}
+                                onChange={(val) => handleFilterChange('violations', val)}
+                              />
+                            </div>
+
+                            {/* Alert date  */}
+                            <div className="space-y-1 w-full lg:w-auto lg:flex-1 lg:max-w-[160px]">
+                              <Label className="text-[10px] uppercase font-bold text-slate-400">Alert Date</Label>
+                              <DateFilterPopover
+                                title="Alert Date"
+                                initialFrom={initialFilters.processed_from}
+                                initialTo={initialFilters.processed_to}
+                                onApply={(range) => updateQueryParams({
+                                  processed_from: range?.from ? format(range.from, "yyyy-MM-dd'T'HH:mm:ssXXX") : null,
+                                  processed_to: range?.to ? format(range.to, "yyyy-MM-dd'T'HH:mm:ssXXX") : null
+                                })}
+                              />
+                            </div>
+
+                            {/* Publishing date  */}
+                            <div className="space-y-1 w-full lg:w-auto lg:flex-1 lg:max-w-[160px]">
+                              <Label className="text-[10px] uppercase font-bold text-slate-400">Publish Date</Label>
+                              <DateFilterPopover
+                                title="Publish Date"
+                                initialFrom={initialFilters.original_date_from}
+                                initialTo={initialFilters.original_date_to}
+                                onApply={(range) => updateQueryParams({
+                                  original_date_from: range?.from ? format(range.from, "yyyy-MM-dd'T'HH:mm:ssXXX") : null,
+                                  original_date_to: range?.to ? format(range.to, "yyyy-MM-dd'T'HH:mm:ssXXX") : null
+                                })}
+                              />
+                            </div>
+                          </div>
+
+                          {/* Row 2: Text Search & Active Filters */}
+                          <div className="flex flex-wrap items-end gap-3 pb-0.5 pl-0.5 w-full">
+
+                            {/* Search */}
+                            <div className="space-y-1 w-full sm:max-w-xs shrink-0">
+                              <Label className="text-[10px] uppercase font-bold text-slate-400">Search</Label>
+                              <div className="flex items-center gap-2">
+                                <div className="relative flex-1">
+                                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                    <Search className="h-4 w-4 text-slate-400" />
+                                  </div>
+                                  <input
+                                    type="text"
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                    placeholder="Search by text..."
+                                    className="w-full bg-white border border-slate-200 rounded-md pl-9 pr-3 h-9 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal shadow-sm transition-all"
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        handleSearchApply();
+                                      }
+                                    }}
+                                  />
+                                </div>
+                                <Button
+                                  onClick={handleSearchApply}
+                                  className="h-9 w-9 p-0 shrink-0 bg-blue-600 hover:bg-blue-700 text-white shadow-sm cursor-pointer transition-colors"
+                                  title="Search"
+                                >
+                                  <Search className="w-4 h-4" />
+                                </Button>
+                              </div>
+                            </div>
+
+                            {/* Active Filters Info Bar */}
+                            {(initialFilters.unique_clusters === 'true' || initialFilters.unique_clusters === true || initialFilters.platform !== 'all' || initialFilters.risk_priority !== 'all' || initialFilters.client_status !== 'all' || (initialFilters.visibility_status && initialFilters.visibility_status !== 'all') || (initialFilters.violations && initialFilters.violations !== 'all') || initialFilters.original_date_from || initialFilters.original_date_to || initialFilters.processed_from || initialFilters.processed_to || searchParams.get('similar_to') || searchParams.get('semantic_search')) && (
+                              <div className="flex flex-wrap items-center gap-2 bg-slate-50/80 border border-slate-100 rounded-md px-3 h-9 shadow-sm shrink-0 w-full xl:w-auto mt-2 xl:mt-0">
+                                <span className="text-[10px] uppercase font-bold text-slate-400 mr-1">Active:</span>
+                                {searchParams.get('similar_to') && (
+                                  <div className="flex items-center gap-1.5 px-2 py-0.5 bg-purple-50 text-purple-700 rounded font-bold text-[10px] uppercase tracking-wider border border-purple-100">
+                                    <Info className="w-3 h-3" />
+                                    Similarity: {searchParams.get('search_type')}
+                                  </div>
+                                )}
+                                {searchParams.get('semantic_search') && (
+                                  <div className="flex items-center gap-1.5 px-2 py-0.5 bg-purple-50 text-purple-700 rounded font-bold text-[10px] uppercase tracking-wider border border-purple-100">
+                                    <Search className="w-3 h-3" />
+                                    Text Search
+                                  </div>
+                                )}
+                                <Button variant="ghost" size="sm" onClick={clearFilters} className="h-6 px-2 text-rose-600 hover:text-rose-700 hover:bg-rose-50 font-bold text-[10px] uppercase tracking-wider cursor-pointer transition-colors ml-auto">
+                                  <X className="w-3.5 h-3.5 mr-1 text-rose-500" /> Clear Filters
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* BULK ASSIGN FUNCTIONALITY */}
+                        {
+                          selectedCount > 0 && (
+                            <div className="flex flex-wrap items-center gap-4 pt-3 border-t border-slate-100 mt-2 animate-in fade-in slide-in-from-top-1">
+                              {selectedCount === 1 && (
+                                <div className="flex items-center gap-2 pr-4 lg:border-r border-slate-100 mb-2 lg:mb-0 w-full lg:w-auto">
+                                  <Button
+                                    variant={searchParams.get('similar_to') === Object.keys(selectedCases)[0] && searchParams.get('search_type') === 'text' ? 'default' : 'outline'}
+                                    size="sm"
+                                    onClick={() => {
+                                      const id = Object.keys(selectedCases)[0]
+                                      updateQueryParams({ similar_to: id, search_type: 'text', semantic_search: null })
+                                    }}
+                                    className={cn(
+                                      "h-8 px-3 text-[10px] font-bold uppercase tracking-wider flex-1 lg:flex-none",
+                                      searchParams.get('similar_to') === Object.keys(selectedCases)[0] && searchParams.get('search_type') === 'text'
+                                        ? "bg-blue-600 text-white hover:bg-blue-700"
+                                        : "border-blue-200 text-blue-700 hover:bg-blue-50"
+                                    )}
+                                  >
+                                    <Search className="w-3 h-3 mr-1.5" />
+                                    Find Similar (Text)
+                                  </Button>
+                                  <Button
+                                    variant={searchParams.get('similar_to') === Object.keys(selectedCases)[0] && searchParams.get('search_type') === 'image' ? 'default' : 'outline'}
+                                    size="sm"
+                                    onClick={() => {
+                                      const id = Object.keys(selectedCases)[0]
+                                      updateQueryParams({ similar_to: id, search_type: 'image', semantic_search: null })
+                                    }}
+                                    className={cn(
+                                      "h-8 px-3 text-[10px] font-bold uppercase tracking-wider flex-1 lg:flex-none",
+                                      searchParams.get('similar_to') === Object.keys(selectedCases)[0] && searchParams.get('search_type') === 'image'
+                                        ? "bg-emerald-600 text-white hover:bg-emerald-700"
+                                        : "border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+                                    )}
+                                  >
+                                    <Search className="w-3 h-3 mr-1.5" />
+                                    Find Similar (Image)
+                                  </Button>
+                                </div>
+                              )}
+
+                              {clientDetails?.permission === "client-admin" && (
+                                <div className="flex flex-col lg:flex-row items-start lg:items-center gap-3 w-full lg:max-w-lg">
+                                  <div className="flex items-center gap-2 px-2.5 py-1.5 bg-blue-50 text-blue-700 rounded-md border border-blue-100 whitespace-nowrap">
+                                    <UserPlus className="w-3.5 h-3.5" />
+                                    <span className="text-[10px] font-bold uppercase tracking-wider">Bulk Assignment</span>
+                                  </div>
+                                  <select
+                                    value={bulkAssignedEmail}
+                                    onChange={(e) => setBulkAssignedEmail(e.target.value)}
+                                    className="w-full bg-white border border-slate-200 rounded-md px-3 h-9 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
+                                  >
+                                    <option value="">Select team member to assign these cases</option>
+                                    {projectEmails?.map((userObj) => (
+                                      <option key={userObj.email} value={userObj.email}>
+                                        {userObj.alias || userObj.email}
+                                      </option>
+                                    ))}
+                                  </select>
+                                  <Button
+                                    onClick={handleBulkAssign}
+                                    disabled={!bulkAssignedEmail || isBulkAssigning}
+                                    className="w-full lg:w-auto h-9 px-6 cursor-pointer bg-blue-600 hover:bg-blue-700 text-white font-bold transition-all shadow-sm shrink-0"
+                                  >
+                                    {isBulkAssigning ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Check className="w-4 h-4 mr-2" />}
+                                    Assign {selectedCount} {selectedCount === 1 ? 'Case' : 'Cases'}
+                                  </Button>
+                                </div>
+                              )}
+                            </div>
+                          )
+                        }
                       </div>
-                    )
-                  }
-                </div>
-              </div>
 
-              {/* Right: Actions & Counts */}
-              <div className={cn("flex items-center gap-5 w-full lg:max-w-50 justify-start lg:justify-end mt-4 lg:mt-0 transition-all", !isMobileFiltersOpen && "hidden lg:flex")}>
+                      {/* Right: Actions & Counts */}
+                      <div className="flex items-center w-full lg:max-w-[200px] lg:justify-end shrink-0">
+                        {/* REPORT DOWNLOAD BUTTONS */}
+                        <div className="flex flex-col gap-2 w-full lg:ml-auto">
+                          <div className="w-full" onClick={() => {
+                            if (selectedCount === 0) alert("Select some cases before exporting");
+                            trackClientClick('export_summary_report', { page: 'CasesList' });
+                          }}>
+                            {selectedCount > 0 ? (
+                              <ReportButton
+                                posts={selectedPostsArray}
+                                project={project}
+                                className="flex w-full cursor-pointer items-center justify-start gap-2 px-2.5 py-1.5 bg-white border border-slate-200 text-slate-700 font-bold rounded-md hover:bg-slate-50 transition-colors text-xs shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
+                              />
+                            ) : (
+                              <button className="flex w-full cursor-pointer items-center justify-start gap-2 px-2.5 py-1.5 bg-white border border-slate-200 text-slate-700 font-bold rounded-md hover:bg-slate-50 transition-colors text-xs shadow-sm disabled:cursor-not-allowed disabled:opacity-50">
+                                <FileDown className="w-3.5 h-3.5" />
+                                Export Summary PDF
+                              </button>
+                            )}
+                          </div>
+                          <div className="w-full" onClick={() => {
+                            if (selectedCount === 0) alert("Select some cases before exporting");
+                            trackClientClick('export_detailed_report', { page: 'CasesList' });
+                          }}>
+                            {selectedCount > 0 ? (
+                              <DetailedReportButton
+                                posts={selectedPostsArray}
+                                project={project}
+                                className="flex w-full cursor-pointer items-center justify-start gap-2 px-2.5 py-1.5 bg-white border border-slate-200 text-slate-700 font-bold rounded-md hover:bg-slate-50 transition-colors text-xs shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
+                              />
+                            ) : (
+                              <button className="flex w-full cursor-pointer items-center justify-start gap-2 px-2.5 py-1.5 bg-white border border-slate-200 text-slate-700 font-bold rounded-md hover:bg-slate-50 transition-colors text-xs shadow-sm">
+                                <FileDown className="w-3.5 h-3.5" />
+                                Export Detailed PDF
+                              </button>
+                            )}
+                          </div>
+                          <div className="w-full" onClick={() => {
+                            if (selectedCount === 0) alert("Select some cases before exporting");
+                            trackClientClick('export_detailed_report_docx', { page: 'CasesList' });
+                          }}>
+                            {selectedCount > 0 ? (
+                              <DetailedReportDocxButton
+                                posts={selectedPostsArray}
+                                project={project}
+                                className="flex w-full cursor-pointer items-center justify-start gap-2 px-2.5 py-1.5 bg-white border border-slate-200 text-slate-700 font-bold rounded-md hover:bg-slate-50 transition-colors text-xs shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
+                              />
+                            ) : (
+                              <button className="flex w-full cursor-pointer items-center justify-start gap-2 px-2.5 py-1.5 bg-white border border-slate-200 text-slate-700 font-bold rounded-md hover:bg-slate-50 transition-colors text-xs shadow-sm">
+                                <FileDown className="w-3.5 h-3.5" />
+                                Export Detailed DOCX
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
 
-                {/* REPORT DOWNLOAD BUTTONS */}
-                <div className="flex flex-col sm:flex-row lg:flex-col gap-2 shrink-0 w-full lg:ml-auto">
-                  <div className="w-full sm:w-auto" onClick={() => {
-                    if (selectedCount === 0) alert("Select some cases before exporting");
-                    trackClientClick('export_summary_report', { page: 'CasesList' });
-                  }}>
-                    {selectedCount > 0 ? (
-                      <ReportButton
-                        posts={selectedPostsArray}
-                        project={project}
-                        className="flex w-full cursor-pointer items-center justify-start gap-2 px-2.5 py-1.5 bg-white border border-slate-200 text-slate-700 font-bold rounded-md hover:bg-slate-50 transition-colors text-xs shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
-                      />
-                    ) : (
-                      <button className="flex w-full cursor-pointer items-center justify-start gap-2 px-2.5 py-1.5 bg-white border border-slate-200 text-slate-700 font-bold rounded-md hover:bg-slate-50 transition-colors text-xs shadow-sm disabled:cursor-not-allowed disabled:opacity-50">
-                        <FileDown className="w-3.5 h-3.5" />
-                        Export Summary PDF
-                      </button>
-                    )}
-                  </div>
-                  <div onClick={() => {
-                    if (selectedCount === 0) alert("Select some cases before exporting");
-                    trackClientClick('export_detailed_report', { page: 'CasesList' });
-                  }}>
-                    {selectedCount > 0 ? (
-                      <DetailedReportButton
-                        posts={selectedPostsArray}
-                        project={project}
-                        className="flex w-full cursor-pointer items-center justify-start gap-2 px-2.5 py-1.5 bg-white border border-slate-200 text-slate-700 font-bold rounded-md hover:bg-slate-50 transition-colors text-xs shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
-                      />
-                    ) : (
-                      <button className="flex w-full cursor-pointer items-center justify-start gap-2 px-2.5 py-1.5 bg-white border border-slate-200 text-slate-700 font-bold rounded-md hover:bg-slate-50 transition-colors text-xs shadow-sm">
-                        <FileDown className="w-3.5 h-3.5" />
-                        Export Detailed PDF
-                      </button>
-                    )}
-                  </div>
-                  <div onClick={() => {
-                    if (selectedCount === 0) alert("Select some cases before exporting");
-                    trackClientClick('export_detailed_report_docx', { page: 'CasesList' });
-                  }}>
-                    {selectedCount > 0 ? (
-                      <DetailedReportDocxButton
-                        posts={selectedPostsArray}
-                        project={project}
-                        className="flex w-full cursor-pointer items-center justify-start gap-2 px-2.5 py-1.5 bg-white border border-slate-200 text-slate-700 font-bold rounded-md hover:bg-slate-50 transition-colors text-xs shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
-                      />
-                    ) : (
-                      <button className="flex w-full cursor-pointer items-center justify-start gap-2 px-2.5 py-1.5 bg-white border border-slate-200 text-slate-700 font-bold rounded-md hover:bg-slate-50 transition-colors text-xs shadow-sm">
-                        <FileDown className="w-3.5 h-3.5" />
-                        Export Detailed DOCX
-                      </button>
-                    )}
-                  </div>
+                  return (
+                    <>
+                      {/* Desktop View */}
+                      <div className="hidden lg:flex w-full">
+                        {filterAndActionsContent}
+                      </div>
 
-
-                </div>
-
-                {/* {(raisedCount > 0 || isInitialLoading) && (
-                <Link
-                  href="/takedowns"
-                  className="flex items-center gap-2 px-3 py-1.5 bg-rose-50 border border-rose-100 rounded-lg text-rose-700 hover:bg-rose-100 transition-colors group"
-                >
-                  <Siren className="w-4 h-4" />
-                  <span className="text-xs font-bold">{isInitialLoading ? '...' : raisedCount} Raised</span>
-                  <ArrowRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-1" />
-                </Link>
-              )} */}
+                      {/* Mobile View (Dialog) */}
+                      <Dialog open={isMobileFiltersOpen} onOpenChange={setIsMobileFiltersOpen}>
+                        <DialogContent className="lg:hidden w-[95vw] max-w-md rounded-2xl p-5 max-h-[90vh] overflow-y-auto">
+                          <DialogHeader className="mb-2 text-left">
+                            <DialogTitle className="text-xl font-black text-slate-800">Filters & Options</DialogTitle>
+                          </DialogHeader>
+                          {filterAndActionsContent}
+                        </DialogContent>
+                      </Dialog>
+                    </>
+                  );
+                })()}
               </div>
             </div>
           </div>
@@ -1136,8 +1151,8 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
         {/* Pagination Controls */}
         {totalCount > 0 && (
           <div className="px-3 sm:px-6 pb-2 pt-2">
-            <div className="bg-white rounded-xl shadow-sm border border-slate-200 px-3 sm:px-4 py-3 flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-0">
-              <div className="flex items-center justify-between w-full sm:w-auto gap-4 sm:gap-6">
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 px-3 sm:px-4 py-3 flex flex-col lg:flex-row items-center justify-between gap-3 lg:gap-0">
+              <div className="flex items-center justify-between w-full lg:w-auto gap-4 sm:gap-6">
                 <div className="flex items-center gap-2 sm:gap-3">
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap hidden sm:inline">Show:</span>
                   <div className="flex bg-slate-50 border border-slate-200 rounded-lg p-0.5">
@@ -1165,7 +1180,7 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
               </div>
 
               {totalPages > 1 && (
-                <div className="flex items-center gap-1 sm:gap-2 w-full sm:w-auto justify-between sm:justify-end mt-2 sm:mt-0">
+                <div className="flex items-center gap-1 sm:gap-2 w-full lg:w-auto justify-between lg:justify-end mt-2 lg:mt-0">
                   <Button
                     variant="outline"
                     size="sm"

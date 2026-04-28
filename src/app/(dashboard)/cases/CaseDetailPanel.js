@@ -388,7 +388,7 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
                         {/* Media Display */}
                         <div className="bg-slate-900 rounded-xl sm:rounded-2xl overflow-hidden shadow-lg border border-slate-800 relative group flex items-center justify-center min-h-[300px] sm:min-h-[400px]">
                             <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-slate-800/50 to-slate-950 pointer-events-none" />
-                            {post.signedImageUrl ? (
+                              {post.signedImageUrl ? (
                                 <img
                                     src={post.signedImageUrl}
                                     alt="Evidence"
@@ -420,10 +420,10 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
                                     )}
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                    <h3 className="text-lg sm:text-xl font-bold text-slate-900 truncate flex items-center gap-1.5 sm:gap-2">
-                                        <div className="">
-                                            {/* platform */}
-                                            <div className="flex-1 min-w-4">
+                                    <div className="flex items-center gap-1.5 sm:gap-2">
+                                        <h3 className="text-lg sm:text-xl font-bold text-slate-900 flex items-center gap-1.5 sm:gap-2 min-w-0">
+                                            <div className="shrink-0 flex items-center">
+                                                {/* platform */}
                                                 {
                                                     post.platform === "x" || post.platform === "twitter" ? (
                                                         <span className="inline-block size-4 text-black">
@@ -440,26 +440,28 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
                                                     ) : post.platform?.toLowerCase() === "youtube" ? (
                                                         <Youtube className="w-6 h-6 text-red-500" />
                                                     ) : (
-                                                        <p className="text-slate-500 font-medium truncate">{post.platform}</p>
+                                                        <p className="text-slate-500 font-medium truncate max-w-[60px]">{post.platform}</p>
                                                     )
                                                 }
                                             </div>
+                                            <span className="truncate">{post.user?.username || 'Unknown User'}</span>
+                                            {post.user?.is_verified && <BadgeCheck className="w-5 h-5 text-blue-500 fill-blue-50 shrink-0" />}
+                                        </h3>
+                                        <div className="shrink-0">
+                                            {post.visibility_status === 'down' ? (
+                                                <Badge variant="outline" className="bg-slate-100 text-slate-500 border-slate-200">Taken Down</Badge>
+                                            ) : (
+                                                <Badge variant="outline" className="bg-emerald-100 text-emerald-700 border-emerald-200">Online</Badge>
+                                            )}
                                         </div>
-                                        {post.user?.username || 'Unknown User'}
-                                        {post.user?.is_verified && <BadgeCheck className="w-5 h-5 text-blue-500 fill-blue-50" />}
-                                        {post.visibility_status === 'down' ? (
-                                            <Badge variant="outline" className="bg-slate-100 text-slate-500 border-slate-200">Taken Down</Badge>
-                                        ) : (
-                                            <Badge variant="outline" className="bg-emerald-100 text-emerald-700 border-emerald-200">Online</Badge>
-                                        )}
-                                    </h3>
-                                    <p className="text-slate-500 font-medium truncate">{post.user?.full_name}</p>
+                                    </div>
+                                    <p className="text-slate-500 font-medium truncate mt-0.5">{post.user?.full_name}</p>
                                 </div>
                                 <a
                                     href={post.url || post.original_url || '#'}
                                     target="_blank"
                                     rel="noreferrer"
-                                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-sm font-bold transition-colors flex items-center gap-2"
+                                    className="shrink-0 px-3 py-2 sm:px-4 sm:py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-sm font-bold transition-colors flex items-center gap-2"
                                 >
                                     <ExternalLink className="w-4 h-4" />
                                     <span className="hidden sm:inline">View Source</span>
@@ -556,8 +558,10 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
                                                         {/* Middle: Content & Metadata */}
                                                         <div className="flex-1 min-w-0 flex flex-col gap-1.5">
                                                             <div className="flex items-center justify-between gap-2">
-                                                                <div className="flex items-center gap-1.5 truncate">
-                                                                    <ProfilePic user={p.user?.username || 'Unknown'} size={16} />
+                                                                <div className="flex items-center gap-1.5 min-w-0">
+                                                                    <div className="shrink-0 flex items-center">
+                                                                        <ProfilePic user={p.user?.username || 'Unknown'} size={16} />
+                                                                    </div>
                                                                     <span className="text-xs font-bold text-slate-900 truncate">{p.user?.username}</span>
                                                                     <span className="text-[10px] font-medium text-slate-500 capitalize px-1.5 py-0.5 bg-slate-100 rounded-sm shrink-0">{p.platform}</span>
                                                                     {p.visibility_status === 'down' ? (
