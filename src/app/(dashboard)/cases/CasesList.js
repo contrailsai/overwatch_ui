@@ -13,7 +13,7 @@ import {
   FileDown, ArrowUp, ArrowDown, ClockFading,
   ChevronLeft, ChevronRight, Smile, TrendingDown, TriangleAlert,
   Youtube, Instagram, Facebook, UserPlus, Check,
-  AlertOctagon
+  AlertOctagon, ChevronDown
 } from 'lucide-react'
 
 import { Twitter, Reddit } from '@/utils/icons'
@@ -44,6 +44,7 @@ import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
 import { DateFilterPopover } from './DateFilterPopover'
 import { ViolationsFilter } from './ViolationsFilter'
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 // import SafeDate from '@/components/SafeDate'
 
 export function CasesList({ cases, project, clientDetails, initialFilters, initialSort, currentPage, itemsPerPage, initialCase, projectEmails }) {
@@ -77,6 +78,19 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
 
   // Search state
   const [searchTerm, setSearchTerm] = useState(searchParams.get('semantic_search') || '')
+  const [exportFormat, setExportFormat] = useState("")
+  
+  // Track report states
+  const [summaryState, setSummaryState] = useState({ loading: false, statusText: '' });
+  const [detailedPdfState, setDetailedPdfState] = useState({ loading: false, statusText: '' });
+  const [detailedDocxState, setDetailedDocxState] = useState({ loading: false, statusText: '' });
+
+  // Toast state
+  const [toast, setToast] = useState(null);
+  const showToast = (message, type = 'error') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  };
 
   useEffect(() => {
     setSearchTerm(searchParams.get('semantic_search') || '')
@@ -699,63 +713,132 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                       </div>
 
                       {/* Right: Actions & Counts */}
-                      <div className="flex items-center w-full lg:max-w-[200px] lg:justify-end shrink-0">
-                        {/* REPORT DOWNLOAD BUTTONS */}
-                        <div className="flex flex-col gap-2 w-full lg:ml-auto">
-                          <div className="w-full" onClick={() => {
-                            if (selectedCount === 0) alert("Select some cases before exporting");
-                            trackClientClick('export_summary_report', { page: 'CasesList' });
-                          }}>
-                            {selectedCount > 0 ? (
+                      <div className={cn("flex gap-5 w-full lg:max-w-50 justify-start lg:justify-end mt-4 lg:mt-0 transition-all", !isMobileFiltersOpen && "hidden lg:flex")}>
+
+                        {/* REPORT DOWNLOAD POPUP */}
+                        <div className="flex flex-col gap-1 shrink-0 w-full lg:ml-auto max-w-[200px]">
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <div className="flex flex-col gap-1 cursor-pointer group">
+                                <Label className="text-[10px] uppercase font-bold text-slate-400 cursor-pointer group-hover:text-blue-500 transition-colors">Download Report</Label>
+                                <div className="w-full bg-white border border-slate-200 rounded-md px-2.5 h-9 text-xs font-semibold text-slate-700 flex items-center justify-between shadow-sm hover:border-blue-500 transition-all">
+                                  <div className="flex items-center gap-2">
+                                    {(summaryState.loading || detailedPdfState.loading || detailedDocxState.loading) ? (
+                                      <Loader2 className="w-3.5 h-3.5 text-blue-600 animate-spin" />
+                                    ) : (
+                                      <FileDown className="w-3.5 h-3.5 text-slate-500" />
+                                    )}
+                                    <span className="text-slate-600">Select Format</span>
+                                  </div>
+                                  <ChevronDown className="w-3.5 h-3.5 text-slate-400 group-hover:text-blue-500 transition-colors" />
+                                </div>
+                              </div>
+                            </PopoverTrigger>
+                            <PopoverContent 
+                              className="w-[200px] p-1.5 bg-white border border-slate-200 rounded-xl shadow-xl z-[100]" 
+                              align="end"
+                              onOpenAutoFocus={(e) => e.preventDefault()}
+                            >
+                              <div className="space-y-1">
+                                <Button
+                                  variant="ghost"
+                                  onClick={() => {
+                                    if (selectedCount === 0) {
+                                      showToast("Please select some cases before exporting", "error");
+                                      return;
+                                    }
+                                    const container = document.getElementById(`btn-summary-pdf`);
+                                    const actualButton = container?.querySelector('button');
+                                    if (actualButton) {
+                                      actualButton.click();
+                                      trackClientClick(`export_summary-pdf`, { page: 'CasesList' });
+                                    }
+                                  }}
+                                  className="w-full flex items-center justify-between px-3 py-2.5 h-auto text-xs font-bold text-slate-700 hover:bg-slate-50 hover:text-blue-600 rounded-lg transition-colors group"
+                                >
+                                  {summaryState.loading ? (
+                                    <span className="text-[10px] text-blue-600 animate-pulse">{summaryState.statusText || 'Preparing...'}</span>
+                                  ) : (
+                                    <span>Summary PDF</span>
+                                  )}
+                                </Button>
+
+                                <Button
+                                  variant="ghost"
+                                  onClick={() => {
+                                    if (selectedCount === 0) {
+                                      showToast("Please select some cases before exporting", "error");
+                                      return;
+                                    }
+                                    const container = document.getElementById(`btn-detailed-pdf`);
+                                    const actualButton = container?.querySelector('button');
+                                    if (actualButton) {
+                                      actualButton.click();
+                                      trackClientClick(`export_detailed-pdf`, { page: 'CasesList' });
+                                    }
+                                  }}
+                                  className="w-full flex items-center justify-between px-3 py-2.5 h-auto text-xs font-bold text-slate-700 hover:bg-slate-50 hover:text-blue-600 rounded-lg transition-colors"
+                                >
+                                  {detailedPdfState.loading ? (
+                                    <span className="text-[10px] text-blue-600 animate-pulse">{detailedPdfState.statusText || 'Preparing...'}</span>
+                                  ) : (
+                                    <span>Detailed PDF</span>
+                                  )}
+                                </Button>
+
+                                <Button
+                                  variant="ghost"
+                                  onClick={() => {
+                                    if (selectedCount === 0) {
+                                      showToast("Please select some cases before exporting", "error");
+                                      return;
+                                    }
+                                    const container = document.getElementById(`btn-detailed-docx`);
+                                    const actualButton = container?.querySelector('button');
+                                    if (actualButton) {
+                                      actualButton.click();
+                                      trackClientClick(`export_detailed-docx`, { page: 'CasesList' });
+                                    }
+                                  }}
+                                  className="w-full flex items-center justify-between px-3 py-2.5 h-auto text-xs font-bold text-slate-700 hover:bg-slate-50 hover:text-blue-600 rounded-lg transition-colors"
+                                >
+                                  {detailedDocxState.loading ? (
+                                    <span className="text-[10px] text-blue-600 animate-pulse">{detailedDocxState.statusText || 'Preparing...'}</span>
+                                  ) : (
+                                    <span>Detailed DOCX</span>
+                                  )}
+                                </Button>
+                              </div>
+                            </PopoverContent>
+                          </Popover>
+
+                          {/* Hidden Actual Buttons to preserve their logic */}
+                          <div className="hidden">
+                            <div id="btn-summary-pdf">
                               <ReportButton
                                 posts={selectedPostsArray}
                                 project={project}
-                                className="flex w-full cursor-pointer items-center justify-start gap-2 px-2.5 py-1.5 bg-white border border-slate-200 text-slate-700 font-bold rounded-md hover:bg-slate-50 transition-colors text-xs shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
+                                onStateChange={setSummaryState}
                               />
-                            ) : (
-                              <button className="flex w-full cursor-pointer items-center justify-start gap-2 px-2.5 py-1.5 bg-white border border-slate-200 text-slate-700 font-bold rounded-md hover:bg-slate-50 transition-colors text-xs shadow-sm disabled:cursor-not-allowed disabled:opacity-50">
-                                <FileDown className="w-3.5 h-3.5" />
-                                Export Summary PDF
-                              </button>
-                            )}
-                          </div>
-                          <div className="w-full" onClick={() => {
-                            if (selectedCount === 0) alert("Select some cases before exporting");
-                            trackClientClick('export_detailed_report', { page: 'CasesList' });
-                          }}>
-                            {selectedCount > 0 ? (
+                            </div>
+                            <div id="btn-detailed-pdf">
                               <DetailedReportButton
                                 posts={selectedPostsArray}
                                 project={project}
-                                className="flex w-full cursor-pointer items-center justify-start gap-2 px-2.5 py-1.5 bg-white border border-slate-200 text-slate-700 font-bold rounded-md hover:bg-slate-50 transition-colors text-xs shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
+                                onStateChange={setDetailedPdfState}
                               />
-                            ) : (
-                              <button className="flex w-full cursor-pointer items-center justify-start gap-2 px-2.5 py-1.5 bg-white border border-slate-200 text-slate-700 font-bold rounded-md hover:bg-slate-50 transition-colors text-xs shadow-sm">
-                                <FileDown className="w-3.5 h-3.5" />
-                                Export Detailed PDF
-                              </button>
-                            )}
-                          </div>
-                          <div className="w-full" onClick={() => {
-                            if (selectedCount === 0) alert("Select some cases before exporting");
-                            trackClientClick('export_detailed_report_docx', { page: 'CasesList' });
-                          }}>
-                            {selectedCount > 0 ? (
+                            </div>
+                            <div id="btn-detailed-docx">
                               <DetailedReportDocxButton
                                 posts={selectedPostsArray}
                                 project={project}
-                                className="flex w-full cursor-pointer items-center justify-start gap-2 px-2.5 py-1.5 bg-white border border-slate-200 text-slate-700 font-bold rounded-md hover:bg-slate-50 transition-colors text-xs shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
+                                onStateChange={setDetailedDocxState}
                               />
-                            ) : (
-                              <button className="flex w-full cursor-pointer items-center justify-start gap-2 px-2.5 py-1.5 bg-white border border-slate-200 text-slate-700 font-bold rounded-md hover:bg-slate-50 transition-colors text-xs shadow-sm">
-                                <FileDown className="w-3.5 h-3.5" />
-                                Export Detailed DOCX
-                              </button>
-                            )}
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
+                      </div>
                   );
 
                   return (
@@ -1389,6 +1472,25 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
         onUpdatePost={handleUpdatePost}
         projectEmails={projectEmails}
       />
+
+      {/* Floating Toast Notification */}
+      {toast && (
+        <div 
+          className={cn(
+            "fixed bottom-8 left-1/2 -translate-x-1/2 z-[100] px-6 py-3 rounded-full shadow-2xl flex items-center gap-3 animate-in slide-in-from-bottom-4 duration-300 border backdrop-blur-md",
+            toast.type === 'success' 
+              ? "bg-emerald-500/90 text-white border-emerald-400" 
+              : "bg-rose-500/90 text-white border-rose-400"
+          )}
+        >
+          {toast.type === 'success' ? (
+            <CheckCircle className="w-5 h-5 text-white" />
+          ) : (
+            <AlertOctagon className="w-5 h-5 text-white" />
+          )}
+          <span className="font-bold text-sm">{toast.message}</span>
+        </div>
+      )}
 
     </div>
   )
