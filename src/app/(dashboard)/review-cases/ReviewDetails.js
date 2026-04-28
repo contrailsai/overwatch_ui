@@ -3,13 +3,13 @@
 import * as React from "react"
 import { useState, useEffect, useActionState, useRef } from 'react'
 import { format } from "date-fns"
-import { submitCaseReview } from './actions'
+import { submitCaseReview, uploadCaseImage } from './actions'
 import {
     Loader2, X, CheckCircle, ExternalLink,
     ChevronLeft, ChevronRight, Calendar, Plus,
     Instagram, Facebook, Youtube,
     Globe, MessageCircle, Quote,
-    BadgeCheck, History, Bot, Siren, LinkIcon, Heart, Share2, Eye, Check, RotateCcw
+    BadgeCheck, History, Bot, Siren, LinkIcon, Heart, Share2, Eye, Check, Upload, FileJson, RotateCcw
 } from 'lucide-react'
 import { Twitter, Reddit } from '@/utils/icons'
 import ProfilePic from '@/components/ProfilePic'
@@ -41,11 +41,27 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
     const [copied, setCopied] = useState(false);
     const [imgError, setImgError] = useState(false);
 
+    // Image upload state
+    const [isUploadingImage, setIsUploadingImage] = useState(false);
+    const [uploadedImageUrl, setUploadedImageUrl] = useState(null);
+    const [mediaError, setMediaError] = useState(false);
+    const fileInputRef = useRef(null);
+
+    // Toast Notification State
+    const [toast, setToast] = useState(null); // { message, type: 'success' | 'error' }
+
+    const showToast = (message, type = 'error') => {
+        setToast({ message, type });
+        setTimeout(() => setToast(null), 3000);
+    };
+
 
     // Keep localPost in sync if the user navigates Next/Prev
     useEffect(() => {
         setLocalPost(post)
         setShowSuccess(false) // Reset success message on navigate
+        setUploadedImageUrl(null);
+        setMediaError(false);
     }, [post])
 
     // Sync state to parent AND local UI on successful submission
@@ -207,6 +223,51 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
         ))
     }
 
+    const handleImageUpload = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        // Client-side validation
+        if (!file.type.startsWith('image/')) {
+            showToast('Please select an image file.');
+            return;
+        }
+        if (file.size > 10 * 1024 * 1024) {
+            showToast('File size must be under 10MB.');
+            return;
+        }
+
+        setIsUploadingImage(true);
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+            const result = await uploadCaseImage(localPost._id, project, clientDetails, formData);
+            if (result.success) {
+                setUploadedImageUrl(result.signedUrl);
+                
+                // Update parent list if needed
+                if (setPosts) {
+                    setPosts(prevPosts => prevPosts.map(p =>
+                        p._id === localPost._id ? { ...p, signedImageUrl: result.signedUrl } : p
+                    ))
+                }
+
+                // Update local UI immediately
+                setLocalPost(prev => ({ ...prev, signedImageUrl: result.signedUrl }))
+
+                showToast("Image uploaded successfully", "success");
+            } else {
+                showToast('Upload failed: ' + result.error);
+            }
+        } catch (error) {
+            showToast('Upload failed. Please try again.');
+        } finally {
+            setIsUploadingImage(false);
+            // Reset file input so the same file can be uploaded again
+            if (fileInputRef.current) fileInputRef.current.value = '';
+        }
+    };
+
     const handleReset = () => {
         setFacePresent(false)
         setNamePresent(false)
@@ -225,6 +286,23 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
         navigator.clipboard.writeText(url);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
+    };
+
+    const handleDownloadJSON = () => {
+        try {
+            const jsonString = JSON.stringify([localPost], null, 2);
+            const blob = new Blob([jsonString], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `case_${localPost._id}_${format(new Date(), 'yyyyMMdd_HHmmss')}.json`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        } catch (error) {
+            console.error('Download Error:', error);
+            alert('Failed to download JSON. Please try again.');
+        }
     };
 
     const PlatformIcon = () => {
@@ -289,6 +367,16 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
                                 {copied ? <Check className="w-5 h-5 text-green-500" /> : <LinkIcon className="w-5 h-5" />}
                             </Button>
 
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={handleDownloadJSON}
+                                className="h-9 w-9 text-slate-500 hover:text-emerald-600 rounded-full"
+                                title="Download JSON"
+                            >
+                                <FileJson className="w-5 h-5" />
+                            </Button>
+
                             {/* {isRequested && (
                                 <Badge className="bg-orange-50 text-orange-700 border-orange-200 gap-1.5 pl-2 animate-pulse">
                                     <Siren className="w-3.5 h-3.5" /> Takedown Requested
@@ -304,16 +392,72 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
                         {/* Media Display */}
                         <div className="bg-slate-900 rounded-2xl overflow-hidden shadow-lg border border-slate-800 relative group flex items-center justify-center min-h-[400px]">
                             <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-slate-800/50 to-slate-950 pointer-events-none" />
-                            {post.signedImageUrl ? (
+                            {uploadedImageUrl ? (
                                 <img
-                                    src={post.signedImageUrl}
+                                    src={uploadedImageUrl}
                                     alt="Evidence"
                                     className="max-w-full h-auto max-h-[600px] object-contain relative z-10"
                                 />
+                            ) : localPost.signedImageUrl && !mediaError ? (
+                                <img
+                                    src={localPost.signedImageUrl}
+                                    alt="Evidence"
+                                    className="max-w-full h-auto max-h-[600px] object-contain relative z-10"
+                                    onError={() => setMediaError(true)}
+                                />
+                            ) : localPost.signedImageUrl && mediaError ? (
+                                <div
+                                    className="text-center p-12 relative z-10 cursor-pointer group/upload"
+                                    onClick={() => !isUploadingImage && fileInputRef.current?.click()}
+                                >
+                                    <input
+                                        ref={fileInputRef}
+                                        type="file"
+                                        accept="image/*"
+                                        className="hidden"
+                                        onChange={handleImageUpload}
+                                    />
+                                    <div className="border-2 border-dashed border-slate-600 group-hover/upload:border-blue-500 rounded-xl p-12 transition-colors duration-200">
+                                        {isUploadingImage ? (
+                                            <>
+                                                <Loader2 className="w-16 h-16 text-blue-400 mx-auto mb-4 animate-spin" />
+                                                <p className="text-slate-400 font-medium text-lg">Uploading...</p>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Upload className="w-16 h-16 text-slate-600 group-hover/upload:text-blue-400 mx-auto mb-4 transition-colors duration-200" />
+                                                <p className="text-slate-400 group-hover/upload:text-slate-300 font-medium text-lg transition-colors duration-200">Click to upload image</p>
+                                                <p className="text-slate-600 text-sm mt-2">PNG, JPG, WEBP up to 10MB</p>
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
                             ) : (
-                                <div className="text-center p-12 relative z-10">
-                                    <Quote className="w-16 h-16 text-slate-700 mx-auto mb-4" />
-                                    <p className="text-slate-500 font-medium text-lg">Text-Only Content</p>
+                                <div 
+                                    className="text-center p-12 relative z-10 cursor-pointer group/upload"
+                                    onClick={() => !isUploadingImage && fileInputRef.current?.click()}
+                                >
+                                    <input
+                                        ref={fileInputRef}
+                                        type="file"
+                                        accept="image/*"
+                                        className="hidden"
+                                        onChange={handleImageUpload}
+                                    />
+                                    <div className="border-2 border-dashed border-slate-600 group-hover/upload:border-blue-500 rounded-xl p-12 transition-colors duration-200">
+                                        {isUploadingImage ? (
+                                            <>
+                                                <Loader2 className="w-16 h-16 text-blue-400 mx-auto mb-4 animate-spin" />
+                                                <p className="text-slate-400 font-medium text-lg">Uploading...</p>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Upload className="w-16 h-16 text-slate-600 group-hover/upload:text-blue-400 mx-auto mb-4 transition-colors duration-200" />
+                                                <p className="text-slate-400 group-hover/upload:text-slate-300 font-medium text-lg transition-colors duration-200">Click to upload image</p>
+                                                <p className="text-slate-600 text-sm mt-2">PNG, JPG, WEBP up to 10MB</p>
+                                            </>
+                                        )}
+                                    </div>
                                 </div>
                             )}
                         </div>
@@ -727,6 +871,17 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
                                 <div className="absolute -top-12 left-1/2 -translate-x-1/2 bg-emerald-100 border border-emerald-300 text-slate-700 text-xs font-bold px-4 py-2 rounded-full shadow shadow-emerald-200 flex items-center gap-2 animate-in slide-in-from-bottom-2 fade-in zoom-in duration-200">
                                     <CheckCircle className="w-3.5 h-3.5 text-emerald-600 stroke-2 " />
                                     Review saved successfully!
+                                </div>
+                            )}
+
+                            {/* Floating Toast Notification */}
+                            {toast && (
+                                <div className={cn(
+                                    "absolute -top-12 left-1/2 -translate-x-1/2 border text-xs font-bold px-4 py-2 rounded-full shadow flex items-center gap-2 animate-in slide-in-from-bottom-2 fade-in zoom-in duration-200",
+                                    toast.type === 'success' ? "bg-emerald-100 border-emerald-300 text-emerald-800" : "bg-rose-100 border-rose-300 text-rose-800"
+                                )}>
+                                    {toast.type === 'success' ? <CheckCircle className="w-3.5 h-3.5" /> : <X className="w-3.5 h-3.5" />}
+                                    {toast.message}
                                 </div>
                             )}
 
