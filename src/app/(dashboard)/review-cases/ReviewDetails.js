@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from "react"
-import { useState, useEffect, useActionState, useRef, useRef } from 'react'
+import { useState, useEffect, useActionState, useRef } from 'react'
 import { format } from "date-fns"
 import { submitCaseReview, uploadCaseImage } from './actions'
 import {
