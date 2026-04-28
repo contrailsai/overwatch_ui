@@ -45,6 +45,8 @@ export function ReviewInterface({
   const [selectedPost, setSelectedPost] = useState(initialCase || null)
   const [posts, setPosts] = useState(initialPosts)
   const [exportingType, setExportingType] = useState(null) // 'csv' | 'json' | null
+  const [exportProgress, setExportProgress] = useState(0)
+  const [selectedExport, setSelectedExport] = useState("")
 
   // useTransition gives us a loading state when Next.js is fetching new URL params!
   const [isPending, startTransition] = useTransition()
@@ -144,7 +146,7 @@ export function ReviewInterface({
       console.error('Export Error:', error)
       alert('Failed to export CSV. Please try again.')
     } finally {
-      setExportingType(null)
+        setExportingType(null)
     }
   }
 
@@ -171,7 +173,7 @@ export function ReviewInterface({
       console.error('Export Error:', error)
       alert('Failed to export JSON. Please try again.')
     } finally {
-      setExportingType(null)
+        setExportingType(null)
     }
   }
 
@@ -302,19 +304,21 @@ export function ReviewInterface({
               </div>
               <div className="flex items-center gap-3">
                 <Select 
+                  value={selectedExport}
                   disabled={!!exportingType || posts.length === 0}
                   onValueChange={(val) => {
+                    setSelectedExport(val)
                     if (val === 'csv') handleExportCSV()
                     if (val === 'json') handleExportJSON()
                   }}
                 >
-                  <SelectTrigger className="h-9 w-[140px] text-xs font-bold text-slate-600 border-slate-200 hover:border-blue-300 transition-all focus:ring-0">
+                  <SelectTrigger className="h-9 w-[150px] text-xs font-bold text-slate-600 border-slate-200 hover:border-blue-300 transition-all focus:ring-0 relative overflow-hidden">
                     <div className="flex items-center gap-2">
                       {exportingType ? (
                         <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-600" />
-                      ) : (
+                      ) : !selectedExport ? (
                         <Download className="h-3.5 w-3.5" />
-                      )}
+                      ) : null}
                       <SelectValue placeholder="Export Data" />
                     </div>
                   </SelectTrigger>

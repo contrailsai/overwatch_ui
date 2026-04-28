@@ -38,13 +38,6 @@ import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
 import { DateFilterPopover } from './DateFilterPopover'
 import { ViolationsFilter } from './ViolationsFilter'
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select"
 // import SafeDate from '@/components/SafeDate'
 
 export function CasesList({ cases, project, clientDetails, initialFilters, initialSort, currentPage, itemsPerPage, initialCase, projectEmails }) {
@@ -702,54 +695,61 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
               {/* Right: Actions & Counts */}
               <div className={cn("flex items-center gap-5 w-full lg:max-w-50 justify-start lg:justify-end mt-4 lg:mt-0 transition-all", !isMobileFiltersOpen && "hidden lg:flex")}>
 
-                {/* REPORT DOWNLOAD SELECT */}
-                <div className="flex flex-col gap-1 shrink-0 w-full lg:ml-auto max-w-[200px]">
-                  <Label className="text-[10px] uppercase font-bold text-slate-400">Download Report</Label>
-                  <Select onValueChange={(val) => {
-                    if (selectedCount === 0) {
-                      alert("Select some cases before exporting");
-                      return;
-                    }
-                    const button = document.getElementById(`btn-${val}`);
-                    if (button) {
-                      button.click();
-                      trackClientClick(`export_${val}`, { page: 'CasesList' });
-                    }
+                {/* REPORT DOWNLOAD BUTTONS */}
+                <div className="flex flex-col sm:flex-row lg:flex-col gap-2 shrink-0 w-full lg:ml-auto">
+                  <div className="w-full sm:w-auto" onClick={() => {
+                    if (selectedCount === 0) alert("Select some cases before exporting");
+                    trackClientClick('export_summary_report', { page: 'CasesList' });
                   }}>
-                    <SelectTrigger className="w-full bg-white border border-slate-200 rounded-md px-2 h-9 text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-sm">
-                      <div className="flex items-center gap-2">
-                        <FileDown className="w-3.5 h-3.5 text-slate-500" />
-                        <SelectValue placeholder="Select Format" />
-                      </div>
-                    </SelectTrigger>
-                    <SelectContent position="popper" className="w-(--radix-select-trigger-width)">
-                      <SelectItem value="summary-pdf" className="text-xs">Summary PDF</SelectItem>
-                      <SelectItem value="detailed-pdf" className="text-xs">Detailed PDF</SelectItem>
-                      <SelectItem value="detailed-docx" className="text-xs">Detailed DOCX</SelectItem>
-                    </SelectContent>
-                  </Select>
-
-                  {/* Hidden Actual Buttons to preserve their logic */}
-                  <div className="hidden">
-                    <div id="btn-summary-pdf">
+                    {selectedCount > 0 ? (
                       <ReportButton
                         posts={selectedPostsArray}
                         project={project}
+                        className="flex w-full cursor-pointer items-center justify-start gap-2 px-2.5 py-1.5 bg-white border border-slate-200 text-slate-700 font-bold rounded-md hover:bg-slate-50 transition-colors text-xs shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
                       />
-                    </div>
-                    <div id="btn-detailed-pdf">
+                    ) : (
+                      <button className="flex w-full cursor-pointer items-center justify-start gap-2 px-2.5 py-1.5 bg-white border border-slate-200 text-slate-700 font-bold rounded-md hover:bg-slate-50 transition-colors text-xs shadow-sm disabled:cursor-not-allowed disabled:opacity-50">
+                        <FileDown className="w-3.5 h-3.5" />
+                        Export Summary PDF
+                      </button>
+                    )}
+                  </div>
+                  <div onClick={() => {
+                    if (selectedCount === 0) alert("Select some cases before exporting");
+                    trackClientClick('export_detailed_report', { page: 'CasesList' });
+                  }}>
+                    {selectedCount > 0 ? (
                       <DetailedReportButton
                         posts={selectedPostsArray}
                         project={project}
+                        className="flex w-full cursor-pointer items-center justify-start gap-2 px-2.5 py-1.5 bg-white border border-slate-200 text-slate-700 font-bold rounded-md hover:bg-slate-50 transition-colors text-xs shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
                       />
-                    </div>
-                    <div id="btn-detailed-docx">
+                    ) : (
+                      <button className="flex w-full cursor-pointer items-center justify-start gap-2 px-2.5 py-1.5 bg-white border border-slate-200 text-slate-700 font-bold rounded-md hover:bg-slate-50 transition-colors text-xs shadow-sm">
+                        <FileDown className="w-3.5 h-3.5" />
+                        Export Detailed PDF
+                      </button>
+                    )}
+                  </div>
+                  <div onClick={() => {
+                    if (selectedCount === 0) alert("Select some cases before exporting");
+                    trackClientClick('export_detailed_report_docx', { page: 'CasesList' });
+                  }}>
+                    {selectedCount > 0 ? (
                       <DetailedReportDocxButton
                         posts={selectedPostsArray}
                         project={project}
+                        className="flex w-full cursor-pointer items-center justify-start gap-2 px-2.5 py-1.5 bg-white border border-slate-200 text-slate-700 font-bold rounded-md hover:bg-slate-50 transition-colors text-xs shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
                       />
-                    </div>
+                    ) : (
+                      <button className="flex w-full cursor-pointer items-center justify-start gap-2 px-2.5 py-1.5 bg-white border border-slate-200 text-slate-700 font-bold rounded-md hover:bg-slate-50 transition-colors text-xs shadow-sm">
+                        <FileDown className="w-3.5 h-3.5" />
+                        Export Detailed DOCX
+                      </button>
+                    )}
                   </div>
+
+
                 </div>
 
                 {/* {(raisedCount > 0 || isInitialLoading) && (
@@ -800,7 +800,6 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                       </div>
                     </th>
                     <th scope="col" className="w-14 sm:w-16 px-2 sm:px-3 py-3 text-center text-xs font-bold text-slate-500 uppercase tracking-wider hidden md:table-cell">Status</th>
-                    
                     <th
                       scope="col"
                       className="px-2 sm:px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider w-full min-w-[200px]"
@@ -986,8 +985,6 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                             )}
                           </div>
                         </td>
-
-
 
                         {/* Content */}
                         <td className="px-2 sm:px-4 py-3 overflow-hidden align-middle">
