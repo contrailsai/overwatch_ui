@@ -751,3 +751,41 @@ export const uploadCaseImage = traceAction('uploadCaseImage', async (postId, pro
     return { success: false, error: error.message }
   }
 })
+
+export const updatePostVisibility = traceAction('updatePostVisibility', async (postId, project, clientDetails, status) => {
+  try {
+    if (!project?.mongo_db_map) {
+      return { success: false, error: 'Project database configuration missing' }
+    }
+
+    if (!postId) {
+      return { success: false, error: 'Missing Post ID' }
+    }
+
+    const client = await clientPromise
+    const db = client.db(project.mongo_db_map)
+    const collection = db.collection('Posts')
+
+    await collection.updateOne(
+      { _id: new ObjectId(postId) },
+      {
+        $set: {
+          visibility_status: status,
+          "metadata.updated_at": new Date().toISOString()
+        },
+        $push: {
+          "metadata.update_history": {
+            updated_at: new Date(),
+            updated_by: clientDetails.email,
+            changes_summary: `Visibility status updated to ${status}`
+          }
+        }
+      }
+    )
+
+    return { success: true }
+  } catch (error) {
+    console.error('updatePostVisibility Error:', error)
+    return { success: false, error: error.message }
+  }
+})
