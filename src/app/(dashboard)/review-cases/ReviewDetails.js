@@ -3,13 +3,13 @@
 import * as React from "react"
 import { useState, useEffect, useActionState, useRef } from 'react'
 import { format } from "date-fns"
-import { submitCaseReview, uploadCaseImage } from './actions'
+import { submitCaseReview, uploadCaseImage, updatePostVisibility } from './actions'
 import {
     Loader2, X, CheckCircle, ExternalLink,
     ChevronLeft, ChevronRight, Calendar, Plus,
     Instagram, Facebook, Youtube,
     Globe, MessageCircle, Quote,
-    BadgeCheck, History, Bot, Siren, LinkIcon, Heart, Share2, Eye, Check, Upload, FileJson, RotateCcw
+    BadgeCheck, History, Bot, Siren, LinkIcon, Heart, Share2, Eye, Check, Upload, FileJson, RotateCcw, AlertCircle
 } from 'lucide-react'
 import { Twitter, Reddit } from '@/utils/icons'
 import ProfilePic from '@/components/ProfilePic'
@@ -169,6 +169,7 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
     const [threatTypes, setThreatTypes] = useState(initialThreatTypes)
     const [selectedLegalCodes, setSelectedLegalCodes] = useState(initialLegalCodes)
     const [isAIGC, setIsAIGC] = useState(hasReview ? !!review.is_aigc : !!analysis.is_aigc)
+    const [visibilityStatus, setVisibilityStatus] = useState(localPost.visibility_status === 'down' ? 'down' : 'online')
 
     const reasoningRef = useRef(null)
     const reviewerCommentsRef = useRef(null)
@@ -221,6 +222,32 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
         setSelectedLegalCodes(prev => prev.map(c => 
             c.code === code ? { ...c, reasoning } : c
         ))
+    }
+
+    const handleVisibilityChange = async (checked) => {
+        const newStatus = checked ? 'online' : 'down'
+        setVisibilityStatus(newStatus)
+        
+        try {
+            const result = await updatePostVisibility(localPost._id, project, clientDetails, newStatus)
+            if (result.success) {
+                showToast(`Status updated to ${newStatus === 'online' ? 'Online' : 'Taken Down'}`, "success")
+                
+                // Update parent list if needed
+                if (setPosts) {
+                    setPosts(prevPosts => prevPosts.map(p =>
+                        p._id === localPost._id ? { ...p, visibility_status: newStatus } : p
+                    ))
+                }
+            } else {
+                showToast('Failed to update status: ' + result.error)
+                // Revert state on failure
+                setVisibilityStatus(visibilityStatus)
+            }
+        } catch (error) {
+            showToast('Failed to update status. Please try again.')
+            setVisibilityStatus(visibilityStatus)
+        }
     }
 
     const handleImageUpload = async (e) => {
@@ -277,6 +304,7 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
         setThreatTypes([])
         setSelectedLegalCodes([])
         setIsAIGC(false)
+        setVisibilityStatus(localPost.visibility_status === 'down' ? 'down' : 'online')
         if (reasoningRef.current) reasoningRef.current.value = ''
         if (reviewerCommentsRef.current) reviewerCommentsRef.current.value = ''
     }
@@ -505,7 +533,7 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
                                         </div>
                                         {post.user?.username || 'Unknown User'}
                                         {post.user?.is_verified && <BadgeCheck className="w-5 h-5 text-blue-500 fill-blue-50" />}
-                                        {post.visibility_status === 'down' ? (
+                                        {visibilityStatus === 'down' ? (
                                             <Badge variant="outline" className="bg-slate-100 text-slate-500 border-slate-200">Taken Down</Badge>
                                         ) : (
                                             <Badge variant="outline" className="bg-emerald-100 text-emerald-700 border-emerald-200">Online</Badge>
@@ -638,6 +666,7 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
                         <input type="hidden" name="name_present" value={namePresent.toString()} />
                         <input type="hidden" name="threat_score" value={threatScore} />
                         <input type="hidden" name="takedown_status" value={localPost.takedown_info?.takedown_status || 'None'} />
+                        <input type="hidden" name="visibility_status" value={visibilityStatus} />
 
                         <div className="p-5 md:p-6 space-y-6 flex-1 relative flex flex-col mx-auto w-full">
                             
@@ -648,10 +677,40 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
                                 </Button>
                             </div>
 
+                             {/**adding edit logic for the Status of the post Online/Offline */}
+                             <section className="space-y-3">
+                                <div className="flex items-center gap-2 mb-1">
+                                    <span className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-bold">1</span>
+                                    <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Visibility Status</h3>
+                                </div>
+                                <div className="bg-slate-50 rounded-xl p-4 border border-slate-200 shadow-sm flex items-center justify-between">
+                                    <div className="flex items-center gap-3">
+                                        <div className={cn(
+                                            "w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all shadow-inner",
+                                            visibilityStatus === 'online' ? "bg-emerald-50 border-emerald-100 text-emerald-600" : "bg-slate-100 border-slate-200 text-slate-400"
+                                        )}>
+                                            {visibilityStatus === 'online' ? <Globe className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
+                                        </div>
+                                        <div>
+                                            <p className="text-sm font-bold text-slate-900">{visibilityStatus === 'online' ? 'Online' : 'Taken Down'}</p>
+                                            <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">Current Status on Source</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span className={cn("text-[10px] font-bold uppercase tracking-widest", visibilityStatus === 'down' ? "text-slate-900" : "text-slate-400")}>Down</span>
+                                        <Switch 
+                                            checked={visibilityStatus === 'online'} 
+                                            onCheckedChange={handleVisibilityChange}
+                                        />
+                                        <span className={cn("text-[10px] font-bold uppercase tracking-widest", visibilityStatus === 'online' ? "text-slate-900" : "text-slate-400")}>Online</span>
+                                    </div>
+                                </div>
+                            </section>
+
                             {/* 1. VERDICT & RISK LEVEL (Moved to Top) */}
                             <section className="space-y-3">
                                 <div className="flex items-center gap-2 mb-1">
-                                    <span className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-bold">1</span>
+                                    <span className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-bold">2</span>
                                     <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Verdict & Risk Level</h3>
                                 </div>
 
@@ -684,7 +743,7 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
                             {/* 2. THREAT CLASSIFICATION */}
                             <section className="space-y-3">
                                 <div className="flex items-center gap-2 mb-1">
-                                    <span className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-bold">2</span>
+                                    <span className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-bold">3</span>
                                     <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">VIOLATIONS</h3>
                                 </div>
 
@@ -780,7 +839,7 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
                             {/* 3. POI IDENTIFICATION */}
                             <section className="space-y-3">
                                 <div className="flex items-center gap-2 mb-1">
-                                    <span className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-bold">3</span>
+                                    <span className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-bold">4</span>
                                     <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">POI Context</h3>
                                 </div>
 
