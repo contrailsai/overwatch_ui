@@ -1,17 +1,17 @@
 'use client'
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import {
   Filter, Search, ChevronRight, AlertTriangle, CheckCircle,
   Clock, Mail, ArrowUpRight, ShieldAlert, User, ImageIcon, X, Loader2,
-  Youtube, Instagram, Facebook, XCircle
+  Youtube, Instagram, Facebook, XCircle, Siren, TriangleAlert, TrendingDown, Smile,
+  ChevronLeft, ChevronsLeft, ChevronsRight, ExternalLink, ChevronDown
 } from 'lucide-react'
 import { Twitter, Reddit } from '@/utils/icons'
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { cn } from "@/lib/utils"
@@ -19,32 +19,58 @@ import { cn } from "@/lib/utils"
 import { DateFilterPopover } from "@/app/(dashboard)/cases/DateFilterPopover"
 import { ViolationsFilter } from "@/app/(dashboard)/cases/ViolationsFilter"
 import { format } from "date-fns"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 
-export default function TakedownsList({ initialTakedowns, initialFilters, isReviewer, metrics, projectLabels }) {
+export default function TakedownsList({ initialTakedowns, initialFilters, isReviewer, metrics, projectLabels, totalCount }) {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
+  const [isPending, startTransition] = useTransition()
 
   const [takedowns, setTakedowns] = useState(initialTakedowns)
+  const [selectedIds, setSelectedIds] = useState([])
+  const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false)
 
   useEffect(() => {
     setTakedowns(initialTakedowns)
   }, [initialTakedowns])
 
-  const getStatusColor = (status) => {
+  const currentPage = parseInt(initialFilters.page) || 1
+  const pageSize = parseInt(initialFilters.pageSize) || 25
+  const totalPages = Math.ceil(totalCount / pageSize)
+
+  const getStatusConfig = (status) => {
     const s = status?.toLowerCase() || '';
     switch (s) {
       case 'takedown successful':
-      case 'takedown_successful': return 'bg-emerald-50 text-emerald-700 border-emerald-200'
+      case 'takedown_successful': 
+        return { label: 'Successful', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' }
       case 'takedown failed':
-      case 'takedown_failed': return 'bg-rose-50 text-rose-700 border-rose-200'
+      case 'takedown_failed': 
+        return { label: 'Failed', color: 'bg-rose-50 text-rose-700 border-rose-200' }
       case 'under process':
-      case 'under_review': return 'bg-blue-50 text-blue-700 border-blue-200'
+      case 'under_review': 
+        return { label: 'Under Review', color: 'bg-blue-50 text-blue-700 border-blue-200' }
       case 'appealed again':
-      case 're_appeal_takedown': return 'bg-amber-50 text-amber-700 border-amber-200'
-      case 'initiated': return 'bg-indigo-50 text-indigo-700 border-indigo-200'
-      default: return 'bg-slate-100 text-slate-700 border-slate-200'
+      case 're_appeal_takedown': 
+        return { label: 'Appealed', color: 'bg-amber-50 text-amber-700 border-amber-200' }
+      case 'initiated': 
+        return { label: 'Initiated', color: 'bg-indigo-50 text-indigo-700 border-indigo-200' }
+      default: 
+        return { label: status?.replace(/_/g, ' ') || 'Unknown', color: 'bg-slate-100 text-slate-700 border-slate-200' }
     }
+  }
+
+  const getRiskLabel = (score) => {
+    if (score >= 96) return { label: 'HIGH', color: 'text-rose-500 bg-rose-50 border-rose-200', icon: Siren };
+    if (score >= 76) return { label: 'MEDIUM', color: 'text-orange-500 bg-orange-50 border-orange-200', icon: TriangleAlert };
+    if (score >= 41) return { label: 'LOW', color: 'text-amber-500 bg-amber-50 border-amber-200', icon: TrendingDown };
+    return { label: 'SAFE', color: 'text-slate-500 bg-slate-50 border-slate-200', icon: Smile };
   }
 
   const updateQueryParams = useCallback((newParams) => {
@@ -56,15 +82,42 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
         params.set(key, value)
       }
     })
-    router.push(`${pathname}?${params.toString()}`)
+    startTransition(() => {
+      router.push(`${pathname}?${params.toString()}`)
+    })
   }, [router, pathname, searchParams])
 
   const handleFilterChange = (key, value) => {
-    updateQueryParams({ [key]: value })
+    updateQueryParams({ [key]: value, page: 1 })
+  }
+
+  const handlePageChange = (newPage) => {
+    if (newPage < 1 || newPage > totalPages) return
+    updateQueryParams({ page: newPage })
+  }
+
+  const handlePageSizeChange = (newSize) => {
+    updateQueryParams({ pageSize: newSize, page: 1 })
   }
 
   const clearFilters = () => {
-    router.push(pathname)
+    startTransition(() => {
+        router.push(pathname)
+    })
+  }
+
+  const toggleSelectAll = () => {
+    if (selectedIds.length === takedowns.length) {
+      setSelectedIds([])
+    } else {
+      setSelectedIds(takedowns.map(t => t.id))
+    }
+  }
+
+  const toggleSelectId = (id) => {
+    setSelectedIds(prev => 
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    )
   }
 
   const hasActiveFilters = initialFilters.status !== 'all' ||
@@ -78,311 +131,572 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
     initialFilters.takedown_date_from ||
     initialFilters.takedown_date_to;
 
-  const totalCount = takedowns.length;
+  const getPageNumbers = () => {
+    const pages = []
+    let start = Math.max(1, currentPage - 2)
+    let end = Math.min(totalPages, start + 4)
+    if (end === totalPages) start = Math.max(1, end - 4)
+    
+    for (let i = start; i <= end; i++) pages.push(i)
+    return pages
+  }
+
+  const FilterControls = ({ isMobile = false }) => (
+    <div className={cn("grid gap-4", isMobile ? "grid-cols-2" : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7")}>
+      <div className="space-y-1.5">
+        <Label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Status</Label>
+        <select
+          value={initialFilters.status}
+          onChange={(e) => {
+            handleFilterChange('status', e.target.value);
+            if (isMobile) setIsMobileFiltersOpen(false);
+          }}
+          className="w-full bg-white border border-slate-200 rounded-md px-2.5 h-9 text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all cursor-pointer shadow-sm"
+        >
+          <option value="all">All Statuses</option>
+          <option value="initiated">Initiated</option>
+          <option value="under_review">Under Review</option>
+          <option value="re_appeal_takedown">Appealed Again</option>
+          <option value="takedown_successful">Takedown Successful</option>
+          <option value="takedown_failed">Takedown Failed</option>
+        </select>
+      </div>
+
+      <div className="space-y-1.5">
+        <Label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Platform</Label>
+        <select
+          value={initialFilters.platform}
+          onChange={(e) => {
+            handleFilterChange('platform', e.target.value);
+            if (isMobile) setIsMobileFiltersOpen(false);
+          }}
+          className="w-full bg-white border border-slate-200 rounded-md px-2.5 h-9 text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all cursor-pointer shadow-sm"
+        >
+          <option value="all">All Platforms</option>
+          <option value="instagram">Instagram</option>
+          <option value="facebook">Facebook</option>
+          <option value="x">X (Twitter)</option>
+          <option value="reddit">Reddit</option>
+          <option value="youtube">YouTube</option>
+        </select>
+      </div>
+
+      <div className="space-y-1.5">
+        <ViolationsFilter
+          projectLabels={projectLabels}
+          initialViolations={initialFilters.violations}
+          onChange={(val) => {
+            handleFilterChange('violations', val);
+            // Don't close mobile filters on multi-select unless you want to
+          }}
+        />
+      </div>
+
+      <div className="space-y-1.5">
+        <Label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Risk Severity</Label>
+        <select
+          value={initialFilters.risk_priority}
+          onChange={(e) => {
+            handleFilterChange('risk_priority', e.target.value);
+            if (isMobile) setIsMobileFiltersOpen(false);
+          }}
+          className="w-full bg-white border border-slate-200 rounded-md px-2.5 h-9 text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all cursor-pointer shadow-sm"
+        >
+          <option value="all">All Risks</option>
+          <option value="high">High Risk</option>
+          <option value="medium">Medium Risk</option>
+          <option value="low">Low Risk</option>
+          <option value="safe">Safe</option>
+        </select>
+      </div>
+
+      <div className="space-y-1.5">
+        <Label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Alert Date</Label>
+        <DateFilterPopover
+          title="Alert Date"
+          initialFrom={initialFilters.processed_from}
+          initialTo={initialFilters.processed_to}
+          onApply={(range) => {
+            updateQueryParams({
+              processed_from: range?.from ? format(range.from, "yyyy-MM-dd'T'HH:mm:ssXXX") : null,
+              processed_to: range?.to ? format(range.to, "yyyy-MM-dd'T'HH:mm:ssXXX") : null
+            });
+            if (isMobile) setIsMobileFiltersOpen(false);
+          }}
+        />
+      </div>
+
+      <div className="space-y-1.5">
+        <Label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Publish Date</Label>
+        <DateFilterPopover
+          title="Publish Date"
+          initialFrom={initialFilters.original_date_from}
+          initialTo={initialFilters.original_date_to}
+          onApply={(range) => {
+            updateQueryParams({
+              original_date_from: range?.from ? format(range.from, "yyyy-MM-dd'T'HH:mm:ssXXX") : null,
+              original_date_to: range?.to ? format(range.to, "yyyy-MM-dd'T'HH:mm:ssXXX") : null
+            });
+            if (isMobile) setIsMobileFiltersOpen(false);
+          }}
+        />
+      </div>
+
+      <div className="space-y-1.5">
+        <Label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Takedown Date</Label>
+        <DateFilterPopover
+          title="Takedown Date"
+          initialFrom={initialFilters.takedown_date_from}
+          initialTo={initialFilters.takedown_date_to}
+          onApply={(range) => {
+            updateQueryParams({
+              takedown_date_from: range?.from ? format(range.from, "yyyy-MM-dd'T'HH:mm:ssXXX") : null,
+              takedown_date_to: range?.to ? format(range.to, "yyyy-MM-dd'T'HH:mm:ssXXX") : null
+            });
+            if (isMobile) setIsMobileFiltersOpen(false);
+          }}
+        />
+      </div>
+    </div>
+  )
 
   return (
-    <div className="flex flex-col h-full w-full bg-slate-50">
-
-      {/* Filters & Controls */}
-      <div className="px-8 py-6 shrink-0 space-y-4">
-
-        {/* Metric Cards */}
+    <div className="relative flex-1 flex flex-col bg-slate-50 overflow-hidden">
+      
+      {/* Metrics Section */}
+      <div className="px-4 sm:px-6 pt-4 sm:pt-6 shrink-0">
         {metrics && (
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-2">
-            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex items-center gap-5">
-              <div className="bg-blue-50 p-3.5 rounded-xl">
-                <Clock className="w-6 h-6 text-blue-600" />
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-4">
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-3 sm:p-4 flex items-center gap-3 sm:gap-4 hover:shadow-md transition-shadow">
+              <div className="bg-blue-50 p-2 sm:p-3 rounded-xl">
+                <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
               </div>
-              <div>
-                <p className="text-sm font-semibold text-slate-500 mb-0.5">Takedowns in Progress</p>
-                <p className="text-2xl font-bold text-slate-900">{metrics.inProgress}</p>
-              </div>
-            </div>
-            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex items-center gap-5">
-              <div className="bg-emerald-50 p-3.5 rounded-xl">
-                <CheckCircle className="w-6 h-6 text-emerald-600" />
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-slate-500 mb-0.5">Takedowns Successful</p>
-                <p className="text-2xl font-bold text-slate-900">{metrics.successful}</p>
+              <div className="min-w-0">
+                <p className="text-[8px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-wider truncate">In Progress</p>
+                <p className="text-lg sm:text-xl font-black text-slate-900 leading-none">{metrics.inProgress}</p>
               </div>
             </div>
-            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex items-center gap-5">
-              <div className="bg-amber-50 p-3.5 rounded-xl">
-                <AlertTriangle className="w-6 h-6 text-amber-600" />
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-3 sm:p-4 flex items-center gap-3 sm:gap-4 hover:shadow-md transition-shadow">
+              <div className="bg-emerald-50 p-2 sm:p-3 rounded-xl">
+                <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-600" />
               </div>
-              <div>
-                <p className="text-sm font-semibold text-slate-500 mb-0.5">Takedowns in Re-appeal</p>
-                <p className="text-2xl font-bold text-slate-900">{metrics.reAppeal}</p>
+              <div className="min-w-0">
+                <p className="text-[8px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-wider truncate">Successful</p>
+                <p className="text-lg sm:text-xl font-black text-slate-900 leading-none">{metrics.successful}</p>
               </div>
             </div>
-            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex items-center gap-5">
-              <div className="bg-rose-50 p-3.5 rounded-xl">
-                <XCircle className="w-6 h-6 text-rose-600" />
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-3 sm:p-4 flex items-center gap-3 sm:gap-4 hover:shadow-md transition-shadow">
+              <div className="bg-amber-50 p-2 sm:p-3 rounded-xl">
+                <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 text-amber-600" />
               </div>
-              <div>
-                <p className="text-sm font-semibold text-slate-500 mb-0.5">Takedowns Failed</p>
-                <p className="text-2xl font-bold text-slate-900">{metrics.failed}</p>
+              <div className="min-w-0">
+                <p className="text-[8px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-wider truncate">Re-appealed</p>
+                <p className="text-lg sm:text-xl font-black text-slate-900 leading-none">{metrics.reAppeal}</p>
+              </div>
+            </div>
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-3 sm:p-4 flex items-center gap-3 sm:gap-4 hover:shadow-md transition-shadow">
+              <div className="bg-rose-50 p-2 sm:p-3 rounded-xl">
+                <XCircle className="w-4 h-4 sm:w-5 sm:h-5 text-rose-600" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[8px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-wider truncate">Failed</p>
+                <p className="text-lg sm:text-xl font-black text-slate-900 leading-none">{metrics.failed}</p>
               </div>
             </div>
           </div>
         )}
+      </div>
 
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
-          <div className="flex flex-col xl:flex-row items-start xl:items-center justify-between gap-6">
-
-            {/* Left: Filters */}
-            <div className="flex flex-col xl:flex-row items-start xl:items-center gap-3 w-full flex-wrap pb-2 xl:pb-0">
-              <div className="flex flex-row justify-between items-start w-full gap-1.5 shrink-0">
-                <div className="flex flex-row justify-center items-start w-full lg:w-fit gap-1.5 shrink-0">
-                  <div className="flex items-center gap-2">
-                    <div className="bg-slate-100 p-1.5 rounded-md text-slate-600">
-                      <Filter className="w-4 h-4" />
-                    </div>
-                    <span className="text-sm font-bold text-slate-700 tracking-wide">Filters</span>
-                  </div>
-                  <div className="text-sm font-medium text-slate-500 flex items-center gap-1.5 pl-5">
-                    <span className="font-bold text-slate-900 text-lg">{totalCount}</span>
-                    cases found
-                  </div>
+      {/* Filters Section */}
+      <div className="px-4 sm:px-6 py-2 shrink-0">
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-3 sm:p-4">
+          <div className="flex flex-col lg:flex-row gap-4 lg:gap-6">
+            
+            {/* Filter Info Sidebar / Mobile Header */}
+            <div className="flex items-center lg:items-start justify-between lg:flex-col w-full lg:w-[160px] shrink-0 lg:border-r border-slate-100 lg:pr-6">
+              <div className="flex flex-col">
+                <div className="flex items-center gap-1.5 mb-0.5 lg:mb-2">
+                  <Filter className="w-3.5 h-3.5 text-blue-600" />
+                  <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Filters</span>
                 </div>
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-xl sm:text-2xl font-black text-slate-800 tracking-tight">{totalCount}</span>
+                  <span className="text-[10px] sm:text-[11px] font-bold text-slate-500">takedowns</span>
+                </div>
+              </div>
 
+              <div className="flex items-center gap-2">
+                {isPending && <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-600" />}
+                
+                {/* Mobile Filter Trigger */}
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => setIsMobileFiltersOpen(true)}
+                  className="lg:hidden h-9 px-3 border-slate-200 text-slate-600 font-bold text-[10px] uppercase tracking-wider"
+                >
+                  <Filter className="w-3.5 h-3.5 mr-2" /> Filter
+                </Button>
 
                 {hasActiveFilters && (
-                  <div className="shrink-0 mb-[1px]">
-                    <Button variant="ghost" size="sm" onClick={clearFilters} className="h-9 px-3 text-rose-600 hover:text-rose-700 hover:bg-rose-50 font-bold text-xs rounded-md">
-                      <X className="w-3.5 h-3.5 mr-1.5" /> Clear All
-                    </Button>
-                  </div>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={clearFilters} 
+                    className="h-8 hidden lg:flex w-full justify-start px-2 text-rose-600 hover:text-rose-700 hover:bg-rose-50 font-bold text-[10px] uppercase tracking-wider mt-2"
+                  >
+                    <X className="w-3.5 h-3.5 mr-1.5" /> Clear All
+                  </Button>
                 )}
               </div>
-
-              {/* <Separator orientation="vertical" className="h-10 bg-slate-200 hidden xl:block" /> */}
-
-              <div className="flex items-end gap-4 flex-wrap w-full justify-evenly">
-                <div className="space-y-1 w-fit min-w-[130px]">
-                  <Label className="text-[10px] uppercase font-bold text-slate-400">Status</Label>
-                  <Select
-                    value={initialFilters.status}
-                    onValueChange={(val) => handleFilterChange('status', val)}
-                  >
-                    <SelectTrigger className="w-full bg-white border-slate-200 h-9 text-xs font-semibold">
-                      <SelectValue placeholder="All Statuses" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Statuses</SelectItem>
-                      <SelectItem value="initiated">Initiated</SelectItem>
-                      <SelectItem value="under_review">Under Review</SelectItem>
-                      <SelectItem value="re_appeal_takedown">Appealed Again</SelectItem>
-                      <SelectItem value="takedown_successful">Takedown Successful</SelectItem>
-                      <SelectItem value="takedown_failed">Takedown Failed</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-1 w-fit min-w-[130px]">
-                  <Label className="text-[10px] uppercase font-bold text-slate-400">Platform</Label>
-                  <Select
-                    value={initialFilters.platform}
-                    onValueChange={(val) => handleFilterChange('platform', val)}
-                  >
-                    <SelectTrigger className="w-full bg-white border-slate-200 h-9 text-xs font-semibold">
-                      <SelectValue placeholder="All Platforms" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Platforms</SelectItem>
-                      <SelectItem value="instagram">Instagram</SelectItem>
-                      <SelectItem value="facebook">Facebook</SelectItem>
-                      <SelectItem value="x">X (Twitter)</SelectItem>
-                      <SelectItem value="reddit">Reddit</SelectItem>
-                      <SelectItem value="youtube">YouTube</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-1 w-fit min-w-[150px]">
-                  <ViolationsFilter
-                    projectLabels={projectLabels}
-                    initialViolations={initialFilters.violations}
-                    onChange={(val) => handleFilterChange('violations', val)}
-                  />
-                </div>
-
-                <div className="space-y-1 w-fit min-w-[130px]">
-                  <Label className="text-[10px] uppercase font-bold text-slate-400">Risk Severity</Label>
-                  <Select
-                    value={initialFilters.risk_priority}
-                    onValueChange={(val) => handleFilterChange('risk_priority', val)}
-                  >
-                    <SelectTrigger className="w-full bg-white border-slate-200 h-9 text-xs font-semibold">
-                      <SelectValue placeholder="All Risks" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Risks</SelectItem>
-                      <SelectItem value="high">High Risk</SelectItem>
-                      <SelectItem value="medium">Medium Risk</SelectItem>
-                      <SelectItem value="low">Low Risk</SelectItem>
-                      <SelectItem value="safe">Safe</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-1 w-fit min-w-[140px]">
-                  <Label className="text-[10px] uppercase font-bold text-slate-400">Alert Date</Label>
-                  <DateFilterPopover
-                    title="Alert Date"
-                    initialFrom={initialFilters.processed_from}
-                    initialTo={initialFilters.processed_to}
-                    onApply={(range) => {
-                      updateQueryParams({
-                        processed_from: range?.from ? format(range.from, "yyyy-MM-dd'T'HH:mm:ssXXX") : null,
-                        processed_to: range?.to ? format(range.to, "yyyy-MM-dd'T'HH:mm:ssXXX") : null
-                      });
-                    }}
-                  />
-                </div>
-
-                <div className="space-y-1 w-fit min-w-[140px]">
-                  <Label className="text-[10px] uppercase font-bold text-slate-400">Publish Date</Label>
-                  <DateFilterPopover
-                    title="Publish Date"
-                    initialFrom={initialFilters.original_date_from}
-                    initialTo={initialFilters.original_date_to}
-                    onApply={(range) => {
-                      updateQueryParams({
-                        original_date_from: range?.from ? format(range.from, "yyyy-MM-dd'T'HH:mm:ssXXX") : null,
-                        original_date_to: range?.to ? format(range.to, "yyyy-MM-dd'T'HH:mm:ssXXX") : null
-                      });
-                    }}
-                  />
-                </div>
-
-                <div className="space-y-1 w-fit min-w-[140px]">
-                  <Label className="text-[10px] uppercase font-bold text-slate-400">Takedown Date</Label>
-                  <DateFilterPopover
-                    title="Takedown start Date"
-                    initialFrom={initialFilters.takedown_date_from}
-                    initialTo={initialFilters.takedown_date_to}
-                    onApply={(range) => {
-                      updateQueryParams({
-                        takedown_date_from: range?.from ? format(range.from, "yyyy-MM-dd'T'HH:mm:ssXXX") : null,
-                        takedown_date_to: range?.to ? format(range.to, "yyyy-MM-dd'T'HH:mm:ssXXX") : null
-                      });
-                    }}
-                  />
-                </div>
-              </div>
             </div>
+
+            {/* Desktop Filter Grid */}
+            <div className="hidden lg:block flex-1">
+              <FilterControls />
+            </div>
+
+            {/* Active Filters Display for Mobile */}
+            {hasActiveFilters && (
+               <div className="lg:hidden flex flex-wrap gap-2 pt-2 border-t border-slate-50">
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={clearFilters} 
+                    className="h-7 px-2 text-rose-600 hover:text-rose-700 hover:bg-rose-50 font-bold text-[9px] uppercase tracking-wider"
+                  >
+                    <X className="w-3 h-3 mr-1" /> Clear All Filters
+                  </Button>
+               </div>
+            )}
           </div>
         </div>
       </div>
 
-      {/* List */}
-      <div className="flex-1 px-8 pb-8">
-        {takedowns.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-24 text-slate-400">
-            <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mb-6 border border-slate-100">
-              <ShieldAlert className="w-8 h-8 opacity-20 text-slate-500" />
+      {/* Mobile Filters Dialog */}
+      <Dialog open={isMobileFiltersOpen} onOpenChange={setIsMobileFiltersOpen}>
+        <DialogContent className="sm:max-w-[425px] p-0 overflow-hidden rounded-2xl border-none shadow-2xl">
+          <DialogHeader className="p-6 bg-slate-50 border-b border-slate-100">
+            <div className="flex items-center justify-between">
+              <DialogTitle className="text-lg font-black text-slate-800 uppercase tracking-tight flex items-center gap-2">
+                <Filter className="w-5 h-5 text-blue-600" /> Refine Results
+              </DialogTitle>
             </div>
-            <h3 className="text-lg font-bold text-slate-700 mb-1">No active takedowns found</h3>
-            <p className="text-sm text-slate-500 max-w-xs text-center">Try adjusting your filters or checking back later.</p>
-            {hasActiveFilters && (
-              <Button variant="outline" onClick={clearFilters} className="mt-6 border-slate-200">
-                Clear all filters
-              </Button>
+          </DialogHeader>
+          <div className="px-6 overflow-y-auto max-h-[70vh]">
+            <FilterControls isMobile={true} />
+          </div>
+          <div className="p-4 bg-slate-50 border-t border-slate-100 flex gap-3">
+             <Button onClick={clearFilters} variant="outline" className="flex-1 h-11 rounded-xl font-bold text-xs uppercase tracking-wider border-slate-200">
+                Reset
+             </Button>
+             <Button onClick={() => setIsMobileFiltersOpen(false)} className="flex-1 h-11 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs uppercase tracking-wider">
+                Show {totalCount} Results
+             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* List Section */}
+      <div className="flex-1 overflow-hidden px-4 sm:px-6 pb-4 min-h-0">
+        <div className={cn("h-full bg-white rounded-2xl shadow-sm border border-slate-200 flex flex-col transition-opacity overflow-hidden duration-300", isPending && "opacity-60")}>
+          
+          {/* Scrollable Table Area */}
+          <div className="overflow-auto flex-1 relative">
+            {takedowns.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full py-24 text-slate-400">
+                <div className="w-16 sm:w-20 h-16 sm:h-20 bg-slate-50 rounded-full flex items-center justify-center mb-6 border border-slate-100">
+                  <ShieldAlert className="w-6 h-6 sm:w-8 sm:h-8 opacity-20 text-slate-500" />
+                </div>
+                <h3 className="text-base sm:text-lg font-bold text-slate-700 mb-1">No active takedowns found</h3>
+                <p className="text-xs sm:text-sm text-slate-500 max-w-xs text-center px-4">Try adjusting your filters or checking back later.</p>
+                {hasActiveFilters && (
+                  <Button variant="outline" onClick={clearFilters} className="mt-6 border-slate-200 font-bold text-[10px] sm:text-xs uppercase tracking-wider">
+                    Clear all filters
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <table className="min-w-full divide-y divide-slate-100 table-fixed lg:table-auto">
+                <thead className="bg-slate-50 sticky top-0 z-10">
+                  <tr>
+                    {/* <th scope="col" className="w-12 px-4 py-3.5 text-center bg-slate-50">
+                      <input 
+                        type="checkbox" 
+                        className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 h-4 w-4" 
+                        checked={selectedIds.length === takedowns.length && takedowns.length > 0}
+                        onChange={toggleSelectAll}
+                      />
+                    </th> */}
+                    <th scope="col" className="w-14 sm:w-16 px-2 sm:px-4 py-3.5 text-center text-[10px] font-bold text-slate-500 uppercase tracking-wider bg-slate-50">Risk</th>
+                    <th scope="col" className="w-20 sm:w-24 px-2 sm:px-4 py-3.5 text-center text-[10px] font-bold text-slate-500 uppercase tracking-wider bg-slate-50">Status</th>
+                    <th scope="col" className="px-4 sm:px-6 py-3.5 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider bg-slate-50">Content</th>
+                    <th scope="col" className="w-48 px-6 py-3.5 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider bg-slate-50 hidden lg:table-cell">Violations</th>
+                    <th scope="col" className="w-32 px-6 py-3.5 text-center text-[10px] font-bold text-slate-500 uppercase tracking-wider bg-slate-50 hidden xl:table-cell">Alert Date</th>
+                    <th scope="col" className="w-32 px-6 py-3.5 text-center text-[10px] font-bold text-slate-500 uppercase tracking-wider bg-slate-50 hidden xl:table-cell">Publish Date</th>
+                    <th scope="col" className="w-10 sm:w-12 px-2 sm:px-4 py-3.5 text-right bg-slate-50"></th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-slate-100">
+                  {takedowns.map((item) => {
+                    const statusConfig = getStatusConfig(item.status);
+                    const risk = getRiskLabel(item.risk_score);
+                    const RiskIcon = risk.icon;
+
+                    return (
+                      <tr 
+                        key={item.id} 
+                        className="group hover:bg-slate-50/80 transition-all cursor-pointer"
+                        onClick={(e) => {
+                          if (e.target.type === 'checkbox') return;
+                          router.push(`/takedowns/case/${item.id}`)
+                        }}
+                      >
+                        {/* <td className="px-4 py-4 whitespace-nowrap align-middle text-center" onClick={(e) => e.stopPropagation()}>
+                          <input 
+                            type="checkbox" 
+                            className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 h-4 w-4" 
+                            checked={selectedIds.includes(item.id)}
+                            onChange={() => toggleSelectId(item.id)}
+                          />
+                        </td> */}
+
+                        {/* Risk */}
+                        <td className="px-2 sm:px-4 py-3 sm:py-4 whitespace-nowrap align-middle text-center">
+                          <div className={cn("inline-flex flex-col items-center justify-center w-10 sm:w-12 py-1 rounded-lg border shadow-sm mx-auto", risk.color)}>
+                            <span className="text-[7px] sm:text-[8px] font-black uppercase tracking-tighter leading-none mb-0.5 sm:mb-1">{risk.label}</span>
+                            <RiskIcon className="w-3 sm:w-3.5 h-3 sm:h-3.5" />
+                          </div>
+                        </td>
+
+                        {/* Status */}
+                        <td className="px-2 sm:px-4 py-3 sm:py-4 whitespace-nowrap align-middle text-center">
+                          <div className="flex flex-col items-center gap-1 sm:gap-1.5">
+                            <div className="bg-slate-50 p-1 rounded-full border border-slate-100">
+                              <Clock className="w-3 sm:w-3.5 h-3 sm:h-3.5 text-slate-400" />
+                            </div>
+                            {item.visibility_status === 'down' ? (
+                              <span className="text-[7px] sm:text-[8px] font-black text-slate-500 uppercase tracking-widest leading-none">Down</span>
+                            ) : (
+                              <span className="text-[7px] sm:text-[8px] font-black text-emerald-600 uppercase tracking-widest leading-none">Online</span>
+                            )}
+                          </div>
+                        </td>
+
+                        {/* Content */}
+                        <td className="px-4 sm:px-6 py-3 sm:py-4 align-middle overflow-hidden">
+                          <div className="flex items-center gap-3 sm:gap-4">
+                            <div className="w-10 h-10 sm:w-14 sm:h-14 rounded-lg overflow-hidden bg-slate-100 border border-slate-200 shadow-sm relative shrink-0">
+                              {item.enrichment?.thumbnail ? (
+                                <img
+                                  src={item.enrichment.thumbnail}
+                                  className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                                  alt=""
+                                />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center">
+                                  <ImageIcon className="w-4 h-4 sm:w-5 sm:h-5 text-slate-300" />
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="min-w-0 flex flex-col gap-0.5">
+                              <div className="flex items-center flex-wrap gap-1.5 sm:gap-2">
+                                <div
+                                  className="font-semibold text-slate-600 rounded-full bg-slate-50 max-w-5 flex items-center justify-center p-1"
+                                  title={item.platform?.charAt(0).toUpperCase() + item.platform?.slice(1)}
+                                >
+                                  {item.platform?.toLowerCase() === 'instagram' ? <Instagram className="size-4 sm:size-5 text-pink-500" />
+                                    : item.platform?.toLowerCase() === 'facebook' ? <Facebook className="size-4 sm:size-5 shrink-0 text-blue-600" />
+                                      : item.platform?.toLowerCase() === 'x' ? <Twitter className="size-4 sm:size-5 text-slate-900" />
+                                        : item.platform?.toLowerCase() === 'youtube' ? <Youtube className="size-4 sm:size-5 text-red-600" />
+                                          : item.platform?.toLowerCase() === 'reddit' ? <Reddit className="size-4 sm:size-5 text-orange-600" />
+                                            : <span className="text-[10px] font-bold text-slate-400">{item.platform?.slice(0, 1).toUpperCase()}</span>
+                                  }
+                                </div>
+                                <span className="text-xs text-slate-400">•</span>
+                                <h4 className="text-xs sm:text-sm font-black text-slate-800 truncate leading-none max-w-[80px] sm:max-w-none">
+                                  {item.enrichment?.username ? `@${item.enrichment.username}` : `Case #${item.id?.substring(0, 8)}`}
+                                </h4>
+                                {item.url && (
+                                  <a 
+                                    href={item.url} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-600 text-[8px] sm:text-[9px] font-bold hover:bg-blue-100 transition-colors shrink-0"
+                                  >
+                                    Source <ExternalLink className="w-2 sm:w-2.5 h-2 sm:h-2.5" />
+                                  </a>
+                                )}
+                              </div>
+                              <p className="text-[10px] sm:text-[11px] text-slate-500 line-clamp-2 leading-relaxed mt-0.5 sm:mt-1">
+                                {item.enrichment?.caption || <span className="italic opacity-50 text-[10px]">No caption content</span>}
+                              </p>
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* Violations */}
+                        <td className="px-6 py-4 align-middle hidden lg:table-cell">
+                          <div className="flex flex-wrap gap-1.5">
+                            {item.threat_types?.length > 0 ? item.threat_types.map((type, idx) => (
+                              <span key={idx} className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[9px] font-bold uppercase tracking-wider border border-slate-200">
+                                {type.replace(/_/g, ' ')}
+                              </span>
+                            )) : (
+                              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest italic">Unknown</span>
+                            )}
+                          </div>
+                        </td>
+
+                        {/* Alert Date */}
+                        <td className="px-6 py-4 whitespace-nowrap align-middle text-center hidden xl:table-cell">
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-xs font-bold text-slate-700">
+                              {item.processed_at ? format(new Date(item.processed_at), "dd/MM/yyyy") : '-'}
+                            </span>
+                            <span className="text-[10px] font-medium text-slate-400">
+                              {item.processed_at ? format(new Date(item.processed_at), "hh:mm aa") : ''}
+                            </span>
+                          </div>
+                        </td>
+
+                        {/* Publish Date */}
+                        <td className="px-6 py-4 whitespace-nowrap align-middle text-center hidden xl:table-cell">
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-xs font-bold text-slate-400">
+                              {item.posted_at ? format(new Date(item.posted_at), "dd/MM/yyyy") : '-'}
+                            </span>
+                            <span className="text-[10px] font-medium text-slate-300">
+                              {item.posted_at ? format(new Date(item.posted_at), "hh:mm aa") : ''}
+                            </span>
+                          </div>
+                        </td>
+
+                        {/* Actions */}
+                        <td className="px-2 sm:px-4 py-3 sm:py-4 whitespace-nowrap align-middle text-right">
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-7 w-7 sm:h-8 sm:w-8 p-0 rounded-full hover:bg-slate-100 text-slate-300 hover:text-slate-900 transition-all"
+                          >
+                            <ChevronRight className="w-4 h-4" />
+                          </Button>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
             )}
           </div>
-        ) : (
-          <div className="grid grid-cols-1 gap-4 w-fit h-fit">
-            {takedowns.map((item) => (
-              <Link
-                key={item.id}
-                href={`/takedowns/case/${item.id}`}
-                className="group block bg-white rounded-xl shadow-sm border border-slate-200 hover:border-blue-300 hover:shadow-md transition-all duration-200 overflow-hidden"
-              >
-                <div className="flex flex-col sm:flex-row min-h-[8rem]">
 
-                  {/* Thumbnail / Left Accent */}
-                  <div className="w-full sm:w-40 sm:h-auto h-32 bg-slate-100 shrink-0 relative overflow-hidden flex items-center justify-center border-b sm:border-b-0 sm:border-r border-slate-100">
-                    {item.enrichment?.thumbnail ? (
-                      <img
-                        src={item.enrichment.thumbnail}
-                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                        alt="Evidence"
-                      />
-                    ) : (
-                      <ImageIcon className="w-8 h-8 text-slate-300" />
-                    )}
-
-                    {/* Platform Icon Overlay */}
-                    <div className="absolute top-2 left-2 bg-white/90 backdrop-blur-sm p-1.5 rounded shadow-sm border border-white/20 flex items-center justify-center">
-                      {item.platform?.toLowerCase() === 'instagram' ? <Instagram className="w-3.5 h-3.5 text-pink-500" />
-                        : item.platform?.toLowerCase() === 'facebook' ? <Facebook className="w-3.5 h-3.5 text-blue-600" />
-                          : item.platform?.toLowerCase() === 'x' ? <span className='max-w-4 max-h-4' ><Twitter className="w-3.5 h-3.5 text-slate-900" /></span>
-                            : item.platform?.toLowerCase() === 'youtube' ? <Youtube className="w-3.5 h-3.5 text-red-600" />
-                              : item.platform?.toLowerCase() === 'reddit' ? <span className='max-w-4 max-h-4' > <Reddit className="w-3.5 h-3.5 text-orange-600" /> </span>
-                                : <span className="text-[10px] font-bold uppercase tracking-wider text-slate-700">{item.platform?.slice(0, 1)}</span>
-                      }
-                    </div>
-                  </div>
-
-                  <div className="flex-1 p-5 min-w-0 flex flex-col justify-between">
-                    <div>
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="min-w-0">
-                          <h3 className="text-lg font-bold text-slate-900 truncate leading-tight group-hover:text-blue-600 transition-colors flex items-center gap-2">
-                            {item.enrichment?.username ? `@${item.enrichment.username}` : `Case #${item.id?.substring(0, 8) || 'Unknown'}`}
-                            {item.visibility_status === 'down' ? (
-                                <Badge variant="outline" className="bg-slate-100 text-slate-500 border-slate-200 uppercase text-[10px] h-5">Taken Down</Badge>
-                            ) : item.visibility_status === 'active' ? (
-                                <Badge variant="outline" className="bg-emerald-100 text-emerald-700 border-emerald-200 uppercase text-[10px] h-5">Online</Badge>
-                            ) : null}
-                          </h3>
-                          <p className="text-sm text-slate-500 truncate mt-1">
-                            {item.enrichment?.caption || <span className="italic opacity-50">No caption content</span>}
-                          </p>
-                        </div>
-                        <Badge variant="outline" className={cn("shrink-0 uppercase text-[11px] px-2.5 font-bold h-6 border", getStatusColor(item.status))}>
-                          {item.status?.replace(/_/g, ' ')}
-                        </Badge>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-x-6 gap-y-3 text-xs text-slate-500 mt-4 border-t border-slate-100 pt-3">
-                      <span className="flex items-center gap-1.5">
-                        <div className={cn("w-2 h-2 rounded-full", item.risk_score >= 96 ? 'bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.4)]' : item.risk_score >= 76 ? 'bg-orange-500' : item.risk_score >= 41 ? 'bg-amber-500' : 'bg-slate-400')} />
-                        Risk: <span className="font-bold text-slate-700">{item.risk_score >= 96 ? 'High' : item.risk_score >= 76 ? 'Medium' : item.risk_score >= 41 ? 'Low' : 'Safe'}</span>
-                      </span>
-                      {/* <span className="flex items-center gap-1.5">
-                        <ShieldAlert className="w-3.5 h-3.5 text-slate-400" />
-                        <span className="font-semibold text-slate-700 capitalize">{item.threat_type?.replace(/_/g, ' ')}</span>
-                      </span> */}
-                      <div className="flex flex-wrap items-center gap-4 sm:ml-auto">
-                        {item.takedown_date && (
-                          <span className="text-slate-500 flex items-center gap-1.5 font-medium">
-                            <Clock className="w-3.5 h-3.5 text-slate-400" />
-                            Started: {format(new Date(item.takedown_date), "MMM d, yyyy")}
-                          </span>
+          {/* Pagination Footer */}
+          <div className="shrink-0 px-4 sm:px-6 py-3 border-t border-slate-100 bg-slate-50/50 flex flex-col md:flex-row items-center justify-between gap-4 z-20">
+            <div className="flex items-center gap-3 w-full md:w-auto justify-between md:justify-start">
+              <div className="flex items-center gap-3">
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest hidden sm:inline">Show:</span>
+                <div className="flex items-center gap-1">
+                  {[10, 25, 50].map(size => (
+                    <button
+                      key={size}
+                      onClick={() => handlePageSizeChange(size)}
+                      className={cn(
+                        "w-7 h-7 sm:w-8 sm:h-8 rounded-lg text-[10px] sm:text-xs font-bold transition-all border",
+                        pageSize === size 
+                          ? "bg-white border-slate-200 text-blue-600 shadow-sm" 
+                          : "text-slate-400 border-transparent hover:border-slate-200"
+                      )}
+                    >
+                      {size}
+                    </button>
+                  ))}
+                  <div className="hidden lg:flex items-center gap-1">
+                    {[75, 100].map(size => (
+                      <button
+                        key={size}
+                        onClick={() => handlePageSizeChange(size)}
+                        className={cn(
+                          "w-8 h-8 rounded-lg text-xs font-bold transition-all border",
+                          pageSize === size 
+                            ? "bg-white border-slate-200 text-blue-600 shadow-sm" 
+                            : "text-slate-400 border-transparent hover:border-slate-200"
                         )}
-                        {item.last_update_date && (
-                          <span className="text-slate-500 flex items-center gap-1.5 font-medium">
-                            <Clock className="w-3.5 h-3.5 text-slate-400" />
-                            Updated: {format(new Date(item.last_update_date), "MMM d, yyyy")}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Right Action Area */}
-                  <div className="w-12 border-l border-slate-100 flex items-center justify-center bg-slate-50/50 group-hover:bg-blue-50/50 transition-colors">
-                    <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-blue-600 transition-colors" />
+                      >
+                        {size}
+                      </button>
+                    ))}
                   </div>
                 </div>
-              </Link>
-            ))}
+              </div>
+              
+              <div className="flex items-center gap-1.5 ml-2 sm:ml-4">
+                <span className="text-[9px] sm:text-[10px] font-black text-slate-400 uppercase tracking-widest">Page</span>
+                <span className="text-xs font-black text-slate-700">{currentPage}</span>
+                <span className="text-[10px] font-bold text-slate-300">/</span>
+                <span className="text-xs font-bold text-slate-400">{totalPages}</span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1 w-full md:w-auto justify-center md:justify-end">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handlePageChange(1)}
+                disabled={currentPage === 1}
+                className="h-8 w-8 p-0 border-slate-200 hidden sm:flex"
+              >
+                <ChevronsLeft className="w-4 h-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handlePageChange(currentPage - 1)}
+                disabled={currentPage === 1}
+                className="h-8 px-2 sm:px-3 gap-1.5 border-slate-200 text-[10px] sm:text-xs font-bold text-slate-600 flex-1 sm:flex-none"
+              >
+                <ChevronLeft className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Previous</span>
+              </Button>
+
+              <div className="flex items-center gap-1 mx-1 sm:mx-2">
+                {getPageNumbers().map(num => (
+                  <button
+                    key={num}
+                    onClick={() => handlePageChange(num)}
+                    className={cn(
+                      "w-7 h-7 sm:w-8 sm:h-8 rounded-lg text-[10px] sm:text-xs font-black transition-all",
+                      currentPage === num 
+                        ? "bg-slate-900 text-white shadow-lg" 
+                        : "text-slate-500 hover:bg-slate-100"
+                    )}
+                  >
+                    {num}
+                  </button>
+                ))}
+              </div>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handlePageChange(currentPage + 1)}
+                disabled={currentPage === totalPages}
+                className="h-8 px-2 sm:px-3 gap-1.5 border-slate-200 text-[10px] sm:text-xs font-bold text-slate-600 flex-1 sm:flex-none"
+              >
+                <span className="hidden sm:inline">Next</span> <ChevronRight className="w-3.5 h-3.5" />
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handlePageChange(totalPages)}
+                disabled={currentPage === totalPages}
+                className="h-8 w-8 p-0 border-slate-200 hidden sm:flex"
+              >
+                <ChevronsRight className="w-4 h-4" />
+              </Button>
+            </div>
           </div>
-        )}
+        </div>
       </div>
     </div>
   )

@@ -134,11 +134,15 @@ const buildTakedownMatchQuery = (filters = {}) => {
 }
 
 /**
- * Fetch all active takedowns with filters and enriched MongoDB data
+ * Fetch active takedowns with filters, server-side pagination, and enriched MongoDB data
  */
 export const getTakedowns = traceAction('getTakedowns', async (filters = {}) => {
   const projectDetails = await getProjectDetails()
-  if (!projectDetails?.projectName) return []
+  if (!projectDetails?.projectName) return { takedowns: [], totalCount: 0 }
+
+  const page = parseInt(filters.page) || 1
+  const pageSize = parseInt(filters.pageSize) || 25
+  const skip = (page - 1) * pageSize
 
   try {
     const client = await clientPromise
@@ -181,7 +185,7 @@ export const getTakedowns = traceAction('getTakedowns', async (filters = {}) => 
 
     const hasDateFilters = Object.keys(dateFilterStage).length > 0;
 
-    const posts = await collection.aggregate([
+    const aggregationPipeline = [
       { $match: matchStage },
       { $project: { text_embedding: 0, image_embedding: 0 } },
       {
@@ -204,8 +208,21 @@ export const getTakedowns = traceAction('getTakedowns', async (filters = {}) => 
         }
       },
       ...(hasDateFilters ? [{ $match: dateFilterStage }] : []),
-      { $sort: { 'takedown_info.events.date': -1, 'metadata.updated_at': -1 } }
-    ]).toArray()
+      {
+        $facet: {
+          metadata: [{ $count: "totalCount" }],
+          data: [
+            { $sort: { 'takedown_info.events.date': -1, 'metadata.updated_at': -1 } },
+            { $skip: skip },
+            { $limit: pageSize }
+          ]
+        }
+      }
+    ];
+
+    const result = await collection.aggregate(aggregationPipeline).toArray()
+    const posts = result[0].data || []
+    const totalCount = result[0].metadata[0]?.totalCount || 0
 
     const enrichedTakedowns = await Promise.all(posts.map(async (post) => {
       let thumbnail = null
@@ -240,10 +257,15 @@ export const getTakedowns = traceAction('getTakedowns', async (filters = {}) => 
         post_platform_id: post.post_id || post.code || '',
         platform: post.platform,
         status: post.takedown_info?.status || 'initiated',
+        visibility_status: post.visibility_status || 'active',
         risk_score: post.review_details?.threat_score || 0,
         threat_type: post.review_details?.threat_types?.[0] || 'Unknown',
+        threat_types: post.review_details?.threat_types || [],
         last_update_date: lastUpdateDate,
         takedown_date: takedownDate,
+        processed_at: post.review_details?.reviewed_at || post.metadata?.updated_at || null,
+        posted_at: post.engagement?.posted_at || post.metadata?.posted_date || null,
+        url: post.url || post.metadata?.url || '',
         notes: post.takedown_info?.notes ? post.takedown_info.notes.join('\n\n') : '',
         enrichment: {
           caption: caption.length > 100 ? caption.substring(0, 100) + '...' : caption,
@@ -253,10 +275,13 @@ export const getTakedowns = traceAction('getTakedowns', async (filters = {}) => 
       }
     }))
 
-    return enrichedTakedowns
+    return {
+      takedowns: enrichedTakedowns,
+      totalCount
+    }
   } catch (mongoError) {
     console.error('Error fetching takedowns from MongoDB:', mongoError)
-    return []
+    return { takedowns: [], totalCount: 0 }
   }
 })
 
