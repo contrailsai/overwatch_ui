@@ -906,14 +906,37 @@ export const getSemanticSearchPosts = traceAction('getSemanticSearchPosts', asyn
       {
         $search: {
           index: "default", // Replace with your actual Atlas Search index name if different
-          text: {
-            query: searchText,
-            path: ['content', 'original_url', 'profile.display_name'], // Searching the fields defined in the Atlas Search index
-            fuzzy: {
-              maxEdits: 2, // Allows up to 2 typos/character changes per word
-              prefixLength: 2, // First 2 characters must match exactly (improves performance and relevance)
-              maxExpansions: 50 // Limits the number of fuzzy variations explored
-            }
+          compound: {
+            should: [
+              {
+                // Layer 1: The Absolute Exact Match (Highest Priority)
+                text: {
+                  query: searchText,
+                  path: "original_url.exact",
+                  score: { boost: { value: 10 } }
+                }
+              },
+              {
+                // Layer 2: The Missing Slash / Sequential Match (High Priority)
+                phrase: {
+                  query: searchText,
+                  path: "original_url",
+                  score: { boost: { value: 5 } }
+                }
+              },
+              {
+                // Layer 3: The Partial Hash Match & other text fields (Normal Priority)
+                text: {
+                  query: searchText,
+                  path: ['content', 'original_url', 'profile.display_name'],
+                  fuzzy: {
+                    maxEdits: 2,
+                    prefixLength: 2,
+                    maxExpansions: 50
+                  }
+                }
+              }
+            ]
           }
         }
       },

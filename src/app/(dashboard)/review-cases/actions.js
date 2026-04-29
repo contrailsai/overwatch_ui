@@ -706,9 +706,9 @@ export const uploadCaseImage = traceAction('uploadCaseImage', async (postId, pro
     }
 
     const buffer = Buffer.from(await file.arrayBuffer())
-    const fileName = file.name
+    const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_')
     const fileType = file.type
-    const s3Key = `case-images/${project.mongo_db_map}/${postId}/${Date.now()}-${fileName}`
+    const s3Key = `case-images/${project.mongo_db_map}/${postId}/${Date.now()}-${sanitizedFileName}`
 
     // 1. Upload to S3
     await uploadFileToS3(buffer, s3Key, fileType)
