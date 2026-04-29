@@ -5,8 +5,12 @@ import { FileDown, Loader2 } from 'lucide-react';
 import { usePdfExport } from './usePdfExport';
 import posthog from 'posthog-js';
 
-export function ReportButton({ posts, project, className }) {
+export function ReportButton({ posts, project, className, onStateChange }) {
   const { exportPdf, loading, statusText } = usePdfExport();
+
+  React.useEffect(() => {
+    onStateChange?.({ loading, statusText });
+  }, [loading, statusText, onStateChange]);
 
   const handleDownload = () => {
     posthog.capture('Report Downloaded', { type: 'Summary Report', format: 'pdf', count: posts?.length || 0 });

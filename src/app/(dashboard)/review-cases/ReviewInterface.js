@@ -258,8 +258,8 @@ export function ReviewInterface({
           <div className="space-y-6">
 
             {/* Header Row */}
-            <div className="flex items-center justify-between border-b pb-4">
-              <div className="flex items-center gap-2.5">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b pb-4">
+              <div className="flex flex-wrap items-center gap-2.5">
                 <div className="bg-blue-50 p-2 rounded-lg text-blue-600">
                   <Filter className="h-4 w-4" />
                 </div>
