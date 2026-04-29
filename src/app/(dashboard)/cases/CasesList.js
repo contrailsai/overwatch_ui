@@ -375,16 +375,26 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                 {/* Header Row: Title & Summary Box */}
                 <div className="flex flex-col w-full lg:w-[160px] xl:w-[180px] shrink-0 rounded-xl p-3 relative ">
                   <div className="flex items-center justify-between mb-2">
+                    <div className="flex flex-col items-start gap-2">
                     <div className="flex items-center gap-1.5">
                       <Filter className="w-3.5 h-3.5 text-blue-600" />
                       <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
                         Filter
                       </span>
                     </div>
+                    <div className="flex items-baseline gap-1.5 mb-3">
+                    <span className="text-2xl font-black text-slate-800 tracking-tight leading-none">
+                      {totalCount}
+                    </span>
+                    <span className="text-[11px] font-bold text-slate-500 leading-none">
+                      cases found
+                    </span>
+                  </div>
+                    </div>
                     {isPending && (
                       <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-600" />
                     )}
-                    <div className="lg:hidden flex  gap-2">
+                    <div className="lg:hidden flex flex-col gap-2">
                       <Button
                         variant="ghost"
                         onClick={() => setIsMobileFiltersOpen(!isMobileFiltersOpen)}
@@ -409,16 +419,6 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                         showLabel={false}
                       />
                     </div>
-                    
-                  </div>
-
-                  <div className="flex items-baseline gap-1.5 mb-3">
-                    <span className="text-2xl font-black text-slate-800 tracking-tight leading-none">
-                      {totalCount}
-                    </span>
-                    <span className="text-[11px] font-bold text-slate-500 leading-none">
-                      cases found
-                    </span>
                   </div>
 
                   {/* Selection Controls */}
@@ -481,7 +481,7 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                         <div className="flex flex-col gap-3 w-full">
 
                           {/* Row 1: Dropdowns and Dates */}
-                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:flex lg:flex-wrap items-start gap-2.5 sm:gap-3 w-full">
+                          <div className="grid grid-cols-2 lg:flex lg:flex-wrap items-start gap-2.5 sm:gap-3 w-full">
 
                             {/* RISK LEVEL */}
                             <div className="space-y-1 w-full lg:w-auto lg:min-w-[140px] lg:max-w-[160px]">
@@ -595,23 +595,7 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                               />
                             </div>
 
-                            {/* Report Download - hidden on mobile dialog as it's now outside */}
-                            <div className="hidden lg:block space-y-1 w-full lg:w-auto lg:flex-1 lg:max-w-[280px] lg:min-w-[240px]">
-                              <Actions
-                                selectedPostsArray={selectedPostsArray}
-                                selectedCount={selectedCount}
-                                summaryState={summaryState}
-                                detailedPdfState={detailedPdfState}
-                                detailedDocxState={detailedDocxState}
-                                setSummaryState={setSummaryState}
-                                setDetailedPdfState={setDetailedPdfState}
-                                setDetailedDocxState={setDetailedDocxState}
-                                showToast={showToast}
-                                trackClientClick={trackClientClick}
-                                project={project}
-                                showLabel={true}
-                              />
-                            </div>
+
                           </div>
 
                           {/* Row 2: Text Search & Active Filters */}
@@ -748,11 +732,6 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                           )
                         }
                       </div>
-
-                      {/* Right: Actions & Counts */}
-                      {/* <div className={cn("flex gap-5 w-full lg:max-w-50 justify-start lg:justify-end mt-4 lg:mt-0 transition-all", !isMobileFiltersOpen && "hidden lg:flex")}>
-
-                      </div> */}
                       </div>
                   );
 
@@ -776,25 +755,38 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                   );
                 })()}
 
-                
+                {/* Right: Actions & Counts */}
+                {/* Report Download - hidden on mobile dialog as it's now outside */}
+                <div className="hidden lg:block space-y-1 w-full lg:w-auto lg:flex-1 lg:max-w-[280px] lg:min-w-[240px]">
+                  <Actions
+                    selectedPostsArray={selectedPostsArray}
+                    selectedCount={selectedCount}
+                    summaryState={summaryState}
+                    detailedPdfState={detailedPdfState}
+                    detailedDocxState={detailedDocxState}
+                    setSummaryState={setSummaryState}
+                    setDetailedPdfState={setDetailedPdfState}
+                    setDetailedDocxState={setDetailedDocxState}
+                    showToast={showToast}
+                    trackClientClick={trackClientClick}
+                    project={project}
+                    showLabel={true}
+                  />
+                </div>
               </div>
-
-              
             </div>
-            
           </div>
-          
         </div>
 
         {/* Main Table */}
-        <div className="flex-1 overflow-y-auto px-3 sm:px-6 pb-4">
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="min-w-full table-fixed divide-y divide-slate-100">
-                <thead className="bg-slate-50/80 sticky top-0 z-10 backdrop-blur-sm">
-                  <tr>
+        <div className="flex-1 min-h-0 px-3 sm:px-6 pb-4 flex flex-col">
+          <div className="flex-1 min-h-0 bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col overflow-hidden">
+            <div className="flex-1 overflow-auto custom-scrollbar relative">
+              <table className="min-w-full table-fixed border-separate border-spacing-0">
+                <thead className="sticky top-0 z-20">
+                  <tr className="bg-slate-50/90 backdrop-blur-md">
                     {/* ---  Checkbox Header --- */}
-                    <th scope="col" className="w-10 sm:w-12 px-2 sm:px-4 py-3 text-left">
+                    <th scope="col" className="w-10 sm:w-12 px-2 sm:px-4 py-3 text-left border-b border-slate-100">
                       <input
                         type="checkbox"
                         checked={isAllCurrentPageSelected}
@@ -810,7 +802,7 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                     </th>
                     <th
                       scope="col"
-                      className="w-16 sm:w-20 px-2 sm:px-3 py-3 text-center text-xs font-bold text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100 transition-colors group select-none hidden sm:table-cell"
+                      className="w-16 sm:w-20 px-2 sm:px-3 py-3 text-center text-xs font-bold text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100/50 transition-colors group select-none hidden sm:table-cell border-b border-slate-100"
                       onClick={() => handleSortChange('threat_score')}
                     >
                       <div className="flex items-center justify-center">
@@ -818,19 +810,19 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                         <SortIcon field="threat_score" />
                       </div>
                     </th>
-                    <th scope="col" className="w-14 sm:w-16 px-2 sm:px-3 py-3 text-center text-xs font-bold text-slate-500 uppercase tracking-wider hidden md:table-cell">Status</th>
+                    <th scope="col" className="w-14 sm:w-16 px-2 sm:px-3 py-3 text-center text-xs font-bold text-slate-500 uppercase tracking-wider hidden md:table-cell border-b border-slate-100">Status</th>
                     <th
                       scope="col"
-                      className="px-2 sm:px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider w-full min-w-[200px]"
+                      className="px-2 sm:px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider w-full min-w-[200px] border-b border-slate-100"
                     >
                       <div className="flex items-center">
                         Content
                       </div>
                     </th>
-                    <th scope="col" className="w-42.5 px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider hidden lg:table-cell">Violations</th>
+                    <th scope="col" className="w-42.5 px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider hidden lg:table-cell border-b border-slate-100">Violations</th>
                     <th
                       scope="col"
-                      className="w-30 px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100 transition-colors group select-none hidden lg:table-cell"
+                      className="w-30 px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100/50 transition-colors group select-none hidden lg:table-cell border-b border-slate-100"
                       onClick={() => handleSortChange('processed_date')}
                     >
                       <div className="flex items-center">
@@ -841,7 +833,7 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
 
                     <th
                       scope="col"
-                      className="w-30 px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100 transition-colors group select-none hidden xl:table-cell"
+                      className="w-30 px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100/50 transition-colors group select-none hidden xl:table-cell border-b border-slate-100"
                       onClick={() => handleSortChange('original_date')}
                     >
                       <div className="flex items-center">
@@ -849,11 +841,11 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                         <SortIcon field="original_date" />
                       </div>
                     </th>
-                    <th scope="col" className="w-16 sm:w-27.5 px-2 sm:px-4 py-3 text-right text-xs font-bold text-slate-500 uppercase tracking-wider"></th>
+                    <th scope="col" className="w-16 sm:w-27.5 px-2 sm:px-4 py-3 text-right text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-100"></th>
                   </tr>
                 </thead>
 
-                <tbody className="bg-white divide-y divide-slate-100">
+                <tbody className="bg-white">
                   {mergedPosts.map((post, index) => {
                     const currentPost = { ...post, client_status: updatedCases[post._id] || post.client_status };
                     const riskScore = currentPost.review_details?.threat_score;
@@ -948,7 +940,7 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                         )}
                       >
                         {/* SELECTED OR NOT  */}
-                        <td className="px-2 sm:px-4 py-3 whitespace-nowrap align-middle" onClick={(e) => e.stopPropagation()}>
+                        <td className="px-2 sm:px-4 py-3 whitespace-nowrap align-middle border-b border-slate-50" onClick={(e) => e.stopPropagation()}>
                           <input
                             type="checkbox"
                             checked={isSelectedRow}
@@ -958,7 +950,7 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                         </td>
 
                         {/* Priority */}
-                        <td className="px-2 sm:px-3 py-3 whitespace-nowrap align-middle hidden sm:table-cell">
+                        <td className="px-2 sm:px-3 py-3 whitespace-nowrap align-middle hidden sm:table-cell border-b border-slate-50">
                           <div className={cn("flex flex-col items-center justify-center p-1.5 rounded-lg text-[10px] font-black tracking-wide border shadow-sm mx-auto w-12", risk.color)}>
                             {
                               risk.label === "High" ? (
@@ -976,7 +968,7 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                         </td>
 
                         {/* Status */}
-                        <td className="px-2 sm:px-3 py-3 whitespace-nowrap align-middle hidden md:table-cell text-center">
+                        <td className="px-2 sm:px-3 py-3 whitespace-nowrap align-middle hidden md:table-cell text-center border-b border-slate-50">
                           <div className="flex flex-col items-center gap-1.5">
                             <HoverCard openDelay={0} closeDelay={50}>
                               <HoverCardTrigger asChild>
@@ -1006,7 +998,7 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                         </td>
 
                         {/* Content */}
-                        <td className="px-2 sm:px-4 py-3 overflow-hidden align-middle">
+                        <td className="px-2 sm:px-4 py-3 overflow-hidden align-middle border-b border-slate-50">
                           <div className="flex gap-3 sm:gap-4">
                             <div className="shrink-0 relative">
                               {post.signedImageUrl ? (
@@ -1081,7 +1073,7 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                         </td>
 
                         {/* Threat Type */}
-                        <td className="px-4 py-3 whitespace-nowrap align-middle hidden lg:table-cell">
+                        <td className="px-4 py-3 whitespace-nowrap align-middle hidden lg:table-cell border-b border-slate-50">
                           <div className="flex flex-wrap gap-1.5 max-w-[200px]">
                             {resolvedThreats.map((threat, idx) => {
                               return (
@@ -1098,7 +1090,7 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                         </td>
 
                         {/* Processed Date */}
-                        <td className="px-4 py-3 whitespace-nowrap align-middle hidden lg:table-cell">
+                        <td className="px-4 py-3 whitespace-nowrap align-middle hidden lg:table-cell border-b border-slate-50">
                           <div className="flex flex-col gap-1 justify-center items-center text-sm font-semibold text-slate-500">
                             <span>{processed_date.split(' ')[0]}</span>
                             <span className="text-xs text-slate-400">
@@ -1108,7 +1100,7 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                         </td>
 
                         {/* Original Date */}
-                        <td className="px-4 py-3 whitespace-nowrap align-middle hidden xl:table-cell">
+                        <td className="px-4 py-3 whitespace-nowrap align-middle hidden xl:table-cell border-b border-slate-50">
                           <div className="flex flex-col gap-1 justify-center items-center text-sm font-semibold text-slate-500">
                             <span>{posted_date.split(' ')[0]}</span>
                             <span className="text-xs text-slate-400">
@@ -1118,7 +1110,7 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                         </td>
 
                         {/* Actions */}
-                        <td className="px-2 sm:px-4 py-3 whitespace-nowrap text-right align-middle">
+                        <td className="px-2 sm:px-4 py-3 whitespace-nowrap text-right align-middle border-b border-slate-50">
                           <Button
                             size="sm"
                             variant={isPanelOpen ? "default" : "secondary"}
@@ -1284,7 +1276,7 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
             </div>
             
             {/* List */}
-            <div className="flex-1 overflow-y-auto">
+            <div className="flex-1 overflow-y-auto custom-scrollbar">
               {mergedPosts.map((post, idx) => {
                 const isSelected = post._id === selectedPost._id;
                 
