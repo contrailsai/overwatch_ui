@@ -5,8 +5,12 @@ import clientPromise from '@/utils/mongodb/client'
 import { ObjectId } from 'mongodb'
 import { getSignedImageUrl, uploadFileToS3, getSignedDownloadUrl, getSignedViewUrl } from '@/utils/aws/s3'
 import { revalidatePath } from 'next/cache'
-import { traceAction } from '@/utils/tracing'
+import { traceAction, recordClickMetric } from '@/utils/tracing'
 import crypto from 'crypto'
+
+export const trackClientClick = traceAction('trackClientClick', async (buttonName, attributes = {}) => {
+  recordClickMetric(buttonName, attributes);
+})
 
 async function getProjectDetails() {
   const user = await getAuthenticatedUser()
@@ -134,11 +138,15 @@ const buildTakedownMatchQuery = (filters = {}) => {
 }
 
 /**
- * Fetch all active takedowns with filters and enriched MongoDB data
+ * Fetch active takedowns with filters, server-side pagination, and enriched MongoDB data
  */
 export const getTakedowns = traceAction('getTakedowns', async (filters = {}) => {
   const projectDetails = await getProjectDetails()
-  if (!projectDetails?.projectName) return []
+  if (!projectDetails?.projectName) return { takedowns: [], totalCount: 0 }
+
+  const page = parseInt(filters.page) || 1
+  const pageSize = parseInt(filters.pageSize) || 25
+  const skip = (page - 1) * pageSize
 
   try {
     const client = await clientPromise
@@ -181,7 +189,7 @@ export const getTakedowns = traceAction('getTakedowns', async (filters = {}) => 
 
     const hasDateFilters = Object.keys(dateFilterStage).length > 0;
 
-    const posts = await collection.aggregate([
+    const aggregationPipeline = [
       { $match: matchStage },
       { $project: { text_embedding: 0, image_embedding: 0 } },
       {
@@ -204,8 +212,21 @@ export const getTakedowns = traceAction('getTakedowns', async (filters = {}) => 
         }
       },
       ...(hasDateFilters ? [{ $match: dateFilterStage }] : []),
-      { $sort: { 'takedown_info.events.date': -1, 'metadata.updated_at': -1 } }
-    ]).toArray()
+      {
+        $facet: {
+          metadata: [{ $count: "totalCount" }],
+          data: [
+            { $sort: { 'takedown_info.events.date': -1, 'metadata.updated_at': -1 } },
+            { $skip: skip },
+            { $limit: pageSize }
+          ]
+        }
+      }
+    ];
+
+    const result = await collection.aggregate(aggregationPipeline).toArray()
+    const posts = result[0].data || []
+    const totalCount = result[0].metadata[0]?.totalCount || 0
 
     const enrichedTakedowns = await Promise.all(posts.map(async (post) => {
       let thumbnail = null
@@ -240,11 +261,18 @@ export const getTakedowns = traceAction('getTakedowns', async (filters = {}) => 
         post_platform_id: post.post_id || post.code || '',
         platform: post.platform,
         status: post.takedown_info?.status || 'initiated',
+        visibility_status: post.visibility_status || 'active',
         risk_score: post.review_details?.threat_score || 0,
         threat_type: post.review_details?.threat_types?.[0] || 'Unknown',
+        threat_types: post.review_details?.threat_types || [],
         last_update_date: lastUpdateDate,
         takedown_date: takedownDate,
+        processed_at: post.review_details?.reviewed_at || post.metadata?.updated_at || null,
+        posted_at: post.engagement?.posted_at || post.metadata?.posted_date || null,
+        url: post.url || post.metadata?.url || '',
         notes: post.takedown_info?.notes ? post.takedown_info.notes.join('\n\n') : '',
+        caption: post.caption || '',
+        user: post.user || '',
         enrichment: {
           caption: caption.length > 100 ? caption.substring(0, 100) + '...' : caption,
           thumbnail,
@@ -253,10 +281,13 @@ export const getTakedowns = traceAction('getTakedowns', async (filters = {}) => 
       }
     }))
 
-    return enrichedTakedowns
+    return {
+      takedowns: enrichedTakedowns,
+      totalCount
+    }
   } catch (mongoError) {
     console.error('Error fetching takedowns from MongoDB:', mongoError)
-    return []
+    return { takedowns: [], totalCount: 0 }
   }
 })
 
@@ -676,5 +707,61 @@ export const addTakedownNote = traceAction('addTakedownNote', async (id, noteCon
   } catch (error) {
     console.error('Add takedown note error:', error)
     return { success: false, error: error.message }
+  }
+})
+
+/**
+ * Fetch all takedown IDs matching the current filters for bulk actions
+ */
+export const getAllTakedownIds = traceAction('getAllTakedownIds', async (filters = {}) => {
+  const projectDetails = await getProjectDetails()
+  if (!projectDetails?.projectName) return []
+
+  try {
+    const client = await clientPromise
+    const db = client.db(projectDetails.dbName)
+    const collection = db.collection('Posts')
+
+    const matchStage = buildTakedownMatchQuery(filters)
+    const dateFilterStage = {}
+
+    if (filters.original_date_from || filters.original_date_to) {
+      dateFilterStage.sort_original_date = {};
+      if (filters.original_date_from) dateFilterStage.sort_original_date.$gte = new Date(filters.original_date_from);
+      if (filters.original_date_to) dateFilterStage.sort_original_date.$lte = new Date(filters.original_date_to);
+    }
+
+    if (filters.processed_from || filters.processed_to) {
+      dateFilterStage.sort_processed_after = {};
+      if (filters.processed_from) dateFilterStage.sort_processed_after.$gte = new Date(filters.processed_from);
+      if (filters.processed_to) dateFilterStage.sort_processed_after.$lte = new Date(filters.processed_to);
+    }
+
+    if (filters.takedown_date_from || filters.takedown_date_to) {
+      dateFilterStage.sort_takedown_date = {};
+      if (filters.takedown_date_from) dateFilterStage.sort_takedown_date.$gte = new Date(filters.takedown_date_from);
+      if (filters.takedown_date_to) dateFilterStage.sort_takedown_date.$lte = new Date(filters.takedown_date_to);
+    }
+
+    const hasDateFilters = Object.keys(dateFilterStage).length > 0;
+
+    const pipeline = [
+      { $match: matchStage },
+      {
+        $addFields: {
+          sort_original_date: { $toDate: { $ifNull: ["$engagement.posted_at", "$metadata.posted_date"] } },
+          sort_processed_after: { $toDate: { $ifNull: ["$review_details.reviewed_at", "$metadata.updated_at"] } },
+          sort_takedown_date: { $toDate: { $ifNull: ["$takedown_info.takedown_start_date", "$metadata.updated_at"] } }
+        }
+      },
+      ...(hasDateFilters ? [{ $match: dateFilterStage }] : []),
+      { $project: { _id: 1 } }
+    ]
+
+    const result = await collection.aggregate(pipeline).toArray()
+    return result.map(doc => doc._id.toString())
+  } catch (error) {
+    console.error('Error fetching all takedown IDs:', error)
+    return []
   }
 })
