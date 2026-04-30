@@ -46,6 +46,9 @@ import { cn } from "@/lib/utils"
 import { DateFilterPopover } from './DateFilterPopover'
 import { ViolationsFilter } from './ViolationsFilter'
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { RiskFilter } from './RiskFilter'
+import { StatusFilter } from './StatusFilter'
+import { PlatformFilter } from './PlatformFilter'
 // import SafeDate from '@/components/SafeDate'
 
 export function CasesList({ cases, project, clientDetails, initialFilters, initialSort, currentPage, itemsPerPage, initialCase, projectEmails }) {
@@ -483,53 +486,32 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                           {/* Row 1: Dropdowns and Dates */}
                           <div className="grid grid-cols-2 lg:flex lg:flex-wrap items-start gap-2.5 sm:gap-3 w-full">
 
-                            {/* RISK LEVEL */}
-                            <div className="space-y-1 w-full lg:w-auto lg:min-w-[140px] lg:max-w-[160px]">
-                              <Label className="text-[10px] uppercase font-bold text-slate-400">Risk Severity</Label>
-                              <select
-                                value={initialFilters.risk_priority || 'all'}
-                                onChange={(e) => handleFilterChange('risk_priority', e.target.value)}
-                                className="w-full bg-white border border-slate-200 rounded-md px-2 h-9 text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-sm"
-                              >
-                                <option value="all">All Risks</option>
-                                <option value="high">High Risk</option>
-                                <option value="medium">Medium Risk</option>
-                                <option value="low">Low Risk</option>
-                                <option value="safe">Safe</option>
-                              </select>
+                            <div className="space-y-1 w-full lg:w-auto lg:flex-1 lg:max-w-[160px]">
+                              <RiskFilter
+                                initialRisk={initialFilters.risk_priority || 'all'}
+                                onChange={(val) => handleFilterChange('risk_priority', val)}
+                              />
                             </div>
 
                             {/* PLATFORM */}
-                            <div className="space-y-1 w-full lg:w-auto lg:min-w-[140px] lg:max-w-[160px]">
-                              <Label className="text-[10px] uppercase font-bold text-slate-400">Platform</Label>
-                              <select
-                                value={initialFilters.platform}
-                                onChange={(e) => handleFilterChange('platform', e.target.value)}
-                                className="w-full bg-white border border-slate-200 rounded-md px-2 h-9 text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-sm"
-                              >
-                                <option value="all">All Platforms</option>
-                                <option value="instagram">Instagram</option>
-                                <option value="facebook">Facebook</option>
-                                <option value="reddit">Reddit</option>
-                                <option value="x">X (Twitter)</option>
-                                <option value="youtube">Youtube</option>
-                                <option value="website">Websites</option>
-                              </select>
+                            <div className="space-y-1 w-full lg:w-auto lg:flex-1 lg:max-w-[160px]">
+                              <PlatformFilter
+                                initialPlatform={initialFilters.platform}
+                                onChange={(val) => handleFilterChange('platform', val)}
+                              />
                             </div>
 
                             {/* STATUS */}
-                            <div className="space-y-1 w-full lg:w-auto lg:min-w-[140px] lg:max-w-[160px]">
-                              <Label className="text-[10px] uppercase font-bold text-slate-400">Status</Label>
-                              <select
-                                value={initialFilters.client_status}
-                                onChange={(e) => handleFilterChange('client_status', e.target.value)}
-                                className="w-full bg-white border border-slate-200 rounded-md px-2 h-9 text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-sm"
-                              >
-                                <option value="all">All Statuses</option>
-                                <option value="To Be Reviewed">To Be Reviewed</option>
-                                <option value="No Action">No Action</option>
-                                <option value="Flag for Takedown">Flag for Takedown</option>
-                              </select>
+                            <div className="space-y-1 w-full lg:w-auto lg:flex-1 lg:max-w-[160px]">
+                              <StatusFilter
+                                initialStatus={initialFilters.client_status}
+                                onChange={(val) => handleFilterChange('client_status', val)}
+                                options={[
+                                  { value: 'To Be Reviewed', label: 'To Be Reviewed' },
+                                  { value: 'No Action', label: 'No Action' },
+                                  { value: 'Flag for Takedown', label: 'Flag for Takedown' },
+                                ]}
+                              />
                             </div>
 
                             {/* UNIQUE CLUSTERS TOGGLE */}
@@ -545,17 +527,17 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                             </div>
 
                             {/* VISIBILITY STATUS */}
-                            <div className="space-y-1 w-full lg:w-auto lg:min-w-[120px] lg:max-w-[160px]">
-                              <Label className="text-[10px] uppercase font-bold text-slate-400">Visibility</Label>
-                              <select
-                                value={initialFilters.visibility_status || 'all'}
-                                onChange={(e) => handleFilterChange('visibility_status', e.target.value)}
-                                className="w-full bg-white border border-slate-200 rounded-md px-2 h-9 text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-sm"
-                              >
-                                <option value="all">All</option>
-                                <option value="active">Online</option>
-                                <option value="down">Taken Down</option>
-                              </select>
+                            <div className="space-y-1 w-full lg:w-auto lg:flex-1 lg:max-w-[160px]">
+                              <StatusFilter
+                                label="Visibility"
+                                placeholder="All Visibility"
+                                initialStatus={initialFilters.visibility_status || 'all'}
+                                onChange={(val) => handleFilterChange('visibility_status', val)}
+                                options={[
+                                  { value: 'active', label: 'Online' },
+                                  { value: 'down', label: 'Taken Down' },
+                                ]}
+                              />
                             </div>
 
                             {/* violations */}

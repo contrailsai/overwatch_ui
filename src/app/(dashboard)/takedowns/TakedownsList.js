@@ -18,7 +18,15 @@ import { cn } from "@/lib/utils"
 
 import { DateFilterPopover } from "@/app/(dashboard)/cases/DateFilterPopover"
 import { ViolationsFilter } from "@/app/(dashboard)/cases/ViolationsFilter"
+import { RiskFilter } from "@/app/(dashboard)/cases/RiskFilter"
+import { StatusFilter } from "@/app/(dashboard)/cases/StatusFilter"
+import { PlatformFilter } from "@/app/(dashboard)/cases/PlatformFilter"
 import { format } from "date-fns"
+import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from "@/components/ui/hover-card"
 import {
   Dialog,
   DialogContent,
@@ -144,41 +152,29 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
   const FilterControls = ({ isMobile = false }) => (
     <div className={cn("grid gap-4", isMobile ? "grid-cols-2" : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7")}>
       <div className="space-y-1.5">
-        <Label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Status</Label>
-        <select
-          value={initialFilters.status}
-          onChange={(e) => {
-            handleFilterChange('status', e.target.value);
-            if (isMobile) setIsMobileFiltersOpen(false);
+        <StatusFilter
+          initialStatus={initialFilters.status}
+          onChange={(val) => {
+            handleFilterChange('status', val);
           }}
-          className="w-full bg-white border border-slate-200 rounded-md px-2.5 h-9 text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all cursor-pointer shadow-sm"
-        >
-          <option value="all">All Statuses</option>
-          <option value="initiated">Initiated</option>
-          <option value="under_review">Under Review</option>
-          <option value="re_appeal_takedown">Appealed Again</option>
-          <option value="takedown_successful">Takedown Successful</option>
-          <option value="takedown_failed">Takedown Failed</option>
-        </select>
+          options={[
+            { value: 'initiated', label: 'Initiated' },
+            { value: 'under_review', label: 'Under Review' },
+            { value: 're_appeal_takedown', label: 'Appealed Again' },
+            { value: 'takedown_successful', label: 'Takedown Successful' },
+            { value: 'takedown_failed', label: 'Takedown Failed' },
+          ]}
+        />
       </div>
 
       <div className="space-y-1.5">
-        <Label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Platform</Label>
-        <select
-          value={initialFilters.platform}
-          onChange={(e) => {
-            handleFilterChange('platform', e.target.value);
-            if (isMobile) setIsMobileFiltersOpen(false);
+        <PlatformFilter
+          initialPlatform={initialFilters.platform}
+          onChange={(val) => {
+            handleFilterChange('platform', val);
           }}
-          className="w-full bg-white border border-slate-200 rounded-md px-2.5 h-9 text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all cursor-pointer shadow-sm"
-        >
-          <option value="all">All Platforms</option>
-          <option value="instagram">Instagram</option>
-          <option value="facebook">Facebook</option>
-          <option value="x">X (Twitter)</option>
-          <option value="reddit">Reddit</option>
-          <option value="youtube">YouTube</option>
-        </select>
+          availablePlatforms={['instagram', 'facebook', 'x', 'reddit', 'youtube']}
+        />
       </div>
 
       <div className="space-y-1.5">
@@ -193,21 +189,12 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
       </div>
 
       <div className="space-y-1.5">
-        <Label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Risk Severity</Label>
-        <select
-          value={initialFilters.risk_priority}
-          onChange={(e) => {
-            handleFilterChange('risk_priority', e.target.value);
-            if (isMobile) setIsMobileFiltersOpen(false);
+        <RiskFilter
+          initialRisk={initialFilters.risk_priority}
+          onChange={(val) => {
+            handleFilterChange('risk_priority', val);
           }}
-          className="w-full bg-white border border-slate-200 rounded-md px-2.5 h-9 text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all cursor-pointer shadow-sm"
-        >
-          <option value="all">All Risks</option>
-          <option value="high">High Risk</option>
-          <option value="medium">Medium Risk</option>
-          <option value="low">Low Risk</option>
-          <option value="safe">Safe</option>
-        </select>
+        />
       </div>
 
       <div className="space-y-1.5">
@@ -221,7 +208,6 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
               processed_from: range?.from ? format(range.from, "yyyy-MM-dd'T'HH:mm:ssXXX") : null,
               processed_to: range?.to ? format(range.to, "yyyy-MM-dd'T'HH:mm:ssXXX") : null
             });
-            if (isMobile) setIsMobileFiltersOpen(false);
           }}
         />
       </div>
@@ -237,7 +223,6 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
               original_date_from: range?.from ? format(range.from, "yyyy-MM-dd'T'HH:mm:ssXXX") : null,
               original_date_to: range?.to ? format(range.to, "yyyy-MM-dd'T'HH:mm:ssXXX") : null
             });
-            if (isMobile) setIsMobileFiltersOpen(false);
           }}
         />
       </div>
@@ -253,7 +238,6 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
               takedown_date_from: range?.from ? format(range.from, "yyyy-MM-dd'T'HH:mm:ssXXX") : null,
               takedown_date_to: range?.to ? format(range.to, "yyyy-MM-dd'T'HH:mm:ssXXX") : null
             });
-            if (isMobile) setIsMobileFiltersOpen(false);
           }}
         />
       </div>
@@ -376,23 +360,15 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
       {/* Mobile Filters Dialog */}
       <Dialog open={isMobileFiltersOpen} onOpenChange={setIsMobileFiltersOpen}>
         <DialogContent className="sm:max-w-[425px] p-0 overflow-hidden rounded-2xl border-none shadow-2xl">
-          <DialogHeader className="p-6 bg-slate-50 border-b border-slate-100">
+          <DialogHeader className="p-6 pb-0 bg-slate-50 border-b border-slate-100">
             <div className="flex items-center justify-between">
               <DialogTitle className="text-lg font-black text-slate-800 uppercase tracking-tight flex items-center gap-2">
                 <Filter className="w-5 h-5 text-blue-600" /> Refine Results
               </DialogTitle>
             </div>
           </DialogHeader>
-          <div className="px-6 overflow-y-auto max-h-[70vh]">
+          <div className="p-6 pt-2 overflow-y-auto max-h-[70vh]">
             <FilterControls isMobile={true} />
-          </div>
-          <div className="p-4 bg-slate-50 border-t border-slate-100 flex gap-3">
-             <Button onClick={clearFilters} variant="outline" className="flex-1 h-11 rounded-xl font-bold text-xs uppercase tracking-wider border-slate-200">
-                Reset
-             </Button>
-             <Button onClick={() => setIsMobileFiltersOpen(false)} className="flex-1 h-11 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs uppercase tracking-wider">
-                Show {totalCount} Results
-             </Button>
           </div>
         </DialogContent>
       </Dialog>
@@ -463,24 +439,55 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
 
                         {/* Risk */}
                         <td className="px-2 sm:px-4 py-3 sm:py-4 whitespace-nowrap align-middle text-center">
-                          <div className={cn("inline-flex flex-col items-center justify-center w-10 sm:w-12 py-1 rounded-lg border shadow-sm mx-auto", risk.color)}>
-                            <span className="text-[7px] sm:text-[8px] font-black uppercase tracking-tighter leading-none mb-0.5 sm:mb-1">{risk.label}</span>
-                            <RiskIcon className="w-3 sm:w-3.5 h-3 sm:h-3.5" />
-                          </div>
+                          <HoverCard openDelay={0} closeDelay={50}>
+                            <HoverCardTrigger asChild>
+                              <div className={cn("inline-flex flex-col items-center justify-center w-10 sm:w-12 py-1 rounded-lg border shadow-sm mx-auto transition-transform hover:scale-110", risk.color)}>
+                                <span className="text-[7px] sm:text-[8px] font-black uppercase tracking-tighter leading-none mb-0.5 sm:mb-1">{risk.label}</span>
+                                <RiskIcon className="w-3 sm:w-3.5 h-3 sm:h-3.5" />
+                              </div>
+                            </HoverCardTrigger>
+                            <HoverCardContent 
+                              className="w-auto px-3 py-2 text-xs font-bold text-slate-700 bg-white border border-slate-200 shadow-xl rounded-lg"
+                              sideOffset={8}
+                            >
+                              Risk Severity: {risk.label}
+                            </HoverCardContent>
+                          </HoverCard>
                         </td>
 
                         {/* Status */}
                         <td className="px-2 sm:px-4 py-3 sm:py-4 whitespace-nowrap align-middle text-center">
-                          <div className="flex flex-col items-center gap-1 sm:gap-1.5">
-                            <div className="bg-slate-50 p-1 rounded-full border border-slate-100">
-                              <Clock className="w-3 sm:w-3.5 h-3 sm:h-3.5 text-slate-400" />
-                            </div>
-                            {item.visibility_status === 'down' ? (
-                              <span className="text-[7px] sm:text-[8px] font-black text-slate-500 uppercase tracking-widest leading-none">Down</span>
-                            ) : (
-                              <span className="text-[7px] sm:text-[8px] font-black text-emerald-600 uppercase tracking-widest leading-none">Online</span>
-                            )}
-                          </div>
+                          <HoverCard openDelay={0} closeDelay={50}>
+                            <HoverCardTrigger asChild>
+                              <div className="flex flex-col items-center gap-1 sm:gap-1.5 group/status cursor-pointer">
+                                <div className="bg-slate-50 p-1 rounded-full border border-slate-100 transition-colors group-hover/status:bg-slate-100">
+                                  <Clock className="w-3 sm:w-3.5 h-3 sm:h-3.5 text-slate-400" />
+                                </div>
+                                {item.visibility_status === 'down' ? (
+                                  <span className="text-[7px] sm:text-[8px] font-black text-slate-500 uppercase tracking-widest leading-none">Down</span>
+                                ) : (
+                                  <span className="text-[7px] sm:text-[8px] font-black text-emerald-600 uppercase tracking-widest leading-none">Online</span>
+                                )}
+                              </div>
+                            </HoverCardTrigger>
+                            <HoverCardContent 
+                              className="w-auto px-3 py-2 text-xs font-bold text-slate-700 bg-white border border-slate-200 shadow-xl rounded-lg"
+                              sideOffset={8}
+                            >
+                              <div className="flex flex-col gap-1">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-slate-400">Status:</span>
+                                  <span className="capitalize">{statusConfig.label}</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-slate-400">Visibility:</span>
+                                  <span className={item.visibility_status === 'down' ? "text-slate-500" : "text-emerald-600"}>
+                                    {item.visibility_status === 'down' ? "Taken Down" : "Online"}
+                                  </span>
+                                </div>
+                              </div>
+                            </HoverCardContent>
+                          </HoverCard>
                         </td>
 
                         {/* Content */}
