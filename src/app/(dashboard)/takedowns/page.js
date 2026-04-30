@@ -21,9 +21,11 @@ export default async function TakedownsPage({ searchParams }) {
     processed_to: resolvedParams.processed_to || null,
     takedown_date_from: resolvedParams.takedown_date_from || null,
     takedown_date_to: resolvedParams.takedown_date_to || null,
+    page: resolvedParams.page || '1',
+    pageSize: resolvedParams.pageSize || '25'
   }
 
-  const [takedowns, metrics, { project }, isReviewer] = await Promise.all([
+  const [{ takedowns, totalCount }, metrics, { project }, isReviewer] = await Promise.all([
     getTakedowns(filters),
     getTakedownMetrics(filters),
     getClientandProjectDetails(),
@@ -31,7 +33,7 @@ export default async function TakedownsPage({ searchParams }) {
   ])
 
   return (
-    <>
+    <div className="absolute inset-0 flex flex-col overflow-hidden">
       {/* Header */}
       < PageHeader title="Takedown Requests" description="Manage and track active content removal requests" />
       <TakedownsList
@@ -39,9 +41,11 @@ export default async function TakedownsPage({ searchParams }) {
         initialFilters={filters}
         isReviewer={isReviewer}
         metrics={metrics}
+        project={project}
         projectLabels={project?.project_details?.labels || []}
+        totalCount={totalCount}
       />
-    </>
+    </div>
   )
 }
 
