@@ -271,6 +271,8 @@ export const getTakedowns = traceAction('getTakedowns', async (filters = {}) => 
         posted_at: post.engagement?.posted_at || post.metadata?.posted_date || null,
         url: post.url || post.metadata?.url || '',
         notes: post.takedown_info?.notes ? post.takedown_info.notes.join('\n\n') : '',
+        caption: post.caption || '',
+        user: post.user || '',
         enrichment: {
           caption: caption.length > 100 ? caption.substring(0, 100) + '...' : caption,
           thumbnail,
@@ -705,5 +707,61 @@ export const addTakedownNote = traceAction('addTakedownNote', async (id, noteCon
   } catch (error) {
     console.error('Add takedown note error:', error)
     return { success: false, error: error.message }
+  }
+})
+
+/**
+ * Fetch all takedown IDs matching the current filters for bulk actions
+ */
+export const getAllTakedownIds = traceAction('getAllTakedownIds', async (filters = {}) => {
+  const projectDetails = await getProjectDetails()
+  if (!projectDetails?.projectName) return []
+
+  try {
+    const client = await clientPromise
+    const db = client.db(projectDetails.dbName)
+    const collection = db.collection('Posts')
+
+    const matchStage = buildTakedownMatchQuery(filters)
+    const dateFilterStage = {}
+
+    if (filters.original_date_from || filters.original_date_to) {
+      dateFilterStage.sort_original_date = {};
+      if (filters.original_date_from) dateFilterStage.sort_original_date.$gte = new Date(filters.original_date_from);
+      if (filters.original_date_to) dateFilterStage.sort_original_date.$lte = new Date(filters.original_date_to);
+    }
+
+    if (filters.processed_from || filters.processed_to) {
+      dateFilterStage.sort_processed_after = {};
+      if (filters.processed_from) dateFilterStage.sort_processed_after.$gte = new Date(filters.processed_from);
+      if (filters.processed_to) dateFilterStage.sort_processed_after.$lte = new Date(filters.processed_to);
+    }
+
+    if (filters.takedown_date_from || filters.takedown_date_to) {
+      dateFilterStage.sort_takedown_date = {};
+      if (filters.takedown_date_from) dateFilterStage.sort_takedown_date.$gte = new Date(filters.takedown_date_from);
+      if (filters.takedown_date_to) dateFilterStage.sort_takedown_date.$lte = new Date(filters.takedown_date_to);
+    }
+
+    const hasDateFilters = Object.keys(dateFilterStage).length > 0;
+
+    const pipeline = [
+      { $match: matchStage },
+      {
+        $addFields: {
+          sort_original_date: { $toDate: { $ifNull: ["$engagement.posted_at", "$metadata.posted_date"] } },
+          sort_processed_after: { $toDate: { $ifNull: ["$review_details.reviewed_at", "$metadata.updated_at"] } },
+          sort_takedown_date: { $toDate: { $ifNull: ["$takedown_info.takedown_start_date", "$metadata.updated_at"] } }
+        }
+      },
+      ...(hasDateFilters ? [{ $match: dateFilterStage }] : []),
+      { $project: { _id: 1 } }
+    ]
+
+    const result = await collection.aggregate(pipeline).toArray()
+    return result.map(doc => doc._id.toString())
+  } catch (error) {
+    console.error('Error fetching all takedown IDs:', error)
+    return []
   }
 })

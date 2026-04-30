@@ -7,16 +7,17 @@ import {
   Filter, Search, ChevronRight, AlertTriangle, CheckCircle,
   Clock, Mail, ArrowUpRight, ShieldAlert, User, ImageIcon, X, Loader2,
   Youtube, Instagram, Facebook, XCircle, Siren, TriangleAlert, TrendingDown, Smile,
-  ChevronLeft, ChevronsLeft, ChevronsRight, ExternalLink, ChevronDown
+  ChevronLeft, ChevronsLeft, ChevronsRight, ExternalLink, ChevronDown, Send, Info
 } from 'lucide-react'
 import { Twitter, Reddit } from '@/utils/icons'
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
+import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
 import { cn } from "@/lib/utils"
 
-import { trackClientClick } from './actions'
+import { trackClientClick, getAllTakedownIds } from './actions'
 import ReportGenerate from '@/components/ReportGenerate'
 import { DateFilterPopover } from "@/app/(dashboard)/cases/DateFilterPopover"
 import { ViolationsFilter } from "@/app/(dashboard)/cases/ViolationsFilter"
@@ -43,8 +44,11 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
   const [isPending, startTransition] = useTransition()
 
   const [takedowns, setTakedowns] = useState(initialTakedowns)
-  const [selectedIds, setSelectedIds] = useState([])
+  const [selectedCases, setSelectedCases] = useState({})
   const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false)
+  const [isAllFilterSelected, setIsAllFilterSelected] = useState(false)
+  const [isSelectingAll, setIsSelectingAll] = useState(false)
+  const [searchTerm, setSearchTerm] = useState(initialFilters.search || '')
 
   // Track report states
   const [summaryState, setSummaryState] = useState({ loading: false, statusText: '' });
@@ -58,7 +62,8 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
     setTimeout(() => setToast(null), 3000);
   };
 
-  const selectedPostsArray = useMemo(() => selectedIds.map(id => ({ _id: id })), [selectedIds]);
+  const selectedIds = useMemo(() => Object.keys(selectedCases), [selectedCases]);
+  const selectedPostsArray = useMemo(() => Object.values(selectedCases), [selectedCases]);
   const selectedCount = selectedIds.length;
 
   useEffect(() => {
@@ -74,20 +79,20 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
     switch (s) {
       case 'takedown successful':
       case 'takedown_successful': 
-        return { label: 'Successful', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' }
+        return { label: 'Successful', color: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: CheckCircle }
       case 'takedown failed':
       case 'takedown_failed': 
-        return { label: 'Failed', color: 'bg-rose-50 text-rose-700 border-rose-200' }
+        return { label: 'Failed', color: 'bg-rose-50 text-rose-700 border-rose-200', icon: XCircle }
       case 'under process':
       case 'under_review': 
-        return { label: 'Under Review', color: 'bg-blue-50 text-blue-700 border-blue-200' }
+        return { label: 'Under Review', color: 'bg-blue-50 text-blue-700 border-blue-200', icon: Clock }
       case 'appealed again':
       case 're_appeal_takedown': 
-        return { label: 'Appealed', color: 'bg-amber-50 text-amber-700 border-amber-200' }
+        return { label: 'Appealed', color: 'bg-amber-50 text-amber-700 border-amber-200', icon: AlertTriangle }
       case 'initiated': 
-        return { label: 'Initiated', color: 'bg-indigo-50 text-indigo-700 border-indigo-200' }
+        return { label: 'Initiated', color: 'bg-indigo-50 text-indigo-700 border-indigo-200', icon: Send }
       default: 
-        return { label: status?.replace(/_/g, ' ') || 'Unknown', color: 'bg-slate-100 text-slate-700 border-slate-200' }
+        return { label: status?.replace(/_/g, ' ') || 'Unknown', color: 'bg-slate-100 text-slate-700 border-slate-200', icon: Info }
     }
   }
 
@@ -133,17 +138,51 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
 
   const toggleSelectAll = () => {
     if (selectedIds.length === takedowns.length) {
-      setSelectedIds([])
+      setSelectedCases({})
+      setIsAllFilterSelected(false)
     } else {
-      setSelectedIds(takedowns.map(t => t.id))
+      const all = {}
+      takedowns.forEach(t => { all[t.id] = { _id: t.id, ...t } })
+      setSelectedCases(all)
     }
   }
 
-  const toggleSelectId = (id) => {
-    setSelectedIds(prev => 
-      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
-    )
+  const handleSelectAllFiltered = async () => {
+    setIsSelectingAll(true)
+    try {
+      const ids = await getAllTakedownIds(initialFilters)
+      setSelectedCases(prev => {
+        const next = { ...prev }
+        ids.forEach(id => {
+          if (!next[id]) next[id] = { _id: id }
+        })
+        return next
+      })
+      setIsAllFilterSelected(true)
+    } finally {
+      setIsSelectingAll(false)
+    }
   }
+
+  const handleClearAllSelected = () => {
+    setSelectedCases({})
+    setIsAllFilterSelected(false)
+  }
+
+  const toggleSelectId = (item) => {
+    setSelectedCases(prev => {
+      const next = { ...prev }
+      if (next[item.id]) {
+        delete next[item.id]
+      } else {
+        next[item.id] = { _id: item.id, ...item }
+      }
+      return next
+    })
+  }
+
+  const isAllCurrentPageSelected = takedowns.length > 0 && takedowns.every(item => !!selectedCases[item.id])
+  const isSomeCurrentPageSelected = takedowns.some(item => !!selectedCases[item.id])
 
   const hasActiveFilters = initialFilters.status !== 'all' ||
     initialFilters.platform !== 'all' ||
@@ -155,6 +194,13 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
     initialFilters.processed_to ||
     initialFilters.takedown_date_from ||
     initialFilters.takedown_date_to;
+
+  // Reset isAllFilterSelected when filters change
+  const filtersKey = JSON.stringify(initialFilters)
+  useEffect(() => {
+    setIsAllFilterSelected(false)
+    setSelectedCases({})
+  }, [filtersKey])
 
   const getPageNumbers = () => {
     const pages = []
@@ -309,121 +355,158 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
       </div>
 
       {/* Filters Section */}
-      <div className="px-4 sm:px-6 py-2 shrink-0">
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-3 sm:p-4">
-          <div className="flex flex-col lg:flex-row gap-4 lg:gap-6">
-            
-            {/* Filter Info Sidebar / Mobile Header */}
-            <div className="flex items-center lg:items-start justify-between lg:flex-col w-full lg:w-[160px] shrink-0 lg:border-r border-slate-100 lg:pr-6">
-              <div className="flex flex-col">
-                <div className="flex items-center gap-1.5 mb-0.5 lg:mb-2">
-                  <Filter className="w-3.5 h-3.5 text-blue-600" />
-                  <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Filters</span>
-                </div>
-                <div className="flex items-baseline gap-1.5">
-                  <span className="text-xl sm:text-2xl font-black text-slate-800 tracking-tight">{totalCount}</span>
-                  <span className="text-[10px] sm:text-[11px] font-bold text-slate-500">takedowns</span>
-                </div>
-              </div>
-
-              <div className="flex flex-col lg:flex-row gap-2">
-                {isPending && <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-600" />}
-                
-                {/* Mobile Filter Trigger */}
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={() => setIsMobileFiltersOpen(true)}
-                  className="lg:hidden h-9 px-3 border-slate-200 text-slate-600 font-bold text-[10px] uppercase tracking-wider"
-                >
-                  <Filter className="w-3.5 h-3.5 mr-2" /> Filter
-                </Button>
-
-                <div className="lg:hidden">
-                  <ReportGenerate
-                    selectedPostsArray={selectedPostsArray}
-                    selectedCount={selectedCount}
-                    summaryState={summaryState}
-                    detailedPdfState={detailedPdfState}
-                    detailedDocxState={detailedDocxState}
-                    setSummaryState={setSummaryState}
-                    setDetailedPdfState={setDetailedPdfState}
-                    setDetailedDocxState={setDetailedDocxState}
-                    showToast={showToast}
-                    trackClientClick={trackClientClick}
-                    project={project}
-                    showLabel={false}
-                  />
-                </div>
-
-                {hasActiveFilters && (
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    onClick={clearFilters} 
-                    className="h-8 hidden lg:flex w-full justify-start px-2 text-rose-600 hover:text-rose-700 hover:bg-rose-50 font-bold text-[10px] uppercase tracking-wider mt-2"
-                  >
-                    <X className="w-3.5 h-3.5 mr-1.5" /> Clear All
-                  </Button>
-                )}
-              </div>
-            </div>
-
-            {/* Desktop Filter Grid */}
-            <div className="hidden lg:block flex-1">
-              <FilterControls />
-            </div>
-
-            {/* Report Export */}
-            <div className="hidden lg:block w-full lg:w-[280px] shrink-0 lg:border-l border-slate-100 lg:pl-6">
-              <ReportGenerate
-                selectedPostsArray={selectedPostsArray}
-                selectedCount={selectedCount}
-                summaryState={summaryState}
-                detailedPdfState={detailedPdfState}
-                detailedDocxState={detailedDocxState}
-                setSummaryState={setSummaryState}
-                setDetailedPdfState={setDetailedPdfState}
-                setDetailedDocxState={setDetailedDocxState}
-                showToast={showToast}
-                trackClientClick={trackClientClick}
-                project={project}
-                showLabel={true}
-              />
-            </div>
-
-            {/* Active Filters Display for Mobile */}
-            {hasActiveFilters && (
-               <div className="lg:hidden flex flex-wrap gap-2 pt-2 border-t border-slate-50">
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    onClick={clearFilters} 
-                    className="h-7 px-2 text-rose-600 hover:text-rose-700 hover:bg-rose-50 font-bold text-[9px] uppercase tracking-wider"
-                  >
-                    <X className="w-3 h-3 mr-1" /> Clear All Filters
-                  </Button>
+         <div className="px-3 sm:px-6 py-2 shrink-0">
+           <div className="bg-white rounded-xl shadow-sm border border-slate-200 px-3 sm:px-4 py-3">
+             <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+ 
+               {/* Left: Filters */}
+               <div className="flex flex-col lg:flex-row gap-4 w-full">
+ 
+                 {/* Header Row: Title & Summary Box */}
+                 <div className="flex flex-col w-full lg:w-[160px] xl:w-[180px] shrink-0 rounded-xl  relative ">
+                   <div className="flex items-center justify-between mb-2">
+                     <div className="flex flex-col items-start gap-2">
+                     <div className="flex items-center gap-1.5">
+                       <Filter className="w-3.5 h-3.5 text-blue-600" />
+                       <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                         Filter
+                       </span>
+                     </div>
+                     <div className="flex items-baseline gap-1.5 mb-3">
+                     <span className="text-2xl font-black text-slate-800 tracking-tight leading-none">
+                       {totalCount}
+                     </span>
+                     <span className="text-[11px] font-bold text-slate-500 leading-none">
+                       takedowns found
+                     </span>
+                   </div>
+                     </div>
+                     {isPending && (
+                       <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-600" />
+                     )}
+                     <div className="lg:hidden flex flex-col gap-2">
+                       <Button
+                         variant="ghost"
+                         onClick={() => setIsMobileFiltersOpen(!isMobileFiltersOpen)}
+                         className="bg-white border border-slate-200 rounded-md px-3 h-9 text-xs font-semibold text-slate-700 flex items-center gap-2 shadow-sm hover:border-blue-500 transition-all"
+                       >
+                         <Filter className="w-3.5 h-3.5 text-slate-500" />
+                         {isMobileFiltersOpen ? 'Hide' : 'Filters'}
+                       </Button>
+                       
+                       <ReportGenerate
+                         selectedPostsArray={selectedPostsArray}
+                         selectedCount={selectedCount}
+                         summaryState={summaryState}
+                         detailedPdfState={detailedPdfState}
+                         detailedDocxState={detailedDocxState}
+                         setSummaryState={setSummaryState}
+                         setDetailedPdfState={setDetailedPdfState}
+                         setDetailedDocxState={setDetailedDocxState}
+                         showToast={showToast}
+                         trackClientClick={trackClientClick}
+                         project={project}
+                         showLabel={false}
+                       />
+                     </div>
+                   </div>
+ 
+                   {/* Selection Controls */}
+                   <div className="mt-auto border-t border-slate-200/80 pt-3">
+                     {selectedCount > 0 ? (
+                       <div className="flex flex-col gap-2">
+                         <div className="flex items-center justify-between">
+                           <span className="inline-flex items-center text-[10px] font-bold bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">
+                             {isAllFilterSelected ? `All ${totalCount}` : selectedCount} Selected
+                           </span>
+                           <button
+                             onClick={handleClearAllSelected}
+                             className="text-[10px] font-bold text-slate-400 hover:text-slate-700 transition-colors cursor-pointer underline underline-offset-2"
+                           >
+                             Clear
+                           </button>
+                         </div>
+ 
+                         {!isAllFilterSelected && totalCount > selectedCount && (
+                           <Button
+                             variant="ghost"
+                             size="sm"
+                             onClick={handleSelectAllFiltered}
+                             disabled={isSelectingAll}
+                             className="w-full h-7 text-[10px] bg-blue-600 text-white hover:bg-blue-700 font-bold shadow-sm cursor-pointer transition-colors"
+                           >
+                             {isSelectingAll ? (
+                               <Loader2 className="w-3 h-3 animate-spin mr-1.5" />
+                             ) : (
+                               <CheckCircle className="w-3 h-3 mr-1.5 opacity-70" />
+                             )}
+                             Select all {totalCount} takedowns
+                           </Button>
+                         )}
+                       </div>
+                     ) : (
+                       <Button
+                         variant="outline"
+                         size="sm"
+                         onClick={handleSelectAllFiltered}
+                         disabled={isSelectingAll || totalCount === 0}
+                         className="w-full h-7 text-[10px] bg-white text-slate-700 hover:bg-slate-100 font-bold shadow-none cursor-pointer transition-colors"
+                       >
+                         {isSelectingAll ? (
+                           <Loader2 className="w-3 h-3 animate-spin mr-1.5 text-blue-600" />
+                         ) : (
+                           <CheckCircle className="w-3 h-3 mr-1.5 text-slate-400" />
+                         )}
+                         Select all takedowns
+                       </Button>
+                     )}
+                   </div>
+                 </div>
+ 
+                 {(() => {
+ 
+                   return (
+                     <>
+                       {/* Desktop View */}
+                       <div className="hidden lg:flex w-full">
+                         <FilterControls />
+                       </div>
+ 
+                       {/* Mobile View (Dialog) */}
+                       <Dialog open={isMobileFiltersOpen} onOpenChange={setIsMobileFiltersOpen}>
+                         <DialogContent className="lg:hidden w-[95vw] max-w-md rounded-2xl p-5 max-h-[90vh] overflow-y-auto">
+                           <DialogHeader className="mb-2 text-left">
+                             <DialogTitle className="text-xl font-black text-slate-800">Filters & Options</DialogTitle>
+                           </DialogHeader>
+                           <FilterControls isMobile={true} />
+                         </DialogContent>
+                       </Dialog>
+                     </>
+                   );
+                 })()}
+ 
+                 {/* Right: Actions & Counts */}
+                 {/* Report Download - hidden on mobile dialog as it's now outside */}
+                 <div className="hidden lg:block space-y-1 w-full lg:w-auto lg:flex-1 lg:max-w-[280px] lg:min-w-[240px]">
+                   <ReportGenerate
+                     selectedPostsArray={selectedPostsArray}
+                     selectedCount={selectedCount}
+                     summaryState={summaryState}
+                     detailedPdfState={detailedPdfState}
+                     detailedDocxState={detailedDocxState}
+                     setSummaryState={setSummaryState}
+                     setDetailedPdfState={setDetailedPdfState}
+                     setDetailedDocxState={setDetailedDocxState}
+                     showToast={showToast}
+                     trackClientClick={trackClientClick}
+                     project={project}
+                     showLabel={true}
+                   />
+                 </div>
                </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Mobile Filters Dialog */}
-      <Dialog open={isMobileFiltersOpen} onOpenChange={setIsMobileFiltersOpen}>
-        <DialogContent className="sm:max-w-[425px] p-0 overflow-hidden rounded-2xl border-none shadow-2xl">
-          <DialogHeader className="p-6 pb-0 bg-slate-50 border-b border-slate-100">
-            <div className="flex items-center justify-between">
-              <DialogTitle className="text-lg font-black text-slate-800 uppercase tracking-tight flex items-center gap-2">
-                <Filter className="w-5 h-5 text-blue-600" /> Refine Results
-              </DialogTitle>
-            </div>
-          </DialogHeader>
-          <div className="p-6 pt-2 overflow-y-auto max-h-[70vh]">
-            <FilterControls isMobile={true} />
-          </div>
-        </DialogContent>
-      </Dialog>
+             </div>
+           </div>
+         </div>
 
       {/* List Section */}
       <div className="flex-1 overflow-hidden px-4 sm:px-6 pb-4 min-h-0">
@@ -445,24 +528,29 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
                 )}
               </div>
             ) : (
-              <table className="min-w-full divide-y divide-slate-100 table-fixed lg:table-auto">
-                <thead className="bg-slate-50 sticky top-0 z-10">
-                  <tr>
-                    <th scope="col" className="w-10 sm:w-12 px-2 sm:px-4 py-3.5 text-center bg-slate-50">
+              <table className="min-w-full table-fixed border-separate border-spacing-0">
+                <thead className="sticky top-0 z-10">
+                  <tr className="bg-slate-50/90 backdrop-blur-md">
+                    <th scope="col" className="w-10 sm:w-12 px-2 sm:px-4 py-3.5 text-center border-b border-slate-100">
                       <input
                         type="checkbox"
-                        checked={takedowns.length > 0 && selectedIds.length === takedowns.length}
-                        onChange={toggleSelectAll}
+                        checked={isAllCurrentPageSelected}
+                        ref={input => {
+                          if (input) {
+                            input.indeterminate = isSomeCurrentPageSelected && !isAllCurrentPageSelected;
+                          }
+                        }}
+                        onChange={() => toggleSelectAll()}
                         className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
                       />
                     </th>
-                    <th scope="col" className="w-14 sm:w-16 px-2 sm:px-4 py-3.5 text-center text-[10px] font-bold text-slate-500 uppercase tracking-wider bg-slate-50">Risk</th>
-                    <th scope="col" className="w-20 sm:w-24 px-2 sm:px-4 py-3.5 text-center text-[10px] font-bold text-slate-500 uppercase tracking-wider bg-slate-50">Status</th>
-                    <th scope="col" className="px-4 sm:px-6 py-3.5 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider bg-slate-50">Content</th>
-                    <th scope="col" className="w-48 px-6 py-3.5 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider bg-slate-50 hidden lg:table-cell">Violations</th>
-                    <th scope="col" className="w-32 px-6 py-3.5 text-center text-[10px] font-bold text-slate-500 uppercase tracking-wider bg-slate-50 hidden xl:table-cell">Alert Date</th>
-                    <th scope="col" className="w-32 px-6 py-3.5 text-center text-[10px] font-bold text-slate-500 uppercase tracking-wider bg-slate-50 hidden xl:table-cell">Publish Date</th>
-                    <th scope="col" className="w-10 sm:w-12 px-2 sm:px-4 py-3.5 text-right bg-slate-50"></th>
+                    <th scope="col" className="w-14 sm:w-16 px-2 sm:px-4 py-3.5 text-center text-[10px] font-bold text-slate-500 uppercase tracking-wider hidden sm:table-cell border-b border-slate-100">Risk</th>
+                    <th scope="col" className="w-20 sm:w-24 px-2 sm:px-4 py-3.5 text-center text-[10px] font-bold text-slate-500 uppercase tracking-wider hidden md:table-cell border-b border-slate-100">Status</th>
+                    <th scope="col" className="px-4 sm:px-6 py-3.5 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-100">Content</th>
+                    <th scope="col" className="w-48 px-6 py-3.5 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider hidden lg:table-cell border-b border-slate-100">Violations</th>
+                    <th scope="col" className="w-32 px-6 py-3.5 text-center text-[10px] font-bold text-slate-500 uppercase tracking-wider hidden xl:table-cell border-b border-slate-100">Alert Date</th>
+                    <th scope="col" className="w-32 px-6 py-3.5 text-center text-[10px] font-bold text-slate-500 uppercase tracking-wider hidden xl:table-cell border-b border-slate-100">Publish Date</th>
+                    <th scope="col" className="w-10 sm:w-12 px-2 sm:px-4 py-3.5 text-right border-b border-slate-100"></th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-slate-100">
@@ -470,6 +558,7 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
                     const statusConfig = getStatusConfig(item.status);
                     const risk = getRiskLabel(item.risk_score);
                     const RiskIcon = risk.icon;
+                    const StatusIcon = statusConfig.icon;
 
                     return (
                       <tr 
@@ -481,17 +570,17 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
                         }}
                       >
                         {/* Checkbox */}
-                        <td className="px-2 sm:px-4 py-3 sm:py-4 whitespace-nowrap align-middle text-center" onClick={(e) => e.stopPropagation()}>
+                        <td className="px-2 sm:px-4 py-3 sm:py-4 whitespace-nowrap align-middle text-center border-b border-slate-50" onClick={(e) => e.stopPropagation()}>
                           <input
                             type="checkbox"
-                            checked={selectedIds.includes(item.id)}
-                            onChange={() => toggleSelectId(item.id)}
+                            checked={!!selectedCases[item.id]}
+                            onChange={() => toggleSelectId(item)}
                             className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
                           />
                         </td>
 
                         {/* Risk */}
-                        <td className="px-2 sm:px-4 py-3 sm:py-4 whitespace-nowrap align-middle text-center">
+                        <td className="px-2 sm:px-4 py-3 sm:py-4 whitespace-nowrap align-middle text-center hidden sm:table-cell border-b border-slate-50">
                           <HoverCard openDelay={0} closeDelay={50}>
                             <HoverCardTrigger asChild>
                               <div className={cn("inline-flex flex-col items-center justify-center w-10 sm:w-12 py-1 rounded-lg border shadow-sm mx-auto transition-transform hover:scale-110", risk.color)}>
@@ -509,44 +598,40 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
                         </td>
 
                         {/* Status */}
-                        <td className="px-2 sm:px-4 py-3 sm:py-4 whitespace-nowrap align-middle text-center">
-                          <HoverCard openDelay={0} closeDelay={50}>
-                            <HoverCardTrigger asChild>
-                              <div className="flex flex-col items-center gap-1 sm:gap-1.5 group/status cursor-pointer">
-                                <div className="bg-slate-50 p-1 rounded-full border border-slate-100 transition-colors group-hover/status:bg-slate-100">
-                                  <Clock className="w-3 sm:w-3.5 h-3 sm:h-3.5 text-slate-400" />
+                        <td className="px-2 sm:px-3 py-3 whitespace-nowrap align-middle hidden md:table-cell text-center border-b border-slate-50">
+                          <div className="flex flex-col items-center gap-1.5">
+                            <HoverCard openDelay={0} closeDelay={50}>
+                              <HoverCardTrigger asChild>
+                                <div
+                                  className={cn("inline-flex items-center justify-center w-8 h-8 rounded-full border shadow-sm cursor-pointer transition-transform hover:scale-110", statusConfig.color)}
+                                >
+                                  <StatusIcon className="w-4 h-4" />
                                 </div>
-                                {item.visibility_status === 'down' ? (
-                                  <span className="text-[7px] sm:text-[8px] font-black text-slate-500 uppercase tracking-widest leading-none">Down</span>
-                                ) : (
-                                  <span className="text-[7px] sm:text-[8px] font-black text-emerald-600 uppercase tracking-widest leading-none">Online</span>
-                                )}
-                              </div>
-                            </HoverCardTrigger>
-                            <HoverCardContent 
-                              className="w-auto px-3 py-2 text-xs font-bold text-slate-700 bg-white border border-slate-200 shadow-xl rounded-lg"
-                              sideOffset={8}
-                            >
-                              <div className="flex flex-col gap-1">
-                                <div className="flex items-center gap-2">
-                                  <span className="text-slate-400">Status:</span>
-                                  <span className="capitalize">{statusConfig.label}</span>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <span className="text-slate-400">Visibility:</span>
-                                  <span className={item.visibility_status === 'down' ? "text-slate-500" : "text-emerald-600"}>
-                                    {item.visibility_status === 'down' ? "Taken Down" : "Online"}
-                                  </span>
-                                </div>
-                              </div>
-                            </HoverCardContent>
-                          </HoverCard>
+                              </HoverCardTrigger>
+                              <HoverCardContent
+                                className="w-auto px-3 py-2 text-xs font-bold text-slate-700 bg-white border border-slate-200 shadow-xl rounded-lg"
+                                sideOffset={8}
+                              >
+                                {statusConfig.label}
+                              </HoverCardContent>
+                            </HoverCard>
+                            {item.visibility_status === 'down' ? (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black bg-slate-100 text-slate-500 uppercase tracking-tighter shadow-sm">
+                                Taken Down
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black bg-emerald-100 text-emerald-700 uppercase tracking-tighter shadow-sm">
+                                Online
+                              </span>
+                            )}
+                          </div>
                         </td>
 
+                        
                         {/* Content */}
-                        <td className="px-4 sm:px-6 py-3 sm:py-4 align-middle overflow-hidden">
-                          <div className="flex items-center gap-3 sm:gap-4">
-                            <div className="w-10 h-10 sm:w-14 sm:h-14 rounded-lg overflow-hidden bg-slate-100 border border-slate-200 shadow-sm relative shrink-0">
+                        <td className="px-2 sm:px-3 py-3 sm:py-4 overflow-hidden align-middle border-b border-slate-50">
+                          <div className="flex items-start gap-2 sm:gap-4">
+                            <div className="w-18 h-18 sm:w-32 sm:h-32 rounded-lg overflow-hidden bg-slate-100 border border-slate-200 shadow-sm relative shrink-0">
                               {item.enrichment?.thumbnail ? (
                                 <img
                                   src={item.enrichment.thumbnail}
@@ -578,6 +663,14 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
                                 <h4 className="text-xs sm:text-sm font-black text-slate-800 truncate leading-none max-w-[80px] sm:max-w-none">
                                   {item.enrichment?.username ? `@${item.enrichment.username}` : `Case #${item.id?.substring(0, 8)}`}
                                 </h4>
+
+                                {/* Mobile Risk Icon */}
+                                <span className="sm:hidden ml-auto">
+                                  <span className={cn("inline-flex items-center p-1 rounded-md text-[10px] font-bold border shadow-sm", risk.color)}>
+                                    <RiskIcon className="w-2.5 h-2.5" />
+                                  </span>
+                                </span>
+
                                 {item.url && (
                                   <a 
                                     href={item.url} 
@@ -598,7 +691,7 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
                         </td>
 
                         {/* Violations */}
-                        <td className="px-6 py-4 align-middle hidden lg:table-cell">
+                        <td className="px-6 py-4 align-middle hidden lg:table-cell border-b border-slate-50">
                           <div className="flex flex-wrap gap-1.5">
                             {item.threat_types?.length > 0 ? item.threat_types.map((type, idx) => (
                               <span key={idx} className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[9px] font-bold uppercase tracking-wider border border-slate-200">
@@ -611,7 +704,7 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
                         </td>
 
                         {/* Alert Date */}
-                        <td className="px-6 py-4 whitespace-nowrap align-middle text-center hidden xl:table-cell">
+                        <td className="px-6 py-4 whitespace-nowrap align-middle text-center hidden xl:table-cell border-b border-slate-50">
                           <div className="flex flex-col gap-0.5">
                             <span className="text-xs font-bold text-slate-700">
                               {item.processed_at ? format(new Date(item.processed_at), "dd/MM/yyyy") : '-'}
@@ -623,7 +716,7 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
                         </td>
 
                         {/* Publish Date */}
-                        <td className="px-6 py-4 whitespace-nowrap align-middle text-center hidden xl:table-cell">
+                        <td className="px-6 py-4 whitespace-nowrap align-middle text-center hidden xl:table-cell border-b border-slate-50">
                           <div className="flex flex-col gap-0.5">
                             <span className="text-xs font-bold text-slate-400">
                               {item.posted_at ? format(new Date(item.posted_at), "dd/MM/yyyy") : '-'}
@@ -635,7 +728,7 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
                         </td>
 
                         {/* Actions */}
-                        <td className="px-2 sm:px-4 py-3 sm:py-4 whitespace-nowrap align-middle text-right">
+                        <td className="px-2 sm:px-4 py-3 sm:py-4 whitespace-nowrap align-middle text-right border-b border-slate-50">
                           <Button 
                             variant="ghost" 
                             size="sm" 
@@ -652,112 +745,130 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
             )}
           </div>
 
-          {/* Pagination Footer */}
-          <div className="shrink-0 px-4 sm:px-6 py-3 border-t border-slate-100 bg-slate-50/50 flex flex-col md:flex-row items-center justify-between gap-4 z-20">
-            <div className="flex items-center gap-3 w-full md:w-auto justify-between md:justify-start">
-              <div className="flex items-center gap-3">
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest hidden sm:inline">Show:</span>
-                <div className="flex items-center gap-1">
-                  {[10, 25, 50].map(size => (
-                    <button
-                      key={size}
-                      onClick={() => handlePageSizeChange(size)}
-                      className={cn(
-                        "w-7 h-7 sm:w-8 sm:h-8 rounded-lg text-[10px] sm:text-xs font-bold transition-all border",
-                        pageSize === size 
-                          ? "bg-white border-slate-200 text-blue-600 shadow-sm" 
-                          : "text-slate-400 border-transparent hover:border-slate-200"
-                      )}
-                    >
-                      {size}
-                    </button>
-                  ))}
-                  <div className="hidden lg:flex items-center gap-1">
-                    {[75, 100].map(size => (
+
+        </div>
+      </div>
+
+      {/* Pagination Controls */}
+      {totalCount > 0 && (
+        <div className="px-3 sm:px-6 pb-2 pt-2">
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 px-3 sm:px-4 py-3 flex flex-col lg:flex-row items-center justify-between gap-3 lg:gap-0">
+            <div className="flex items-center justify-between w-full lg:w-auto gap-4 sm:gap-6">
+              <div className="flex items-center gap-2 sm:gap-3">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap hidden sm:inline">Show:</span>
+                  <div className="flex bg-slate-50 border border-slate-200 rounded-lg p-0.5">
+                    {[10, 25, 50, 75, 100].map((limit) => (
                       <button
-                        key={size}
-                        onClick={() => handlePageSizeChange(size)}
+                        key={limit}
+                        onClick={() => updateQueryParams({ pageSize: limit.toString(), page: 1 })}
                         className={cn(
-                          "w-8 h-8 rounded-lg text-xs font-bold transition-all border",
-                          pageSize === size 
-                            ? "bg-white border-slate-200 text-blue-600 shadow-sm" 
-                            : "text-slate-400 border-transparent hover:border-slate-200"
+                          "px-2 sm:px-2.5 py-1 text-[10px] font-bold transition-all rounded-md cursor-pointer",
+                          pageSize === limit
+                            ? "bg-white text-blue-600 shadow-sm ring-1 ring-slate-200"
+                            : "text-slate-500 hover:text-slate-700 hover:bg-slate-100"
                         )}
                       >
-                        {size}
+                        {limit}
                       </button>
                     ))}
                   </div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap hidden sm:inline">per page</span>
+                </div>
+
+                <div className="text-[10px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">
+                  Page <span className="text-slate-900">{currentPage}</span> / <span className="text-slate-900">{totalPages || 1}</span>
                 </div>
               </div>
-              
-              <div className="flex items-center gap-1.5 ml-2 sm:ml-4">
-                <span className="text-[9px] sm:text-[10px] font-black text-slate-400 uppercase tracking-widest">Page</span>
-                <span className="text-xs font-black text-slate-700">{currentPage}</span>
-                <span className="text-[10px] font-bold text-slate-300">/</span>
-                <span className="text-xs font-bold text-slate-400">{totalPages}</span>
-              </div>
-            </div>
 
-            <div className="flex items-center gap-1 w-full md:w-auto justify-center md:justify-end">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handlePageChange(1)}
-                disabled={currentPage === 1}
-                className="h-8 w-8 p-0 border-slate-200 hidden sm:flex"
-              >
-                <ChevronsLeft className="w-4 h-4" />
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handlePageChange(currentPage - 1)}
-                disabled={currentPage === 1}
-                className="h-8 px-2 sm:px-3 gap-1.5 border-slate-200 text-[10px] sm:text-xs font-bold text-slate-600 flex-1 sm:flex-none"
-              >
-                <ChevronLeft className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Previous</span>
-              </Button>
-
-              <div className="flex items-center gap-1 mx-1 sm:mx-2">
-                {getPageNumbers().map(num => (
-                  <button
-                    key={num}
-                    onClick={() => handlePageChange(num)}
-                    className={cn(
-                      "w-7 h-7 sm:w-8 sm:h-8 rounded-lg text-[10px] sm:text-xs font-black transition-all",
-                      currentPage === num 
-                        ? "bg-slate-900 text-white shadow-lg" 
-                        : "text-slate-500 hover:bg-slate-100"
-                    )}
+              {totalPages > 1 && (
+                <div className="flex items-center gap-1 sm:gap-2 w-full lg:w-auto justify-between lg:justify-end mt-2 lg:mt-0">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handlePageChange(1)}
+                    disabled={currentPage === 1}
+                    className="h-8 sm:h-9 px-2 text-xs font-bold border-slate-200 hover:bg-slate-50 disabled:opacity-50 hidden sm:flex"
+                    title="First Page"
                   >
-                    {num}
-                  </button>
-                ))}
-              </div>
+                    &lt;&lt;
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handlePageChange(currentPage - 1)}
+                    disabled={currentPage === 1}
+                    className="h-8 sm:h-9 px-2 sm:px-3 text-xs font-bold border-slate-200 hover:bg-slate-50 disabled:opacity-50 flex-1 sm:flex-none"
+                  >
+                    <ChevronLeft className="w-4 h-4 sm:mr-1" /> <span className="hidden sm:inline">Previous</span>
+                  </Button>
 
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handlePageChange(currentPage + 1)}
-                disabled={currentPage === totalPages}
-                className="h-8 px-2 sm:px-3 gap-1.5 border-slate-200 text-[10px] sm:text-xs font-bold text-slate-600 flex-1 sm:flex-none"
-              >
-                <span className="hidden sm:inline">Next</span> <ChevronRight className="w-3.5 h-3.5" />
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handlePageChange(totalPages)}
-                disabled={currentPage === totalPages}
-                className="h-8 w-8 p-0 border-slate-200 hidden sm:flex"
-              >
-                <ChevronsRight className="w-4 h-4" />
-              </Button>
+                  <div className="flex items-center gap-1 mx-0 sm:mx-1">
+                    {(() => {
+                      const pages = [];
+                      let start = Math.max(1, currentPage - 2);
+                      let end = Math.min(totalPages, currentPage + 2);
+
+                      // For mobile, show fewer pages
+                      let isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
+                      if (isMobile) {
+                        start = Math.max(1, currentPage - 1);
+                        end = Math.min(totalPages, currentPage + 1);
+                      }
+
+                      if (currentPage <= (isMobile ? 1 : 2)) {
+                        end = Math.min(totalPages, isMobile ? 3 : 5);
+                      }
+                      if (currentPage >= totalPages - (isMobile ? 0 : 1)) {
+                        start = Math.max(1, totalPages - (isMobile ? 2 : 4));
+                      }
+
+                      for (let i = start; i <= end; i++) {
+                        pages.push(i);
+                      }
+
+                      return pages.map(pageNum => (
+                        <Button
+                          key={pageNum}
+                          variant={currentPage === pageNum ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => handlePageChange(pageNum)}
+                          className={cn(
+                            "h-8 w-8 sm:h-9 sm:w-9 p-0 text-xs font-bold",
+                            currentPage === pageNum
+                              ? "bg-slate-800 hover:bg-slate-900 text-white shadow-sm"
+                              : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                          )}
+                        >
+                          {pageNum}
+                        </Button>
+                      ));
+                    })()}
+                  </div>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handlePageChange(currentPage + 1)}
+                    disabled={currentPage === totalPages}
+                    className="h-8 sm:h-9 px-2 sm:px-3 text-xs font-bold border-slate-200 hover:bg-slate-50 disabled:opacity-50 flex-1 sm:flex-none"
+                  >
+                    <span className="hidden sm:inline">Next</span> <ChevronRight className="w-4 h-4 sm:ml-1" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handlePageChange(totalPages)}
+                    disabled={currentPage === totalPages}
+                    className="h-8 sm:h-9 px-2 text-xs font-bold border-slate-200 hover:bg-slate-50 disabled:opacity-50 hidden sm:flex"
+                    title="Last Page"
+                  >
+                    &gt;&gt;
+                  </Button>
+                </div>
+              )}
             </div>
           </div>
-        </div>
-      </div>
+        )}
 
       {/* Floating Toast Notification */}
       {toast && (
