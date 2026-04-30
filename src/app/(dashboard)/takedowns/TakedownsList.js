@@ -396,14 +396,6 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
               <table className="min-w-full divide-y divide-slate-100 table-fixed lg:table-auto">
                 <thead className="bg-slate-50 sticky top-0 z-10">
                   <tr>
-                    {/* <th scope="col" className="w-12 px-4 py-3.5 text-center bg-slate-50">
-                      <input 
-                        type="checkbox" 
-                        className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 h-4 w-4" 
-                        checked={selectedIds.length === takedowns.length && takedowns.length > 0}
-                        onChange={toggleSelectAll}
-                      />
-                    </th> */}
                     <th scope="col" className="w-14 sm:w-16 px-2 sm:px-4 py-3.5 text-center text-[10px] font-bold text-slate-500 uppercase tracking-wider bg-slate-50">Risk</th>
                     <th scope="col" className="w-20 sm:w-24 px-2 sm:px-4 py-3.5 text-center text-[10px] font-bold text-slate-500 uppercase tracking-wider bg-slate-50">Status</th>
                     <th scope="col" className="px-4 sm:px-6 py-3.5 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider bg-slate-50">Content</th>
@@ -428,14 +420,6 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
                           router.push(`/takedowns/case/${item.id}`)
                         }}
                       >
-                        {/* <td className="px-4 py-4 whitespace-nowrap align-middle text-center" onClick={(e) => e.stopPropagation()}>
-                          <input 
-                            type="checkbox" 
-                            className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 h-4 w-4" 
-                            checked={selectedIds.includes(item.id)}
-                            onChange={() => toggleSelectId(item.id)}
-                          />
-                        </td> */}
 
                         {/* Risk */}
                         <td className="px-2 sm:px-4 py-3 sm:py-4 whitespace-nowrap align-middle text-center">

@@ -87,7 +87,6 @@ export function PlatformFilter({ initialPlatform = 'all', onChange, availablePla
                     className="text-xs font-semibold"
                   >
                     <div className="flex items-center gap-2">
-                      {/* {platform.icon && <platform.icon size={14} className="text-slate-500" />} */}
                       <span>{platform.label}</span>
                     </div>
                     {initialPlatform === platform.id && <CheckIcon size={14} className='ml-auto text-blue-600' />}
