@@ -5,8 +5,12 @@ import clientPromise from '@/utils/mongodb/client'
 import { ObjectId } from 'mongodb'
 import { getSignedImageUrl, uploadFileToS3, getSignedDownloadUrl, getSignedViewUrl } from '@/utils/aws/s3'
 import { revalidatePath } from 'next/cache'
-import { traceAction } from '@/utils/tracing'
+import { traceAction, recordClickMetric } from '@/utils/tracing'
 import crypto from 'crypto'
+
+export const trackClientClick = traceAction('trackClientClick', async (buttonName, attributes = {}) => {
+  recordClickMetric(buttonName, attributes);
+})
 
 async function getProjectDetails() {
   const user = await getAuthenticatedUser()

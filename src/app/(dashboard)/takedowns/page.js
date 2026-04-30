@@ -41,6 +41,7 @@ export default async function TakedownsPage({ searchParams }) {
         initialFilters={filters}
         isReviewer={isReviewer}
         metrics={metrics}
+        project={project}
         projectLabels={project?.project_details?.labels || []}
         totalCount={totalCount}
       />

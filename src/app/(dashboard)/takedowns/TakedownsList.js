@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useEffect, useTransition } from 'react'
+import { useState, useCallback, useEffect, useTransition, useMemo } from 'react'
 import Link from 'next/link'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import {
@@ -16,6 +16,8 @@ import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { cn } from "@/lib/utils"
 
+import { trackClientClick } from './actions'
+import ReportGenerate from '@/components/ReportGenerate'
 import { DateFilterPopover } from "@/app/(dashboard)/cases/DateFilterPopover"
 import { ViolationsFilter } from "@/app/(dashboard)/cases/ViolationsFilter"
 import { RiskFilter } from "@/app/(dashboard)/cases/RiskFilter"
@@ -34,7 +36,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 
-export default function TakedownsList({ initialTakedowns, initialFilters, isReviewer, metrics, projectLabels, totalCount }) {
+export default function TakedownsList({ initialTakedowns, initialFilters, isReviewer, metrics, project, projectLabels, totalCount }) {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -43,6 +45,21 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
   const [takedowns, setTakedowns] = useState(initialTakedowns)
   const [selectedIds, setSelectedIds] = useState([])
   const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false)
+
+  // Track report states
+  const [summaryState, setSummaryState] = useState({ loading: false, statusText: '' });
+  const [detailedPdfState, setDetailedPdfState] = useState({ loading: false, statusText: '' });
+  const [detailedDocxState, setDetailedDocxState] = useState({ loading: false, statusText: '' });
+
+  // Toast state
+  const [toast, setToast] = useState(null);
+  const showToast = (message, type = 'error') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  const selectedPostsArray = useMemo(() => selectedIds.map(id => ({ _id: id })), [selectedIds]);
+  const selectedCount = selectedIds.length;
 
   useEffect(() => {
     setTakedowns(initialTakedowns)
@@ -309,7 +326,7 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex flex-col lg:flex-row gap-2">
                 {isPending && <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-600" />}
                 
                 {/* Mobile Filter Trigger */}
@@ -321,6 +338,23 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
                 >
                   <Filter className="w-3.5 h-3.5 mr-2" /> Filter
                 </Button>
+
+                <div className="lg:hidden">
+                  <ReportGenerate
+                    selectedPostsArray={selectedPostsArray}
+                    selectedCount={selectedCount}
+                    summaryState={summaryState}
+                    detailedPdfState={detailedPdfState}
+                    detailedDocxState={detailedDocxState}
+                    setSummaryState={setSummaryState}
+                    setDetailedPdfState={setDetailedPdfState}
+                    setDetailedDocxState={setDetailedDocxState}
+                    showToast={showToast}
+                    trackClientClick={trackClientClick}
+                    project={project}
+                    showLabel={false}
+                  />
+                </div>
 
                 {hasActiveFilters && (
                   <Button 
@@ -338,6 +372,24 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
             {/* Desktop Filter Grid */}
             <div className="hidden lg:block flex-1">
               <FilterControls />
+            </div>
+
+            {/* Report Export */}
+            <div className="hidden lg:block w-full lg:w-[280px] shrink-0 lg:border-l border-slate-100 lg:pl-6">
+              <ReportGenerate
+                selectedPostsArray={selectedPostsArray}
+                selectedCount={selectedCount}
+                summaryState={summaryState}
+                detailedPdfState={detailedPdfState}
+                detailedDocxState={detailedDocxState}
+                setSummaryState={setSummaryState}
+                setDetailedPdfState={setDetailedPdfState}
+                setDetailedDocxState={setDetailedDocxState}
+                showToast={showToast}
+                trackClientClick={trackClientClick}
+                project={project}
+                showLabel={true}
+              />
             </div>
 
             {/* Active Filters Display for Mobile */}
@@ -396,6 +448,14 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
               <table className="min-w-full divide-y divide-slate-100 table-fixed lg:table-auto">
                 <thead className="bg-slate-50 sticky top-0 z-10">
                   <tr>
+                    <th scope="col" className="w-10 sm:w-12 px-2 sm:px-4 py-3.5 text-center bg-slate-50">
+                      <input
+                        type="checkbox"
+                        checked={takedowns.length > 0 && selectedIds.length === takedowns.length}
+                        onChange={toggleSelectAll}
+                        className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                      />
+                    </th>
                     <th scope="col" className="w-14 sm:w-16 px-2 sm:px-4 py-3.5 text-center text-[10px] font-bold text-slate-500 uppercase tracking-wider bg-slate-50">Risk</th>
                     <th scope="col" className="w-20 sm:w-24 px-2 sm:px-4 py-3.5 text-center text-[10px] font-bold text-slate-500 uppercase tracking-wider bg-slate-50">Status</th>
                     <th scope="col" className="px-4 sm:px-6 py-3.5 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider bg-slate-50">Content</th>
@@ -420,6 +480,15 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
                           router.push(`/takedowns/case/${item.id}`)
                         }}
                       >
+                        {/* Checkbox */}
+                        <td className="px-2 sm:px-4 py-3 sm:py-4 whitespace-nowrap align-middle text-center" onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.includes(item.id)}
+                            onChange={() => toggleSelectId(item.id)}
+                            className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                          />
+                        </td>
 
                         {/* Risk */}
                         <td className="px-2 sm:px-4 py-3 sm:py-4 whitespace-nowrap align-middle text-center">
@@ -689,6 +758,42 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
           </div>
         </div>
       </div>
+
+      {/* Floating Toast Notification */}
+      {toast && (
+        <div 
+          className={cn(
+            "fixed bottom-6 left-1/2 -translate-x-1/2 z-100 w-[calc(100%-2.5rem)] max-w-[400px] md:w-auto px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-5 duration-300 border backdrop-blur-xl",
+            toast.type === 'success' 
+              ? "bg-emerald-600/90 text-white border-emerald-400/50 shadow-emerald-900/20" 
+              : "bg-rose-600/90 text-white border-rose-400/50 shadow-rose-900/20"
+          )}
+        >
+          <div className="flex items-center gap-3 w-full">
+            <div className={cn(
+              "shrink-0 p-1.5 rounded-xl bg-white/20",
+              toast.type === 'success' ? "text-emerald-50" : "text-rose-50"
+            )}>
+              {toast.type === 'success' ? (
+                <CheckCircle className="w-5 h-5" />
+              ) : (
+                <AlertTriangle className="w-5 h-5" />
+              )}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-bold leading-tight">
+                {toast.message}
+              </p>
+            </div>
+            <button 
+              onClick={() => setToast(null)}
+              className="shrink-0 p-1 hover:bg-white/10 rounded-lg transition-colors"
+            >
+              <X className="w-4 h-4 opacity-70 hover:opacity-100" />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
