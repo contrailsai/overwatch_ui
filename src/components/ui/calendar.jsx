@@ -171,7 +171,17 @@ function CalendarDayButton({
         defaultClassNames.day,
         className
       )}
-      {...props} />
+      {...props}
+      onPointerDown={(e) => {
+        // Prevent Radix Popover from intercepting and swallowing the pointer event on Windows hybrid touch devices
+        e.stopPropagation();
+        props.onPointerDown?.(e);
+      }}
+      onClick={(e) => {
+        // Ensure click reaches day picker
+        props.onClick?.(e);
+      }}
+    />
   );
 }
 

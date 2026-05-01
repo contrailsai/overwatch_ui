@@ -207,7 +207,7 @@ export function DateFilterPopover({ title, onApply, initialFrom, initialTo }) {
     // };
 
     return (
-        <Popover open={open} onOpenChange={handleOpenChange} modal={true}>
+        <Popover open={open} onOpenChange={handleOpenChange} modal={false}>
             <PopoverTrigger asChild>
                 <Button variant="outline" className="w-full justify-start text-left font-normal bg-white border-slate-200 h-9 text-xs">
                     <CalendarIcon className="h-3.5 w-3.5 mr-2 shrink-0" />
