@@ -40,7 +40,7 @@ export function RiskFilter({ initialRisk = 'all', onChange }) {
             variant='outline'
             role='combobox'
             aria-expanded={open}
-            className='h-9 w-full justify-between hover:bg-transparent bg-white border-slate-200 px-3 shadow-sm'
+            className='h-9 w-full justify-between hover:bg-transparent bg-white border-slate-200 px-3'
           >
             <div className='flex items-center gap-2 overflow-hidden'>
               {selectedLevel ? (

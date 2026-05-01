@@ -53,7 +53,7 @@ export const fetchAndCompressImage = async (imageUrl, maxWidth = 800) => {
     }
 };
 
-export function CaseExportDocxButton({ post, project }) {
+export function CaseExportDocxButton({ post, project, className }) {
     const { clientDetails } = useClient();
     const [imgState, setImgState] = useState({ compressedUrl: null, loading: true });
     const [isGenerating, setIsGenerating] = useState(false);
@@ -113,7 +113,7 @@ export function CaseExportDocxButton({ post, project }) {
             size="sm"
             disabled={isGenerating || imgState.loading}
             onClick={handleDownload}
-            className="gap-2 cursor-pointer disabled:cursor-not-allowed border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-100 transition-all font-semibold shadow-sm h-8"
+            className={className || "gap-2 cursor-pointer disabled:cursor-not-allowed border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-100 transition-all font-semibold shadow-sm h-8"}
         >
             {(isGenerating || imgState.loading) ? (
                 <Loader2 className="w-4 h-4 animate-spin" />

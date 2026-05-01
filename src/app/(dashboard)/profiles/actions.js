@@ -75,7 +75,7 @@ export const normalized_S3_post = traceAction('normalized_S3_post', async (post)
   return normalized;
 })
 
-export const getProfiles = traceAction('getProfiles', async (project, page = 1, limit = 20, filters = {}) => {
+export const getProfiles = traceAction('getProfiles', async (project, page = 1, limit = 20, filters = {}, sort = { field: null, direction: 'desc' }) => {
     try {
         if (!project?.mongo_db_map) {
             return { profiles: [], totalCount: 0, page: 1, totalPages: 0 }
@@ -113,11 +113,114 @@ export const getProfiles = traceAction('getProfiles', async (project, page = 1, 
             }
         }
 
-        const profiles = await collection.find(query, { projection: { text_embedding: 0, image_embedding: 0 } })
-            .sort({ 'review_details.reviewed_at': -1 })
-            .skip(skip)
-            .limit(limit)
-            .toArray()
+        if (filters.searchText && filters.searchText.trim()) {
+            const searchRegex = new RegExp(filters.searchText.trim(), 'i')
+            const searchConditions = [
+                { 'metadata.profile_url': { $regex: searchRegex } },
+                { profile_url: { $regex: searchRegex } },
+            ]
+            if (query.$or) {
+                // Merge search $or with any existing $or (e.g. from "To Be Reviewed" status filter)
+                query.$and = [
+                    ...(query.$and || []),
+                    { $or: query.$or },
+                    { $or: searchConditions },
+                ]
+                delete query.$or
+            } else {
+                query.$or = searchConditions
+            }
+        }
+
+        if (filters.publish_date_from || filters.publish_date_to) {
+            const dateRange = {}
+            if (filters.publish_date_from) dateRange.$gte = new Date(filters.publish_date_from)
+            if (filters.publish_date_to) dateRange.$lte = new Date(filters.publish_date_to)
+            // Try last_relevant_publish_date first, fall back to review_details.reviewed_at
+            const dateConditions = [
+                { 'last_relevant_publish_date': dateRange },
+                { 'review_details.reviewed_at': dateRange },
+            ]
+            if (query.$and) {
+                query.$and.push({ $or: dateConditions })
+            } else if (query.$or) {
+                query.$and = [{ $or: query.$or }, { $or: dateConditions }]
+                delete query.$or
+            } else {
+                query.$or = dateConditions
+            }
+        }
+
+        // Risk filter on review_details.risk.
+        // The DB stores the medium band as either 'mid' or 'medium' (see risk_rank pipeline below
+        // and getProfileRiskBadge), so map the filter id to all stored variants before matching.
+        if (filters.risk && filters.risk !== 'all') {
+            const riskValues = filters.risk === 'medium' ? ['mid', 'medium'] : [filters.risk]
+            query['review_details.risk'] = { $in: riskValues.map(v => new RegExp(`^${v}$`, 'i')) }
+        }
+
+        // Location text search on metadata.location
+        if (filters.location && filters.location.trim()) {
+            const locationRegex = new RegExp(filters.location.trim(), 'i')
+            query['metadata.location'] = { $regex: locationRegex }
+        }
+
+        // Follower count range on metadata.follower_count
+        if (filters.follower_min || filters.follower_max) {
+            const followerRange = {}
+            if (filters.follower_min) followerRange.$gte = parseInt(filters.follower_min, 10)
+            if (filters.follower_max) followerRange.$lte = parseInt(filters.follower_max, 10)
+            query['metadata.follower_count'] = followerRange
+        }
+
+        // Sort pipeline — backend-driven sorting for Risk / Followers / Cases / Last Active.
+        const dir = sort.direction === 'asc' ? 1 : -1
+        let sortPipeline
+        if (sort.field === 'risk') {
+            sortPipeline = { risk_rank: dir, 'review_details.reviewed_at': -1, _id: 1 }
+        } else if (sort.field === 'followers') {
+            sortPipeline = { 'metadata.follower_count': dir, 'review_details.reviewed_at': -1, _id: 1 }
+        } else if (sort.field === 'cases') {
+            sortPipeline = { cases_count: dir, 'review_details.reviewed_at': -1, _id: 1 }
+        } else if (sort.field === 'last_active') {
+            sortPipeline = { sort_last_active: dir, 'review_details.reviewed_at': -1, _id: 1 }
+        } else {
+            sortPipeline = { 'review_details.reviewed_at': -1, _id: 1 }
+        }
+
+        const profiles = await collection.aggregate([
+            { $match: query },
+            { $project: { text_embedding: 0, image_embedding: 0 } },
+            {
+                $addFields: {
+                    cases_count: { $size: { $ifNull: ['$posts', []] } },
+                    // Map risk band → numeric rank so categorical sort gives high → mid → low → safe (desc).
+                    risk_rank: {
+                        $switch: {
+                            branches: [
+                                { case: { $eq: [{ $toLower: { $ifNull: ['$review_details.risk', ''] } }, 'high'] }, then: 4 },
+                                { case: { $in: [{ $toLower: { $ifNull: ['$review_details.risk', ''] } }, ['mid', 'medium']] }, then: 3 },
+                                { case: { $eq: [{ $toLower: { $ifNull: ['$review_details.risk', ''] } }, 'low'] }, then: 2 },
+                                { case: { $eq: [{ $toLower: { $ifNull: ['$review_details.risk', ''] } }, 'safe'] }, then: 1 },
+                            ],
+                            default: 0,
+                        },
+                    },
+                    // Coerce last_relevant_publish_date to a Date so sorting works regardless of stored type.
+                    sort_last_active: {
+                        $convert: {
+                            input: '$last_relevant_publish_date',
+                            to: 'date',
+                            onError: null,
+                            onNull: null,
+                        },
+                    },
+                },
+            },
+            { $sort: sortPipeline },
+            { $skip: skip },
+            { $limit: limit },
+        ]).toArray()
 
         const totalCount = await collection.countDocuments(query)
 
@@ -138,6 +241,7 @@ export const getProfiles = traceAction('getProfiles', async (project, page = 1, 
                 review_details: p.review_details || {},
                 client_status: p.client_status || 'To Be Reviewed',
                 client_notes: p.client_notes || [],
+                last_relevant_publish_date: p.last_relevant_publish_date || null,
                 metadata: p.metadata ? {
                     ...p.metadata,
                     profile_pic: signedProfilePic

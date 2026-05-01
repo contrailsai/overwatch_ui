@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react';
-import { Download, Loader2, FileText } from 'lucide-react';
+import { Download, Loader2 } from 'lucide-react';
 import { Button } from "@/components/ui/button"
 import { sendGAEvent } from '@next/third-parties/google';
 import { generateProfileDocx } from './ProfileReportDocx';
@@ -138,14 +138,14 @@ export function ProfileExportDocxButton({ profile, project, className }) {
             variant="outline"
             disabled={isLoading}
             onClick={handleDownload}
-            className={className || "w-full cursor-pointer rounded-xl border-2 border-slate-200 text-slate-500 hover:border-blue-500 hover:text-blue-600 flex items-center justify-center gap-2 font-bold transition-all bg-white py-2"}
+            className={className}
         >
             {isLoading ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
-                <FileText className="w-4 h-4" />
+                <Download className="w-4 h-4 shrink-0" />
             )}
-            {isLoading ? 'Preparing Report...' : 'Download DOCX Report'}
+            {isLoading ? 'Preparing Report...' : 'DOCX'}
         </Button>
     );
 }

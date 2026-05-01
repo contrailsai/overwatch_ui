@@ -384,6 +384,20 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
                         </div>
                     </div>
 
+                    {/* Mobile/Tablet Export Buttons (kept at top below lg breakpoint) */}
+                    <div onClick={() => trackClientClick('download_case_report', { page: 'CaseDetailPanel' })} className="lg:hidden flex gap-2 px-4 sm:px-6 py-3 border-b border-slate-100 bg-white">
+                        <CaseExportButton
+                            post={post}
+                            project={project}
+                            className="flex-1 cursor-pointer rounded-md border border-slate-200 text-slate-600 hover:border-blue-500 hover:text-blue-600 flex items-center justify-center gap-1.5 text-xs font-bold transition-all bg-white px-3 py-1.5 h-auto"
+                        />
+                        <CaseExportDocxButton
+                            post={post}
+                            project={project}
+                            className="flex-1 cursor-pointer rounded-md border border-slate-200 text-slate-600 hover:border-blue-500 hover:text-blue-600 flex items-center justify-center gap-1.5 text-xs font-bold transition-all bg-white px-3 py-1.5 h-auto"
+                        />
+                    </div>
+
                     <div className=" flex flex-col gap-6 sm:gap-8 px-4 sm:px-8 pb-8 pt-4 sm:pt-0 ">
                         {/* Media Display */}
                         <div className="bg-slate-900 rounded-xl sm:rounded-2xl overflow-hidden shadow-lg border border-slate-800 relative group flex items-center justify-center min-h-[300px] sm:min-h-[400px]">
@@ -624,13 +638,25 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
                         <div className="relative w-full lg:w-[500px] bg-white flex flex-col lg:h-full shrink-0 border-t lg:border-t-0 border-slate-100">
 
                             {/* EDIT BUTTON HERE */}
-                            <div className="hidden sm:block">
+                            <div className="hidden sm:flex items-start justify-between gap-3 px-4 sm:px-6 pt-4 pb-3 border-b border-slate-100">
+                                <div onClick={() => trackClientClick('download_case_report', { page: 'CaseDetailPanel' })} className="hidden lg:flex gap-2">
+                                    <CaseExportButton
+                                        post={post}
+                                        project={project}
+                                        className="cursor-pointer rounded-md border border-slate-200 text-slate-600 hover:border-blue-500 hover:text-blue-600 flex items-center justify-center gap-1.5 text-xs font-bold transition-all bg-white px-3 py-1.5 h-auto"
+                                    />
+                                    <CaseExportDocxButton
+                                        post={post}
+                                        project={project}
+                                        className="cursor-pointer rounded-md border border-slate-200 text-slate-600 hover:border-blue-500 hover:text-blue-600 flex items-center justify-center gap-1.5 text-xs font-bold transition-all bg-white px-3 py-1.5 h-auto"
+                                    />
+                                </div>
                                 <Button
                                     onClick={() => setIsEditing(true)}
                                     variant="ghost"
-                                    className=" absolute top-4 right-4 z-10 w-fit h-fit bg-white text-slate-600 hover:text-slate-900 font-bold cursor-pointer border border-slate-200 hover:border-slate-200 "
+                                    className="shrink-0 cursor-pointer rounded-md border border-slate-200 text-slate-600 hover:border-blue-500 hover:text-blue-600 flex items-center justify-center gap-1.5 text-xs font-bold transition-all bg-white px-3 py-1.5 h-auto hover:bg-white"
                                 >
-                                    <Pencil className="w-4 h-4 mr-1" />
+                                    <Pencil className="w-4 h-4" />
                                     Edit
                                 </Button>
                             </div>
@@ -1007,10 +1033,6 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
                                             )}
                                         </div>
                                     )}
-                                    <div onClick={() => trackClientClick('download_case_report', { page: 'CaseDetailPanel' })} className="flex gap-2">
-                                        <CaseExportButton post={post} project={project} />
-                                        <CaseExportDocxButton post={post} project={project} />
-                                    </div>
                                 </div>
                             </div>
 
