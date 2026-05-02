@@ -1,15 +1,16 @@
 'use client'
 
 import * as React from "react"
-import { useState, useEffect, useActionState, useRef } from 'react'
+import { useState, useEffect, useActionState, useRef, useTransition } from 'react'
 import { format } from "date-fns"
-import { submitCaseReview, uploadCaseImage, updatePostVisibility } from './actions'
+import { submitCaseReview, uploadCaseImage, updatePostVisibility, runAIAnalysis } from './actions'
 import {
     Loader2, X, CheckCircle, ExternalLink,
     ChevronLeft, ChevronRight, Calendar, Plus,
     Instagram, Facebook, Youtube,
     Globe, MessageCircle, Quote,
-    BadgeCheck, History, Bot, Siren, LinkIcon, Heart, Share2, Eye, Check, Upload, FileJson, RotateCcw, AlertCircle
+    BadgeCheck, History, Bot, Siren, LinkIcon, Heart, Share2, Eye, Check, Upload, FileJson, RotateCcw, AlertCircle, RefreshCw,
+    Sparkles, Clock, User, ShieldAlert, FileSearch, FileText, ChevronDown, ChevronUp
 } from 'lucide-react'
 import { Twitter, Reddit } from '@/utils/icons'
 import ProfilePic from '@/components/ProfilePic'
@@ -97,7 +98,7 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
 
     const getInitialThreatTypes = () => {
         const projectLabels = project_details.labels || [];
-        
+
         if (hasReview) {
             return Array.from(new Set([
                 ...(review.threat_types || []),
@@ -106,7 +107,7 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
         }
 
         const matchedThreatTypes = new Set();
-        
+
         for (const t of (analysis.threat_types || [])) {
             const normalizedT = normalizeString(t);
             const match = projectLabels.find(l => normalizeString(l.name) === normalizedT);
@@ -122,7 +123,7 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
                 }
             });
         }
-        
+
         return Array.from(matchedThreatTypes);
     };
 
@@ -131,7 +132,7 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
     const getInitialLegalCodes = () => {
         const projectLegalCodes = project_details.legal_codes || [];
         const codes = [];
-        
+
         if (hasReview) {
             for (const item of (review.legal_codes || [])) {
                 const codeName = typeof item === 'string' ? item : item.code;
@@ -147,9 +148,9 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
             const rawCodeName = typeof item === 'string' ? item : item.code;
             const reasoning = typeof item === 'string' ? '' : item.reasoning || '';
             const normalizedRaw = normalizeString(rawCodeName);
-            
+
             const match = projectLegalCodes.find(c => normalizeString(c.name) === normalizedRaw);
-            
+
             if (match) {
                 if (!codes.some(c => c.code === match.name)) {
                     codes.push({ code: match.name, reasoning });
@@ -182,16 +183,23 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
     const posted_date = rawPostedDate ? format(new Date(rawPostedDate), "dd/MM/yyyy") : "N/A"
     const sourced_date = rawSourcedDate ? format(new Date(rawSourcedDate), "dd/MM/yyyy") : "N/A"
 
-    const full_analysis_reasonning = hasReview ? review.reasoning : [
-        analysis.reasoning,
-        analysis.misinformation_explanation ? `Misinformation: ${analysis.misinformation_explanation}` : "",
-        analysis.categorization_reason,
-        analysis.threat_category ? `Category: ${analysis.threat_category}` : "",
-        analysis.nsfw_check?.reasoning ? `NSFW: ${analysis.nsfw_check.reasoning}` : "",
-        analysis.hate_speech_check?.reasoning ? `Hate Speech: ${analysis.hate_speech_check.reasoning}` : ""
-    ].filter(Boolean).join('\n\n').trim()
+    const default_reviewer_analysis = hasReview ? (review.reasoning || '') : (analysis.reasoning || '')
+    const [showAIInsights, setShowAIInsights] = useState(!hasReview)
 
     // --- Handlers ---
+    const [isPendingAnalysis, startAnalysisTransition] = useTransition()
+
+    const handleRunAIAnalysis = () => {
+        startAnalysisTransition(async () => {
+            const result = await runAIAnalysis(localPost._id, project, clientDetails)
+            if (result.success) {
+                showToast('AI Analysis requested successfully. Data will be updated shortly.', 'success')
+            } else {
+                showToast('Failed to request AI analysis: ' + result.error)
+            }
+        })
+    }
+
     const handleAddPoi = () => {
         const trimmed = newPoiInput.trim()
         if (trimmed && !poiNames.some(name => name.toLowerCase() === trimmed.toLowerCase())) {
@@ -219,7 +227,7 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
     }
 
     const updateLegalCodeReasoning = (code, reasoning) => {
-        setSelectedLegalCodes(prev => prev.map(c => 
+        setSelectedLegalCodes(prev => prev.map(c =>
             c.code === code ? { ...c, reasoning } : c
         ))
     }
@@ -227,12 +235,12 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
     const handleVisibilityChange = async (checked) => {
         const newStatus = checked ? 'online' : 'down'
         setVisibilityStatus(newStatus)
-        
+
         try {
             const result = await updatePostVisibility(localPost._id, project, clientDetails, newStatus)
             if (result.success) {
                 showToast(`Status updated to ${newStatus === 'online' ? 'Online' : 'Taken Down'}`, "success")
-                
+
                 // Update parent list if needed
                 if (setPosts) {
                     setPosts(prevPosts => prevPosts.map(p =>
@@ -271,7 +279,7 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
             const result = await uploadCaseImage(localPost._id, project, clientDetails, formData);
             if (result.success) {
                 setUploadedImageUrl(result.signedUrl);
-                
+
                 // Update parent list if needed
                 if (setPosts) {
                     setPosts(prevPosts => prevPosts.map(p =>
@@ -461,7 +469,7 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
                                     </div>
                                 </div>
                             ) : (
-                                <div 
+                                <div
                                     className="text-center p-12 relative z-10 cursor-pointer group/upload"
                                     onClick={() => !isUploadingImage && fileInputRef.current?.click()}
                                 >
@@ -669,19 +677,36 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
                         <input type="hidden" name="visibility_status" value={visibilityStatus} />
 
                         <div className="p-5 md:p-6 space-y-6 flex-1 relative flex flex-col mx-auto w-full">
-                            
-                            <div className="flex justify-end -mb-2">
-                                <Button type="button" variant="ghost" size="sm" onClick={handleReset} className="h-8 text-slate-500 hover:text-slate-700 hover:bg-slate-100">
-                                    <RotateCcw className="w-3.5 h-3.5 mr-1.5" />
-                                    Reset Form
-                                </Button>
-                            </div>
 
-                             {/**adding edit logic for the Status of the post Online/Offline */}
-                             <section className="space-y-3">
-                                <div className="flex items-center gap-2 mb-1">
-                                    <span className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-bold">1</span>
-                                    <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Visibility Status</h3>
+                            {/**adding edit logic for the Status of the post Online/Offline */}
+                            <section className="space-y-3">
+                                <div className="flex justify-end items-center gap-1.5 mb-1.5">
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={handleRunAIAnalysis}
+                                        disabled={isPendingAnalysis}
+                                        className=" cursor-pointer h-7 px-3 text-xs rounded-full bg-blue-50/50 text-blue-600 border-blue-200 hover:bg-blue-100 hover:text-blue-700 transition-colors"
+                                    >
+                                        {isPendingAnalysis ? <Loader2 className="w-3 h-3 mr-1.5 animate-spin" /> : <RefreshCw className="w-3 h-3 mr-1.5" />}
+                                        Re-run AI Analysis
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant="ghost" size="sm"
+                                        onClick={handleReset}
+                                        className="cursor-pointer h-7 px-3 text-xs rounded-full text-slate-500 hover:text-slate-700 hover:bg-slate-100"
+                                    >
+                                        <RotateCcw className="w-3 h-3 mr-1.5" />
+                                        Reset Form
+                                    </Button>
+                                </div>
+                                <div className="flex items-center justify-start gap-2 mb-1">
+                                    <div className="flex items-center gap-2">
+                                        <span className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-bold">1</span>
+                                        <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Visibility Status</h3>
+                                    </div>
                                 </div>
                                 <div className="bg-slate-50 rounded-xl p-4 border border-slate-200 shadow-sm flex items-center justify-between">
                                     <div className="flex items-center gap-3">
@@ -698,13 +723,113 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
                                     </div>
                                     <div className="flex items-center gap-2">
                                         <span className={cn("text-[10px] font-bold uppercase tracking-widest", visibilityStatus === 'down' ? "text-slate-900" : "text-slate-400")}>Down</span>
-                                        <Switch 
-                                            checked={visibilityStatus === 'online'} 
+                                        <Switch
+                                            checked={visibilityStatus === 'online'}
                                             onCheckedChange={handleVisibilityChange}
                                         />
                                         <span className={cn("text-[10px] font-bold uppercase tracking-widest", visibilityStatus === 'online' ? "text-slate-900" : "text-slate-400")}>Online</span>
                                     </div>
                                 </div>
+                            </section>
+
+                            {/* 5. AI INSIGHTS & EVIDENCE */}
+                            <section className="space-y-3">
+                                <div className="flex items-center justify-between mb-1 cursor-pointer group" onClick={() => setShowAIInsights(!showAIInsights)}>
+                                    <div className="flex items-center gap-2">
+                                        <span className="flex items-center justify-center w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold">
+                                            <Sparkles className="w-3.5 h-3.5" />
+                                        </span>
+                                        <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider group-hover:text-indigo-600 transition-colors">AI Context & Evidence</h3>
+                                    </div>
+                                    <Button type="button" variant="ghost" size="icon" className="h-6 w-6 text-slate-400 group-hover:text-indigo-600 transition-colors">
+                                        {showAIInsights ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                                    </Button>
+                                </div>
+
+                                {showAIInsights && (
+                                    <div className="bg-indigo-50/30 rounded-xl p-4 border border-indigo-100 shadow-sm space-y-4 animate-in slide-in-from-top-2 fade-in duration-200">
+                                        {analysis.takedown_timeline && (
+                                            <div className="flex items-center justify-between bg-rose-50 border border-rose-100 p-3 rounded-lg shadow-sm">
+                                                <div className="flex items-center gap-2">
+                                                    <Clock className="w-4 h-4 text-rose-600" />
+                                                    <span className="text-xs font-bold text-rose-900 uppercase tracking-wider">Recommended Takedown</span>
+                                                </div>
+                                                <Badge className="bg-rose-100 text-rose-700 hover:bg-rose-100 border-rose-200 shadow-none font-bold">{analysis.takedown_timeline}</Badge>
+                                            </div>
+                                        )}
+
+                                        {analysis.profile_summary && (
+                                            <div className="space-y-1.5">
+                                                <h5 className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest flex items-center gap-1.5">
+                                                    <User className="w-3 h-3" /> Profile Summary
+                                                </h5>
+                                                <div className="p-3 rounded-lg border border-indigo-100 bg-white text-xs text-slate-700 leading-relaxed shadow-sm">
+                                                    {analysis.profile_summary}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {analysis.misinformation_explanation && (
+                                            <div className="space-y-1.5">
+                                                <h5 className="text-[10px] font-bold text-orange-600 uppercase tracking-widest flex items-center gap-1.5">
+                                                    <ShieldAlert className="w-3 h-3" /> Misinformation Analysis
+                                                </h5>
+                                                <div className="p-3 rounded-lg border border-orange-100 bg-orange-50/50 text-xs text-slate-700 leading-relaxed shadow-sm">
+                                                    {analysis.misinformation_explanation}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {analysis.aigc_forensic_summary && (
+                                            <div className="space-y-1.5">
+                                                <h5 className="text-[10px] font-bold text-purple-600 uppercase tracking-widest flex items-center gap-1.5">
+                                                    <FileSearch className="w-3 h-3" /> AIGC Forensic Summary
+                                                </h5>
+                                                <div className="p-3 rounded-lg border border-purple-100 bg-purple-50/50 text-xs text-slate-700 leading-relaxed shadow-sm">
+                                                    {analysis.aigc_forensic_summary}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {analysis.anti_india_reasoning && (
+                                            <div className="space-y-1.5">
+                                                <h5 className="text-[10px] font-bold text-red-600 uppercase tracking-widest flex items-center gap-1.5">
+                                                    <AlertCircle className="w-3 h-3" /> Policy Violation Focus
+                                                </h5>
+                                                <div className="p-3 rounded-lg border border-red-100 bg-red-50/50 text-xs text-slate-700 leading-relaxed shadow-sm">
+                                                    {analysis.anti_india_reasoning}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {analysis.reasoning && (
+                                            <div className="space-y-1.5">
+                                                <h5 className="text-[10px] font-bold text-blue-600 uppercase tracking-widest flex items-center gap-1.5">
+                                                    <FileText className="w-3 h-3" /> General Reasoning
+                                                </h5>
+                                                <div className="p-3 rounded-lg border border-blue-100 bg-blue-50/50 text-xs text-slate-700 leading-relaxed shadow-sm">
+                                                    {analysis.reasoning}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {analysis.urls && analysis.urls.length > 0 && (
+                                            <div className="space-y-2 pt-2 border-t border-indigo-100/50">
+                                                <h5 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                                                    <LinkIcon className="w-3 h-3" /> References & Grounding Sources
+                                                </h5>
+                                                <div className="flex flex-col gap-1.5">
+                                                    {analysis.urls.map((url, i) => (
+                                                        <a key={i} href={url} target="_blank" rel="noreferrer" title={url} className="text-[11px] text-blue-600 hover:text-blue-800 hover:bg-blue-100 truncate flex items-center gap-2 bg-blue-50/50 p-2 rounded-md border border-blue-100 transition-colors">
+                                                            <ExternalLink className="w-3.5 h-3.5 shrink-0 text-blue-400" />
+                                                            <span className="truncate">{url}</span>
+                                                        </a>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
                             </section>
 
                             {/* 1. VERDICT & RISK LEVEL (Moved to Top) */}
@@ -803,32 +928,32 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
                                                 const selected = selectedLegalCodes.find(c => c.code === item.name);
                                                 const isSelected = !!selected;
                                                 return (
-                                                <div
-                                                    key={item.name}
-                                                    className={cn(
-                                                        "flex flex-col gap-2 p-3 rounded-lg border transition-all hover:shadow-sm",
-                                                        isSelected ? "bg-purple-50 border-purple-200 ring-1 ring-purple-200" : "bg-white border-slate-200 hover:border-purple-200"
-                                                    )}
-                                                >
-                                                    <label className="flex items-center gap-3 cursor-pointer">
-                                                        <Checkbox
-                                                            checked={isSelected}
-                                                            onCheckedChange={() => toggleLegalCode(item.name)}
-                                                            className="border-slate-300 data-[state=checked]:bg-purple-600 data-[state=checked]:border-purple-600"
-                                                        />
-                                                        <span className={cn("text-xs font-bold uppercase", isSelected ? "text-purple-700" : "text-slate-600")}>
-                                                            {item.name}
-                                                        </span>
-                                                    </label>
-                                                    {isSelected && (
-                                                        <Textarea 
-                                                            value={selected.reasoning}
-                                                            onChange={(e) => updateLegalCodeReasoning(item.name, e.target.value)}
-                                                            placeholder={`Provide reasoning for selecting ${item.name}...`}
-                                                            className="mt-2 text-sm bg-white border-purple-200 min-h-[60px]"
-                                                        />
-                                                    )}
-                                                </div>
+                                                    <div
+                                                        key={item.name}
+                                                        className={cn(
+                                                            "flex flex-col gap-2 p-3 rounded-lg border transition-all hover:shadow-sm",
+                                                            isSelected ? "bg-purple-50 border-purple-200 ring-1 ring-purple-200" : "bg-white border-slate-200 hover:border-purple-200"
+                                                        )}
+                                                    >
+                                                        <label className="flex items-center gap-3 cursor-pointer">
+                                                            <Checkbox
+                                                                checked={isSelected}
+                                                                onCheckedChange={() => toggleLegalCode(item.name)}
+                                                                className="border-slate-300 data-[state=checked]:bg-purple-600 data-[state=checked]:border-purple-600"
+                                                            />
+                                                            <span className={cn("text-xs font-bold uppercase", isSelected ? "text-purple-700" : "text-slate-600")}>
+                                                                {item.name}
+                                                            </span>
+                                                        </label>
+                                                        {isSelected && (
+                                                            <Textarea
+                                                                value={selected.reasoning}
+                                                                onChange={(e) => updateLegalCodeReasoning(item.name, e.target.value)}
+                                                                placeholder={`Provide reasoning for selecting ${item.name}...`}
+                                                                className="mt-2 text-sm bg-white border-purple-200 min-h-[60px]"
+                                                            />
+                                                        )}
+                                                    </div>
                                                 );
                                             })}
                                         </div>
@@ -888,18 +1013,18 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
                                 </div>
                             </section>
 
-                            {/* 4. ANALYSIS & NOTES (Grouped textareas at the bottom) */}
+                            {/* 6. ANALYSIS & NOTES (Grouped textareas at the bottom) */}
                             <section className="space-y-4 pt-2">
                                 <div className="grid grid-cols-1 gap-8">
                                     <div className="space-y-2">
                                         <Label className="text-xs font-bold text-slate-500 uppercase flex justify-between">
-                                            <span>Detailed Analysis</span>
+                                            <span>Reviewer Final Analysis</span>
                                         </Label>
                                         <Textarea
                                             ref={reasoningRef}
                                             name="reasoning"
-                                            defaultValue={full_analysis_reasonning}
-                                            placeholder="Enter full analysis reasoning here..."
+                                            defaultValue={default_reviewer_analysis}
+                                            placeholder="Enter your final analysis reasoning here..."
                                             className="min-h-[100px] bg-slate-50 border-slate-200 text-sm focus:bg-white transition-colors resize-y"
                                         />
                                     </div>
