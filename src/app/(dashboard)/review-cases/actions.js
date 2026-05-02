@@ -5,6 +5,7 @@ import clientPromise from '@/utils/mongodb/client'
 import { redirect } from 'next/navigation'
 import { ObjectId } from 'mongodb'
 import { getSignedImageUrl, uploadFileToS3 } from '@/utils/aws/s3'
+import { sendContentModerationSqsMessage } from '@/utils/aws/sqs'
 import { updateDailyMetrics } from '@/utils/supabase/metrics'
 import { sendEmail } from '@/utils/email'
 import { traceAction } from '@/utils/tracing'
@@ -786,6 +787,29 @@ export const updatePostVisibility = traceAction('updatePostVisibility', async (p
     return { success: true }
   } catch (error) {
     console.error('updatePostVisibility Error:', error)
+    return { success: false, error: error.message }
+  }
+})
+
+export const runAIAnalysis = traceAction('runAIAnalysis', async (postId, project, clientDetails) => {
+  try {
+    if (!project?.mongo_db_map) {
+      return { success: false, error: 'Project database configuration missing' }
+    }
+
+    if (!postId) {
+      return { success: false, error: 'Missing Post ID' }
+    }
+
+    const response = await sendContentModerationSqsMessage(project.mongo_db_map, 'Posts', postId);
+    
+    if (!response) {
+      return { success: false, error: 'AI analysis queue not configured' }
+    }
+
+    return { success: true }
+  } catch (error) {
+    console.error('runAIAnalysis Error:', error)
     return { success: false, error: error.message }
   }
 })

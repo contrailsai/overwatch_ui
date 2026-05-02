@@ -11,6 +11,7 @@ const sqsClient = new SQSClient({
 
 const QUEUE_URL = process.env.AWS_SQS_QUEUE_URL;
 const REPORT_QUEUE_URL = process.env.AWS_REPORT_GENERATION_SQS;
+const CONTENT_MODERATION_SQS_QUEUE_URL = process.env.AWS_CONTENT_MODERATION_SQS_QUEUE_URL;
 
 /**
  * Sends a message to the SQS queue for link ingestion.
@@ -51,3 +52,35 @@ export const sendReportSqsMessage = traceAction('sendReportSqsMessage', async (m
     throw error;
   }
 });
+
+/**
+ * Sends a message to the SQS queue for content moderation (AI analysis).
+ * @param {Object} messageBody - The payload to send to SQS.
+ * @returns {Promise<Object>} - The response from SQS.
+ */
+export const sendContentModerationSqsMessage = traceAction('sendContentModerationSqsMessage', async (db_name, collection_name, object_id) => {
+  if (!CONTENT_MODERATION_SQS_QUEUE_URL) {
+    console.log("AWS_CONTENT_MODERATION_SQS_QUEUE_URL not configured.");
+    return null;
+  }
+
+  const messageBody = {
+    db_name,
+    collection_name,
+    object_id
+  };
+
+  const command = new SendMessageCommand({
+    QueueUrl: CONTENT_MODERATION_SQS_QUEUE_URL,
+    MessageBody: JSON.stringify(messageBody),
+  });
+
+  try {
+    const response = await sqsClient.send(command);
+    return response;
+  } catch (error) {
+    console.error("Error sending message to content moderation queue:", error);
+    throw error;
+  }
+});
+
