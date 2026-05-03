@@ -163,16 +163,19 @@ export const getPosts = traceAction('getPosts', async (project, page = 1, limit 
       // ---> key is null or 
       // ---> the key is explicitly "To Be Reviewed" 
       // should be included in this filter.
-      if (filters.client_status === 'To Be Reviewed') {
+      const statusLower = filters.client_status.toLowerCase();
+      if (statusLower === 'to be reviewed') {
         andConditions.push({
           $or: [
             { client_status: { $exists: false } },
             { client_status: null },
-            { client_status: 'To Be Reviewed' }
+            { client_status: { $regex: new RegExp('^to be reviewed$', 'i') } }
           ]
         })
+      } else if (statusLower === 'takedown' || statusLower === 'takedowns') {
+        query.client_status = { $regex: new RegExp('^takedowns?$', 'i') }
       } else {
-        query.client_status = filters.client_status
+        query.client_status = { $regex: new RegExp(`^${filters.client_status}$`, 'i') }
       }
     }
 
@@ -400,16 +403,21 @@ export const getAllPostIds = traceAction('getAllPostIds', async (project, filter
     }
 
     if (filters.client_status && filters.client_status !== 'all') {
-      if (filters.client_status === 'To Be Reviewed') {
+      const statusLower = filters.client_status.toLowerCase();
+      const escapedStatus = filters.client_status.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+      if (statusLower === 'to be reviewed') {
         andConditions.push({
           $or: [
             { client_status: { $exists: false } },
             { client_status: null },
-            { client_status: 'To Be Reviewed' }
+            { client_status: { $regex: '^to be reviewed$', $options: 'i' } }
           ]
         })
+      } else if (statusLower === 'takedown' || statusLower === 'takedowns') {
+        query.client_status = { $regex: '^takedowns?$', $options: 'i' }
       } else {
-        query.client_status = filters.client_status
+        query.client_status = { $regex: `^${escapedStatus}$`, $options: 'i' }
       }
     }
 
@@ -597,16 +605,21 @@ export const getSimilarPosts = traceAction('getSimilarPosts', async (project, so
     }
 
     if (filters.client_status && filters.client_status !== 'all') {
-      if (filters.client_status === 'To Be Reviewed') {
+      const statusLower = filters.client_status.toLowerCase();
+      const escapedStatus = filters.client_status.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+      if (statusLower === 'to be reviewed') {
         andConditions.push({
           $or: [
             { client_status: { $exists: false } },
             { client_status: null },
-            { client_status: 'To Be Reviewed' }
+            { client_status: { $regex: '^to be reviewed$', $options: 'i' } }
           ]
         })
+      } else if (statusLower === 'takedown' || statusLower === 'takedowns') {
+        matchQuery.client_status = { $regex: '^takedowns?$', $options: 'i' }
       } else {
-        matchQuery.client_status = filters.client_status
+        matchQuery.client_status = { $regex: `^${escapedStatus}$`, $options: 'i' }
       }
     }
 
@@ -789,16 +802,21 @@ export const getSemanticSearchPosts = traceAction('getSemanticSearchPosts', asyn
     }
 
     if (filters.client_status && filters.client_status !== 'all') {
-      if (filters.client_status === 'To Be Reviewed') {
+      const statusLower = filters.client_status.toLowerCase();
+      const escapedStatus = filters.client_status.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+      if (statusLower === 'to be reviewed') {
         andConditions.push({
           $or: [
             { client_status: { $exists: false } },
             { client_status: null },
-            { client_status: 'To Be Reviewed' }
+            { client_status: { $regex: '^to be reviewed$', $options: 'i' } }
           ]
         })
+      } else if (statusLower === 'takedown' || statusLower === 'takedowns') {
+        matchQuery.client_status = { $regex: '^takedowns?$', $options: 'i' }
       } else {
-        matchQuery.client_status = filters.client_status
+        matchQuery.client_status = { $regex: `^${escapedStatus}$`, $options: 'i' }
       }
     }
 

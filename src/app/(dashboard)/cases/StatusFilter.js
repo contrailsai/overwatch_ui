@@ -66,7 +66,7 @@ export function StatusFilter({
                   <span>{placeholder}</span>
                   {initialStatus === 'all' && <CheckIcon size={14} className='ml-auto text-blue-600' />}
                 </CommandItem>
-                {options.map(option => (
+                {options.filter(Boolean).map(option => (
                   <CommandItem
                     key={option.value}
                     value={option.value}
