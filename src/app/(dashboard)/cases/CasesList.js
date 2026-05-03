@@ -533,9 +533,10 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                                     onChange={(val) => handleFilterChange('client_status', val)}
                                     options={[
                                       { value: 'To Be Reviewed', label: 'To Be Reviewed' },
+                                      allowDoTakedown && { value: 'Takedown', label: 'Takedown' },
                                       { value: 'No Action', label: 'No Action' },
                                       { value: 'Flag for Takedown', label: 'Flag for Takedown' },
-                                    ]}
+                                    ].filter(Boolean)}
                                   />
                                 </div>
 
