@@ -307,7 +307,7 @@ export async function updateClientMetaStats(project_name, client_email, action) 
  * Tracks the daily login/activity of a client in a project.
  * If the entry for today doesn't exist, it inserts one.
  */
-export async function trackClientActivity(client_id, project_name, actionType = 'login') {
+export async function trackClientActivity(client_id, project_name, actionType = 'login', details = null, clientEmail = null) {
   const supabase = await createClient()
 
   if (!client_id || !project_name) {
@@ -330,6 +330,12 @@ export async function trackClientActivity(client_id, project_name, actionType = 
         updates.reviewed_cases = (existingRecord.reviewed_cases || 0) + 1
       } else if (actionType === 'reviewed_profile') {
         updates.reviewed_profiles = (existingRecord.reviewed_profiles || 0) + 1
+      } else if (actionType === 'report_download' && details) {
+        const currentReports = existingRecord.reports_download || {}
+        updates.reports_download = {
+          ...currentReports,
+          [details]: (currentReports[details] || 0) + 1
+        }
       }
 
       const { error: updateError } = await supabase
@@ -362,7 +368,8 @@ export async function trackClientActivity(client_id, project_name, actionType = 
         login_time: actionType === 'login' ? time : null,
         last_activity: time,
         reviewed_cases: actionType === 'reviewed_case' ? 1 : 0,
-        reviewed_profiles: actionType === 'reviewed_profile' ? 1 : 0
+        reviewed_profiles: actionType === 'reviewed_profile' ? 1 : 0,
+        reports_download: actionType === 'report_download' && details ? { [details]: 1 } : {}
       }
 
       const { error: insertError } = await supabase
@@ -399,6 +406,29 @@ export async function trackClientActivity(client_id, project_name, actionType = 
     }
   } catch (err) {
     console.error('Failed to track daily activity in client_logs:', err)
+  }
+
+  // Send Slack notification for report generation
+  if (actionType === 'report_download' && details) {
+    try {
+      const SLACK_WEBHOOK_URL = process.env.SLACK_WEBHOOK_URL_REPORT_GENERATION
+      if (SLACK_WEBHOOK_URL) {
+        const email = clientEmail || client_id
+
+        // Fire-and-forget fetch to avoid blocking the client response
+        fetch(SLACK_WEBHOOK_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: email,
+            "report-type": details,
+            project: project_name
+          })
+        }).catch(err => console.error('Slack webhook error:', err))
+      }
+    } catch (slackError) {
+      console.error('Slack notification setup failed:', slackError)
+    }
   }
 }
 
