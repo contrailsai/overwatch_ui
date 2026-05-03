@@ -4,9 +4,12 @@ import React from 'react';
 import { FileDown, Loader2 } from 'lucide-react';
 import { usePdfExport } from './usePdfExport';
 import posthog from 'posthog-js';
+import { useClient } from '@/context/ClientContext';
+import { trackClientActivity } from '@/utils/supabase/metrics';
 
 export function DetailedReportButton({ posts, project, className, onStateChange }) {
     const { exportPdf, loading, statusText } = usePdfExport();
+    const { clientDetails } = useClient();
 
     React.useEffect(() => {
         onStateChange?.({ loading, statusText });
@@ -14,6 +17,11 @@ export function DetailedReportButton({ posts, project, className, onStateChange 
 
     const handleDownload = () => {
         posthog.capture('Report Downloaded', { type: 'Detailed Case Report', format: 'pdf', count: posts?.length || 0 });
+
+        if (clientDetails?.id && project?.project_name) {
+            trackClientActivity(clientDetails.id, project.project_name, 'report_download', 'detailed_pdf', clientDetails.email);
+        }
+
         exportPdf({
             posts,
             project,

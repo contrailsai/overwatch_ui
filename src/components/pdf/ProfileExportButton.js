@@ -4,12 +4,20 @@ import React from 'react';
 import { Download, Loader2 } from 'lucide-react';
 import { usePdfExport } from './usePdfExport';
 import posthog from 'posthog-js';
+import { useClient } from '@/context/ClientContext';
+import { trackClientActivity } from '@/utils/supabase/metrics';
 
 export function ProfileExportButton({ profile, project, className }) {
     const { exportPdf, loading, statusText } = usePdfExport();
+    const { clientDetails } = useClient();
 
     const handleDownload = () => {
         posthog.capture('Report Downloaded', { type: 'Profile Report', format: 'pdf', profileId: profile?._id });
+
+        if (clientDetails?.id && project?.project_name) {
+            trackClientActivity(clientDetails.id, project.project_name, 'report_download', 'profile_pdf', clientDetails.email);
+        }
+
         // profile.posts contains the array of post IDs
         // We pass the profile object so the server can extract metadata like profile pic
         exportPdf({

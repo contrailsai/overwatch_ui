@@ -69,24 +69,39 @@ export const fetch_clients_in_project = traceAction('fetch_clients_in_project', 
                     last30DaysCases: 0,
                     last30DaysProfiles: 0,
                     allTimeCases: 0,
-                    allTimeProfiles: 0
+                    allTimeProfiles: 0,
+                    todayReports: {},
+                    last7DaysReports: {},
+                    last30DaysReports: {},
+                    allTimeReports: {}
                 }
             }
             
+            // Helper to merge report counts
+            const mergeReports = (target, source) => {
+                if (!source) return;
+                Object.keys(source).forEach(key => {
+                    target[key] = (target[key] || 0) + source[key]
+                })
+            }
+
             // All-time aggregation
             logsMap[cid].allTimeCases += log.reviewed_cases || 0
             logsMap[cid].allTimeProfiles += log.reviewed_profiles || 0
+            mergeReports(logsMap[cid].allTimeReports, log.reports_download)
 
             // 30 days aggregation
             if (log.date >= last30DaysStr) {
                 logsMap[cid].last30DaysCases += log.reviewed_cases || 0
                 logsMap[cid].last30DaysProfiles += log.reviewed_profiles || 0
+                mergeReports(logsMap[cid].last30DaysReports, log.reports_download)
             }
 
             // 7 days aggregation
             if (log.date >= last7DaysStr) {
                 logsMap[cid].last7DaysCases += log.reviewed_cases || 0
                 logsMap[cid].last7DaysProfiles += log.reviewed_profiles || 0
+                mergeReports(logsMap[cid].last7DaysReports, log.reports_download)
             }
 
             // Today data
@@ -95,6 +110,7 @@ export const fetch_clients_in_project = traceAction('fetch_clients_in_project', 
                 logsMap[cid].todayLastActivity = log.last_activity
                 logsMap[cid].todayCases = log.reviewed_cases || 0
                 logsMap[cid].todayProfiles = log.reviewed_profiles || 0
+                mergeReports(logsMap[cid].todayReports, log.reports_download)
             }
         })
     }
@@ -111,7 +127,11 @@ export const fetch_clients_in_project = traceAction('fetch_clients_in_project', 
             last30DaysCases: 0,
             last30DaysProfiles: 0,
             allTimeCases: 0,
-            allTimeProfiles: 0
+            allTimeProfiles: 0,
+            todayReports: {},
+            last7DaysReports: {},
+            last30DaysReports: {},
+            allTimeReports: {}
         }
         
         return {

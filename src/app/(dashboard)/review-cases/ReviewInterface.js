@@ -108,22 +108,22 @@ export function ReviewInterface({
         headers.join(','),
         ...allPosts.map(post => {
           const rowData = [
-            post._id,
-            post.post_id,
-            post.url,
-            post.caption || '',
-            post.platform,
-            post.author_url,
-            post.author_username,
-            post.author_name,
-            post.posted_at,
-            post.likes,
-            post.comments,
-            post.views,
-            post.shares,
-            post.retweets,
-            post.quotes,
-            post.replies,
+            post._id?.$oid || '',
+            post.code || '',
+            post.url || '',
+            post.content || '',
+            post.platform || '',
+            post.profile?.profile_url || '',
+            post.profile?.username || '',
+            post.profile?.display_name || '',
+            post.engagement?.posted_at?.$date || '',
+            post.engagement?.likes || 0,
+            post.engagement?.comments || 0,
+            post.engagement?.views || 0,
+            post.engagement?.shares || 0,
+            post.engagement?.retweets || 0,
+            post.engagement?.quotes || 0,
+            post.engagement?.replies || 0,
             post.review_details?.reasoning || ''
           ]
           // Sanitize each field: escape quotes, replace newlines, and wrap in double quotes
@@ -146,7 +146,7 @@ export function ReviewInterface({
       console.error('Export Error:', error)
       alert('Failed to export CSV. Please try again.')
     } finally {
-        setExportingType(null)
+      setExportingType(null)
     }
   }
 
@@ -173,13 +173,51 @@ export function ReviewInterface({
       console.error('Export Error:', error)
       alert('Failed to export JSON. Please try again.')
     } finally {
-        setExportingType(null)
+      setExportingType(null)
     }
   }
 
   const handleDownloadSingleJSON = (post) => {
     try {
-      const jsonString = JSON.stringify([post], null, 2)
+      const exportData = {
+        _id: {
+          $oid: post._id
+        },
+        code: post.code || post.post_id || "",
+        content: post.content || post.post_content?.content || post.caption || "",
+        created_at: {
+          $date: post.created_at || ""
+        },
+        engagement: {
+          likes: post.engagement?.likes ?? post.stats?.like_count ?? 0,
+          comments: post.engagement?.comments ?? post.stats?.comment_count ?? 0,
+          shares: post.engagement?.shares ?? post.stats?.share_count ?? 0,
+          retweets: post.engagement?.retweets ?? post.stats?.retweet_count ?? 0,
+          quotes: post.engagement?.quotes ?? post.stats?.quote_count ?? 0,
+          replies: post.engagement?.replies ?? post.stats?.reply_count ?? 0,
+          views: post.engagement?.views ?? post.stats?.view_count ?? 0,
+          posted_at: {
+            $date: post.posted_date || ""
+          }
+        },
+        media_urls: post.media_urls || post.post_content?.media_urls || [],
+        platform: post.platform || "",
+        profile: {
+          platform_user_id: post.profile?.platform_user_id || null,
+          username: post.profile?.username || post.user?.username || "",
+          display_name: post.profile?.display_name || post.user?.full_name || "",
+          profile_url: post.profile?.profile_url || post.user?.profile_pic_url || "",
+          is_verified: post.profile?.is_verified ?? post.user?.is_verified ?? false
+        },
+        sourcing_date: {
+          $date: post.sourcing_date || ""
+        },
+        url: post.original_url || post.url || "",
+        analysis_results: post.analysis_results || {},
+        review_details: post.review_details || {}
+      }
+
+      const jsonString = JSON.stringify(exportData, null, 2)
       const blob = new Blob([jsonString], { type: 'application/json' })
       const url = URL.createObjectURL(blob)
       const link = document.createElement('a')
@@ -251,14 +289,14 @@ export function ReviewInterface({
     <div className="flex h-full relative bg-slate-50">
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col h-full overflow-hidden px-8 py-6 transition-all duration-300">
+      <div className="flex-1 flex flex-col h-full overflow-hidden transition-all duration-300">
 
         {/* Filters Card */}
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 mb-8">
-          <div className="space-y-6">
+        <div className=" py-3 px-4 mb-1">
+          <div className="space-y-2">
 
             {/* Header Row */}
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b pb-4">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
               <div className="flex flex-wrap items-center gap-2.5">
                 <div className="bg-blue-50 p-2 rounded-lg text-blue-600">
                   <Filter className="h-4 w-4" />
@@ -303,7 +341,7 @@ export function ReviewInterface({
 
               </div>
               <div className="flex items-center gap-3">
-                <Select 
+                <Select
                   value={selectedExport}
                   disabled={!!exportingType || posts.length === 0}
                   onValueChange={(val) => {
@@ -340,10 +378,8 @@ export function ReviewInterface({
               </div>
             </div>
 
-            {/* <Separator className="bg-slate-100" /> */}
-
             {/* Controls Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-6 gap-5">
+            <div className="grid grid-cols-1 items-end md:grid-cols-5 gap-5">
               <div className="space-y-2">
                 <Label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Status</Label>
                 <Select
@@ -381,34 +417,10 @@ export function ReviewInterface({
                   </SelectContent>
                 </Select>
               </div>
-              {/* 
-              <div className="space-y-2">
-                <Label className="text-xs font-bold text-slate-500 uppercase tracking-wide flex items-center gap-1.5">
-                  <Calendar className="w-3.5 h-3.5" /> Sourced After
-                </Label>
-                <DatePicker
-                  date={currentFilters.sourcingDateStart ? new Date(currentFilters.sourcingDateStart) : undefined}
-                  setDate={(date) => handleFilterChange('sourcingDateStart', date ? format(date, 'yyyy-MM-dd') : '')}
-                  placeholder="Select Date"
-                  className="w-full"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label className="text-xs font-bold text-slate-500 uppercase tracking-wide flex items-center gap-1.5">
-                  <Database className="w-3.5 h-3.5" /> Ingested After
-                </Label>
-                <DatePicker
-                  date={currentFilters.dbDateStart ? new Date(currentFilters.dbDateStart) : undefined}
-                  setDate={(date) => handleFilterChange('dbDateStart', date ? format(date, 'yyyy-MM-dd') : '')}
-                  placeholder="Select Date"
-                  className="w-full"
-                />
-              </div> */}
 
               {/* sourcing date  */}
               <div className="space-y-1.5 w-full min-w-32">
-                <Label className="text-[10px] uppercase font-bold text-slate-400">Sourcing Date</Label>
+                <Label className="text-xs font-bold text-slate-500 uppercase tracking-wide">SOURCING DATE</Label>
                 <DateFilterPopover
                   title="Sourcing Date"
                   initialFrom={currentFilters.sourcingDateStart}
@@ -422,7 +434,7 @@ export function ReviewInterface({
 
               {/* posting date  */}
               <div className="space-y-1.5 w-full min-w-32">
-                <Label className="text-[10px] uppercase font-bold text-slate-400">Publish Date</Label>
+                <Label className="text-xs font-bold text-slate-500 uppercase tracking-wide">PUBLISH DATE</Label>
                 <DateFilterPopover
                   title="Publish Date"
                   initialFrom={currentFilters.postingDateStart}
@@ -433,7 +445,9 @@ export function ReviewInterface({
                   })}
                 />
               </div>
-              <div className="flex items-center space-x-2.5 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200/50">
+
+              {/* is AI analyzed ? */}
+              <div className="flex items-center justify-between h-fit py-2 space-x-2.5 bg-neutral-100 shadow-xs px-2  rounded-lg border">
                 <Checkbox
                   id="aiAnalyzed"
                   checked={currentFilters.aiAnalyzed === 'true' || currentFilters.aiAnalyzed === true}
@@ -448,28 +462,12 @@ export function ReviewInterface({
                   AI Analyzed Only
                 </label>
               </div>
-
-              <div className="flex items-center space-x-2.5 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200/50">
-                <Checkbox
-                  id="poiDetected"
-                  checked={currentFilters.poiDetected !== 'false' && currentFilters.poiDetected !== false}
-                  onCheckedChange={(checked) => handleFilterChange('poiDetected', checked.toString())}
-                  className="border-slate-300 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
-                />
-                <label
-                  htmlFor="poiDetected"
-                  className="text-sm font-medium leading-none cursor-pointer text-slate-700 flex items-center gap-2"
-                >
-                  <Search className="w-3.5 h-3.5 text-blue-500" />
-                  POI Detected
-                </label>
-              </div>
             </div>
           </div>
         </div>
 
         {/* Data Table */}
-        <div className={cn("flex-1 min-h-0 bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden transition-opacity flex flex-col", isPending && "opacity-60")}>
+        <div className={cn("flex-1 min-h-0 bg-white shadow-sm border border-slate-200 overflow-hidden transition-opacity flex flex-col", isPending && "opacity-60")}>
           <div className="overflow-auto flex-1">
             <table className="min-w-full divide-y divide-slate-100">
               <thead className="bg-slate-50 sticky top-0 z-10 shadow-sm">
@@ -545,7 +543,7 @@ export function ReviewInterface({
                         </td> */}
 
                         {/* Content */}
-                        <td className="px-6 py-4 max-w-lg align-top">
+                        <td className="px-6 py-3 max-w-lg align-top">
                           <div className="flex gap-4">
                             <div className="shrink-0 relative">
                               {post.signedImageUrl ? (
@@ -562,6 +560,7 @@ export function ReviewInterface({
                                   <Quote className="h-6 w-6 text-slate-300" />
                                 </div>
                               )}
+                              {/* SHOW PLATFORM */}
                               {post.platform.toLowerCase() === 'instagram' && <div className="absolute -bottom-1 -right-1 bg-white rounded-full p-0.5 shadow-sm"><Instagram className="w-4 h-4 text-pink-500 fill-pink-50" /></div>}
                               {post.platform.toLowerCase() === 'facebook' && <div className="absolute -bottom-1 -right-1 bg-white rounded-full p-0.5 shadow-sm"><Facebook className="w-4 h-4 text-blue-600 fill-blue-50" /></div>}
                               {post.platform.toLowerCase() === 'x' && <div className="absolute -bottom-1 -right-1 bg-white rounded-full p-1 shadow-sm"> <span className="block size-4 text-black"><Twitter /></span> </div>}
@@ -589,7 +588,7 @@ export function ReviewInterface({
                                   {post.taken_at ? format(new Date(post.taken_at * 1000), "dd/MM/yyyy") : 'N/A'}
                                 </span>
                               </div>
-                              <p className="text-sm text-slate-600 line-clamp-2 leading-relaxed">
+                              <p className="text-sm text-slate-600 line-clamp-1 leading-relaxed">
                                 {post.caption || <span className="italic text-slate-400">No caption available</span>}
                               </p>
                             </div>
@@ -597,10 +596,16 @@ export function ReviewInterface({
                         </td>
 
                         {/* Platform */}
-                        <td className="px-6 py-4 whitespace-nowrap align-top">
-                          <Badge variant="outline" className="capitalize font-semibold text-slate-600 border-slate-300">
-                            {post.platform.toLowerCase() || 'Unknown'}
-                          </Badge>
+                        <td className="px-6 py-4 flex flex-col items-center whitespace-nowrap align-top">
+                          {/* SHOW PLATFORM */}
+                          {post.platform.toLowerCase() === 'instagram' && <div className=" bg-white w-fit h-fit rounded-full p-0.5 shadow-sm"><Instagram className="w-4 h-4 text-pink-500 fill-pink-50" /></div>}
+                          {post.platform.toLowerCase() === 'facebook' && <div className=" bg-white w-fit h-fit rounded-full p-0.5 shadow-sm"><Facebook className="w-4 h-4 text-blue-600 fill-blue-50" /></div>}
+                          {post.platform.toLowerCase() === 'x' && <div className=" bg-white w-fit h-fit rounded-full p-1 shadow-sm"> <span className="block size-4 text-black"><Twitter /></span> </div>}
+                          {post.platform.toLowerCase() === 'reddit' && <div className=" bg-white w-fit h-fit rounded-full p-0.5 shadow-sm"> <span className="block size-6 text-black"><Reddit /></span> </div>}
+                          {post.platform.toLowerCase() === 'youtube' && <div className=" bg-white w-fit h-fit rounded-full p-0.5 shadow-sm"><Youtube className="w-4 h-4 text-red-600 fill-red-50" /></div>}
+                          {post.platform.toLowerCase() === 'website' && <div className=" bg-white w-fit h-fit rounded-full p-0.5 shadow-sm"><Globe className="w-4 h-4 text-slate-500" /></div>}
+
+                          {post.platform.toLowerCase() || 'Unknown'}
                         </td>
 
                         {/* Ingestion Date */}
@@ -669,8 +674,8 @@ export function ReviewInterface({
 
         {/* Pagination Controls */}
         {totalPages > 1 && (
-          <div className="pb-2 pt-4">
-            <div className="bg-white rounded-xl shadow-sm border border-slate-200 px-4 py-3 flex items-center justify-between">
+          <div className="">
+            <div className=" px-4 py-3 flex items-center justify-between">
               <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">
                 Page <span className="text-slate-900">{currentPage}</span> of <span className="text-slate-900">{totalPages}</span>
               </div>

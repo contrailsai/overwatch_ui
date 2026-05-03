@@ -8,6 +8,7 @@ import { getPostsByIds } from '@/app/(dashboard)/cases/actions';
 import { generateDetailedCasesDocx } from './DetailedCasesReportDocx';
 import { useClient } from '@/context/ClientContext';
 import posthog from 'posthog-js';
+import { trackClientActivity } from '@/utils/supabase/metrics';
 
 export function DetailedReportDocxButton({ posts, project, className, onStateChange }) {
     const { clientDetails } = useClient();
@@ -109,6 +110,10 @@ export function DetailedReportDocxButton({ posts, project, className, onStateCha
                 event_id: 'detailed_cases_report_docx',
                 status: 'downloading'
             });
+
+            if (clientDetails?.id && project?.project_name) {
+                trackClientActivity(clientDetails.id, project.project_name, 'report_download', 'detailed_docx', clientDetails.email);
+            }
             
             await generateDetailedCasesDocx(fullyLoadedPosts, project, imgState.compressedImages, clientDetails);
 
