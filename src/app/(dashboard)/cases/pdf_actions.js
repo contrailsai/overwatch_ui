@@ -5,6 +5,7 @@ import { traceAction } from '@/utils/tracing'
 import { createClient } from '@/utils/supabase/server'
 import { generateReportHash } from '@/utils/report-hash'
 import { sendReportSqsMessage } from '@/utils/aws/sqs'
+import { getAuthenticatedUser } from '@/utils/supabase/server'
 
 export const getReportDownloadUrl = traceAction('getReportDownloadUrl', async (s3Url, originalName) => {
   if (!s3Url) return null
@@ -22,6 +23,9 @@ export const getReportDownloadUrl = traceAction('getReportDownloadUrl', async (s
 
 export const getOrCreateReportJob = traceAction('getOrCreateReportJob', async ({ posts, project, profile, reportType }) => {
   const supabase = await createClient();
+  const user = await getAuthenticatedUser();
+  if (!user) throw new Error('Authentication required to generate reports');
+
   const postIds = posts.map(p => p._id);
   const profileId = profile?.id || profile?._id || '';
   const hash = generateReportHash(project?.project_name || 'unknown', postIds, reportType, profileId);
@@ -29,11 +33,12 @@ export const getOrCreateReportJob = traceAction('getOrCreateReportJob', async ({
   // Calculate 2 mins ago
   const twoMinsAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString();
 
-  // Check for recent matching request
+  // Check for recent matching request by THIS client
   const { data: existingJob, error: checkError } = await supabase
     .from('reports_generation')
     .select('*')
     .eq('report_hash', hash)
+    .eq('client_id', user.id)
     .gte('last_update', twoMinsAgo)
     .order('last_update', { ascending: false })
     .limit(1)
@@ -59,7 +64,8 @@ export const getOrCreateReportJob = traceAction('getOrCreateReportJob', async ({
       report_hash: hash,
       project: project?.project_name,
       status: 'Waiting in queue...',
-      report_type: reportType
+      report_type: reportType,
+      client_id: user.id
     })
     .select('id')
     .single();
