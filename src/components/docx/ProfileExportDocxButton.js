@@ -39,7 +39,7 @@ export function ProfileExportDocxButton({ profile, project, className }) {
                 }
 
                 // Compress post images
-                const imagePromises = postsToProcess.map(async (post) => {
+                const imagePromises = postsToProcess?.map(async (post) => {
                     try {
                         const sourceUrl = post?.signedImageUrl ||
                             post?.image_url ||
@@ -84,7 +84,8 @@ export function ProfileExportDocxButton({ profile, project, className }) {
 
             if (isMounted) setFetchingData(true);
             try {
-                const fullPosts = await getPostsByIds(project, profile.posts);
+                const result = await getPostsByIds(project, profile.posts);
+                const fullPosts = Array.isArray(result) ? result : (result?.posts ?? []);
                 if (isMounted) {
                     setFullyLoadedPosts(fullPosts);
                     processImages(fullPosts);

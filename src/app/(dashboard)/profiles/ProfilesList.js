@@ -166,7 +166,6 @@ export function ProfilesList({ profiles, project, initialFilters, initialSort = 
 
     const hasActiveFilter = (
         initialFilters.platform !== 'all' ||
-        initialFilters.is_verified !== 'all' ||
         initialFilters.status !== 'all' ||
         initialFilters.searchText ||
         initialFilters.publish_date_from ||
@@ -253,19 +252,6 @@ export function ProfilesList({ profiles, project, initialFilters, initialSort = 
                                                 />
                                             </div>
 
-                                            <div className="space-y-1 w-full lg:w-auto lg:flex-1 lg:max-w-[140px]">
-                                                <StatusFilter
-                                                    label="Verified"
-                                                    placeholder="All"
-                                                    initialStatus={initialFilters.is_verified}
-                                                    onChange={(val) => handleFilterChange('is_verified', val)}
-                                                    options={[
-                                                        { value: 'true', label: 'Verified' },
-                                                        { value: 'false', label: 'Unverified' },
-                                                    ]}
-                                                />
-                                            </div>
-
                                             <div className="space-y-1 w-full lg:w-auto lg:flex-1 lg:max-w-[160px]">
                                                 <StatusFilter
                                                     label="Status"
@@ -281,9 +267,9 @@ export function ProfilesList({ profiles, project, initialFilters, initialSort = 
                                             </div>
 
                                             <div className="space-y-1.5 w-full lg:w-auto lg:min-w-[140px] lg:max-w-[160px]">
-                                                <Label className="text-[10px] uppercase font-bold text-slate-400">Publish Date</Label>
+                                                <Label className="text-[10px] uppercase font-bold text-slate-400">Last Activity</Label>
                                                 <DateFilterPopover
-                                                    title="Publish Date of ingested post"
+                                                    title="Last Activity"
                                                     initialFrom={initialFilters.publish_date_from}
                                                     initialTo={initialFilters.publish_date_to}
                                                     onApply={(range) => updateQueryParams({
@@ -413,49 +399,47 @@ export function ProfilesList({ profiles, project, initialFilters, initialSort = 
                 {/* Desktop Table View */}
                 <div className="hidden md:flex md:flex-col flex-1 min-h-0 bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                     <div className="flex-1 overflow-auto custom-scrollbar relative">
-                    <table className="min-w-full table-fixed border-separate border-spacing-0">
+                    <table className="min-w-full border-separate border-spacing-0">
                         <thead className="sticky top-0 z-20 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                             <tr className="bg-slate-50/90 backdrop-blur-md">
                                 <th
                                     scope="col"
                                     onClick={() => handleSortChange('risk')}
-                                    className="px-6 py-4 text-left w-[120px] border-b border-slate-100 cursor-pointer hover:bg-slate-100/50 transition-colors select-none"
+                                    className="px-6 py-4 text-left border-b border-slate-100 cursor-pointer hover:bg-slate-100/50 transition-colors select-none"
                                 >
                                     <div className="flex items-center">Risk<SortIcon field="risk" /></div>
                                 </th>
-                                <th scope="col" className="px-6 py-4 text-left w-[150px] border-b border-slate-100">Status</th>
-                                <th scope="col" className="px-6 py-4 text-left w-[240px] border-b border-slate-100">Display Name</th>
-                                <th scope="col" className="px-6 py-4 text-left w-[140px] border-b border-slate-100">Platform</th>
+                                <th scope="col" className="px-6 py-4 text-left border-b border-slate-100">Status</th>
+                                <th scope="col" className="px-6 py-4 text-left border-b border-slate-100">Display Name</th>
+                                <th scope="col" className="px-6 py-4 text-left border-b border-slate-100">Platform</th>
                                 <th
                                     scope="col"
                                     onClick={() => handleSortChange('followers')}
-                                    className="px-6 py-4 text-left w-[120px] border-b border-slate-100 hidden lg:table-cell cursor-pointer hover:bg-slate-100/50 transition-colors select-none"
+                                    className="px-6 py-4 text-left border-b border-slate-100 hidden lg:table-cell cursor-pointer hover:bg-slate-100/50 transition-colors select-none"
                                 >
                                     <div className="flex items-center">Followers<SortIcon field="followers" /></div>
                                 </th>
-                                <th scope="col" className="px-6 py-4 text-left w-[160px] border-b border-slate-100 hidden xl:table-cell">Location</th>
                                 <th
                                     scope="col"
                                     onClick={() => handleSortChange('cases')}
-                                    className="px-6 py-4 text-left w-[100px] border-b border-slate-100 cursor-pointer hover:bg-slate-100/50 transition-colors select-none"
+                                    className="px-6 py-4 text-left border-b border-slate-100 cursor-pointer hover:bg-slate-100/50 transition-colors select-none"
                                 >
                                     <div className="flex items-center">Cases<SortIcon field="cases" /></div>
                                 </th>
                                 <th
                                     scope="col"
                                     onClick={() => handleSortChange('last_active')}
-                                    className="px-6 py-4 text-left w-[140px] border-b border-slate-100 hidden lg:table-cell cursor-pointer hover:bg-slate-100/50 transition-colors select-none"
+                                    className="px-6 py-4 text-left border-b border-slate-100 hidden lg:table-cell cursor-pointer hover:bg-slate-100/50 transition-colors select-none"
                                 >
                                     <div className="flex items-center">Last Active<SortIcon field="last_active" /></div>
                                 </th>
-                                <th scope="col" className="px-6 py-4 text-left w-[100px] border-b border-slate-100">Source</th>
                                 <th scope="col" className="px-6 py-4 text-right border-b border-slate-100">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="bg-white">
                             {localProfiles.length === 0 ? (
                                 <tr>
-                                    <td colSpan={10} className="px-6 py-20 text-center">
+                                    <td colSpan={8} className="px-6 py-20 text-center">
                                         <div className="flex flex-col items-center justify-center text-slate-400">
                                             <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4 border border-slate-100 shadow-inner">
                                                 <User className="w-8 h-8 opacity-20" />
@@ -481,7 +465,6 @@ export function ProfilesList({ profiles, project, initialFilters, initialSort = 
                                     const isSelected = selectedProfile?._id === profile._id
                                     const risk = profile.review_details?.risk || 'safe'
                                     const followerCount = profile.metadata?.follower_count
-                                    const location = profile.metadata?.location?.trim()
                                     const lastActive = profile.last_relevant_publish_date
                                     return (
                                         <tr key={profile._id} onClick={() => setSelectedProfile(profile)} className={cn('transition-all cursor-pointer group hover:bg-slate-50/80', isSelected && 'bg-blue-50/50')}>
@@ -526,18 +509,31 @@ export function ProfilesList({ profiles, project, initialFilters, initialSort = 
                                                             <User className="w-4 h-4 text-slate-400" />
                                                         )}
                                                     </div>
-                                                    <div className="flex flex-col gap-0.5 min-w-0">
-                                                        <span className="font-bold text-slate-800 text-sm tracking-tight truncate max-w-[180px] flex items-center gap-1">
+                                                    <div className="flex flex-col gap-0.5 min-w-0 flex-1">
+                                                        <span className="font-bold text-slate-800 text-sm tracking-tight truncate flex items-center gap-1">
                                                             <span className="truncate">{profile.display_name}</span>
                                                             {profile.is_verified && (
                                                                 <BadgeCheck className="w-3.5 h-3.5 text-blue-500 fill-blue-50 shrink-0" />
                                                             )}
                                                         </span>
-                                                        {profile.username && (
-                                                            <span className="text-[10px] text-slate-400 truncate max-w-[180px]">
-                                                                @{profile.username}
-                                                            </span>
-                                                        )}
+                                                        <div className="flex items-center gap-2 min-w-0">
+                                                            {profile.username && (
+                                                                <span className="text-[10px] text-slate-400 truncate">
+                                                                    @{profile.username}
+                                                                </span>
+                                                            )}
+                                                            {profile.profile_url && (
+                                                                <a
+                                                                    href={profile.profile_url}
+                                                                    target="_blank"
+                                                                    rel="noreferrer"
+                                                                    onClick={(e) => e.stopPropagation()}
+                                                                    className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-blue-600 hover:text-blue-800 hover:underline transition-colors shrink-0"
+                                                                >
+                                                                    Source <ExternalLink className="w-2.5 h-2.5" />
+                                                                </a>
+                                                            )}
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </td>
@@ -557,16 +553,6 @@ export function ProfilesList({ profiles, project, initialFilters, initialSort = 
                                                     <span className="text-slate-300 text-xs">—</span>
                                                 )}
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap align-middle border-b border-slate-50 hidden xl:table-cell">
-                                                {location ? (
-                                                    <div className="flex items-center gap-1.5 text-slate-600 text-xs font-semibold">
-                                                        <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                                                        <span className="truncate max-w-[120px]">{location}</span>
-                                                    </div>
-                                                ) : (
-                                                    <span className="text-slate-300 text-xs">—</span>
-                                                )}
-                                            </td>
                                             <td className="px-6 py-4 whitespace-nowrap align-middle font-bold text-slate-700 text-sm border-b border-slate-50">
                                                 {profile.posts.length}
                                             </td>
@@ -579,18 +565,6 @@ export function ProfilesList({ profiles, project, initialFilters, initialSort = 
                                                 ) : (
                                                     <span className="text-slate-300 text-xs">—</span>
                                                 )}
-                                            </td>
-                                            {/* Source */}
-                                            <td className="px-4 py-3 whitespace-nowrap align-middle border-b border-slate-50">
-                                                <a
-                                                    href={profile.profile_url}
-                                                    target="_blank"
-                                                    rel="noreferrer"
-                                                    onClick={(e) => e.stopPropagation()}
-                                                    className="inline-flex items-center text-blue-600 hover:text-blue-800 font-bold text-xs transition-colors hover:underline bg-blue-50 px-2 py-1 rounded-md"
-                                                >
-                                                    Source <ExternalLink className="w-3 h-3 ml-1" />
-                                                </a>
                                             </td>
                                             <td className="px-4 py-3 whitespace-nowrap text-right align-middle border-b border-slate-50">
                                                 <Button
