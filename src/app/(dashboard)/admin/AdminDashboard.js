@@ -339,6 +339,21 @@ const AdminDashboard = ({ project_name, clients }) => {
                                             <span>{stats.last30DaysProfiles || 0} <span className="text-[10px] text-slate-400 font-normal">profiles</span></span>
                                         </div>
                                     </div>
+                                    <div className="space-y-1 min-w-0 col-span-2">
+                                        <p className="text-xs text-slate-500 font-medium">Reports Downloaded (All Time)</p>
+                                        <div className="flex flex-wrap gap-1.5 text-xs">
+                                            {Object.entries(stats.allTimeReports || {}).length > 0 ? (
+                                                Object.entries(stats.allTimeReports).map(([type, count]) => (
+                                                    <Badge key={type} variant="secondary" className="bg-slate-100 text-slate-700 hover:bg-slate-200">
+                                                        <span className="capitalize mr-1">{type.replace(/_/g, ' ')}:</span>
+                                                        <span className="font-bold">{count}</span>
+                                                    </Badge>
+                                                ))
+                                            ) : (
+                                                <span className="text-slate-400 italic">No reports downloaded yet</span>
+                                            )}
+                                        </div>
+                                    </div>
                                 </div>
                                 <div className="p-3 bg-slate-100/50 flex flex-wrap justify-end gap-2 border-t border-slate-100">
                                     <Button variant="outline" size="sm" className="h-8 text-xs bg-white text-slate-600 hover:text-purple-600" onClick={() => { setClientToEditOrg(client); setNewOrg(client.organization || '') }}>
@@ -377,6 +392,7 @@ const AdminDashboard = ({ project_name, clients }) => {
                                 <TableHead className="w-[300px] font-semibold text-slate-700">Member Details</TableHead>
                                 <TableHead className="font-semibold text-slate-700">Status & Activity</TableHead>
                                 <TableHead className="text-center font-semibold text-slate-700">Today</TableHead>
+                                <TableHead className="text-center font-semibold text-slate-700">Reports Downloaded</TableHead>
                                 <TableHead className="text-center font-semibold text-slate-700">Last 7 Days</TableHead>
                                 <TableHead className="text-center font-semibold text-slate-700">Last 30 Days</TableHead>
                                 <TableHead className="text-right font-semibold text-slate-700">Manage</TableHead>
@@ -464,6 +480,22 @@ const AdminDashboard = ({ project_name, clients }) => {
                                             </div>
                                         </TableCell>
                                         <TableCell className="py-4">
+                                            <div className="flex items-center justify-center">
+                                                <div className="flex flex-col gap-1 items-start">
+                                                    {Object.entries(stats.allTimeReports || {}).length > 0 ? (
+                                                        Object.entries(stats.allTimeReports).map(([type, count]) => (
+                                                            <div key={type} className="flex items-center gap-2 text-xs" title={`All time ${type} reports downloaded`}>
+                                                                <span className="font-medium text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded capitalize">{type.replace(/_/g, ' ')}</span>
+                                                                <span className="font-bold text-slate-800">{count}</span>
+                                                            </div>
+                                                        ))
+                                                    ) : (
+                                                        <span className="text-xs text-slate-400 italic">No reports</span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </TableCell>
+                                        <TableCell className="py-4">
                                             <div className="flex items-center justify-center gap-4 text-sm">
                                                 <div className="flex items-baseline gap-1" title="Cases Reviewed Last 7 Days">
                                                     <span className="font-bold text-slate-800">{stats.last7DaysCases || 0}</span>
@@ -539,7 +571,7 @@ const AdminDashboard = ({ project_name, clients }) => {
                             })}
                             {filteredClients.length === 0 && (
                                 <TableRow>
-                                    <TableCell colSpan={6} className="h-64 text-center">
+                                    <TableCell colSpan={7} className="h-64 text-center">
                                         <div className="flex flex-col items-center justify-center text-slate-500">
                                             <div className="p-4 rounded-full bg-slate-50 mb-4 border border-slate-100">
                                                 <Users className="w-8 h-8 text-slate-300" />

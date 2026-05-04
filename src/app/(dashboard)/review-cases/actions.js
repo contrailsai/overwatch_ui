@@ -5,6 +5,7 @@ import clientPromise from '@/utils/mongodb/client'
 import { redirect } from 'next/navigation'
 import { ObjectId } from 'mongodb'
 import { getSignedImageUrl, uploadFileToS3 } from '@/utils/aws/s3'
+import { sendContentModerationSqsMessage } from '@/utils/aws/sqs'
 import { updateDailyMetrics } from '@/utils/supabase/metrics'
 import { sendEmail } from '@/utils/email'
 import { traceAction } from '@/utils/tracing'
@@ -369,22 +370,32 @@ export const getAllPostsForExport = traceAction('getAllPostsForExport', async (p
     const posts = await collection.aggregate(pipeline).toArray()
 
     const processedPosts = posts.map(post => ({
-      _id: post._id.toString(),
-      post_id: post.post_id || post.code || '',
-      url: post.original_url || post.result_origin?.source_url || '',
-      caption: post.post_content?.caption || post.caption || '',
+      _id: { $oid: post._id.toString() },
+      code: post.code || post.post_id || '',
+      content: post.content || post.post_content?.content || post.caption || '',
+      created_at: { $date: post.created_at || post.metadata?.created_at || '' },
+      engagement: {
+        likes: post.engagement?.likes ?? post.stats?.like_count ?? 0,
+        comments: post.engagement?.comments ?? post.stats?.comment_count ?? 0,
+        shares: post.engagement?.shares ?? post.stats?.share_count ?? 0,
+        retweets: post.engagement?.retweets ?? post.stats?.retweet_count ?? 0,
+        quotes: post.engagement?.quotes ?? post.stats?.quote_count ?? 0,
+        replies: post.engagement?.replies ?? post.stats?.reply_count ?? 0,
+        views: post.engagement?.views ?? post.stats?.view_count ?? 0,
+        posted_at: { $date: post.engagement?.posted_at || post.metadata?.posted_date || '' }
+      },
+      media_urls: post.media_urls || post.post_content?.media_urls || [],
       platform: post.platform ? post.platform.toLowerCase() : '',
-      author_url: post.profile?.profile_url || post.author?.url || '',
-      author_username: post.profile?.username || '',
-      author_name: post.profile?.display_name || post.author?.name || '',
-      posted_at: post.engagement?.posted_at ? new Date(post.engagement.posted_at).toISOString() : (post.metadata?.sourcing_date ? new Date(post.metadata.sourcing_date).toISOString() : ''),
-      likes: post.engagement?.likes || 0,
-      comments: post.engagement?.comments || 0,
-      views: post.engagement?.views || 0,
-      shares: post.engagement?.shares || 0,
-      retweets: post.engagement?.retweets || 0,
-      quotes: post.engagement?.quotes || 0,
-      replies: post.engagement?.replies || 0,
+      profile: {
+        platform_user_id: post.profile?.platform_user_id || null,
+        username: post.profile?.username || post.author?.username || '',
+        display_name: post.profile?.display_name || post.author?.name || '',
+        profile_url: post.profile?.profile_url || post.author?.url || '',
+        is_verified: post.profile?.is_verified || false
+      },
+      sourcing_date: { $date: post.sourcing_date || post.metadata?.sourcing_date || '' },
+      url: post.original_url || post.url || post.result_origin?.source_url || '',
+      analysis_results: post.analysis_results || {},
       review_details: post.review_details || {}
     }))
 
@@ -786,6 +797,29 @@ export const updatePostVisibility = traceAction('updatePostVisibility', async (p
     return { success: true }
   } catch (error) {
     console.error('updatePostVisibility Error:', error)
+    return { success: false, error: error.message }
+  }
+})
+
+export const runAIAnalysis = traceAction('runAIAnalysis', async (postId, project, clientDetails) => {
+  try {
+    if (!project?.mongo_db_map) {
+      return { success: false, error: 'Project database configuration missing' }
+    }
+
+    if (!postId) {
+      return { success: false, error: 'Missing Post ID' }
+    }
+
+    const response = await sendContentModerationSqsMessage(project.mongo_db_map, 'Posts', postId);
+    
+    if (!response) {
+      return { success: false, error: 'AI analysis queue not configured' }
+    }
+
+    return { success: true }
+  } catch (error) {
+    console.error('runAIAnalysis Error:', error)
     return { success: false, error: error.message }
   }
 })

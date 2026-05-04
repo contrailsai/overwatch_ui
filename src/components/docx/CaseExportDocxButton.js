@@ -8,6 +8,7 @@ import { generateSingleCaseDocx } from './SingleCaseReportDocx';
 
 import { useClient } from '@/context/ClientContext';
 import posthog from 'posthog-js';
+import { trackClientActivity } from '@/utils/supabase/metrics';
 
 export const fetchAndCompressImage = async (imageUrl, maxWidth = 800) => {
     try {
@@ -93,6 +94,11 @@ export function CaseExportDocxButton({ post, project, className }) {
                 event_id: 'single_case_report_docx',
                 status: 'downloading'
             });
+
+            if (clientDetails?.id && project?.project_name) {
+                trackClientActivity(clientDetails.id, project.project_name, 'report_download', 'single_case_docx', clientDetails.email);
+            }
+
             await generateSingleCaseDocx(post, project, imgState.compressedUrl, clientDetails);
 
             sendGAEvent('event', 'download_single_case_report_docx', {

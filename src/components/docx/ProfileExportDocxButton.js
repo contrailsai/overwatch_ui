@@ -9,6 +9,7 @@ import { fetchAndCompressImage } from './CaseExportDocxButton';
 import { getPostsByIds } from '@/app/(dashboard)/cases/actions';
 import { useClient } from '@/context/ClientContext';
 import posthog from 'posthog-js';
+import { trackClientActivity } from '@/utils/supabase/metrics';
 
 export function ProfileExportDocxButton({ profile, project, className }) {
     const { clientDetails } = useClient();
@@ -108,6 +109,10 @@ export function ProfileExportDocxButton({ profile, project, className }) {
                 status: 'downloading',
                 profile_id: profile?._id
             });
+
+            if (clientDetails?.id && project?.project_name) {
+                trackClientActivity(clientDetails.id, project.project_name, 'report_download', 'profile_docx', clientDetails.email);
+            }
 
             await generateProfileDocx(
                 profile,
