@@ -8,7 +8,7 @@ import posthog from 'posthog-js';
 import { useClient } from '@/context/ClientContext';
 import { trackClientActivity } from '@/utils/supabase/metrics';
 
-export function CaseExportButton({ post, project }) {
+export function CaseExportButton({ post, project, className }) {
     const { exportPdf, loading, statusText } = usePdfExport();
     const { clientDetails } = useClient();
 
@@ -36,7 +36,7 @@ export function CaseExportButton({ post, project }) {
             size="sm"
             disabled={loading}
             onClick={handleDownload}
-            className="gap-2 cursor-pointer disabled:cursor-not-allowed border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-100 transition-all font-semibold shadow-sm h-auto min-h-[32px] py-1.5"
+            className={className || "gap-2 cursor-pointer disabled:cursor-not-allowed border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-100 transition-all font-semibold shadow-sm h-auto min-h-[32px] py-1.5"}
         >
             {loading ? (
                 <Loader2 className="w-4 h-4 animate-spin shrink-0" />

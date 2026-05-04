@@ -79,7 +79,8 @@ export function DetailedReportDocxButton({ posts, project, className, onStateCha
             if (placeholderIds.length > 0) {
                 if (isMounted) setFetchingData(true);
                 try {
-                    const fullPosts = await getPostsByIds(project, placeholderIds);
+                    const result = await getPostsByIds(project, placeholderIds);
+                    const fullPosts = Array.isArray(result) ? result : (result?.posts ?? []);
                     // Merge full posts back into our list
                     finalPosts = posts.map(p => {
                         const full = fullPosts.find(fp => fp._id === p._id);

@@ -545,6 +545,9 @@ export const getPostsByIds = traceAction('getPostsByIds', async (project, ids) =
     const client = await clientPromise
     const db = client.db(project.mongo_db_map)
     const collection = db.collection('Posts')
+    const totalCount = ids.length;
+    const page = 1;
+    const limit = 100;
 
     const objectIds = ids.map(id => new ObjectId(id))
     const posts = await collection.find(
