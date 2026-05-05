@@ -14,12 +14,9 @@ export const normalized_S3_post = traceAction('normalized_S3_post', async (post)
   if (!post) return null;
 
   // Find S3 URL to sign from post_content.media_urls
-  let s3UrlToSign = null;
-  if (post?.post_content?.media_urls && post.post_content.media_urls.length > 0) {
-    const firstMedia = post.post_content.media_urls[0];
-    // Prefer thumbnail for videos, otherwise use s3_url
-    s3UrlToSign = firstMedia.thumbnail_url || firstMedia.s3_url;
-  }
+  const firstMedia = post?.post_content?.media_urls?.[0] || null;
+  // Prefer thumbnail for videos, otherwise use s3_url
+  const s3UrlToSign = firstMedia ? (firstMedia.thumbnail_url || firstMedia.s3_url) : null;
 
   const signedUrl = s3UrlToSign ? await getSignedImageUrl(s3UrlToSign) : null;
 
@@ -30,6 +27,7 @@ export const normalized_S3_post = traceAction('normalized_S3_post', async (post)
     created_at: post?.metadata?.created_at ? new Date(post.metadata.created_at).toISOString() : null,
     sourcing_date: post?.metadata?.sourcing_date ? new Date(post.metadata.sourcing_date).toISOString() : null,
     signedImageUrl: signedUrl,
+    uploadedManually: firstMedia?.uploaded_manually === true,
 
     // Content
     caption: post.post_content?.caption || post.post_content?.content || '',

@@ -287,12 +287,12 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
                 // Update parent list if needed
                 if (setPosts) {
                     setPosts(prevPosts => prevPosts.map(p =>
-                        p._id === localPost._id ? { ...p, signedImageUrl: result.signedUrl } : p
+                        p._id === localPost._id ? { ...p, signedImageUrl: result.signedUrl, uploadedManually: true } : p
                     ))
                 }
 
                 // Update local UI immediately
-                setLocalPost(prev => ({ ...prev, signedImageUrl: result.signedUrl }))
+                setLocalPost(prev => ({ ...prev, signedImageUrl: result.signedUrl, uploadedManually: true }))
 
                 showToast("Image uploaded successfully", "success");
             } else {
@@ -323,11 +323,11 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
 
                 if (setPosts) {
                     setPosts(prevPosts => prevPosts.map(p =>
-                        p._id === localPost._id ? { ...p, signedImageUrl: null } : p
+                        p._id === localPost._id ? { ...p, signedImageUrl: null, uploadedManually: false } : p
                     ))
                 }
 
-                setLocalPost(prev => ({ ...prev, signedImageUrl: null }))
+                setLocalPost(prev => ({ ...prev, signedImageUrl: null, uploadedManually: false }))
 
                 showToast('Image deleted successfully', 'success');
             } else {
@@ -475,8 +475,8 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
                             />
 
                             {(() => {
-                                const hasDisplayedImage = !!uploadedImageUrl || (localPost.signedImageUrl && !mediaError);
-                                if (!hasDisplayedImage) return null;
+                                const showManualImage = !!uploadedImageUrl || (localPost.signedImageUrl && !mediaError && localPost.uploadedManually);
+                                if (!showManualImage) return null;
                                 return (
                                     <div className="absolute top-4 right-4 z-20 flex gap-2">
                                         {showDeleteConfirm ? (
