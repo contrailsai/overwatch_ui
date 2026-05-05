@@ -4,7 +4,7 @@ import { createClient } from '@/utils/supabase/server'
 import clientPromise from '@/utils/mongodb/client'
 import { redirect } from 'next/navigation'
 import { ObjectId } from 'mongodb'
-import { getSignedImageUrl, uploadFileToS3 } from '@/utils/aws/s3'
+import { getSignedImageUrl, uploadFileToS3, deleteFileFromS3 } from '@/utils/aws/s3'
 import { sendContentModerationSqsMessage } from '@/utils/aws/sqs'
 import { updateDailyMetrics } from '@/utils/supabase/metrics'
 import { sendEmail } from '@/utils/email'
@@ -759,6 +759,68 @@ export const uploadCaseImage = traceAction('uploadCaseImage', async (postId, pro
     return { success: true, signedUrl }
   } catch (error) {
     console.error('uploadCaseImage Error:', error)
+    return { success: false, error: error.message }
+  }
+})
+
+export const deleteCaseImage = traceAction('deleteCaseImage', async (postId, project, clientDetails) => {
+  try {
+    if (!project?.mongo_db_map) {
+      return { success: false, error: 'Project database configuration missing' }
+    }
+
+    if (!postId) {
+      return { success: false, error: 'Missing Post ID' }
+    }
+
+    const client = await clientPromise
+    const db = client.db(project.mongo_db_map)
+    const collection = db.collection('Posts')
+
+    const existingPost = await collection.findOne(
+      { _id: new ObjectId(postId) },
+      { projection: { 'post_content.media_urls': 1 } }
+    )
+
+    if (!existingPost) {
+      return { success: false, error: 'Post not found' }
+    }
+
+    const mediaUrls = existingPost?.post_content?.media_urls || []
+
+    // Best-effort: only delete manually uploaded files from S3 to avoid removing original scraped media
+    for (const m of mediaUrls) {
+      if (m?.uploaded_manually && m?.s3_url) {
+        try {
+          const url = new URL(m.s3_url)
+          const key = url.pathname.substring(1)
+          if (key) await deleteFileFromS3(key)
+        } catch (err) {
+          console.error('S3 delete failed (continuing):', err)
+        }
+      }
+    }
+
+    await collection.updateOne(
+      { _id: new ObjectId(postId) },
+      {
+        $set: {
+          'post_content.media_urls': [],
+          'metadata.updated_at': new Date().toISOString()
+        },
+        $push: {
+          'metadata.update_history': {
+            updated_at: new Date(),
+            updated_by: clientDetails.email,
+            changes_summary: 'Image deleted manually for case'
+          }
+        }
+      }
+    )
+
+    return { success: true }
+  } catch (error) {
+    console.error('deleteCaseImage Error:', error)
     return { success: false, error: error.message }
   }
 })
