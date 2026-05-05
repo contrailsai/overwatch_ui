@@ -32,7 +32,7 @@ const initialState = {
 
 export default function ReviewForm({ post, project, clientDetails, onClose, onNavigate, hasPrev, hasNext, setPosts }) {
     const { project_details } = project
-    // console.log(post)
+    console.log(post)
     const submit_to_edit = submitCaseReview.bind(null, project, clientDetails)
     const [state, formAction, isPending] = useActionState(submit_to_edit, initialState)
 
@@ -571,6 +571,38 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
                                 </div>
                             </div>
                         </div>
+
+                        {/* Result Origin Section */}
+                        {localPost.result_origin && (
+                            <div className="flex items-center justify-between bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                                <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                                    <LinkIcon className="w-3 h-3" /> Result Origin
+                                </h4>
+                                <div className="flex flex-row items-center gap-10">
+                                    {Object.entries(localPost.result_origin).map(([key, value]) => (
+                                        <div key={key} className="flex flex-row items-baseline gap-1.5">
+                                            <span className="text-[10px] font-bold text-slate-500 uppercase">
+                                                {key.replace(/_/g, ' ')}
+                                            </span>
+                                            <span className="text-lg font-semibold text-slate-900 break-all">
+                                                {typeof value === 'string' && value.startsWith('http') ? (
+                                                    <a
+                                                        href={value}
+                                                        target="_blank"
+                                                        rel="noreferrer"
+                                                        className="text-blue-600 hover:underline flex items-center gap-1"
+                                                    >
+                                                        Source Link <ExternalLink className="w-3 h-3 shrink-0" />
+                                                    </a>
+                                                ) : (
+                                                    String(value || 'N/A')
+                                                )}
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
 
                         {
                             post.platform.toLowerCase() !== "website" && (
