@@ -3,6 +3,7 @@
 import { trackClientClick, getAllPostIds } from './actions'
 import { CaseDetailPanel } from './CaseDetailPanel'
 import { bulkAssignCasesTo } from './feature_actions'
+import { initiateTakedown } from './takedown_actions'
 
 // IMPORT UI THINGS 
 // import { Skeleton } from "@/components/ui/skeleton"
@@ -14,7 +15,7 @@ import {
   ChevronLeft, ChevronRight, Smile, TrendingDown, TriangleAlert,
   Youtube, Instagram, Facebook, UserPlus, Check,
   AlertOctagon, ChevronDown,
-  DownloadIcon
+  DownloadIcon, ShieldAlert
 } from 'lucide-react'
 
 import { Twitter, Reddit } from '@/utils/icons'
@@ -38,6 +39,8 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
+  DialogFooter,
 } from "@/components/ui/dialog"
 // import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
@@ -80,6 +83,9 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
 
   const [bulkAssignedEmail, setBulkAssignedEmail] = useState("")
   const [isBulkAssigning, setIsBulkAssigning] = useState(false)
+
+  const [showBulkTakedownConfirm, setShowBulkTakedownConfirm] = useState(false)
+  const [isBulkTakedownProcessing, setIsBulkTakedownProcessing] = useState(false)
 
   // Search state
   const [searchTerm, setSearchTerm] = useState(searchParams.get('semantic_search') || '')
@@ -254,6 +260,47 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
     }
   }
 
+  const handleBulkTakedown = async () => {
+    const postIds = Object.keys(selectedCases)
+    if (postIds.length === 0) return
+
+    setIsBulkTakedownProcessing(true)
+    trackClientClick('bulk_do_takedown', { page: 'CasesList', count: postIds.length })
+    try {
+      const result = await initiateTakedown(postIds, clientDetails.email)
+      if (result.success) {
+        setMergedPosts(prev => prev.map(post =>
+          selectedCases[post._id]
+            ? {
+              ...post,
+              client_status: 'Takedown',
+              takedown_info: {
+                ...(post.takedown_info || {}),
+                in_takedown_process: true,
+                status: 'initiated'
+              }
+            }
+            : post
+        ))
+
+        const newUpdatedCases = { ...updatedCases }
+        postIds.forEach(id => { newUpdatedCases[id] = 'Takedown' })
+        setUpdatedCases(newUpdatedCases)
+
+        const skippedNote = result.skipped > 0 ? ` (${result.skipped} already in takedown)` : ''
+        showToast(`Takedown initiated for ${result.count} ${result.count === 1 ? 'case' : 'cases'}${skippedNote}`, 'success')
+        setShowBulkTakedownConfirm(false)
+        handleClearAllSelected()
+      } else {
+        showToast("Bulk takedown failed: " + result.error, 'error')
+      }
+    } catch (error) {
+      showToast("Error during bulk takedown", 'error')
+    } finally {
+      setIsBulkTakedownProcessing(false)
+    }
+  }
+
   // Check if all items on the *current page* are selected for the header checkbox
   const isAllCurrentPageSelected = mergedPosts.length > 0 && mergedPosts.every(post => !!selectedCases[post._id])
   const isSomeCurrentPageSelected = mergedPosts.some(post => !!selectedCases[post._id])
@@ -378,7 +425,7 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
 
                     {/* Header Row: Title & Summary Box */}
                     <div className="flex flex-col w-full lg:w-[160px] xl:w-[180px] shrink-0 rounded-xl p-3 relative ">
-                      <div className="flex items-end justify-between">
+                      <div className="flex items-start justify-between pb-1">
                         <div className="flex flex-col items-start gap-2">
                           {/* FILTER TEXT */}
                           <div className="flex items-center gap-1.5">
@@ -400,10 +447,8 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                               cases found
                             </span>
                           </div>
-                        </div>
-
-                        {/* MOBILE VIEW BUTTONS SETUP */}
-                        <div className="lg:hidden flex flex-col gap-2">
+                          {/* MOBILE VIEW BUTTONS SETUP */}
+                          <div className="lg:hidden flex flex-col gap-2 items-start">
                           <Button
                             variant="ghost"
                             onClick={() => setIsMobileFiltersOpen(!isMobileFiltersOpen)}
@@ -412,7 +457,37 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                             <Filter className="w-3.5 h-3.5 text-slate-500" />
                             {isMobileFiltersOpen ? 'Hide' : 'Filters'}
                           </Button>
+                          {allowDoTakedown && selectedCount > 0 && (
+                            <Button
+                              variant="ghost"
+                              onClick={() => {
+                                if (selectedCount === 0) {
+                                  showToast("Please select some cases before initiating takedown", "error")
+                                  return
+                                }
+                                setShowBulkTakedownConfirm(true)
+                              }}
+                              disabled={isBulkTakedownProcessing}
+                              className={cn(
+                                "h-9 w-full px-3 text-xs font-bold text-white shadow-sm rounded-md transition-all",
+                                "bg-rose-600 hover:bg-rose-700 cursor-pointer",
+                                selectedCount === 0 && "opacity-50 hover:bg-rose-600"
+                              )}
+                              title={selectedCount === 0 ? "Select cases to initiate a bulk takedown" : "Initiate takedown for selected cases"}
+                            >
+                              {isBulkTakedownProcessing ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              ) : (
+                                <ShieldAlert className="w-3.5 h-3.5" />
+                              )}
+                              Do Takedown
+                            </Button>
+                          )}
+                          </div>
+                        </div>
 
+                        {/* MOBILE VIEW BUTTONS SETUP */}
+                        <div className="lg:hidden flex flex-col gap-2">
                           <ReportGenerate
                             selectedPostsArray={selectedPostsArray}
                             selectedCount={selectedCount}
@@ -509,7 +584,7 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                             <div className="flex flex-col gap-3 w-full">
 
                               {/* Dropdowns and Dates and text search ..*/}
-                              <div className="flex flex-wrap items-start gap-2.5 sm:gap-3 w-full h-full ">
+                              <div className="flex flex-wrap items-center gap-2.5 sm:gap-3 w-full h-full ">
 
                                 <div className="space-y-1 w-full lg:w-auto lg:flex-1 lg:max-w-[160px]">
                                   <RiskFilter
@@ -634,6 +709,37 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                                     </Button>
                                   </div>
                                 </div>
+
+                                {allowDoTakedown && selectedCount > 0  && (
+                                <div className="hidden lg:block space-y-1 w-full sm:max-w-xs shrink-0">
+                                  <Label className="text-[10px] uppercase font-bold text-slate-400">Initiate Takedown</Label>
+                                  <div className="flex items-center gap-2">
+                                    <Button
+                                      onClick={() => {
+                                        if (selectedCount === 0) {
+                                          showToast("Please select some cases before initiating takedown", "error")
+                                          return
+                                        }
+                                        setShowBulkTakedownConfirm(true)
+                                      }}
+                                      disabled={isBulkTakedownProcessing}
+                                      className={cn(
+                                        "h-9 font-bold text-white shadow-sm  transition-all",
+                                        "bg-rose-600 hover:bg-rose-700 cursor-pointer",
+                                        selectedCount === 0 && "opacity-50 hover:bg-rose-600"
+                                      )}
+                                      title={selectedCount === 0 ? "Select cases to initiate a bulk takedown" : "Initiate takedown for selected cases"}
+                                    >
+                                      {isBulkTakedownProcessing ? (
+                                        <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                                      ) : (
+                                        <ShieldAlert className="w-4 h-4 mr-2" />
+                                      )}
+                                      Do Takedown{selectedCount > 0 ? ` (${isAllFilterSelected ? totalCount : selectedCount})` : ''}
+                                    </Button>
+                                  </div>
+                                </div>
+                                  )}
 
                                 {/* Active Filters Info Bar */}
                                 {(initialFilters.unique_clusters === 'true' || initialFilters.unique_clusters === true || initialFilters.platform !== 'all' || initialFilters.risk_priority !== 'all' || initialFilters.client_status !== 'all' || (initialFilters.visibility_status && initialFilters.visibility_status !== 'all') || (initialFilters.violations && initialFilters.violations !== 'all') || initialFilters.original_date_from || initialFilters.original_date_to || initialFilters.processed_from || initialFilters.processed_to || searchParams.get('similar_to') || searchParams.get('semantic_search')) && (
@@ -768,7 +874,7 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
 
                     {/* Right: Actions & Counts */}
                     {/* Report Download - hidden on mobile dialog as it's now outside */}
-                    <div className="hidden lg:block space-y-1 w-full lg:w-auto lg:flex-1 lg:max-w-[280px] lg:min-w-[240px]">
+                    <div className="hidden lg:flex flex-col gap-2 w-full lg:w-auto lg:flex-1 lg:max-w-[280px] lg:min-w-[240px]">
                       <ReportGenerate
                         selectedPostsArray={selectedPostsArray}
                         selectedCount={selectedCount}
@@ -1405,6 +1511,57 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
         onUpdatePost={handleUpdatePost}
         projectEmails={projectEmails}
       />
+
+      {/* Bulk Takedown Confirmation Dialog */}
+      <Dialog
+        open={showBulkTakedownConfirm}
+        onOpenChange={(open) => {
+          if (!isBulkTakedownProcessing) setShowBulkTakedownConfirm(open)
+        }}
+      >
+        <DialogContent className="sm:max-w-md rounded-2xl">
+          <DialogHeader>
+            <div className="flex items-center gap-3">
+              <div className="shrink-0 p-2 rounded-xl bg-rose-50 text-rose-600 border border-rose-100">
+                <ShieldAlert className="w-5 h-5" />
+              </div>
+              <DialogTitle className="text-lg font-black text-slate-800">
+                Initiate Takedown
+              </DialogTitle>
+            </div>
+            <DialogDescription className="pt-2 text-sm text-slate-600 leading-relaxed">
+              You&apos;re about to initiate a takedown for{' '}
+              <span className="font-bold text-slate-900">
+                {isAllFilterSelected ? totalCount : selectedCount}{' '}
+                {(isAllFilterSelected ? totalCount : selectedCount) === 1 ? 'case' : 'cases'}
+              </span>
+              . Cases already in a takedown process will be skipped. This action cannot be easily undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex flex-row justify-end gap-2 pt-2">
+            <Button
+              variant="outline"
+              onClick={() => setShowBulkTakedownConfirm(false)}
+              disabled={isBulkTakedownProcessing}
+              className="cursor-pointer"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleBulkTakedown}
+              disabled={isBulkTakedownProcessing}
+              className="bg-rose-600 hover:bg-rose-700 text-white font-bold cursor-pointer"
+            >
+              {isBulkTakedownProcessing ? (
+                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+              ) : (
+                <ShieldAlert className="w-4 h-4 mr-2" />
+              )}
+              Confirm Takedown
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Floating Toast Notification */}
       {toast && (

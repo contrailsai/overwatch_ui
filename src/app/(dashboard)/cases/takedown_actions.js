@@ -37,8 +37,13 @@ export const getProjectDetails = traceAction('getProjectDetails_cases', async ()
 //
 // FOR TAKEDOWNS DETAILS ( WE REFACTOR LATER WHEN WE SEE THE TAKEDOWNS )
 //
-export const initiateTakedown = traceAction('initiateTakedown', async (caseId, status, client_email) => {
+export const initiateTakedown = traceAction('initiateTakedown', async (caseIds, client_email) => {
     try {
+        const ids = Array.isArray(caseIds) ? caseIds : [caseIds]
+        if (ids.length === 0) {
+            return { success: false, error: "No cases provided" }
+        }
+
         const projectDetails = await getProjectDetails()
         if (!projectDetails?.dbName) {
             return { success: false, error: "Project configuration not found" }
@@ -48,92 +53,102 @@ export const initiateTakedown = traceAction('initiateTakedown', async (caseId, s
         const db = client.db(projectDetails.dbName)
         const collection = db.collection('Posts')
 
-        // 1. Fetch post data
-        const post = await collection.findOne(
-            { _id: new ObjectId(caseId) },
-            { projection: { text_embedding: 0, image_embedding: 0 } }
-        )
-        if (!post) {
-            return { success: false, error: "Case not found" }
-        }
+        const objectIds = ids.map(id => new ObjectId(id))
+        const isBulk = ids.length > 1
 
-        // SETUP THE OBJECT FOR TAKEDOWN MANAGEMENT
-        const takedown_info = {
-            in_takedown_process: true,
-            status: 'initiated',
-            takedown_start_date: new Date().toISOString(),
-            notes: [],
-            documents: [],
-            events: [
-                {
-                    event: 'Takedown Initiated',
-                    date: new Date().toISOString(),
-                    details: `Takedown initiated by client ${client_email}`
-                }
-            ]
-        }
-
-        const result = await collection.updateOne(
-            { _id: new ObjectId(caseId) },
+        // Only target cases not already in a takedown process
+        const posts = await collection.find(
             {
-                $set: {
-                    client_status: status,
-                    "content_reviewed_by": projectDetails.client_email,
-                    "metadata.updated_at": new Date().toISOString(),
-                    "takedown_info": takedown_info
-                },
-                $push: {
-                    "metadata.update_history": {
-                        updated_at: new Date(),
-                        updated_by: projectDetails.client_email,
-                        changes_summary: "client initiated case takedown"
+                _id: { $in: objectIds },
+                $and: [
+                    { $or: [{ 'takedown_info.in_takedown_process': { $ne: true } }, { takedown_info: { $exists: false } }] },
+                    { $or: [{ client_status: { $ne: 'Takedown' } }, { client_status: { $exists: false } }] }
+                ]
+            },
+            { projection: { text_embedding: 0, image_embedding: 0 } }
+        ).toArray()
+
+        if (posts.length === 0) {
+            return { success: false, error: "No eligible cases found (already in takedown or missing)" }
+        }
+
+        const nowIso = new Date().toISOString()
+        const status = "Takedown"
+        const changesSummary = isBulk ? "client initiated bulk case takedown" : "client initiated case takedown"
+        const eventDetails = `Takedown initiated by client ${client_email}${isBulk ? ' (bulk)' : ''}`
+
+        const bulkOps = posts.map(post => ({
+            updateOne: {
+                filter: { _id: post._id },
+                update: {
+                    $set: {
+                        client_status: status,
+                        content_reviewed_by: projectDetails.client_email,
+                        "metadata.updated_at": nowIso,
+                        takedown_info: {
+                            in_takedown_process: true,
+                            status: 'initiated',
+                            takedown_start_date: nowIso,
+                            notes: [],
+                            documents: [],
+                            events: [
+                                {
+                                    event: 'Takedown Initiated',
+                                    date: nowIso,
+                                    details: eventDetails
+                                }
+                            ]
+                        }
+                    },
+                    $push: {
+                        "metadata.update_history": {
+                            updated_at: new Date(),
+                            updated_by: projectDetails.client_email,
+                            changes_summary: changesSummary
+                        }
                     }
                 }
             }
-        )
+        }))
 
-        if (result.matchedCount > 0) {
-            // Track metrics
+        const result = await collection.bulkWrite(bulkOps)
 
-            // 1. DAILY REVIEW METRICS UPDATES
+        await Promise.all(posts.map(async post => {
+            const platform = post?.platform?.toLowerCase()
             const currentReviewData = {
                 risk_score: post.review_details?.threat_score || 0,
                 client_status: status,
-                platform: post?.platform.toLowerCase()
+                platform
             }
-
             const previousReviewData = post.client_status && post.client_status !== 'To Be Reviewed' ? {
                 risk_score: post.review_details?.threat_score || 0,
                 client_status: post.client_status,
-                platform: post?.platform.toLowerCase()
+                platform
             } : null
 
             await updateClientReviewedMetrics(
                 { project_name: projectDetails.projectName },
                 currentReviewData,
                 previousReviewData
-            ).catch(err =>
-                console.error('Failed to update client metrics:', err)
-            )
+            ).catch(err => console.error('Failed to update client metrics:', err))
 
-            // 2. CLIENT's META STATS UPDATE
             await updateClientMetaStats(
                 projectDetails.projectName,
                 client_email,
                 "reviewed_case"
-            )
+            ).catch(err => console.error('Failed to update meta stats:', err))
+        }))
 
-            // SLACK NOTIFICATION
-            // 4. Trigger Slack Alert
-            await sendSlackNotification().catch(e => console.error("Slack alert failed", e));
+        await sendSlackNotification().catch(e => console.error("Slack alert failed", e))
 
-            return { success: true }
-        } else {
-            return { success: false, error: "Case not found" }
+        return {
+            success: true,
+            count: result.modifiedCount,
+            requested: ids.length,
+            skipped: ids.length - posts.length
         }
-
     } catch (e) {
-        console.error("Approve Takedown Error:", e)
+        console.error("Initiate Takedown Error:", e)
         return { success: false, error: e.message }
     }
 })

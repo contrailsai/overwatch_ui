@@ -282,11 +282,9 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
         sourced_date = format(new Date(post.created_at), "dd/MM/yyyy");
 
     const handleTakedown = async () => {
-        const status = "Takedown";
         setIsProcessing('takedown');
         try {
-            // const result = await updateClientStatus(post._id, status, clientDetails.email);
-            const result = await initiateTakedown(post._id, status, clientDetails.email);
+            const result = await initiateTakedown([post._id], clientDetails.email);
             if (result.success) {
                 if (onUpdateStatus) onUpdateStatus(post._id, 'Takedown'); // CASE SENSITIVE BE CAREFULL
                 setShowProcessed(post._id);
