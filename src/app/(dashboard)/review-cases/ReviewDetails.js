@@ -3,14 +3,14 @@
 import * as React from "react"
 import { useState, useEffect, useActionState, useRef, useTransition } from 'react'
 import { format } from "date-fns"
-import { submitCaseReview, uploadCaseImage, updatePostVisibility, runAIAnalysis } from './actions'
+import { submitCaseReview, uploadCaseImage, deleteCaseImage, updatePostVisibility, runAIAnalysis } from './actions'
 import {
     Loader2, X, CheckCircle, ExternalLink,
     ChevronLeft, ChevronRight, Calendar, Plus,
     Instagram, Facebook, Youtube,
     Globe, MessageCircle, Quote,
     BadgeCheck, History, Bot, Siren, LinkIcon, Heart, Share2, Eye, Check, Upload, FileJson, RotateCcw, AlertCircle, RefreshCw,
-    Sparkles, Clock, User, ShieldAlert, FileSearch, FileText, ChevronDown, ChevronUp
+    Sparkles, Clock, User, ShieldAlert, FileSearch, FileText, ChevronDown, ChevronUp, Pencil, Trash2
 } from 'lucide-react'
 import { Twitter, Reddit } from '@/utils/icons'
 import ProfilePic from '@/components/ProfilePic'
@@ -32,7 +32,7 @@ const initialState = {
 
 export default function ReviewForm({ post, project, clientDetails, onClose, onNavigate, hasPrev, hasNext, setPosts }) {
     const { project_details } = project
-    // console.log(post)
+    console.log(post)
     const submit_to_edit = submitCaseReview.bind(null, project, clientDetails)
     const [state, formAction, isPending] = useActionState(submit_to_edit, initialState)
 
@@ -44,6 +44,8 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
 
     // Image upload state
     const [isUploadingImage, setIsUploadingImage] = useState(false);
+    const [isDeletingImage, setIsDeletingImage] = useState(false);
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [uploadedImageUrl, setUploadedImageUrl] = useState(null);
     const [mediaError, setMediaError] = useState(false);
     const fileInputRef = useRef(null);
@@ -63,6 +65,7 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
         setShowSuccess(false) // Reset success message on navigate
         setUploadedImageUrl(null);
         setMediaError(false);
+        setShowDeleteConfirm(false);
     }, [post])
 
     // Sync state to parent AND local UI on successful submission
@@ -279,16 +282,17 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
             const result = await uploadCaseImage(localPost._id, project, clientDetails, formData);
             if (result.success) {
                 setUploadedImageUrl(result.signedUrl);
+                setMediaError(false);
 
                 // Update parent list if needed
                 if (setPosts) {
                     setPosts(prevPosts => prevPosts.map(p =>
-                        p._id === localPost._id ? { ...p, signedImageUrl: result.signedUrl } : p
+                        p._id === localPost._id ? { ...p, signedImageUrl: result.signedUrl, uploadedManually: true } : p
                     ))
                 }
 
                 // Update local UI immediately
-                setLocalPost(prev => ({ ...prev, signedImageUrl: result.signedUrl }))
+                setLocalPost(prev => ({ ...prev, signedImageUrl: result.signedUrl, uploadedManually: true }))
 
                 showToast("Image uploaded successfully", "success");
             } else {
@@ -300,6 +304,39 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
             setIsUploadingImage(false);
             // Reset file input so the same file can be uploaded again
             if (fileInputRef.current) fileInputRef.current.value = '';
+        }
+    };
+
+    const handleReplaceImage = () => {
+        if (isUploadingImage || isDeletingImage) return;
+        fileInputRef.current?.click();
+    };
+
+    const handleDeleteImage = async () => {
+        setIsDeletingImage(true);
+        try {
+            const result = await deleteCaseImage(localPost._id, project, clientDetails);
+            if (result.success) {
+                setUploadedImageUrl(null);
+                setMediaError(false);
+                setShowDeleteConfirm(false);
+
+                if (setPosts) {
+                    setPosts(prevPosts => prevPosts.map(p =>
+                        p._id === localPost._id ? { ...p, signedImageUrl: null, uploadedManually: false } : p
+                    ))
+                }
+
+                setLocalPost(prev => ({ ...prev, signedImageUrl: null, uploadedManually: false }))
+
+                showToast('Image deleted successfully', 'success');
+            } else {
+                showToast('Delete failed: ' + result.error);
+            }
+        } catch (error) {
+            showToast('Delete failed. Please try again.');
+        } finally {
+            setIsDeletingImage(false);
         }
     };
 
@@ -428,6 +465,66 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
                         {/* Media Display */}
                         <div className="bg-slate-900 rounded-2xl overflow-hidden shadow-lg border border-slate-800 relative group flex items-center justify-center min-h-[400px]">
                             <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-slate-800/50 to-slate-950 pointer-events-none" />
+
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={handleImageUpload}
+                            />
+
+                            {(() => {
+                                const showManualImage = !!uploadedImageUrl || (localPost.signedImageUrl && !mediaError && localPost.uploadedManually);
+                                if (!showManualImage) return null;
+                                return (
+                                    <div className="absolute top-4 right-4 z-20 flex gap-2">
+                                        {showDeleteConfirm ? (
+                                            <>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setShowDeleteConfirm(false)}
+                                                    disabled={isDeletingImage}
+                                                    className="bg-slate-900/80 backdrop-blur-sm hover:bg-slate-700 text-white px-3 py-2 rounded-lg shadow-lg text-xs font-bold transition-colors disabled:opacity-50"
+                                                >
+                                                    Cancel
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={handleDeleteImage}
+                                                    disabled={isDeletingImage}
+                                                    className="bg-rose-600 hover:bg-rose-700 text-white px-3 py-2 rounded-lg shadow-lg text-xs font-bold transition-colors flex items-center gap-1.5 disabled:opacity-50"
+                                                >
+                                                    {isDeletingImage ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                                                    Confirm Delete
+                                                </button>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <button
+                                                    type="button"
+                                                    onClick={handleReplaceImage}
+                                                    disabled={isUploadingImage || isDeletingImage}
+                                                    className="bg-slate-900/80 backdrop-blur-sm hover:bg-blue-600 text-white p-2 rounded-lg shadow-lg transition-colors disabled:opacity-50"
+                                                    title="Replace image"
+                                                >
+                                                    {isUploadingImage ? <Loader2 className="w-4 h-4 animate-spin" /> : <Pencil className="w-4 h-4" />}
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setShowDeleteConfirm(true)}
+                                                    disabled={isUploadingImage || isDeletingImage}
+                                                    className="bg-slate-900/80 backdrop-blur-sm hover:bg-rose-600 text-white p-2 rounded-lg shadow-lg transition-colors disabled:opacity-50"
+                                                    title="Delete image"
+                                                >
+                                                    <Trash2 className="w-4 h-4" />
+                                                </button>
+                                            </>
+                                        )}
+                                    </div>
+                                );
+                            })()}
+
                             {uploadedImageUrl ? (
                                 <img
                                     src={uploadedImageUrl}
@@ -441,45 +538,11 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
                                     className="max-w-full h-auto max-h-[600px] object-contain relative z-10"
                                     onError={() => setMediaError(true)}
                                 />
-                            ) : localPost.signedImageUrl && mediaError ? (
-                                <div
-                                    className="text-center p-12 relative z-10 cursor-pointer group/upload"
-                                    onClick={() => !isUploadingImage && fileInputRef.current?.click()}
-                                >
-                                    <input
-                                        ref={fileInputRef}
-                                        type="file"
-                                        accept="image/*"
-                                        className="hidden"
-                                        onChange={handleImageUpload}
-                                    />
-                                    <div className="border-2 border-dashed border-slate-600 group-hover/upload:border-blue-500 rounded-xl p-12 transition-colors duration-200">
-                                        {isUploadingImage ? (
-                                            <>
-                                                <Loader2 className="w-16 h-16 text-blue-400 mx-auto mb-4 animate-spin" />
-                                                <p className="text-slate-400 font-medium text-lg">Uploading...</p>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <Upload className="w-16 h-16 text-slate-600 group-hover/upload:text-blue-400 mx-auto mb-4 transition-colors duration-200" />
-                                                <p className="text-slate-400 group-hover/upload:text-slate-300 font-medium text-lg transition-colors duration-200">Click to upload image</p>
-                                                <p className="text-slate-600 text-sm mt-2">PNG, JPG, WEBP up to 10MB</p>
-                                            </>
-                                        )}
-                                    </div>
-                                </div>
                             ) : (
                                 <div
                                     className="text-center p-12 relative z-10 cursor-pointer group/upload"
                                     onClick={() => !isUploadingImage && fileInputRef.current?.click()}
                                 >
-                                    <input
-                                        ref={fileInputRef}
-                                        type="file"
-                                        accept="image/*"
-                                        className="hidden"
-                                        onChange={handleImageUpload}
-                                    />
                                     <div className="border-2 border-dashed border-slate-600 group-hover/upload:border-blue-500 rounded-xl p-12 transition-colors duration-200">
                                         {isUploadingImage ? (
                                             <>
@@ -571,6 +634,38 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
                                 </div>
                             </div>
                         </div>
+
+                        {/* Result Origin Section */}
+                        {localPost.result_origin && (
+                            <div className="flex items-center justify-between bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                                <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                                    <LinkIcon className="w-3 h-3" /> Result Origin
+                                </h4>
+                                <div className="flex flex-row items-center gap-10">
+                                    {Object.entries(localPost.result_origin).map(([key, value]) => (
+                                        <div key={key} className="flex flex-row items-baseline gap-1.5">
+                                            <span className="text-[10px] font-bold text-slate-500 uppercase">
+                                                {key.replace(/_/g, ' ')}
+                                            </span>
+                                            <span className="text-lg font-semibold text-slate-900 break-all">
+                                                {typeof value === 'string' && value.startsWith('http') ? (
+                                                    <a
+                                                        href={value}
+                                                        target="_blank"
+                                                        rel="noreferrer"
+                                                        className="text-blue-600 hover:underline flex items-center gap-1"
+                                                    >
+                                                        Source Link <ExternalLink className="w-3 h-3 shrink-0" />
+                                                    </a>
+                                                ) : (
+                                                    String(value || 'N/A')
+                                                )}
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
 
                         {
                             post.platform.toLowerCase() !== "website" && (

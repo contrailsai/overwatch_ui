@@ -7,10 +7,10 @@ import { ProfileExportDocxButton } from '@/components/docx/ProfileExportDocxButt
 import {
     ExternalLink, X, Facebook, Instagram, Youtube, CheckCircle,
     User, ArrowRight, FileText, Siren, ClockFading, Info, Globe,
-    BadgeCheck, ShieldAlert, TriangleAlert, TrendingDown, Smile,
+    BadgeCheck, TriangleAlert, TrendingDown, Smile,
     Fingerprint, MessageSquareWarning, Laugh, EyeOff, ShieldX, ShieldQuestion,
-    FishingHook, UserRoundX, AlertCircle, Eye,
-    MessageCircle, Send, Loader2, CheckCircle2, Download, AlertTriangle,
+    FishingHook, UserRoundX, AlertCircle,
+    MessageCircle, Send, Loader2, CheckCircle2, AlertTriangle,
     MapPin, Calendar, Link2, Hash, ChevronLeft, ChevronRight
 } from 'lucide-react'
 import { Twitter, Reddit } from '@/utils/icons'
@@ -53,6 +53,20 @@ const RiskIcon = ({ label }) => {
     return <Smile className="w-3 h-3" />
 }
 
+const getProfileRiskBadge = (risk) => {
+    const v = typeof risk === 'string' ? risk.toLowerCase() : risk
+    if (v === 'high' || (typeof v === 'number' && v >= 96)) {
+        return { label: 'High', className: 'bg-rose-50 text-rose-700 border-rose-200' }
+    }
+    if (v === 'mid' || v === 'medium' || (typeof v === 'number' && v >= 76)) {
+        return { label: 'Medium', className: 'bg-orange-50 text-orange-700 border-orange-200' }
+    }
+    if (v === 'low' || (typeof v === 'number' && v >= 41)) {
+        return { label: 'Low', className: 'bg-amber-50 text-amber-700 border-amber-200' }
+    }
+    return { label: 'Safe', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' }
+}
+
 const getStatusConfig = (status) => {
     if (status === 'To Be Reviewed' || !status) return { label: 'Pending', color: 'text-slate-600 bg-slate-50 border-slate-200', icon: ClockFading }
     if (status === 'No Action' || status === 'Pass') return { label: 'No Action', color: 'text-emerald-700 bg-emerald-50 border-emerald-200', icon: CheckCircle }
@@ -60,48 +74,17 @@ const getStatusConfig = (status) => {
     return { label: status, color: 'text-slate-600 bg-slate-50 border-slate-200', icon: Info }
 }
 
-function SignalCard({ active, title, icon: Icon, color }) {
-    if (!active) return null;
-
-    const colorStyles = {
-        purple: "bg-purple-50/50 border-purple-100/50 text-purple-700",
-        rose: "bg-rose-50/50 border-rose-100/50 text-rose-700",
-        orange: "bg-orange-50/50 border-orange-100/50 text-orange-700",
-        indigo: "bg-indigo-50/50 border-indigo-100/50 text-indigo-700",
-        red: "bg-red-50/50 border-red-100/50 text-red-700",
-        violet: "bg-violet-50/50 border-violet-100/50 text-violet-700",
-        yellow: "bg-yellow-50/50 border-yellow-100/50 text-yellow-700",
-        blue: "bg-blue-50/50 border-blue-100/50 text-blue-700",
-        emerald: "bg-emerald-50/50 border-emerald-100/50 text-emerald-700",
-        amber: "bg-amber-50/50 border-amber-100/50 text-amber-700",
-    }[color] || "bg-slate-50 border-slate-100 text-slate-700";
-
-    const iconBg = {
-        purple: "bg-purple-100 text-purple-600",
-        rose: "bg-rose-100 text-rose-600",
-        orange: "bg-orange-100 text-orange-600",
-        indigo: "bg-indigo-100 text-indigo-600",
-        red: "bg-red-100 text-red-600",
-        violet: "bg-violet-100 text-violet-600",
-        yellow: "bg-yellow-100 text-yellow-600",
-        blue: "bg-blue-100 text-blue-600",
-        emerald: "bg-emerald-100 text-emerald-600",
-        amber: "bg-amber-100 text-amber-600",
-    }[color] || "bg-slate-100 text-slate-600";
-
-    return (
-        <div className={cn(
-            "group relative flex items-center gap-3 p-3 rounded-xl border transition-all duration-300 hover:shadow-md hover:scale-[1.02]",
-            colorStyles
-        )}>
-            <div className={cn("shrink-0 w-8 h-8 rounded-lg flex items-center justify-center transition-transform group-hover:rotate-6", iconBg)}>
-                <Icon className="w-4 h-4" />
-            </div>
-            <div className="flex-1 min-w-0">
-                <span className="text-xs font-bold truncate block">{title}</span>
-            </div>
-        </div>
-    )
+const VIOLATION_COLOR_MAP = {
+    purple: "bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-50",
+    rose: "bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-50",
+    orange: "bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-50",
+    indigo: "bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-50",
+    red: "bg-red-50 text-red-700 border-red-200 hover:bg-red-50",
+    violet: "bg-violet-50 text-violet-700 border-violet-200 hover:bg-violet-50",
+    yellow: "bg-yellow-50 text-yellow-700 border-yellow-200 hover:bg-yellow-50",
+    blue: "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-50",
+    emerald: "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-50",
+    amber: "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-50",
 }
 
 const getLabelConfig = (labelName) => {
@@ -199,14 +182,7 @@ export default function ProfileDetailPanel({ profile, project, isOpen, onClose, 
     const medCount = cases?.filter(c => { const s = c.review_details?.threat_score ?? 0; return s >= 76 && s < 96 }).length || 0
     const lowCount = cases?.filter(c => { const s = c.review_details?.threat_score ?? 0; return s >= 41 && s < 76 }).length || 0
 
-    const getRiskStyles = (riskValue) => {
-        const val = typeof riskValue === 'string' ? riskValue.toLowerCase() : riskValue;
-        if (val === 'high' || val >= 96) return "bg-rose-500 border-rose-400 text-white";
-        if (val === 'mid' || val === 'medium' || (val >= 76 && val < 96)) return "bg-orange-500 border-orange-400 text-white";
-        if (val === 'low' || (val >= 41 && val < 76)) return "bg-amber-500 border-amber-400 text-white";
-        return "bg-emerald-500 border-emerald-400 text-white shadow-sm";
-    }
-    // console.log(profile)
+    const profileRisk = getProfileRiskBadge(riskScore)
     return (
         <>
             <div
@@ -232,13 +208,27 @@ export default function ProfileDetailPanel({ profile, project, isOpen, onClose, 
                     </div>
                 </div>
 
+                {/* Mobile Export Buttons (kept at top on small screens) */}
+                <div className="md:hidden flex gap-2 px-4 py-3 border-b border-slate-100 bg-white shrink-0">
+                    <ProfileExportButton
+                        profile={profile}
+                        project={project}
+                        className="flex-1 cursor-pointer rounded-md border border-slate-200 text-slate-600 hover:border-blue-500 hover:text-blue-600 flex items-center justify-center gap-1.5 text-xs font-bold transition-all bg-white px-3 py-1.5"
+                    />
+                    <ProfileExportDocxButton
+                        profile={profile}
+                        project={project}
+                        className="flex-1 cursor-pointer rounded-md border border-slate-200 text-slate-600 hover:border-blue-500 hover:text-blue-600 flex items-center justify-center gap-1.5 text-xs font-bold transition-all bg-white px-3 py-1.5 h-auto"
+                    />
+                </div>
+
                 {/* Content wrapper for responsive scrolling */}
                 <div className="flex-1 flex flex-col md:flex-row overflow-y-auto md:overflow-hidden w-full md:w-auto relative">
                     
                     {/* LEFT: Profile & Cases */}
                     <div className="w-full md:w-[540px] md:h-full flex flex-col md:overflow-hidden border-b md:border-b-0 md:border-r border-slate-100 shrink-0">
                         {/* Profile & Metadata Section */}
-                        <div className="px-4 md:px-6 py-5 md:py-6 border-b border-slate-100 bg-linear-to-b from-slate-50/80 to-white shrink-0 relative">
+                        <div className="px-4 md:px-6 py-5 md:py-6 border-b border-slate-100 bg-white shrink-0 relative">
                             {/* Desktop Close & Nav Buttons */}
                             <div className="hidden md:flex absolute top-4 right-4 items-center gap-2">
                                 <div className="flex items-center gap-1 bg-slate-50/50 p-1 rounded-lg border border-slate-200/60 backdrop-blur-sm mr-2">
@@ -274,7 +264,7 @@ export default function ProfileDetailPanel({ profile, project, isOpen, onClose, 
                                             <BadgeCheck className="w-4 h-4 text-blue-500 shrink-0" />
                                         )}
                                         {profile.metadata?.is_business && (
-                                            <Badge variant="secondary" className="h-5 px-1.5 text-[9px] font-bold bg-slate-800 text-white hover:bg-slate-700 border-none uppercase tracking-wider">
+                                            <Badge variant="outline" className="h-5 px-1.5 text-[9px] font-bold bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-50 uppercase tracking-wider shadow-none">
                                                 Business
                                             </Badge>
                                         )}
@@ -374,14 +364,14 @@ export default function ProfileDetailPanel({ profile, project, isOpen, onClose, 
 
                     {/* Stats */}
                     {cases && cases.length > 0 && (
-                        <div className="px-6 py-3 bg-slate-50 border-b border-slate-100 flex items-center gap-6 shrink-0">
+                        <div className="px-6 py-3 bg-white border-b border-slate-100 flex items-center gap-6 shrink-0">
                             <div className="text-center">
                                 <p className="text-lg font-bold text-slate-900">{cases.length}</p>
                                 <p className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold">Cases</p>
                             </div>
                             {highCount > 0 && (
                                 <div className="text-center">
-                                    <p className="text-lg font-bold text-rose-600">{highCount}</p>
+                                    <p className="text-lg font-bold text-rose-500">{highCount}</p>
                                     <p className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold">High Risk</p>
                                 </div>
                             )}
@@ -517,39 +507,55 @@ export default function ProfileDetailPanel({ profile, project, isOpen, onClose, 
                 </div>
 
                 {/* RIGHT: Review Analysis */}
-                <div className="w-full md:w-[420px] md:h-full flex flex-col md:overflow-hidden bg-slate-50 shrink-0 border-t md:border-t-0 border-slate-100">
+                <div className="w-full md:w-[420px] md:h-full flex flex-col md:overflow-hidden bg-white shrink-0 border-t md:border-t-0 border-slate-100">
                     {/* <div className="px-6 py-4 border-b border-slate-100 bg-white shrink-0">
                         <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Review Analysis</h3>
                         <p className="text-[10px] text-slate-400 mt-1 uppercase tracking-widest font-bold">Reviewed Date: {review.reviewed_at ? format(new Date(review.reviewed_at), 'dd MMM yyyy, HH:mm') : 'N/A'}</p>
                     </div> */}
-
-                    <div className="flex-1 md:overflow-y-auto py-6 md:py-5 px-4 md:px-3 space-y-8 bg-white">
+                    <div className="flex-1 md:overflow-y-auto p-4 sm:p-6 bg-white">
                         {/* Risk Assessment */}
-                        <div>
-                            <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Risk Assessment</h4>
-                            <div className={cn(
-                                "rounded-2xl p-5 border relative overflow-hidden shadow-lg transition-all flex justify-between items-center",
-                                getRiskStyles(riskScore)
-                            )}>
-                                <div>
-                                    <p className="text-white/80 font-bold text-[10px] uppercase tracking-wide mb-0.5">Profile Risk</p>
-                                    <p className="text-5xl font-black tracking-tighter ">{riskScore}</p>
-                                </div>
-                                <div className="bg-white/20 p-3 rounded-xl backdrop-blur-md">
-                                    <ShieldAlert className="w-6 h-6 text-white" />
-                                </div>
+                        <div className="flex items-start justify-between gap-3 py-3 first:pt-0 border-b border-slate-100">
+                            <div className="space-y-2">
+                                <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Profile Risk</h4>
+                                <Badge variant="outline" className={cn("text-xs shadow-none font-bold px-3 py-1.5 gap-1.5", profileRisk.className)}>
+                                    <RiskIcon label={profileRisk.label} />
+                                    {profileRisk.label} Risk
+                                </Badge>
+                            </div>
+                            <div className="hidden md:flex gap-2 shrink-0">
+                                <ProfileExportButton
+                                    profile={profile}
+                                    project={project}
+                                    className="cursor-pointer rounded-md border border-slate-200 text-slate-600 hover:border-blue-500 hover:text-blue-600 flex items-center justify-center gap-1.5 text-xs font-bold transition-all bg-white px-3 py-1.5"
+                                />
+                                <ProfileExportDocxButton
+                                    profile={profile}
+                                    project={project}
+                                    className="cursor-pointer rounded-md border border-slate-200 text-slate-600 hover:border-blue-500 hover:text-blue-600 flex items-center justify-center gap-1.5 text-xs font-bold transition-all bg-white px-3 py-1.5 h-auto"
+                                />
                             </div>
                         </div>
 
-                        {/* Signals/Violations */}
-                        <div>
-                            <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Detected Violations</h4>
+                        {/* Reasoning */}
+                        <div className="space-y-3 py-3 first:pt-0 border-b border-slate-100">
+                            <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Review Analysis</h4>
+                            <div className="w-full text-slate-700 leading-relaxed text-sm font-medium whitespace-pre-wrap">
+                                {reasoning}
+                            </div>
+                        </div>
+
+                        {/* Detected Violations */}
+                        <div className="space-y-4 py-3 first:pt-0 border-b border-slate-100">
+                            <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Detected Violations</h4>
                             {violations.length > 0 ? (
-                                <div className="grid grid-cols-1 gap-2.5">
+                                <div className="flex flex-wrap gap-2">
                                     {violations.map((v, idx) => {
                                         const config = getLabelConfig(v);
+                                        const colorMap = VIOLATION_COLOR_MAP[config.color] || "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-50";
                                         return (
-                                            <SignalCard key={idx} active={true} title={v.replace(/[-_]/g, ' ').toUpperCase()} icon={config.icon} color={config.color} />
+                                            <Badge key={idx} variant="outline" className={cn("text-xs shadow-none px-3 py-1.5 capitalize font-semibold", colorMap)}>
+                                                {v.replace(/[-_]/g, ' ')}
+                                            </Badge>
                                         )
                                     })}
                                 </div>
@@ -558,46 +564,32 @@ export default function ProfileDetailPanel({ profile, project, isOpen, onClose, 
                             )}
                         </div>
 
-                        {/* Reasoning */}
-                        <div className="space-y-3">
-                            <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                                <Eye className="w-3.5 h-3.5" /> Review Analysis
-                            </h4>
-                            <div className="w-full bg-white p-5 rounded-xl border border-slate-100 text-slate-600 leading-relaxed text-sm font-medium whitespace-pre-wrap shadow-sm">
-                                {reasoning}
-                            </div>
-                        </div>
-
                         {/* Review Notes Section */}
-                        <div className="space-y-4">
-                            <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 flex items-center">
-                                <MessageCircle className="w-3.5 h-3.5 mr-1.5" /> Review Notes
-                            </h4>
+                        <div className="space-y-4 py-3 first:pt-0">
+                            <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Comments</h4>
 
-                            {localNotes && localNotes.length > 0 ? (
+                            {localNotes && localNotes.length > 0 && (
                                 <div className="space-y-3 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
                                     {localNotes.map((note, idx) => (
-                                        <div key={idx} className="bg-white border border-slate-100 p-4 rounded-xl shadow-sm">
-                                            <div className="flex justify-between items-start mb-2">
-                                                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">{note.email || 'User'}</span>
-                                                <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">
+                                        <div key={idx} className="bg-slate-50 border border-slate-100 p-4 rounded-xl">
+                                            <div className="flex justify-between items-start mb-3">
+                                                <span className="text-[10px] font-bold text-slate-400">{note.email || 'Unknown User'}</span>
+                                                <span className="text-[10px] text-slate-400">
                                                     <SafeDate date={note.created_at} />
                                                 </span>
                                             </div>
-                                            <p className="text-sm text-slate-700 font-medium whitespace-pre-wrap leading-relaxed">
+                                            <p className="text-sm text-slate-700 font-medium whitespace-pre-wrap">
                                                 {note.text}
                                             </p>
                                         </div>
                                     ))}
                                 </div>
-                            ) : (
-                                <p className="text-xs text-slate-400 italic px-1">No notes added yet.</p>
                             )}
 
                             <div className="relative mt-2">
                                 <Textarea
-                                    placeholder="Add a note..."
-                                    className="min-h-[100px] pr-12 text-sm resize-none bg-white border-slate-200 focus-visible:ring-blue-500 rounded-xl shadow-xs"
+                                    placeholder="Comments"
+                                    className="min-h-[100px] pr-12 text-sm resize-none bg-white border-slate-200 focus-visible:ring-blue-500"
                                     value={noteText}
                                     onChange={(e) => setNoteText(e.target.value)}
                                     onKeyDown={(e) => {
@@ -610,7 +602,7 @@ export default function ProfileDetailPanel({ profile, project, isOpen, onClose, 
                                 <Button
                                     size="icon"
                                     variant="ghost"
-                                    className="absolute cursor-pointer bottom-3 right-3 h-8 w-8 hover:text-blue-600 bg-white transition-colors duration-200 disabled:opacity-50 border border-slate-100 rounded-lg shadow-sm"
+                                    className="absolute cursor-pointer bottom-2 right-2 h-8 w-8 hover:text-blue-600 bg-white transition-colors duration-200 disabled:opacity-50"
                                     onClick={handleAddNote}
                                     disabled={!noteText.trim() || isSubmittingNote}
                                 >
@@ -663,19 +655,6 @@ export default function ProfileDetailPanel({ profile, project, isOpen, onClose, 
                                     <AlertTriangle className="w-4 h-4 mr-2" />}
                                 Flag for Takedown
                             </Button>
-                        </div>
-
-                        <div className="flex flex-col gap-2">
-                            <ProfileExportButton
-                                profile={profile}
-                                project={project}
-                                className="w-full cursor-pointer rounded-xl border-2 border-slate-200 text-slate-500 hover:border-blue-500 hover:text-blue-600 flex items-center justify-center gap-2 font-bold transition-all bg-white py-2"
-                            />
-                            <ProfileExportDocxButton
-                                profile={profile}
-                                project={project}
-                                className="w-full cursor-pointer rounded-xl border-2 border-slate-200 text-slate-500 hover:border-blue-500 hover:text-blue-600 flex items-center justify-center gap-2 font-bold transition-all bg-white py-2"
-                            />
                         </div>
                     </div>
                 </div>

@@ -1,4 +1,4 @@
-import { S3Client, GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3"
+import { S3Client, GetObjectCommand, PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3"
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner"
 
 const s3Client = new S3Client({
@@ -8,6 +8,21 @@ const s3Client = new S3Client({
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
   },
 })
+
+export async function deleteFileFromS3(key) {
+  const command = new DeleteObjectCommand({
+    Bucket: process.env.AWS_BUCKET_NAME,
+    Key: key,
+  })
+
+  try {
+    await s3Client.send(command)
+    return key
+  } catch (error) {
+    console.error("Error deleting from S3:", error)
+    throw error
+  }
+}
 
 export async function uploadFileToS3(buffer, key, contentType) {
   const command = new PutObjectCommand({

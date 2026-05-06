@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { getTakedownDetails, updateTakedown, addTakedownNote, uploadTakedownDocument, getTakedownDocuments, getDocumentDownloadUrl } from '../../actions'
+import { updatePostVisibility } from '@/app/(dashboard)/review-cases/actions'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
@@ -453,6 +454,24 @@ export default function TakedownDetails({ takedownId, initialData, initialDocume
     setStatus(newStatus)
 
     const statusToUpdate = newStatus || status
+
+    // Handle post visibility synchronization based on takedown success
+    const currentVisibility = data?.post?.visibility_status || 'online';
+    let newVisibility = currentVisibility;
+
+    if (statusToUpdate === 'takedown_successful' && currentVisibility !== 'down') {
+      newVisibility = 'down';
+    } else if (statusToUpdate !== 'takedown_successful' && currentVisibility === 'down') {
+      newVisibility = 'online';
+    }
+
+    if (newVisibility !== currentVisibility && data?.post) {
+      const postId = data.post._id || data.post.id;
+      const visibilityResult = await updatePostVisibility(postId, project, clientDetails, newVisibility);
+      if (!visibilityResult.success) {
+        alert('Failed to update post visibility: ' + visibilityResult.error);
+      }
+    }
 
     await updateTakedown(takedownId, {
       status: statusToUpdate
@@ -1151,7 +1170,7 @@ export default function TakedownDetails({ takedownId, initialData, initialDocume
                       {post?.user?.is_verified && <BadgeCheck className="w-4 h-4 text-blue-500 fill-blue-50" />}
                       {post?.visibility_status === 'down' ? (
                           <Badge variant="outline" className="bg-slate-100 text-slate-500 border-slate-200">Taken Down</Badge>
-                      ) : post?.visibility_status === 'active' ? (
+                      ) : (post?.visibility_status === 'active' || post?.visibility_status === 'online') ? (
                           <Badge variant="outline" className="bg-emerald-100 text-emerald-700 border-emerald-200">Online</Badge>
                       ) : null}
                     </h3>

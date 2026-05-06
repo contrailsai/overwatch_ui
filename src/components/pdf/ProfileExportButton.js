@@ -33,7 +33,7 @@ export function ProfileExportButton({ profile, project, className }) {
     return (
         <button
             disabled={loading}
-            className={className || "w-full cursor-pointer rounded-xl border-2 border-slate-200 text-slate-500 hover:border-blue-500 hover:text-blue-600 flex items-center justify-center gap-2 font-bold transition-all bg-white py-2 disabled:cursor-not-allowed disabled:opacity-50 h-auto min-h-[44px]"}
+            className={className}
             onClick={handleDownload}
         >
             {loading ? (
@@ -42,7 +42,7 @@ export function ProfileExportButton({ profile, project, className }) {
                 <Download className="w-4 h-4 shrink-0" />
             )}
             <span className="whitespace-pre-line text-left leading-snug">
-                {loading ? statusText || 'Preparing Report...' : 'Download PDF Report'}
+                {loading ? statusText || 'Preparing Report...' : 'PDF'}
             </span>
         </button>
     );

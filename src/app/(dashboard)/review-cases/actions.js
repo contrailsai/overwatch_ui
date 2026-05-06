@@ -4,7 +4,7 @@ import { createClient } from '@/utils/supabase/server'
 import clientPromise from '@/utils/mongodb/client'
 import { redirect } from 'next/navigation'
 import { ObjectId } from 'mongodb'
-import { getSignedImageUrl, uploadFileToS3 } from '@/utils/aws/s3'
+import { getSignedImageUrl, uploadFileToS3, deleteFileFromS3 } from '@/utils/aws/s3'
 import { sendContentModerationSqsMessage } from '@/utils/aws/sqs'
 import { updateDailyMetrics } from '@/utils/supabase/metrics'
 import { sendEmail } from '@/utils/email'
@@ -14,12 +14,9 @@ export const normalized_S3_post = traceAction('normalized_S3_post', async (post)
   if (!post) return null;
 
   // Find S3 URL to sign from post_content.media_urls
-  let s3UrlToSign = null;
-  if (post?.post_content?.media_urls && post.post_content.media_urls.length > 0) {
-    const firstMedia = post.post_content.media_urls[0];
-    // Prefer thumbnail for videos, otherwise use s3_url
-    s3UrlToSign = firstMedia.thumbnail_url || firstMedia.s3_url;
-  }
+  const firstMedia = post?.post_content?.media_urls?.[0] || null;
+  // Prefer thumbnail for videos, otherwise use s3_url
+  const s3UrlToSign = firstMedia ? (firstMedia.thumbnail_url || firstMedia.s3_url) : null;
 
   const signedUrl = s3UrlToSign ? await getSignedImageUrl(s3UrlToSign) : null;
 
@@ -30,6 +27,7 @@ export const normalized_S3_post = traceAction('normalized_S3_post', async (post)
     created_at: post?.metadata?.created_at ? new Date(post.metadata.created_at).toISOString() : null,
     sourcing_date: post?.metadata?.sourcing_date ? new Date(post.metadata.sourcing_date).toISOString() : null,
     signedImageUrl: signedUrl,
+    uploadedManually: firstMedia?.uploaded_manually === true,
 
     // Content
     caption: post.post_content?.caption || post.post_content?.content || '',
@@ -759,6 +757,68 @@ export const uploadCaseImage = traceAction('uploadCaseImage', async (postId, pro
     return { success: true, signedUrl }
   } catch (error) {
     console.error('uploadCaseImage Error:', error)
+    return { success: false, error: error.message }
+  }
+})
+
+export const deleteCaseImage = traceAction('deleteCaseImage', async (postId, project, clientDetails) => {
+  try {
+    if (!project?.mongo_db_map) {
+      return { success: false, error: 'Project database configuration missing' }
+    }
+
+    if (!postId) {
+      return { success: false, error: 'Missing Post ID' }
+    }
+
+    const client = await clientPromise
+    const db = client.db(project.mongo_db_map)
+    const collection = db.collection('Posts')
+
+    const existingPost = await collection.findOne(
+      { _id: new ObjectId(postId) },
+      { projection: { 'post_content.media_urls': 1 } }
+    )
+
+    if (!existingPost) {
+      return { success: false, error: 'Post not found' }
+    }
+
+    const mediaUrls = existingPost?.post_content?.media_urls || []
+
+    // Best-effort: only delete manually uploaded files from S3 to avoid removing original scraped media
+    for (const m of mediaUrls) {
+      if (m?.uploaded_manually && m?.s3_url) {
+        try {
+          const url = new URL(m.s3_url)
+          const key = url.pathname.substring(1)
+          if (key) await deleteFileFromS3(key)
+        } catch (err) {
+          console.error('S3 delete failed (continuing):', err)
+        }
+      }
+    }
+
+    await collection.updateOne(
+      { _id: new ObjectId(postId) },
+      {
+        $set: {
+          'post_content.media_urls': [],
+          'metadata.updated_at': new Date().toISOString()
+        },
+        $push: {
+          'metadata.update_history': {
+            updated_at: new Date(),
+            updated_by: clientDetails.email,
+            changes_summary: 'Image deleted manually for case'
+          }
+        }
+      }
+    )
+
+    return { success: true }
+  } catch (error) {
+    console.error('deleteCaseImage Error:', error)
     return { success: false, error: error.message }
   }
 })
