@@ -283,6 +283,45 @@ export const getDashboardData = traceAction('getDashboardData', async (project, 
 
   categoryLineData.forEach(d => delete d.rawDate)
 
+  // Daily KPI series — independent per-day values for each KPI sparkline
+  const dailyKpiData = []
+  const kpiCursor = new Date(startDate)
+  const kpiEndLimit = new Date(endDate)
+  kpiEndLimit.setHours(23, 59, 59, 999)
+
+  while (kpiCursor <= kpiEndLimit) {
+    const dateLabel = kpiCursor.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    dailyKpiData.push({
+      date: dateLabel,
+      rawDate: kpiCursor.toISOString().split('T')[0],
+      discovered: 0,
+      reviewed: 0,
+      takedown: 0,
+      pending: 0,
+    })
+    kpiCursor.setDate(kpiCursor.getDate() + 1)
+  }
+
+  casesData.forEach(row => {
+    const rawDate = new Date(row.date).toISOString().split('T')[0]
+    const entry = dailyKpiData.find(d => d.rawDate === rawDate)
+    if (entry) entry.discovered += row.total_cases || 0
+  })
+
+  reviewedData.forEach(row => {
+    const rawDate = new Date(row.date).toISOString().split('T')[0]
+    const entry = dailyKpiData.find(d => d.rawDate === rawDate)
+    if (!entry) return
+    entry.reviewed += row.total_reviewed || 0
+    const r = parseJsonField(row.reviewed)
+    entry.takedown += r.Takedown || 0
+  })
+
+  dailyKpiData.forEach(d => {
+    d.pending = Math.max(0, d.discovered - d.reviewed)
+    delete d.rawDate
+  })
+
   const PLATFORM_COLORS = {
     instagram: '#e1306c',
     facebook: '#1877f2',
@@ -311,6 +350,7 @@ export const getDashboardData = traceAction('getDashboardData', async (project, 
       pendingRisk,
       totalCasesDiscovered,
       deltas,
+      dailyKpiData,
     },
 
     // ---- Section 2: Analytics ----

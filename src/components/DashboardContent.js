@@ -372,6 +372,7 @@ export function DashboardContent({ data }) {
         totalPending = 0,
         totalCasesDiscovered = 0,
         deltas = {},
+        dailyKpiData = [],
     } = clientTracker
 
     const mergedPlatformColors = { ...PLATFORM_COLORS, ...dbPlatformColors }
@@ -446,36 +447,36 @@ export function DashboardContent({ data }) {
 
                 {/* ── Row 1: 4 KPI cards ───────────────────────────────── */}
                 <section className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                    <KpiCard 
-                        icon={CheckCircle2} 
-                        label="Cases Reviewed" 
-                        value={totalReviewed} 
-                        delta={deltas.totalReviewed} 
-                        sparkData={platformLineData.map(d => ({ value: (d.totalReviewed || (platforms.reduce((acc, p) => acc + (d[p] || 0), 0) * 0.9)), date: d.date }))}
+                    <KpiCard
+                        icon={CheckCircle2}
+                        label="Cases Reviewed"
+                        value={totalReviewed}
+                        delta={deltas.totalReviewed}
+                        sparkData={dailyKpiData.map(d => ({ value: d.reviewed, date: d.date }))}
                         color="#10b981"
                     />
-                    <KpiCard 
-                        icon={PlusCircle} 
-                        label="New Cases" 
-                        value={totalCasesDiscovered} 
-                        delta={deltas.totalCasesDiscovered} 
-                        sparkData={platformLineData.map(d => ({ value: platforms.reduce((acc, p) => acc + (d[p] || 0), 0), date: d.date }))}
+                    <KpiCard
+                        icon={PlusCircle}
+                        label="New Cases"
+                        value={totalCasesDiscovered}
+                        delta={deltas.totalCasesDiscovered}
+                        sparkData={dailyKpiData.map(d => ({ value: d.discovered, date: d.date }))}
                         color="#3b82f6"
                     />
-                    <KpiCard 
-                        icon={Clock} 
-                        label="Pending Review" 
-                        value={totalPending} 
-                        delta={deltas.totalPending} 
-                        sparkData={platformLineData.map(d => ({ value: (platforms.reduce((acc, p) => acc + (d[p] || 0), 0) * 0.2) + 5, date: d.date }))}
+                    <KpiCard
+                        icon={Clock}
+                        label="Pending Review"
+                        value={totalPending}
+                        delta={deltas.totalPending}
+                        sparkData={dailyKpiData.map(d => ({ value: d.pending, date: d.date }))}
                         color="#f59e0b"
                     />
-                    <KpiCard 
-                        icon={XCircle} 
-                        label="Removal Count" 
-                        value={totalTakedown} 
-                        delta={deltas.totalTakedown} 
-                        sparkData={platformLineData.map(d => ({ value: d.totalTakedown || (platforms.reduce((acc, p) => acc + (d[p] || 0), 0) * 0.1), date: d.date }))}
+                    <KpiCard
+                        icon={XCircle}
+                        label="Removal Count"
+                        value={totalTakedown}
+                        delta={deltas.totalTakedown}
+                        sparkData={dailyKpiData.map(d => ({ value: d.takedown, date: d.date }))}
                         color="#ef4444"
                     />
                 </section>
