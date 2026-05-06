@@ -1,6 +1,6 @@
 'use client'
 
-import { trackClientClick, getAllPostIds } from './actions'
+import { trackClientClick, getAllPostIds, updateClientStatus } from './actions'
 import { CaseDetailPanel } from './CaseDetailPanel'
 import { bulkAssignCasesTo } from './feature_actions'
 import { initiateTakedown } from './takedown_actions'
@@ -15,7 +15,7 @@ import {
   ChevronLeft, ChevronRight, Smile, TrendingDown, TriangleAlert,
   Youtube, Instagram, Facebook, UserPlus, Check,
   AlertOctagon, ChevronDown,
-  DownloadIcon, ShieldAlert
+  DownloadIcon, ShieldAlert, MoreHorizontal
 } from 'lucide-react'
 
 import { Twitter, Reddit } from '@/utils/icons'
@@ -55,7 +55,66 @@ import { PlatformFilter } from './PlatformFilter'
 import ReportGenerate from '@/components/ReportGenerate'
 // import SafeDate from '@/components/SafeDate'
 
+function BulkActionMenu({
+  allowDoTakedown,
+  isBulkTakedownProcessing,
+  isBulkNoActionProcessing,
+  isBulkFlagProcessing,
+  onDoTakedown,
+  onNoAction,
+  onFlagForTakedown,
+}) {
+  const anyProcessing = isBulkTakedownProcessing || isBulkNoActionProcessing || isBulkFlagProcessing
+
+  const itemBase = "w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs font-bold text-left transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+
+  return (
+    <div className="flex flex-col gap-1">
+      {allowDoTakedown && (
+        <button
+          type="button"
+          onClick={onDoTakedown}
+          disabled={anyProcessing}
+          className={cn(itemBase, "text-rose-700 hover:bg-rose-50")}
+        >
+          {isBulkTakedownProcessing
+            ? <Loader2 className="w-4 h-4 animate-spin text-rose-600" />
+            : <ShieldAlert className="w-4 h-4 text-rose-600" />}
+          <span className="flex-1">Do Takedown</span>
+        </button>
+      )}
+
+      <button
+        type="button"
+        onClick={onNoAction}
+        disabled={anyProcessing}
+        className={cn(itemBase, "text-emerald-700 hover:bg-emerald-50")}
+      >
+        {isBulkNoActionProcessing
+          ? <Loader2 className="w-4 h-4 animate-spin text-emerald-600" />
+          : <CheckCircle className="w-4 h-4 text-emerald-600" />}
+        <span className="flex-1">No Action</span>
+      </button>
+
+      {!allowDoTakedown && (
+        <button
+          type="button"
+          onClick={onFlagForTakedown}
+          disabled={anyProcessing}
+          className={cn(itemBase, "text-orange-700 hover:bg-orange-50")}
+        >
+          {isBulkFlagProcessing
+            ? <Loader2 className="w-4 h-4 animate-spin text-orange-600" />
+            : <FlagTriangleLeft className="w-4 h-4 text-orange-600" />}
+          <span className="flex-1">Flag for Takedown</span>
+        </button>
+      )}
+    </div>
+  )
+}
+
 export function CasesList({ cases, project, clientDetails, initialFilters, initialSort, currentPage, itemsPerPage, initialCase, projectEmails }) {
+console.log("🔍 ~ CasesList ~ src/app/(dashboard)/cases/CasesList.js:116 ~ project:", project);
 
   // console.log(cases)
 
@@ -86,6 +145,15 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
 
   const [showBulkTakedownConfirm, setShowBulkTakedownConfirm] = useState(false)
   const [isBulkTakedownProcessing, setIsBulkTakedownProcessing] = useState(false)
+
+  const [showBulkNoActionConfirm, setShowBulkNoActionConfirm] = useState(false)
+  const [isBulkNoActionProcessing, setIsBulkNoActionProcessing] = useState(false)
+
+  const [showBulkFlagConfirm, setShowBulkFlagConfirm] = useState(false)
+  const [isBulkFlagProcessing, setIsBulkFlagProcessing] = useState(false)
+
+  const [actionMenuOpen, setActionMenuOpen] = useState(false)
+  const [mobileActionMenuOpen, setMobileActionMenuOpen] = useState(false)
 
   // Search state
   const [searchTerm, setSearchTerm] = useState(searchParams.get('semantic_search') || '')
@@ -160,6 +228,7 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
 
   // Merged posts for current page view
   const [mergedPosts, setMergedPosts] = useState([])
+  console.log("🔍 ~ CasesList ~ src/app/(dashboard)/cases/CasesList.js:229 ~ mergedPosts:", mergedPosts);
 
   useEffect(() => {
     setMergedPosts(cases?.posts || [])
@@ -300,6 +369,58 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
       setIsBulkTakedownProcessing(false)
     }
   }
+
+  const applyBulkClientStatus = async (status, opts = {}) => {
+    const postIds = Object.keys(selectedCases)
+    if (postIds.length === 0) return
+
+    const { setProcessing, closeDialog, trackEvent, successVerb } = opts
+    setProcessing(true)
+    if (trackEvent) {
+      trackClientClick(trackEvent, { page: 'CasesList', count: postIds.length })
+    }
+    try {
+      const result = await updateClientStatus(postIds, status, clientDetails.email)
+      if (result.success) {
+        setMergedPosts(prev => prev.map(post =>
+          selectedCases[post._id]
+            ? { ...post, client_status: status }
+            : post
+        ))
+
+        const newUpdatedCases = { ...updatedCases }
+        postIds.forEach(id => { newUpdatedCases[id] = status })
+        setUpdatedCases(newUpdatedCases)
+
+        const count = result.count ?? postIds.length
+        showToast(`${successVerb} ${count} ${count === 1 ? 'case' : 'cases'}`, 'success')
+        closeDialog?.()
+        handleClearAllSelected()
+      } else {
+        showToast(`Bulk update failed: ${result.error || 'Unknown error'}`, 'error')
+      }
+    } catch (e) {
+      showToast(`Error during bulk ${status.toLowerCase()}`, 'error')
+    } finally {
+      setProcessing(false)
+    }
+  }
+
+  const handleBulkNoAction = () =>
+    applyBulkClientStatus('No Action', {
+      setProcessing: setIsBulkNoActionProcessing,
+      closeDialog: () => setShowBulkNoActionConfirm(false),
+      trackEvent: 'bulk_no_action',
+      successVerb: 'Marked No Action for'
+    })
+
+  const handleBulkFlagForTakedown = () =>
+    applyBulkClientStatus('Flag for Takedown', {
+      setProcessing: setIsBulkFlagProcessing,
+      closeDialog: () => setShowBulkFlagConfirm(false),
+      trackEvent: 'bulk_flag_for_takedown',
+      successVerb: 'Flagged for takedown:'
+    })
 
   // Check if all items on the *current page* are selected for the header checkbox
   const isAllCurrentPageSelected = mergedPosts.length > 0 && mergedPosts.every(post => !!selectedCases[post._id])
@@ -457,31 +578,41 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                             <Filter className="w-3.5 h-3.5 text-slate-500" />
                             {isMobileFiltersOpen ? 'Hide' : 'Filters'}
                           </Button>
-                          {allowDoTakedown && selectedCount > 0 && (
-                            <Button
-                              variant="ghost"
-                              onClick={() => {
-                                if (selectedCount === 0) {
-                                  showToast("Please select some cases before initiating takedown", "error")
-                                  return
-                                }
-                                setShowBulkTakedownConfirm(true)
-                              }}
-                              disabled={isBulkTakedownProcessing}
-                              className={cn(
-                                "h-9 w-full px-3 text-xs font-bold text-white shadow-sm rounded-md transition-all",
-                                "bg-rose-600 hover:bg-rose-700 cursor-pointer",
-                                selectedCount === 0 && "opacity-50 hover:bg-rose-600"
-                              )}
-                              title={selectedCount === 0 ? "Select cases to initiate a bulk takedown" : "Initiate takedown for selected cases"}
-                            >
-                              {isBulkTakedownProcessing ? (
-                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                              ) : (
-                                <ShieldAlert className="w-3.5 h-3.5" />
-                              )}
-                              Do Takedown
-                            </Button>
+                          {selectedCount > 0 && (
+                            <Popover open={mobileActionMenuOpen} onOpenChange={setMobileActionMenuOpen}>
+                              <PopoverTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  disabled={isBulkTakedownProcessing || isBulkNoActionProcessing || isBulkFlagProcessing}
+                                  className={cn(
+                                    "h-9 w-full px-3 text-xs font-bold text-white shadow-sm rounded-md transition-all flex items-center justify-between gap-2",
+                                    "bg-red-400 hover:bg-red-500 cursor-pointer"
+                                  )}
+                                  title="Select an action for the selected cases"
+                                >
+                                  <span className="flex items-center gap-1.5">
+                                    Select Action ({isAllFilterSelected ? totalCount : selectedCount})
+                                  </span>
+                                  <ChevronDown className={cn("w-3.5 h-3.5 transition-transform", mobileActionMenuOpen && "rotate-180")} />
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent
+                                align="start"
+                                sideOffset={6}
+                                style={{ width: 'var(--radix-popover-trigger-width)' }}
+                                className="min-w-[140px] p-1 rounded-md border border-slate-200 shadow-lg"
+                              >
+                                <BulkActionMenu
+                                  allowDoTakedown={allowDoTakedown}
+                                  isBulkTakedownProcessing={isBulkTakedownProcessing}
+                                  isBulkNoActionProcessing={isBulkNoActionProcessing}
+                                  isBulkFlagProcessing={isBulkFlagProcessing}
+                                  onDoTakedown={() => { setMobileActionMenuOpen(false); setShowBulkTakedownConfirm(true) }}
+                                  onNoAction={() => { setMobileActionMenuOpen(false); setShowBulkNoActionConfirm(true) }}
+                                  onFlagForTakedown={() => { setMobileActionMenuOpen(false); setShowBulkFlagConfirm(true) }}
+                                />
+                              </PopoverContent>
+                            </Popover>
                           )}
                           </div>
                         </div>
@@ -710,36 +841,44 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                                   </div>
                                 </div>
 
-                                {allowDoTakedown && selectedCount > 0  && (
-                                <div className="hidden lg:block space-y-1 w-full sm:max-w-xs shrink-0">
-                                  <Label className="text-[10px] uppercase font-bold text-slate-400">Initiate Takedown</Label>
-                                  <div className="flex items-center gap-2">
-                                    <Button
-                                      onClick={() => {
-                                        if (selectedCount === 0) {
-                                          showToast("Please select some cases before initiating takedown", "error")
-                                          return
-                                        }
-                                        setShowBulkTakedownConfirm(true)
-                                      }}
-                                      disabled={isBulkTakedownProcessing}
-                                      className={cn(
-                                        "h-9 font-bold text-white shadow-sm  transition-all",
-                                        "bg-rose-600 hover:bg-rose-700 cursor-pointer",
-                                        selectedCount === 0 && "opacity-50 hover:bg-rose-600"
-                                      )}
-                                      title={selectedCount === 0 ? "Select cases to initiate a bulk takedown" : "Initiate takedown for selected cases"}
-                                    >
-                                      {isBulkTakedownProcessing ? (
-                                        <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                                      ) : (
-                                        <ShieldAlert className="w-4 h-4 mr-2" />
-                                      )}
-                                      Do Takedown{selectedCount > 0 ? ` (${isAllFilterSelected ? totalCount : selectedCount})` : ''}
-                                    </Button>
+                                {selectedCount > 0 && (
+                                  <div className="hidden lg:block space-y-1 w-full sm:max-w-xs shrink-0">
+                                    <Label className="text-[10px] uppercase font-bold text-slate-400">Bulk Action</Label>
+                                    <Popover open={actionMenuOpen} onOpenChange={setActionMenuOpen}>
+                                      <PopoverTrigger asChild>
+                                        <Button
+                                          disabled={isBulkTakedownProcessing || isBulkNoActionProcessing || isBulkFlagProcessing}
+                                          className={cn(
+                                            "h-9 font-bold text-white shadow-sm transition-all flex items-center justify-between gap-2",
+                                            "bg-red-400 hover:bg-red-500 cursor-pointer"
+                                          )}
+                                          title="Select an action for the selected cases"
+                                        >
+                                          <span className="flex items-center gap-2">
+                                            Select Action ({isAllFilterSelected ? totalCount : selectedCount})
+                                          </span>
+                                          <ChevronDown className={cn("w-4 h-4 transition-transform", actionMenuOpen && "rotate-180")} />
+                                        </Button>
+                                      </PopoverTrigger>
+                                      <PopoverContent
+                                        align="start"
+                                        sideOffset={6}
+                                        style={{ width: 'var(--radix-popover-trigger-width)' }}
+                                        className="min-w-[150px] p-1 rounded-md border border-slate-200 shadow-lg"
+                                      >
+                                        <BulkActionMenu
+                                          allowDoTakedown={allowDoTakedown}
+                                          isBulkTakedownProcessing={isBulkTakedownProcessing}
+                                          isBulkNoActionProcessing={isBulkNoActionProcessing}
+                                          isBulkFlagProcessing={isBulkFlagProcessing}
+                                          onDoTakedown={() => { setActionMenuOpen(false); setShowBulkTakedownConfirm(true) }}
+                                          onNoAction={() => { setActionMenuOpen(false); setShowBulkNoActionConfirm(true) }}
+                                          onFlagForTakedown={() => { setActionMenuOpen(false); setShowBulkFlagConfirm(true) }}
+                                        />
+                                      </PopoverContent>
+                                    </Popover>
                                   </div>
-                                </div>
-                                  )}
+                                )}
 
                                 {/* Active Filters Info Bar */}
                                 {(initialFilters.unique_clusters === 'true' || initialFilters.unique_clusters === true || initialFilters.platform !== 'all' || initialFilters.risk_priority !== 'all' || initialFilters.client_status !== 'all' || (initialFilters.visibility_status && initialFilters.visibility_status !== 'all') || (initialFilters.violations && initialFilters.violations !== 'all') || initialFilters.original_date_from || initialFilters.original_date_to || initialFilters.processed_from || initialFilters.processed_to || searchParams.get('similar_to') || searchParams.get('semantic_search')) && (
@@ -1558,6 +1697,108 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                 <ShieldAlert className="w-4 h-4 mr-2" />
               )}
               Confirm Takedown
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk No Action Confirmation Dialog */}
+      <Dialog
+        open={showBulkNoActionConfirm}
+        onOpenChange={(open) => {
+          if (!isBulkNoActionProcessing) setShowBulkNoActionConfirm(open)
+        }}
+      >
+        <DialogContent className="sm:max-w-md rounded-2xl">
+          <DialogHeader>
+            <div className="flex items-center gap-3">
+              <div className="shrink-0 p-2 rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-100">
+                <CheckCircle className="w-5 h-5" />
+              </div>
+              <DialogTitle className="text-lg font-black text-slate-800">
+                Mark as No Action
+              </DialogTitle>
+            </div>
+            <DialogDescription className="pt-2 text-sm text-slate-600 leading-relaxed">
+              You&apos;re about to mark{' '}
+              <span className="font-bold text-slate-900">
+                {isAllFilterSelected ? totalCount : selectedCount}{' '}
+                {(isAllFilterSelected ? totalCount : selectedCount) === 1 ? 'case' : 'cases'}
+              </span>{' '}
+              as <span className="font-bold text-slate-900">No Action</span>. This will close them out of review.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex flex-row justify-end gap-2 pt-2">
+            <Button
+              variant="outline"
+              onClick={() => setShowBulkNoActionConfirm(false)}
+              disabled={isBulkNoActionProcessing}
+              className="cursor-pointer"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleBulkNoAction}
+              disabled={isBulkNoActionProcessing}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold cursor-pointer"
+            >
+              {isBulkNoActionProcessing ? (
+                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+              ) : (
+                <CheckCircle className="w-4 h-4 mr-2" />
+              )}
+              Confirm No Action
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Flag for Takedown Confirmation Dialog */}
+      <Dialog
+        open={showBulkFlagConfirm}
+        onOpenChange={(open) => {
+          if (!isBulkFlagProcessing) setShowBulkFlagConfirm(open)
+        }}
+      >
+        <DialogContent className="sm:max-w-md rounded-2xl">
+          <DialogHeader>
+            <div className="flex items-center gap-3">
+              <div className="shrink-0 p-2 rounded-xl bg-orange-50 text-orange-600 border border-orange-100">
+                <FlagTriangleLeft className="w-5 h-5" />
+              </div>
+              <DialogTitle className="text-lg font-black text-slate-800">
+                Flag for Takedown
+              </DialogTitle>
+            </div>
+            <DialogDescription className="pt-2 text-sm text-slate-600 leading-relaxed">
+              You&apos;re about to flag{' '}
+              <span className="font-bold text-slate-900">
+                {isAllFilterSelected ? totalCount : selectedCount}{' '}
+                {(isAllFilterSelected ? totalCount : selectedCount) === 1 ? 'case' : 'cases'}
+              </span>{' '}
+              as <span className="font-bold text-slate-900">Flag for Takedown</span>. The takedown team will pick these up for review.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex flex-row justify-end gap-2 pt-2">
+            <Button
+              variant="outline"
+              onClick={() => setShowBulkFlagConfirm(false)}
+              disabled={isBulkFlagProcessing}
+              className="cursor-pointer"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleBulkFlagForTakedown}
+              disabled={isBulkFlagProcessing}
+              className="bg-orange-600 hover:bg-orange-700 text-white font-bold cursor-pointer"
+            >
+              {isBulkFlagProcessing ? (
+                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+              ) : (
+                <FlagTriangleLeft className="w-4 h-4 mr-2" />
+              )}
+              Confirm Flag
             </Button>
           </DialogFooter>
         </DialogContent>

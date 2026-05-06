@@ -43,44 +43,59 @@ export const getDashboardData = traceAction('getDashboardData', async (project, 
   const startDateStr = startDate.toISOString().split('T')[0] // YYYY-MM-DD
   const endDateStr = endDate.toISOString().split('T')[0]
 
-  // 1. Fetch daily_cases_metrics (total cases discovered, risk & category breakdowns)
-  let casesQuery = supabase
-    .from('daily_case_metrics')
-    .select('*')
-    .gte('date', startDateStr)
-    .lte('date', endDateStr)
-    .order('date', { ascending: true })
+  // Prior window of equal length (immediately preceding) — for KPI deltas
+  const dayMs = 24 * 60 * 60 * 1000
+  const windowDays = Math.max(1, Math.round((endDate.getTime() - startDate.getTime()) / dayMs) + 1)
+  const priorEndDate = new Date(startDate.getTime() - dayMs)
+  const priorStartDate = new Date(priorEndDate.getTime() - (windowDays - 1) * dayMs)
+  const priorStartStr = priorStartDate.toISOString().split('T')[0]
+  const priorEndStr = priorEndDate.toISOString().split('T')[0]
 
-  if (projectName) {
-    casesQuery = casesQuery.eq('project_name', projectName)
+  const buildCasesQuery = (start, end) => {
+    let q = supabase
+      .from('daily_case_metrics')
+      .select('*')
+      .gte('date', start)
+      .lte('date', end)
+      .order('date', { ascending: true })
+    if (projectName) q = q.eq('project_name', projectName)
+    return q
+  }
+  const buildReviewedQuery = (start, end) => {
+    let q = supabase
+      .from('daily_reviewed_metrics')
+      .select('*')
+      .gte('date', start)
+      .lte('date', end)
+      .order('date', { ascending: true })
+    if (projectName) q = q.eq('project_name', projectName)
+    return q
   }
 
-  const { data: casesMetrics, error: casesError } = await casesQuery
+  // Fire all four queries in parallel
+  const [
+    { data: casesMetrics, error: casesError },
+    { data: reviewedMetrics, error: reviewedError },
+    { data: priorCasesMetrics },
+    { data: priorReviewedMetrics },
+  ] = await Promise.all([
+    buildCasesQuery(startDateStr, endDateStr),
+    buildReviewedQuery(startDateStr, endDateStr),
+    buildCasesQuery(priorStartStr, priorEndStr),
+    buildReviewedQuery(priorStartStr, priorEndStr),
+  ])
 
   if (casesError) {
     console.error('Error fetching daily_case_metrics:', casesError)
   }
-
-  // 2. Fetch daily_reviewed_metrics (what the client has reviewed)
-  let reviewedQuery = supabase
-    .from('daily_reviewed_metrics')
-    .select('*')
-    .gte('date', startDateStr)
-    .lte('date', endDateStr)
-    .order('date', { ascending: true })
-
-  if (projectName) {
-    reviewedQuery = reviewedQuery.eq('project_name', projectName)
-  }
-
-  const { data: reviewedMetrics, error: reviewedError } = await reviewedQuery
-
   if (reviewedError) {
     console.error('Error fetching daily_reviewed_metrics:', reviewedError)
   }
 
   const casesData = casesMetrics || []
   const reviewedData = reviewedMetrics || []
+  const priorCasesData = priorCasesMetrics || []
+  const priorReviewedData = priorReviewedMetrics || []
 
   // Helper to safely parse JSON fields that may arrive as string or object
   const parseJsonField = (field) => {
@@ -133,6 +148,32 @@ export const getDashboardData = traceAction('getDashboardData', async (project, 
   // Pending cases = total discovered - total reviewed (clamped to 0)
   const totalPending = Math.max(0, totalCasesDiscovered - totalReviewed)
 
+  // ── Prior window aggregates (for KPI deltas) ─────────────
+  let priorReviewed = 0
+  let priorTakedown = 0
+  priorReviewedData.forEach(row => {
+    priorReviewed += row.total_reviewed || 0
+    const r = parseJsonField(row.reviewed)
+    priorTakedown += r.Takedown || 0
+  })
+  let priorCasesDiscovered = 0
+  priorCasesData.forEach(row => {
+    priorCasesDiscovered += row.total_cases || 0
+  })
+  const priorPending = Math.max(0, priorCasesDiscovered - priorReviewed)
+
+  const calcDelta = (curr, prev) => {
+    if (prev === 0) return curr === 0 ? 0 : 100
+    return Math.round(((curr - prev) / prev) * 1000) / 10
+  }
+
+  const deltas = {
+    totalReviewed: calcDelta(totalReviewed, priorReviewed),
+    totalCasesDiscovered: calcDelta(totalCasesDiscovered, priorCasesDiscovered),
+    totalPending: calcDelta(totalPending, priorPending),
+    totalTakedown: calcDelta(totalTakedown, priorTakedown),
+  }
+
   // Distribute pending proportionally across risk levels using cases risk ratio
   const caseRiskTotal = caseRiskSafe + caseRiskLow + caseRiskMedium + caseRiskHigh || 1
   const pendingRisk = {
@@ -160,10 +201,10 @@ export const getDashboardData = traceAction('getDashboardData', async (project, 
 
   // Risk Distribution — from cases data for the full picture
   const RISK_COLORS = {
-    high: '#f43f5e',    // rose-500
-    medium: '#f97316',  // orange-500
-    low: '#f59e0b',     // amber-500
-    safe: '#64748b',    // slate-500
+    high: '#ff0000',    // red
+    medium: '#ffaa00',  // orange
+    low: '#2c43f5',     // making blue
+    safe: '#10b981',    // emerald
   }
   const riskDistribution = [
     { name: 'High', value: caseRiskHigh, fill: RISK_COLORS.high },
@@ -213,6 +254,74 @@ export const getDashboardData = traceAction('getDashboardData', async (project, 
   // Clean up rawDate before returning
   platformLineData.forEach(d => delete d.rawDate)
 
+  // Daily Category Line Chart — top N categories per date
+  const TOP_N_CATEGORIES = 5
+  const topCategoryNames = categoryDistribution.slice(0, TOP_N_CATEGORIES).map(c => c.name)
+
+  const categoryLineData = []
+  const catCursor = new Date(startDate)
+  const catEndLimit = new Date(endDate)
+  catEndLimit.setHours(23, 59, 59, 999)
+
+  while (catCursor <= catEndLimit) {
+    const dateLabel = catCursor.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    const entry = { date: dateLabel, rawDate: catCursor.toISOString().split('T')[0] }
+    topCategoryNames.forEach(c => { entry[c] = 0 })
+    categoryLineData.push(entry)
+    catCursor.setDate(catCursor.getDate() + 1)
+  }
+
+  casesData.forEach(row => {
+    const rowDateStr = new Date(row.date).toISOString().split('T')[0]
+    const cats = parseJsonField(row.categories)
+    const entry = categoryLineData.find(d => d.rawDate === rowDateStr)
+    if (!entry) return
+    topCategoryNames.forEach(c => {
+      if (cats[c]) entry[c] = (entry[c] || 0) + cats[c]
+    })
+  })
+
+  categoryLineData.forEach(d => delete d.rawDate)
+
+  // Daily KPI series — independent per-day values for each KPI sparkline
+  const dailyKpiData = []
+  const kpiCursor = new Date(startDate)
+  const kpiEndLimit = new Date(endDate)
+  kpiEndLimit.setHours(23, 59, 59, 999)
+
+  while (kpiCursor <= kpiEndLimit) {
+    const dateLabel = kpiCursor.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    dailyKpiData.push({
+      date: dateLabel,
+      rawDate: kpiCursor.toISOString().split('T')[0],
+      discovered: 0,
+      reviewed: 0,
+      takedown: 0,
+      pending: 0,
+    })
+    kpiCursor.setDate(kpiCursor.getDate() + 1)
+  }
+
+  casesData.forEach(row => {
+    const rawDate = new Date(row.date).toISOString().split('T')[0]
+    const entry = dailyKpiData.find(d => d.rawDate === rawDate)
+    if (entry) entry.discovered += row.total_cases || 0
+  })
+
+  reviewedData.forEach(row => {
+    const rawDate = new Date(row.date).toISOString().split('T')[0]
+    const entry = dailyKpiData.find(d => d.rawDate === rawDate)
+    if (!entry) return
+    entry.reviewed += row.total_reviewed || 0
+    const r = parseJsonField(row.reviewed)
+    entry.takedown += r.Takedown || 0
+  })
+
+  dailyKpiData.forEach(d => {
+    d.pending = Math.max(0, d.discovered - d.reviewed)
+    delete d.rawDate
+  })
+
   const PLATFORM_COLORS = {
     instagram: '#e1306c',
     facebook: '#1877f2',
@@ -240,11 +349,15 @@ export const getDashboardData = traceAction('getDashboardData', async (project, 
       totalPending,
       pendingRisk,
       totalCasesDiscovered,
+      deltas,
+      dailyKpiData,
     },
 
     // ---- Section 2: Analytics ----
     riskDistribution,
     categoryDistribution,
+    categoryLineData,
+    topCategoryNames,
     platformLineData,
     platforms,
     platformColors: PLATFORM_COLORS,
