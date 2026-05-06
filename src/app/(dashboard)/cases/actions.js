@@ -1042,8 +1042,14 @@ export const getProjectDetails = traceAction('getProjectDetails_cases', async ()
 })
 
 // UPDATE CLIENT STATUS FLAG FOR TAKEDOWN / NO ACTION
+// Accepts a single caseId (string) OR an array of caseIds for bulk operation.
 export const updateClientStatus = traceAction('updateClientStatus', async (caseId, status, client_email) => {
   try {
+    const ids = Array.isArray(caseId) ? caseId : [caseId]
+    if (ids.length === 0) {
+      return { success: false, error: "No cases provided" }
+    }
+
     const projectDetails = await getProjectDetails()
     if (!projectDetails?.dbName) {
       return { success: false, error: "Project configuration not found" }
@@ -1053,67 +1059,75 @@ export const updateClientStatus = traceAction('updateClientStatus', async (caseI
     const db = client.db(projectDetails.dbName)
     const collection = db.collection('Posts')
 
-    const post = await collection.findOne(
-      { _id: new ObjectId(caseId) },
+    const objectIds = ids.map(id => new ObjectId(id))
+    const isBulk = ids.length > 1
+
+    const posts = await collection.find(
+      { _id: { $in: objectIds } },
       { projection: { text_embedding: 0, image_embedding: 0 } }
-    )
-    if (!post) {
+    ).toArray()
+
+    if (posts.length === 0) {
       return { success: false, error: "Case not found" }
     }
 
-    const result = await collection.updateOne(
-      { _id: new ObjectId(caseId) },
+    const nowIso = new Date().toISOString()
+    const changesSummary = (isBulk ? "bulk " : "") + "client status change to " + status
 
-      {
-        $set: {
-          client_status: status,
-          "content_reviewed_by": projectDetails.client_email,
-          "metadata.updated_at": new Date().toISOString(),
-        },
-        $push: {
-          "metadata.update_history": {
-            updated_at: new Date(),
-            updated_by: projectDetails.client_email,
-            changes_summary: "client status change to " + status
+    const bulkOps = posts.map(post => ({
+      updateOne: {
+        filter: { _id: post._id },
+        update: {
+          $set: {
+            client_status: status,
+            "content_reviewed_by": projectDetails.client_email,
+            "metadata.updated_at": nowIso,
+          },
+          $push: {
+            "metadata.update_history": {
+              updated_at: new Date(),
+              updated_by: projectDetails.client_email,
+              changes_summary: changesSummary
+            }
           }
         }
       }
-    )
+    }))
 
-    if (result.matchedCount > 0) {
-      // Track metrics
+    const result = await collection.bulkWrite(bulkOps)
 
-      // 1. DAILY REVIEW METRICS UPDATES
+    // Track metrics for each post (parallel, errors swallowed)
+    await Promise.all(posts.map(async post => {
+      const platform = post?.platform?.toLowerCase()
       const currentReviewData = {
         risk_score: post.review_details?.threat_score || 0,
         client_status: status,
-        platform: post?.platform.toLowerCase()
+        platform
       }
-
       const previousReviewData = post.client_status && post.client_status !== 'To Be Reviewed' ? {
         risk_score: post.review_details?.threat_score || 0,
         client_status: post.client_status,
-        platform: post?.platform.toLowerCase() 
+        platform
       } : null
 
       await updateClientReviewedMetrics(
         { project_name: projectDetails.projectName },
         currentReviewData,
         previousReviewData
-      ).catch(err =>
-        console.error('Failed to update client metrics:', err)
-      )
+      ).catch(err => console.error('Failed to update client metrics:', err))
 
-      // 2. CLIENT's META STATS UPDATE
       await updateClientMetaStats(
         projectDetails.projectName,
         client_email,
         "reviewed_case"
-      )
+      ).catch(err => console.error('Failed to update meta stats:', err))
+    }))
 
-      return { success: true }
-    } else {
-      return { success: false, error: "Case not found" }
+    return {
+      success: true,
+      count: result.modifiedCount,
+      requested: ids.length,
+      skipped: ids.length - posts.length
     }
   } catch (e) {
     console.error("updateClientStatus Error:", e)
