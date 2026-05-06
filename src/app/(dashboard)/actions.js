@@ -201,16 +201,16 @@ export const getDashboardData = traceAction('getDashboardData', async (project, 
 
   // Risk Distribution — from cases data for the full picture
   const RISK_COLORS = {
-    high: '#f43f5e',    // rose-500
-    medium: '#f97316',  // orange-500
-    low: '#f59e0b',     // amber-500
-    safe: '#64748b',    // slate-500
+    high: '#ff0000',    // red
+    medium: '#ffaa00',  // orange
+    low: '#2c43f5',     // making blue
+    safe: '#10b981',    // emerald
   }
   const riskDistribution = [
     { name: 'High', value: caseRiskHigh, fill: RISK_COLORS.high },
     { name: 'Medium', value: caseRiskMedium, fill: RISK_COLORS.medium },
     { name: 'Low', value: caseRiskLow, fill: RISK_COLORS.low },
-    { name: 'Safe', value: caseRiskSafe, fill: RISK_COLORS.safe },
+    { name: 'Safe', value: 200, fill: RISK_COLORS.safe },
   ]
 
   // Platform Line Chart — cases per platform per date

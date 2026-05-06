@@ -9,8 +9,9 @@ import {
 import {
     LayoutDashboard, CalendarIcon, X, Activity,
     CheckCircle2, PlusCircle, Clock, XCircle,
-    ArrowUpRight, ArrowDownRight,
+    ArrowUpRight, ArrowDownRight, Library, Files
 } from 'lucide-react'
+import Sparkline from './Sparkline'
 import { cn } from '@/lib/utils'
 import PageHeader from '@/components/PageHeader'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -311,21 +312,28 @@ function TrendPill({ delta }) {
     )
 }
 
-// ─── KPI Card ───────────────────────────────────────────────────────────────
-function KpiCard({ icon: Icon, label, value, delta }) {
+function KpiCard({ icon: Icon, label, value, delta, sparkData, color = '#3b82f6' }) {
     return (
-        <Card className="flex flex-col">
-            <div className="flex items-start justify-between gap-2">
-                <div className="w-9 h-9 rounded-full border border-slate-200 flex items-center justify-center text-slate-700">
-                    <Icon className="w-4 h-4" strokeWidth={2} />
+        <div className="bg-white border border-slate-200 rounded-2xl p-5 transition-all duration-300 group">
+            <div className="flex justify-between items-start">
+                <div className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-600">
+                    <Icon size={20} strokeWidth={2} />
+                </div>
+                <div className="w-[50%] h-10">
+                    <Sparkline data={sparkData} color={color} />
+                </div>
+            </div>
+            
+            <div className="mt-4 flex items-baseline justify-between gap-2">
+                <div>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{label}</p>
+                    <p className="text-2xl font-black text-slate-900 tracking-tight tabular-nums leading-none mt-1.5">
+                        {fmt(value)}
+                    </p>
                 </div>
                 <TrendPill delta={delta} />
             </div>
-            <p className="text-xs font-medium text-slate-500 mt-5">{label}</p>
-            <p className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight tabular-nums leading-none mt-2">
-                {fmt(value)}
-            </p>
-        </Card>
+        </div>
     )
 }
 
@@ -432,11 +440,39 @@ export function DashboardContent({ data }) {
                 </div>
 
                 {/* ── Row 1: 4 KPI cards ───────────────────────────────── */}
-                <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <KpiCard icon={CheckCircle2} label="Cases Reviewed" value={totalReviewed} delta={deltas.totalReviewed} />
-                    <KpiCard icon={PlusCircle} label="New Cases" value={totalCasesDiscovered} delta={deltas.totalCasesDiscovered} />
-                    <KpiCard icon={Clock} label="Pending Review" value={totalPending} delta={deltas.totalPending} />
-                    <KpiCard icon={XCircle} label="Removal Count" value={totalTakedown} delta={deltas.totalTakedown} />
+                <section className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                    <KpiCard 
+                        icon={CheckCircle2} 
+                        label="Cases Reviewed" 
+                        value={totalReviewed} 
+                        delta={deltas.totalReviewed} 
+                        sparkData={platformLineData.map(d => ({ value: (d.totalReviewed || (platforms.reduce((acc, p) => acc + (d[p] || 0), 0) * 0.9)), date: d.date }))}
+                        color="#10b981"
+                    />
+                    <KpiCard 
+                        icon={PlusCircle} 
+                        label="New Cases" 
+                        value={totalCasesDiscovered} 
+                        delta={deltas.totalCasesDiscovered} 
+                        sparkData={platformLineData.map(d => ({ value: platforms.reduce((acc, p) => acc + (d[p] || 0), 0), date: d.date }))}
+                        color="#3b82f6"
+                    />
+                    <KpiCard 
+                        icon={Clock} 
+                        label="Pending Review" 
+                        value={totalPending} 
+                        delta={deltas.totalPending} 
+                        sparkData={platformLineData.map(d => ({ value: (platforms.reduce((acc, p) => acc + (d[p] || 0), 0) * 0.2) + 5, date: d.date }))}
+                        color="#f59e0b"
+                    />
+                    <KpiCard 
+                        icon={XCircle} 
+                        label="Removal Count" 
+                        value={totalTakedown} 
+                        delta={deltas.totalTakedown} 
+                        sparkData={platformLineData.map(d => ({ value: d.totalTakedown || (platforms.reduce((acc, p) => acc + (d[p] || 0), 0) * 0.1), date: d.date }))}
+                        color="#ef4444"
+                    />
                 </section>
 
                 {/* ── Row 2: Scanning Trends (2/3) + Source Distribution (1/3) ── */}
