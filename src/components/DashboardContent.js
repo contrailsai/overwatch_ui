@@ -5,12 +5,12 @@ import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import {
     PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
     LineChart, Line, XAxis, YAxis, CartesianGrid,
-    AreaChart, Area,
+    AreaChart, Area, BarChart, Bar,
 } from 'recharts'
 import {
     LayoutDashboard, CalendarIcon, X, Activity,
     CheckCircle2, PlusCircle, Clock, XCircle,
-    ArrowUpRight, ArrowDownRight, Library, Files, TrendingUp
+    ArrowUpRight, ArrowDownRight, Library, Files, TrendingUp, Layers
 } from 'lucide-react'
 import Sparkline from './Sparkline'
 import { cn } from '@/lib/utils'
@@ -136,8 +136,8 @@ function DateFilter({ active, from, to }) {
         ? `${format(new Date(from), 'MMM d')} – ${format(new Date(to), 'MMM d')}`
         : 'Custom'
 
-    const pillBase = 'h-9 px-4 rounded-full text-xs font-semibold transition-colors whitespace-nowrap inline-flex items-center justify-center gap-1.5 cursor-pointer'
-    const pillActive = 'bg-slate-900 text-white border border-slate-900'
+    const pillBase = 'h-9 px-4 rounded-full text-sm font-semibold transition-colors whitespace-nowrap inline-flex items-center justify-center gap-1.5 cursor-pointer'
+    const pillActive = 'bg-blue-600 text-white border border-blue-600'
     const pillIdle = 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50'
 
     return (
@@ -170,7 +170,7 @@ function DateFilter({ active, from, to }) {
                     sideOffset={6}
                 >
                     <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-slate-50/80">
-                        <div className="text-xs">
+                        <div className="text-sm">
                             <p className="font-bold uppercase tracking-wider text-slate-400 text-[10px] mb-0.5">Range</p>
                             <p className="font-semibold text-slate-900">
                                 {internalRange?.from ? (
@@ -242,7 +242,7 @@ function DateFilter({ active, from, to }) {
 const ChartTooltip = ({ active, payload, label, colors = {}, uppercase = false, nameFormatter }) => {
     if (!active || !payload?.length) return null
     return (
-        <div className="bg-white text-slate-900 text-xs rounded-md px-3 py-2.5 shadow-md border border-slate-200 min-w-[160px]">
+        <div className="bg-white text-slate-900 text-sm rounded-md px-3 py-2.5 shadow-md border border-slate-200 min-w-[160px]">
             {label && <p className="text-slate-400 font-bold mb-2 uppercase tracking-wider text-[10px]">{label}</p>}
             {payload.map((p, i) => {
                 const rawColor = p.color || p.stroke || p.fill || p.payload?.fill || p.payload?.color
@@ -283,7 +283,7 @@ function Empty({ h = 200, msg = 'No data detected' }) {
             <div className="p-3 bg-slate-50 border border-slate-100 rounded-md mb-3">
                 <Activity className="w-6 h-6 opacity-50" aria-hidden="true" />
             </div>
-            <p className="text-xs font-bold tracking-tight text-slate-500">{msg}</p>
+            <p className="text-sm font-bold tracking-tight text-slate-500">{msg}</p>
             <p className="text-[11px] font-medium text-slate-400 mt-0.5">Try changing the date range</p>
         </div>
     )
@@ -437,7 +437,7 @@ export function DashboardContent({ data }) {
 
                 {/* ── Sub-header: overview info + date filter ─────────── */}
                 <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-                    <p className="text-xs font-medium text-slate-500">
+                    <p className="text-sm font-medium text-slate-500">
                         <span className="text-slate-700 font-semibold">{overviewLabel}</span>
                         <span className="mx-1.5 text-slate-300">·</span>
                         <span>Last updated {lastUpdated}</span>
@@ -473,7 +473,7 @@ export function DashboardContent({ data }) {
                     />
                     <KpiCard
                         icon={XCircle}
-                        label="Removal Count"
+                        label="Takedown Count"
                         value={totalTakedown}
                         delta={deltas.totalTakedown}
                         sparkData={dailyKpiData.map(d => ({ value: d.takedown, date: d.date }))}
@@ -484,18 +484,24 @@ export function DashboardContent({ data }) {
                 {/* ── Row 2: Scanning Trends (2/3) + Source Distribution (1/3) ── */}
                 <section className="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
-                    {/* Scanning Trends */}
+                    {/* Cases by Platform */}
                     <Card className="lg:col-span-2 flex flex-col">
-                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-                            <SectionLabel>Scanning Trends</SectionLabel>
-                            <div className="flex flex-wrap gap-x-4 gap-y-2 sm:justify-end">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                            <div className="inline-flex items-center gap-2">
+                                <Layers className="w-3.5 h-3.5 text-blue-500" strokeWidth={2.5} />
+                                <SectionLabel>Cases by Platform</SectionLabel>
+                            </div>
+                            <div className="flex flex-wrap gap-1.5 sm:justify-end">
                                 {platforms.map(p => (
-                                    <div key={p} className="flex items-center gap-1.5">
+                                    <div
+                                        key={p}
+                                        className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-slate-100 border border-slate-200/60"
+                                    >
                                         <span
-                                            className="w-3 h-0.5 rounded-full"
+                                            className="w-2 h-2 rounded-full shrink-0"
                                             style={{ backgroundColor: mergedPlatformColors[p] }}
                                         />
-                                        <span className="text-[11px] font-semibold text-slate-700">
+                                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-700">
                                             {platformLabel(p)}
                                         </span>
                                     </div>
@@ -503,19 +509,16 @@ export function DashboardContent({ data }) {
                             </div>
                         </div>
 
-                        <div className="flex items-baseline gap-2 mt-4">
-                            <span className="text-3xl font-black text-slate-900 tracking-tight tabular-nums leading-none">
-                                {fmt(totalCasesDiscovered)}
-                            </span>
-                            <span className="text-xs font-medium text-slate-500">cases discovered</span>
-                        </div>
-
                         {platformLineData.length === 0 || platforms.length === 0 ? (
-                            <Empty h={260} />
+                            <Empty h={300} />
                         ) : (
-                            <div className="flex-1 min-h-[260px] mt-4 -ml-2">
+                            <div className="flex-1 min-h-[300px] mt-6 -ml-2">
                                 <ResponsiveContainer width="100%" height="100%">
-                                    <LineChart data={platformLineData} margin={{ top: 10, right: 10, left: 0, bottom: 5 }}>
+                                    <BarChart
+                                        data={platformLineData}
+                                        margin={{ top: 10, right: 10, left: 0, bottom: 5 }}
+                                        barCategoryGap="22%"
+                                    >
                                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                                         <XAxis
                                             dataKey="date"
@@ -534,21 +537,19 @@ export function DashboardContent({ data }) {
                                         />
                                         <Tooltip
                                             content={<ChartTooltip colors={mergedPlatformColors} />}
-                                            cursor={{ stroke: '#cbd5e1', strokeWidth: 1 }}
+                                            cursor={{ fill: 'rgba(148, 163, 184, 0.08)' }}
                                         />
-                                        {platforms.map(p => (
-                                            <Line
+                                        {platforms.map((p, i) => (
+                                            <Bar
                                                 key={p}
-                                                type="monotone"
                                                 dataKey={p}
                                                 name={p}
-                                                stroke={mergedPlatformColors[p]}
-                                                strokeWidth={2}
-                                                dot={false}
-                                                activeDot={{ r: 4, strokeWidth: 0 }}
+                                                stackId="cases"
+                                                fill={mergedPlatformColors[p]}
+                                                radius={i === platforms.length - 1 ? [3, 3, 0, 0] : 0}
                                             />
                                         ))}
-                                    </LineChart>
+                                    </BarChart>
                                 </ResponsiveContainer>
                             </div>
                         )}
@@ -559,16 +560,16 @@ export function DashboardContent({ data }) {
                         <SectionLabel>Source Distribution</SectionLabel>
 
                         {platformTotal === 0 ? (
-                            <Empty h={240} />
+                            <Empty h={300} />
                         ) : (
-                            <>
-                                <div className="relative w-full h-[180px] mt-3">
+                            <div className="flex-1 flex flex-col">
+                                <div className="relative w-full flex-1 min-h-[240px] mt-3">
                                     <ResponsiveContainer width="100%" height="100%">
                                         <PieChart>
                                             <Pie
                                                 data={platformDistribution}
                                                 cx="50%" cy="50%"
-                                                innerRadius={56} outerRadius={78}
+                                                innerRadius="58%" outerRadius="86%"
                                                 paddingAngle={2}
                                                 dataKey="value"
                                                 cornerRadius={3}
@@ -582,18 +583,18 @@ export function DashboardContent({ data }) {
                                         </PieChart>
                                     </ResponsiveContainer>
                                     <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                                        <p className="text-2xl font-black text-slate-900 tabular-nums leading-none">
+                                        <p className="text-3xl font-black text-slate-900 tabular-nums leading-none">
                                             {fmt(platformTotal)}
                                         </p>
-                                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mt-1">
+                                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mt-1.5">
                                             Total
                                         </p>
                                     </div>
                                 </div>
 
-                                <div className="grid grid-cols-2 gap-x-4 gap-y-2 mt-4">
+                                <div className="grid grid-cols-2 gap-x-4 gap-y-2.5 mt-6">
                                     {platformDistribution.map(p => (
-                                        <div key={p.name} className="flex items-center justify-between gap-2 text-xs">
+                                        <div key={p.name} className="flex items-center justify-between gap-2 text-sm">
                                             <div className="flex items-center gap-2 min-w-0">
                                                 <span className="w-2 h-2 rounded-full shrink-0" style={{ background: p.color }} />
                                                 <span className="text-slate-700 font-medium truncate">{platformLabel(p.name)}</span>
@@ -602,7 +603,7 @@ export function DashboardContent({ data }) {
                                         </div>
                                     ))}
                                 </div>
-                            </>
+                            </div>
                         )}
                     </Card>
                 </section>
@@ -628,7 +629,7 @@ export function DashboardContent({ data }) {
                                 </div>
                                 <div className="flex flex-wrap gap-x-6 gap-y-2 mt-4">
                                     {riskDistribution.map(r => (
-                                        <div key={r.name} className="flex items-center gap-2 text-xs">
+                                        <div key={r.name} className="flex items-center gap-2 text-sm">
                                             <span className="w-2 h-2 rounded-full" style={{ background: r.fill }} />
                                             <span className="text-slate-700 font-medium">{r.name}</span>
                                             <span className="text-slate-900 font-bold tabular-nums">{fmt(r.value)}</span>
@@ -678,9 +679,9 @@ export function DashboardContent({ data }) {
                         </div>
 
                         {totalDiscovery === 0 ? (
-                            <Empty h={220} />
+                            <Empty h={260} />
                         ) : (
-                            <div className="h-[220px] mt-4 -ml-2">
+                            <div className="flex-1 min-h-[260px] mt-4 -ml-2">
                                 <ResponsiveContainer width="100%" height="100%">
                                     <AreaChart data={dailyDiscovery} margin={{ top: 10, right: 16, left: 0, bottom: 5 }}>
                                         <defs>
@@ -731,16 +732,16 @@ export function DashboardContent({ data }) {
                         <SectionLabel>Review Decisions</SectionLabel>
 
                         {decisionTotal === 0 ? (
-                            <Empty h={220} />
+                            <Empty h={300} />
                         ) : (
-                            <>
-                                <div className="relative w-full h-[180px] mt-3">
+                            <div className="flex-1 flex flex-col">
+                                <div className="relative w-full flex-1 min-h-[220px] mt-3">
                                     <ResponsiveContainer width="100%" height="100%">
                                         <PieChart>
                                             <Pie
                                                 data={decisionFiltered}
                                                 cx="50%" cy="50%"
-                                                innerRadius={56} outerRadius={78}
+                                                innerRadius="58%" outerRadius="86%"
                                                 paddingAngle={2}
                                                 dataKey="value"
                                                 cornerRadius={3}
@@ -754,27 +755,27 @@ export function DashboardContent({ data }) {
                                         </PieChart>
                                     </ResponsiveContainer>
                                     <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                                        <p className="text-2xl font-black text-slate-900 tabular-nums leading-none">
+                                        <p className="text-3xl font-black text-slate-900 tabular-nums leading-none">
                                             {fmt(decisionTotal)}
                                         </p>
-                                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mt-1">
+                                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mt-1.5">
                                             Total
                                         </p>
                                     </div>
                                 </div>
 
-                                <div className="space-y-2 mt-4">
+                                <div className="space-y-2.5 mt-6">
                                     {decisionData.map(d => (
-                                        <div key={d.name} className="flex items-center justify-between gap-2 text-xs">
+                                        <div key={d.name} className="flex items-center justify-between gap-2 text-sm">
                                             <div className="flex items-center gap-2 min-w-0">
                                                 <span className="w-2 h-2 rounded-full shrink-0" style={{ background: d.color }} />
-                                                <span className="text-slate-700 font-medium truncate">{d.name === 'Takedown' ? 'Removed' : d.name}</span>
+                                                <span className="text-slate-700 font-medium truncate">{d.name}</span>
                                             </div>
                                             <span className="text-slate-900 font-bold tabular-nums">{fmt(d.value)}</span>
                                         </div>
                                     ))}
                                 </div>
-                            </>
+                            </div>
                         )}
                     </Card>
 
