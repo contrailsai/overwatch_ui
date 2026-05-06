@@ -311,9 +311,9 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
     <div className="relative flex-1 flex flex-col bg-slate-50 overflow-hidden">
       
       {/* Metrics Section */}
-      <div className="px-4 sm:px-6 pt-4 sm:pt-6 shrink-0">
+      <div className="px-4 sm:px-6 pt-2 sm:pt-4 shrink-0">
         {metrics && (
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-2">
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-3 sm:p-4 flex items-center gap-3 sm:gap-4 hover:shadow-md transition-shadow">
               <div className="bg-blue-50 p-2 sm:p-3 rounded-xl">
                 <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
@@ -356,7 +356,7 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
 
       {/* Filters Section */}
          <div className="px-3 sm:px-6 py-2 shrink-0">
-           <div className="bg-white rounded-xl shadow-sm border border-slate-200 px-3 sm:px-4 py-3">
+           <div>
              <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
  
                {/* Left: Filters */}
@@ -509,8 +509,8 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
          </div>
 
       {/* List Section */}
-      <div className="flex-1 overflow-hidden px-4 sm:px-6 pb-4 min-h-0">
-        <div className={cn("h-full bg-white rounded-2xl shadow-sm border border-slate-200 flex flex-col transition-opacity overflow-hidden duration-300", isPending && "opacity-60")}>
+      <div className="flex-1 overflow-hidden min-h-0">
+        <div className={cn("h-full border-t border-slate-200 flex flex-col transition-opacity overflow-hidden duration-300", isPending && "opacity-60")}>
           
           {/* Scrollable Table Area */}
           <div className="overflow-auto flex-1 relative">
@@ -751,8 +751,8 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
 
       {/* Pagination Controls */}
       {totalCount > 0 && (
-        <div className="px-3 sm:px-6 pb-2 pt-2">
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 px-3 sm:px-4 py-3 flex flex-col lg:flex-row items-center justify-between gap-3 lg:gap-0">
+        <div className="">
+          <div className="border-t border-slate-200 px-3 sm:px-4 py-3 flex flex-col lg:flex-row items-center justify-between gap-3 lg:gap-0">
             <div className="flex items-center justify-between w-full lg:w-auto gap-4 sm:gap-6">
               <div className="flex items-center gap-2 sm:gap-3">
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap hidden sm:inline">Show:</span>
