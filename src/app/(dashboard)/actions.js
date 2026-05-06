@@ -210,7 +210,7 @@ export const getDashboardData = traceAction('getDashboardData', async (project, 
     { name: 'High', value: caseRiskHigh, fill: RISK_COLORS.high },
     { name: 'Medium', value: caseRiskMedium, fill: RISK_COLORS.medium },
     { name: 'Low', value: caseRiskLow, fill: RISK_COLORS.low },
-    { name: 'Safe', value: 200, fill: RISK_COLORS.safe },
+    { name: 'Safe', value: caseRiskSafe, fill: RISK_COLORS.safe },
   ]
 
   // Platform Line Chart — cases per platform per date

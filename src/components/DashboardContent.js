@@ -5,11 +5,12 @@ import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import {
     PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
     LineChart, Line, XAxis, YAxis, CartesianGrid,
+    AreaChart, Area,
 } from 'recharts'
 import {
     LayoutDashboard, CalendarIcon, X, Activity,
     CheckCircle2, PlusCircle, Clock, XCircle,
-    ArrowUpRight, ArrowDownRight, Library, Files
+    ArrowUpRight, ArrowDownRight, Library, Files, TrendingUp
 } from 'lucide-react'
 import Sparkline from './Sparkline'
 import { cn } from '@/lib/utils'
@@ -20,7 +21,6 @@ import { format } from 'date-fns'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const fmt = (n) => (n ?? 0).toLocaleString()
-const pct = (n, total) => (total > 0 ? Math.round((n / total) * 100) : 0)
 
 const platformLabel = (p) => {
     if (!p) return ''
@@ -60,8 +60,10 @@ const DECISION_COLORS = {
     'Takedown': '#a855f7',
 }
 
-const CATEGORY_BAR_PALETTE = ['#ef4444', '#3b82f6', '#64748b']
-const CATEGORY_BAR_REST = '#cbd5e1'
+const CATEGORY_LINE_PALETTE = ['#2563eb', '#06b6d4', '#a855f7', '#f97316', '#10b981', '#eab308', '#ec4899']
+
+const formatCategoryLabel = (name) =>
+    String(name || '').replace(/_/g, '-').replace(/\s+/g, '-').toUpperCase()
 
 // ─── Date Filter ─────────────────────────────────────────────────────────────
 function DateFilter({ active, from, to }) {
@@ -237,7 +239,7 @@ function DateFilter({ active, from, to }) {
 }
 
 // ─── Custom Tooltip ──────────────────────────────────────────────────────────
-const ChartTooltip = ({ active, payload, label, colors = {} }) => {
+const ChartTooltip = ({ active, payload, label, colors = {}, uppercase = false, nameFormatter }) => {
     if (!active || !payload?.length) return null
     return (
         <div className="bg-white text-slate-900 text-xs rounded-md px-3 py-2.5 shadow-md border border-slate-200 min-w-[160px]">
@@ -245,11 +247,18 @@ const ChartTooltip = ({ active, payload, label, colors = {} }) => {
             {payload.map((p, i) => {
                 const rawColor = p.color || p.stroke || p.fill || p.payload?.fill || p.payload?.color
                 const color = (rawColor === 'none' || rawColor === 'transparent') ? (colors[p.name] || '#cbd5e1') : (rawColor || '#cbd5e1')
-                const displayName = p.name === 'value' ? 'Cases' : platformLabel(p.name)
+                const displayName = nameFormatter
+                    ? nameFormatter(p.name)
+                    : p.name === 'value' ? 'Cases' : platformLabel(p.name)
                 return (
                     <div key={i} className="flex items-center gap-2.5 py-0.5">
                         <span className="w-2 h-2 rounded-full shrink-0" style={{ background: color }} />
-                        <span className="text-slate-500 font-medium flex-1 truncate">{displayName}</span>
+                        <span className={cn(
+                            'flex-1 truncate',
+                            uppercase
+                                ? 'text-slate-600 font-semibold uppercase tracking-wider text-[11px]'
+                                : 'text-slate-500 font-medium',
+                        )}>{displayName}</span>
                         <span className="font-bold text-slate-900 tabular-nums">{fmt(p.value)}</span>
                     </div>
                 )
@@ -348,6 +357,8 @@ export function DashboardContent({ data }) {
         clientTracker = {},
         riskDistribution = [],
         categoryDistribution = [],
+        categoryLineData = [],
+        topCategoryNames = [],
         platformLineData = [],
         platforms = [],
         platformColors: dbPlatformColors = {},
@@ -398,30 +409,24 @@ export function DashboardContent({ data }) {
     const decisionTotal = decisionData.reduce((s, d) => s + d.value, 0)
     const decisionFiltered = decisionData.filter(d => d.value > 0)
 
-    // Queue progress
-    const queueDenominator = totalReviewed + totalPending
-    const queueProgress = pct(totalReviewed, queueDenominator)
-
-    // Time to clear backlogs (hours): pending / avg-daily-reviewed × 24h
-    const numDays = Math.max(1, platformLineData.length)
-    const avgDailyReviewed = totalReviewed / numDays
-    const hoursToClear = avgDailyReviewed > 0 ? (totalPending / avgDailyReviewed) * 24 : null
-    const clearLabel = hoursToClear == null
-        ? '—'
-        : hoursToClear < 1
-            ? '< 1 hour'
-            : hoursToClear < 24
-                ? `~ ${Math.round(hoursToClear)} hours`
-                : `~ ${Math.round(hoursToClear / 24)} days`
-
-    // Top Violation Categories (limit to 7, with %s of total)
-    const totalCategoryCount = categoryDistribution.reduce((s, c) => s + c.value, 0)
-    const topCategories = categoryDistribution.slice(0, 7).map((c, i) => ({
-        name: c.name,
-        value: c.value,
-        percent: totalCategoryCount > 0 ? Math.round((c.value / totalCategoryCount) * 100) : 0,
-        color: i < 3 && c.value > 0 ? CATEGORY_BAR_PALETTE[i] : CATEGORY_BAR_REST,
+    // Daily Discovery — total cases per day (sum across platforms)
+    const dailyDiscovery = platformLineData.map(d => ({
+        date: d.date,
+        value: platforms.reduce((s, p) => s + (d[p] || 0), 0),
     }))
+    const peakDiscovery = dailyDiscovery.reduce((m, d) => Math.max(m, d.value), 0)
+    const totalDiscovery = dailyDiscovery.reduce((s, d) => s + d.value, 0)
+    const avgDiscovery = dailyDiscovery.length > 0 ? Math.round(totalDiscovery / dailyDiscovery.length) : 0
+
+    // Daily Alerted Categories — color map by index
+    const categoryColors = topCategoryNames.reduce((acc, name, i) => {
+        acc[name] = CATEGORY_LINE_PALETTE[i % CATEGORY_LINE_PALETTE.length]
+        return acc
+    }, {})
+    const totalCategoryAlerts = categoryLineData.reduce(
+        (s, d) => s + topCategoryNames.reduce((rs, n) => rs + (d[n] || 0), 0),
+        0,
+    )
 
     return (
         <div className="flex-1 flex flex-col h-full overflow-hidden bg-slate-50">
@@ -601,7 +606,7 @@ export function DashboardContent({ data }) {
                     </Card>
                 </section>
 
-                {/* ── Row 3: Risk Breakdown (full width) ────────────────── */}
+                {/* ── Row 3: Risk Breakdown ────────────────── */}
                 <section>
                     <Card>
                         <SectionLabel>Risk Breakdown</SectionLabel>
@@ -634,36 +639,90 @@ export function DashboardContent({ data }) {
                     </Card>
                 </section>
 
-                {/* ── Row 4: Queue Status + Review Decisions + Top Violation Categories ── */}
-                <section className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                {/* ── Row 4: Discovery Trend + Review Decisions ── */}
 
-                    {/* Queue Status */}
+                <section className="grid grid-cols-1 lg:grid-cols-4 md:grid-cols-2 gap-4 ">
+
+                    {/* Discovery Trend */}
                     <Card className="flex flex-col">
-                        <SectionLabel>Queue Status</SectionLabel>
-
-                        <div className="flex flex-col items-center text-center my-4">
-                            <p className="text-3xl font-black text-slate-900 tabular-nums leading-none">{fmt(totalPending)}</p>
-                            <p className="text-xs font-medium text-slate-500 mt-2">Pending Review</p>
-                        </div>
-
-                        <div className="mt-auto">
-                            <div className="flex items-baseline justify-between mb-2">
-                                <span className="text-xs font-medium text-slate-600">Progress</span>
-                                <span className="text-xs font-bold text-slate-900 tabular-nums">{queueProgress}%</span>
+                        <div className="flex items-start justify-between gap-3">
+                            <div className="flex flex-col">
+                                <div className="flex items-center gap-1.5">
+                                    <TrendingUp className="w-3.5 h-3.5 text-emerald-500" strokeWidth={2.5} />
+                                    <SectionLabel>Discovery Trend</SectionLabel>
+                                </div>
+                                <span className="text-[11px] font-semibold text-sky-600 mt-1.5">
+                                    Cases scanned per day
+                                </span>
                             </div>
-                            <div className="h-1 bg-slate-100 rounded-full overflow-hidden">
-                                <div
-                                    className="h-full bg-blue-500 rounded-full transition-all duration-500"
-                                    style={{ width: `${queueProgress}%` }}
-                                />
-                            </div>
-
-                            <div className="mt-4 flex items-center gap-2 px-3 py-2 rounded-md bg-slate-50 border border-slate-100">
-                                <Clock className="w-3.5 h-3.5 text-slate-500" />
-                                <span className="text-[11px] font-medium text-slate-500 flex-1">Time to clear backlogs</span>
-                                <span className="text-[11px] font-bold text-slate-900">{clearLabel}</span>
+                            <div className="text-right">
+                                <p className="text-2xl font-black text-slate-900 tabular-nums leading-none">
+                                    {fmt(totalDiscovery)}
+                                </p>
+                                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mt-1">
+                                    Total
+                                </p>
                             </div>
                         </div>
+
+                        <div className="mt-3 flex items-center gap-3 text-[11px]">
+                            <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-slate-50 border border-slate-100">
+                                <span className="font-medium text-slate-500">Peak</span>
+                                <span className="font-bold text-slate-900 tabular-nums">{fmt(peakDiscovery)}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-slate-50 border border-slate-100">
+                                <span className="font-medium text-slate-500">Avg/day</span>
+                                <span className="font-bold text-slate-900 tabular-nums">{fmt(avgDiscovery)}</span>
+                            </div>
+                        </div>
+
+                        {totalDiscovery === 0 ? (
+                            <Empty h={220} />
+                        ) : (
+                            <div className="h-[220px] mt-4 -ml-2">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <AreaChart data={dailyDiscovery} margin={{ top: 10, right: 16, left: 0, bottom: 5 }}>
+                                        <defs>
+                                            <linearGradient id="discoveryFill" x1="0" y1="0" x2="0" y2="1">
+                                                <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.28} />
+                                                <stop offset="100%" stopColor="#3b82f6" stopOpacity={0} />
+                                            </linearGradient>
+                                        </defs>
+                                        <CartesianGrid strokeDasharray="2 4" vertical={false} stroke="#e2e8f0" />
+                                        <XAxis
+                                            dataKey="date"
+                                            tick={{ fontSize: 10, fontWeight: 600, fill: '#94a3b8' }}
+                                            tickLine={false}
+                                            axisLine={false}
+                                            dy={8}
+                                            minTickGap={24}
+                                        />
+                                        <YAxis
+                                            tick={{ fontSize: 10, fontWeight: 600, fill: '#94a3b8' }}
+                                            tickLine={false}
+                                            axisLine={false}
+                                            width={32}
+                                            allowDecimals={false}
+                                            tickCount={5}
+                                        />
+                                        <Tooltip
+                                            content={<ChartTooltip nameFormatter={() => 'Cases'} />}
+                                            cursor={{ stroke: '#94a3b8', strokeWidth: 1 }}
+                                        />
+                                        <Area
+                                            type="linear"
+                                            dataKey="value"
+                                            name="value"
+                                            stroke="#3b82f6"
+                                            strokeWidth={1.5}
+                                            fill="url(#discoveryFill)"
+                                            dot={{ r: 2.5, fill: '#3b82f6', strokeWidth: 0 }}
+                                            activeDot={{ r: 4, strokeWidth: 2, stroke: '#fff', fill: '#3b82f6' }}
+                                        />
+                                    </AreaChart>
+                                </ResponsiveContainer>
+                            </div>
+                        )}
                     </Card>
 
                     {/* Review Decisions */}
@@ -718,30 +777,75 @@ export function DashboardContent({ data }) {
                         )}
                     </Card>
 
-                    {/* Top Violation Categories */}
-                    <Card className="flex flex-col">
-                        <SectionLabel>Top Violation Categories</SectionLabel>
 
-                        {topCategories.length === 0 ? (
-                            <Empty h={220} />
-                        ) : (
-                            <div className="space-y-3 mt-4">
-                                {topCategories.map(c => (
-                                    <div key={c.name} className="flex items-center gap-3">
-                                        <span className="text-xs font-medium text-slate-700 w-28 truncate" title={c.name}>
-                                            {c.name.replace(/_/g, ' ')}
-                                        </span>
-                                        <div className="flex-1 h-1 bg-slate-100 rounded-full overflow-hidden">
-                                            <div
-                                                className="h-full rounded-full transition-all duration-500"
-                                                style={{ width: `${c.percent}%`, backgroundColor: c.color }}
-                                            />
-                                        </div>
-                                        <span className="text-xs font-bold text-slate-900 tabular-nums w-9 text-right">
-                                            {c.percent}%
+                    {/* ── Row 5: Daily Alerted Categories (full width line chart) ── */}
+                    <Card className="flex flex-col md:col-span-2 lg:col-span-2">
+                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                            <div className="flex flex-col">
+                                <div className="flex items-center gap-1.5">
+                                    <TrendingUp className="w-3.5 h-3.5 text-emerald-500" strokeWidth={2.5} />
+                                    <SectionLabel>Daily Alerted Categories</SectionLabel>
+                                </div>
+                                <span className="text-[11px] font-semibold text-sky-600 mt-1.5">
+                                    Top categories over time
+                                </span>
+                            </div>
+                            <div className="flex flex-wrap gap-x-4 gap-y-2 sm:justify-end">
+                                {topCategoryNames.map(c => (
+                                    <div key={c} className="flex items-center gap-1.5 max-w-[180px]">
+                                        <span
+                                            className="w-2 h-2 rounded-full shrink-0"
+                                            style={{ backgroundColor: categoryColors[c] }}
+                                        />
+                                        <span className="text-[11px] font-bold tracking-wider uppercase text-slate-700 truncate">
+                                            {formatCategoryLabel(c)}
                                         </span>
                                     </div>
                                 ))}
+                            </div>
+                        </div>
+
+                        {categoryLineData.length === 0 || topCategoryNames.length === 0 || totalCategoryAlerts === 0 ? (
+                            <Empty h={320} />
+                        ) : (
+                            <div className="h-[320px] mt-4 -ml-2">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <LineChart data={categoryLineData} margin={{ top: 10, right: 16, left: 0, bottom: 5 }}>
+                                        <CartesianGrid strokeDasharray="2 4" vertical={false} stroke="#e2e8f0" />
+                                        <XAxis
+                                            dataKey="date"
+                                            tick={{ fontSize: 10, fontWeight: 600, fill: '#94a3b8' }}
+                                            tickLine={false}
+                                            axisLine={false}
+                                            dy={8}
+                                            minTickGap={24}
+                                        />
+                                        <YAxis
+                                            tick={{ fontSize: 10, fontWeight: 600, fill: '#94a3b8' }}
+                                            tickLine={false}
+                                            axisLine={false}
+                                            width={32}
+                                            allowDecimals={false}
+                                            tickCount={5}
+                                        />
+                                        <Tooltip
+                                            content={<ChartTooltip colors={categoryColors} uppercase nameFormatter={formatCategoryLabel} />}
+                                            cursor={{ stroke: '#94a3b8', strokeWidth: 1 }}
+                                        />
+                                        {topCategoryNames.map(c => (
+                                            <Line
+                                                key={c}
+                                                type="linear"
+                                                dataKey={c}
+                                                name={c}
+                                                stroke={categoryColors[c]}
+                                                strokeWidth={1.5}
+                                                dot={{ r: 2.5, fill: categoryColors[c], strokeWidth: 0 }}
+                                                activeDot={{ r: 4, strokeWidth: 2, stroke: '#fff', fill: categoryColors[c] }}
+                                            />
+                                        ))}
+                                    </LineChart>
+                                </ResponsiveContainer>
                             </div>
                         )}
                     </Card>
