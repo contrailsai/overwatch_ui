@@ -697,7 +697,9 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
                               <span key={idx} className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[9px] font-bold uppercase tracking-wider border border-slate-200">
                                 {type.replace(/_/g, ' ')}
                               </span>
-                            )) : (
+                            )) : item.violations_unknown === false ? (
+                              <span className="text-[9px] font-bold text-slate-400">-</span>
+                            ) : (
                               <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest italic">Unknown</span>
                             )}
                           </div>
