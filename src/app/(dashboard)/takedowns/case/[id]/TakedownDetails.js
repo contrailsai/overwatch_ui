@@ -32,7 +32,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
-import { cn } from "@/lib/utils"
+import { cn, omitSafeThreatTypes } from "@/lib/utils"
 
 // Helper for Visual Stages
 function StageProgress({ status, onUpdate, updating, readOnly }) {
@@ -537,10 +537,13 @@ export default function TakedownDetails({ takedownId, initialData, initialDocume
 
   // --- Data Resolution for UI ---
   const riskScore = review.threat_score ?? analysis.risk_score ?? 0;
-  let category = review.primary_threat_type || review.threat_type || analysis.category || 'Unknown';
-  if (Array.isArray(review.threat_types) && review.threat_types.length > 0) {
-    category = review.threat_types.join(', ').replace(/_/g, ' ');
-  }
+  const displayThreatTypes = omitSafeThreatTypes(review.threat_types)
+  let category =
+    displayThreatTypes.length > 0
+      ? displayThreatTypes.join(', ').replace(/_/g, ' ')
+      : [review.primary_threat_type, review.threat_type, analysis.category].find(
+          (c) => c != null && c !== '' && String(c).toLowerCase() !== 'safe'
+        ) || 'Unknown'
   const reasoning = review.reasoning || analysis.categorization_reason || 'No detailed reasoning provided.';
   const reviewerNote = review.reviewer_comments || null;
   const poiNames = review.poi_names || analysis.poi_check?.poi_names || [];

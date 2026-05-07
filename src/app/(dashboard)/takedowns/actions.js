@@ -6,6 +6,7 @@ import { ObjectId } from 'mongodb'
 import { getSignedImageUrl, uploadFileToS3, getSignedDownloadUrl, getSignedViewUrl } from '@/utils/aws/s3'
 import { revalidatePath } from 'next/cache'
 import { traceAction, recordClickMetric } from '@/utils/tracing'
+import { omitSafeThreatTypes } from '@/lib/utils'
 import crypto from 'crypto'
 
 export const trackClientClick = traceAction('trackClientClick', async (buttonName, attributes = {}) => {
@@ -30,6 +31,16 @@ async function getProjectDetails() {
     projectName: clientDetails.project_name,
     dbName: clientDetails.project?.mongo_db_map
   }
+}
+
+/** List payload: never surface `safe` as a displayed threat type. */
+function getListThreatTypes(reviewDetails) {
+  const raw = reviewDetails?.threat_types
+  const violations_unknown = !Array.isArray(raw) || raw.length === 0
+  if (violations_unknown) {
+    return { threat_types: [], violations_unknown: true }
+  }
+  return { threat_types: omitSafeThreatTypes(raw), violations_unknown: false }
 }
 
 /**
@@ -255,6 +266,8 @@ export const getTakedowns = traceAction('getTakedowns', async (filters = {}) => 
       let takedownDate = post.takedown_info?.takedown_start_date || null
       if (takedownDate && takedownDate.$date) takedownDate = takedownDate.$date
 
+      const { threat_types, violations_unknown } = getListThreatTypes(post.review_details)
+
       return {
         id: post._id.toString(),
         mongo_post_id: post._id.toString(),
@@ -263,8 +276,9 @@ export const getTakedowns = traceAction('getTakedowns', async (filters = {}) => 
         status: post.takedown_info?.status || 'initiated',
         visibility_status: post.visibility_status || 'active',
         risk_score: post.review_details?.threat_score || 0,
-        threat_type: post.review_details?.threat_types?.[0] || 'Unknown',
-        threat_types: post.review_details?.threat_types || [],
+        threat_type: threat_types[0] || (violations_unknown ? 'Unknown' : '-'),
+        threat_types,
+        violations_unknown,
         last_update_date: lastUpdateDate,
         takedown_date: takedownDate,
         processed_at: post.review_details?.reviewed_at || post.metadata?.updated_at || null,
