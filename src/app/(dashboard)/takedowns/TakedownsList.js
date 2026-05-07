@@ -19,17 +19,12 @@ import { cn } from "@/lib/utils"
 
 import { trackClientClick, getAllTakedownIds } from './actions'
 import ReportGenerate from '@/components/ReportGenerate'
-import { DateFilterPopover } from "@/app/(dashboard)/cases/DateFilterPopover"
+import { DateFilterPopover } from "@/components/DateFilterPopover"
 import { ViolationsFilter } from "@/app/(dashboard)/cases/ViolationsFilter"
 import { RiskFilter } from "@/app/(dashboard)/cases/RiskFilter"
 import { StatusFilter } from "@/app/(dashboard)/cases/StatusFilter"
 import { PlatformFilter } from "@/app/(dashboard)/cases/PlatformFilter"
 import { format } from "date-fns"
-import {
-  HoverCard,
-  HoverCardContent,
-  HoverCardTrigger,
-} from "@/components/ui/hover-card"
 import {
   Dialog,
   DialogContent,
@@ -213,9 +208,11 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
   }
 
   const FilterControls = ({ isMobile = false }) => (
-    <div className={cn("grid gap-4", isMobile ? "grid-cols-2" : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7")}>
-      <div className="space-y-1.5">
+    <div className={cn("flex flex-wrap items-end gap-2.5 sm:gap-3 w-full", isMobile && "flex-col items-stretch")}>
+      <div className="space-y-1 w-full lg:w-auto lg:flex-1 lg:max-w-[180px]">
         <StatusFilter
+          label="Takedown Status"
+          placeholder="All Statuses"
           initialStatus={initialFilters.status}
           onChange={(val) => {
             handleFilterChange('status', val);
@@ -230,7 +227,7 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
         />
       </div>
 
-      <div className="space-y-1.5">
+      <div className="space-y-1 w-full lg:w-auto lg:flex-1 lg:max-w-[160px]">
         <PlatformFilter
           initialPlatform={initialFilters.platform}
           onChange={(val) => {
@@ -240,18 +237,17 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
         />
       </div>
 
-      <div className="space-y-1.5">
+      <div className="space-y-1 w-full lg:w-auto lg:min-w-[140px] lg:max-w-[180px]">
         <ViolationsFilter
           projectLabels={projectLabels}
           initialViolations={initialFilters.violations}
           onChange={(val) => {
             handleFilterChange('violations', val);
-            // Don't close mobile filters on multi-select unless you want to
           }}
         />
       </div>
 
-      <div className="space-y-1.5">
+      <div className="space-y-1 w-full lg:w-auto lg:flex-1 lg:max-w-[160px]">
         <RiskFilter
           initialRisk={initialFilters.risk_priority}
           onChange={(val) => {
@@ -260,7 +256,7 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
         />
       </div>
 
-      <div className="space-y-1.5">
+      <div className="space-y-1 w-full lg:w-auto lg:min-w-[140px] lg:max-w-[160px]">
         <Label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Alert Date</Label>
         <DateFilterPopover
           title="Alert Date"
@@ -275,7 +271,7 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
         />
       </div>
 
-      <div className="space-y-1.5">
+      <div className="space-y-1 w-full lg:w-auto lg:min-w-[140px] lg:max-w-[160px]">
         <Label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Publish Date</Label>
         <DateFilterPopover
           title="Publish Date"
@@ -290,7 +286,7 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
         />
       </div>
 
-      <div className="space-y-1.5">
+      <div className="space-y-1 w-full lg:w-auto lg:min-w-[140px] lg:max-w-[160px]">
         <Label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Takedown Date</Label>
         <DateFilterPopover
           title="Takedown Date"
@@ -304,6 +300,17 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
           }}
         />
       </div>
+
+      {hasActiveFilters && (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={clearFilters}
+          className="h-9 px-3 text-rose-600 hover:text-rose-700 hover:bg-rose-50 font-bold text-[10px] uppercase tracking-wider cursor-pointer transition-colors w-full lg:w-auto shrink-0"
+        >
+          <X className="w-3.5 h-3.5 mr-1 text-rose-500" /> Clear Filters
+        </Button>
+      )}
     </div>
   )
 
@@ -311,9 +318,9 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
     <div className="relative flex-1 flex flex-col bg-slate-50 overflow-hidden">
       
       {/* Metrics Section */}
-      <div className="px-4 sm:px-6 pt-4 sm:pt-6 shrink-0">
+      <div className="px-4 sm:px-6 pt-2 shrink-0">
         {metrics && (
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-3 sm:p-4 flex items-center gap-3 sm:gap-4 hover:shadow-md transition-shadow">
               <div className="bg-blue-50 p-2 sm:p-3 rounded-xl">
                 <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
@@ -355,15 +362,15 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
       </div>
 
       {/* Filters Section */}
-         <div className="px-3 sm:px-6 py-2 shrink-0">
-           <div className="bg-white rounded-xl shadow-sm border border-slate-200 px-3 sm:px-4 py-3">
+         <div className="px-3 sm:px-6 pt-5 shrink-0">
+           <div>
              <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
- 
+
                {/* Left: Filters */}
-               <div className="flex flex-col lg:flex-row gap-4 w-full">
- 
+               <div className="flex flex-col lg:flex-row lg:items-end gap-4 w-full">
+
                  {/* Header Row: Title & Summary Box */}
-                 <div className="flex flex-col w-full lg:w-[160px] xl:w-[180px] shrink-0 rounded-xl  relative ">
+                 <div className="flex flex-col w-full lg:w-[160px] xl:w-[180px] shrink-0 relative">
                    <div className="flex items-center justify-between mb-2">
                      <div className="flex flex-col items-start gap-2">
                      <div className="flex items-center gap-1.5">
@@ -509,11 +516,11 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
          </div>
 
       {/* List Section */}
-      <div className="flex-1 overflow-hidden px-4 sm:px-6 pb-4 min-h-0">
-        <div className={cn("h-full bg-white rounded-2xl shadow-sm border border-slate-200 flex flex-col transition-opacity overflow-hidden duration-300", isPending && "opacity-60")}>
-          
+      <div className="flex-1 min-h-0 flex flex-col pt-2">
+        <div className={cn("flex-1 min-h-0 bg-white shadow-sm border border-slate-200 flex flex-col overflow-hidden transition-opacity duration-300", isPending && "opacity-60")}>
+
           {/* Scrollable Table Area */}
-          <div className="overflow-auto flex-1 relative">
+          <div className="overflow-auto flex-1 relative custom-scrollbar">
             {takedowns.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full py-24 text-slate-400">
                 <div className="w-16 sm:w-20 h-16 sm:h-20 bg-slate-50 rounded-full flex items-center justify-center mb-6 border border-slate-100">
@@ -531,7 +538,7 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
               <table className="min-w-full table-fixed border-separate border-spacing-0">
                 <thead className="sticky top-0 z-10">
                   <tr className="bg-slate-50/90 backdrop-blur-md">
-                    <th scope="col" className="w-10 sm:w-12 px-2 sm:px-4 py-3.5 text-center border-b border-slate-100">
+                    <th scope="col" className="w-10 sm:w-12 px-2 sm:px-4 py-3 text-center border-b border-slate-100">
                       <input
                         type="checkbox"
                         checked={isAllCurrentPageSelected}
@@ -544,13 +551,14 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
                         className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
                       />
                     </th>
-                    <th scope="col" className="w-14 sm:w-16 px-2 sm:px-4 py-3.5 text-center text-[10px] font-bold text-slate-500 uppercase tracking-wider hidden sm:table-cell border-b border-slate-100">Risk</th>
-                    <th scope="col" className="w-20 sm:w-24 px-2 sm:px-4 py-3.5 text-center text-[10px] font-bold text-slate-500 uppercase tracking-wider hidden md:table-cell border-b border-slate-100">Status</th>
-                    <th scope="col" className="px-4 sm:px-6 py-3.5 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-100">Content</th>
-                    <th scope="col" className="w-48 px-6 py-3.5 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider hidden lg:table-cell border-b border-slate-100">Violations</th>
-                    <th scope="col" className="w-32 px-6 py-3.5 text-center text-[10px] font-bold text-slate-500 uppercase tracking-wider hidden xl:table-cell border-b border-slate-100">Alert Date</th>
-                    <th scope="col" className="w-32 px-6 py-3.5 text-center text-[10px] font-bold text-slate-500 uppercase tracking-wider hidden xl:table-cell border-b border-slate-100">Publish Date</th>
-                    <th scope="col" className="w-10 sm:w-12 px-2 sm:px-4 py-3.5 text-right border-b border-slate-100"></th>
+                    <th scope="col" className="w-14 sm:w-16 px-2 sm:px-3 py-3 text-center text-[10px] font-bold text-slate-500 uppercase tracking-wider hidden sm:table-cell border-b border-slate-100">Risk</th>
+                    <th scope="col" className="w-28 sm:w-32 px-2 sm:px-3 py-3 text-center text-[10px] font-bold text-slate-500 uppercase tracking-wider hidden md:table-cell border-b border-slate-100">Status</th>
+                    <th scope="col" className="px-2 sm:px-4 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider w-full min-w-[200px] border-b border-slate-100">Content</th>
+                    <th scope="col" className="w-64 px-4 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider hidden lg:table-cell border-b border-slate-100">Violations</th>
+                    <th scope="col" className="w-28 px-3 py-3 text-center text-[10px] font-bold text-slate-500 uppercase tracking-wider hidden lg:table-cell border-b border-slate-100">Alert Date</th>
+                    <th scope="col" className="w-28 px-3 py-3 text-center text-[10px] font-bold text-slate-500 uppercase tracking-wider hidden xl:table-cell border-b border-slate-100">Publish Date</th>
+                    <th scope="col" className="w-28 px-3 py-3 text-center text-[10px] font-bold text-slate-500 uppercase tracking-wider hidden xl:table-cell border-b border-slate-100">Takedown Date</th>
+                    <th scope="col" className="w-10 sm:w-12 px-2 sm:px-4 py-3 text-right border-b border-slate-100"></th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-slate-100">
@@ -570,7 +578,7 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
                         }}
                       >
                         {/* Checkbox */}
-                        <td className="px-2 sm:px-4 py-3 sm:py-4 whitespace-nowrap align-middle text-center border-b border-slate-50" onClick={(e) => e.stopPropagation()}>
+                        <td className="px-2 sm:px-4 py-2 whitespace-nowrap align-middle text-center border-b border-slate-50" onClick={(e) => e.stopPropagation()}>
                           <input
                             type="checkbox"
                             checked={!!selectedCases[item.id]}
@@ -580,41 +588,24 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
                         </td>
 
                         {/* Risk */}
-                        <td className="px-2 sm:px-4 py-3 sm:py-4 whitespace-nowrap align-middle text-center hidden sm:table-cell border-b border-slate-50">
-                          <HoverCard openDelay={0} closeDelay={50}>
-                            <HoverCardTrigger asChild>
-                              <div className={cn("inline-flex flex-col items-center justify-center w-10 sm:w-12 py-1 rounded-lg border shadow-sm mx-auto transition-transform hover:scale-110", risk.color)}>
-                                <span className="text-[7px] sm:text-[8px] font-black uppercase tracking-tighter leading-none mb-0.5 sm:mb-1">{risk.label}</span>
-                                <RiskIcon className="w-3 sm:w-3.5 h-3 sm:h-3.5" />
-                              </div>
-                            </HoverCardTrigger>
-                            <HoverCardContent 
-                              className="w-auto px-3 py-2 text-xs font-bold text-slate-700 bg-white border border-slate-200 shadow-xl rounded-lg"
-                              sideOffset={8}
-                            >
-                              Risk Severity: {risk.label}
-                            </HoverCardContent>
-                          </HoverCard>
+                        <td className="px-2 sm:px-3 py-2 whitespace-nowrap align-middle text-center hidden sm:table-cell border-b border-slate-50">
+                          <div className={cn("flex flex-col items-center justify-center p-1.5 rounded-lg text-[10px] font-black tracking-wide border shadow-sm mx-auto w-12", risk.color)}>
+                            <RiskIcon className="w-4 h-4 mb-1" />
+                            <span className="uppercase text-[8px] leading-none">{risk.label}</span>
+                          </div>
                         </td>
 
                         {/* Status */}
                         <td className="px-2 sm:px-3 py-3 whitespace-nowrap align-middle hidden md:table-cell text-center border-b border-slate-50">
                           <div className="flex flex-col items-center gap-1.5">
-                            <HoverCard openDelay={0} closeDelay={50}>
-                              <HoverCardTrigger asChild>
-                                <div
-                                  className={cn("inline-flex items-center justify-center w-8 h-8 rounded-full border shadow-sm cursor-pointer transition-transform hover:scale-110", statusConfig.color)}
-                                >
-                                  <StatusIcon className="w-4 h-4" />
-                                </div>
-                              </HoverCardTrigger>
-                              <HoverCardContent
-                                className="w-auto px-3 py-2 text-xs font-bold text-slate-700 bg-white border border-slate-200 shadow-xl rounded-lg"
-                                sideOffset={8}
-                              >
+                            <div
+                              className={cn("inline-flex items-center gap-1 px-2 py-1 rounded-md border shadow-sm", statusConfig.color)}
+                            >
+                              <StatusIcon className="w-3 h-3 shrink-0" />
+                              <span className="text-[10px] font-bold uppercase tracking-tight leading-none">
                                 {statusConfig.label}
-                              </HoverCardContent>
-                            </HoverCard>
+                              </span>
+                            </div>
                             {item.visibility_status === 'down' ? (
                               <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black bg-slate-100 text-slate-500 uppercase tracking-tighter shadow-sm">
                                 Taken Down
@@ -629,8 +620,8 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
 
                         
                         {/* Content */}
-                        <td className="px-2 sm:px-3 py-3 sm:py-4 overflow-hidden align-middle border-b border-slate-50">
-                          <div className="flex items-start gap-2 sm:gap-4">
+                        <td className="px-2 sm:px-4 py-1 overflow-hidden align-middle border-b border-slate-50">
+                          <div className="flex gap-3 sm:gap-4">
                             <div className="w-18 h-18 sm:w-32 sm:h-32 rounded-lg overflow-hidden bg-slate-100 border border-slate-200 shadow-sm relative shrink-0">
                               {item.enrichment?.thumbnail ? (
                                 <img
@@ -639,14 +630,14 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
                                   alt=""
                                 />
                               ) : (
-                                <div className="w-full h-full flex items-center justify-center">
-                                  <ImageIcon className="w-4 h-4 sm:w-5 sm:h-5 text-slate-300" />
+                                <div className="w-full h-full bg-slate-50 flex items-center justify-center">
+                                  <ImageIcon className="h-6 w-6 sm:h-8 sm:w-8 text-slate-300" />
                                 </div>
                               )}
                             </div>
 
-                            <div className="min-w-0 flex flex-col gap-0.5">
-                              <div className="flex items-center flex-wrap gap-1.5 sm:gap-2">
+                            <div className="flex flex-col min-w-0 gap-1">
+                              <div className="flex items-center gap-2">
                                 <div
                                   className="font-semibold text-slate-600 rounded-full bg-slate-50 max-w-5 flex items-center justify-center p-1"
                                   title={item.platform?.charAt(0).toUpperCase() + item.platform?.slice(1)}
@@ -660,9 +651,21 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
                                   }
                                 </div>
                                 <span className="text-xs text-slate-400">•</span>
-                                <h4 className="text-xs sm:text-sm font-black text-slate-800 truncate leading-none max-w-[80px] sm:max-w-none">
+                                <span className="font-bold text-slate-900 text-xs sm:text-sm truncate transition-colors max-w-[80px] sm:max-w-none">
                                   {item.enrichment?.username ? `@${item.enrichment.username}` : `Case #${item.id?.substring(0, 8)}`}
-                                </h4>
+                                </span>
+
+                                {item.url && (
+                                  <a
+                                    href={item.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="inline-flex items-center tracking-tight text-blue-600 hover:text-blue-800 font-bold text-xs transition-colors hover:underline bg-blue-50 px-1.5 py-0.5 rounded-md shrink-0"
+                                  >
+                                    Source <ExternalLink className="w-3 h-3 ml-1" />
+                                  </a>
+                                )}
 
                                 {/* Mobile Risk Icon */}
                                 <span className="sm:hidden ml-auto">
@@ -670,67 +673,61 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
                                     <RiskIcon className="w-2.5 h-2.5" />
                                   </span>
                                 </span>
-
-                                {item.url && (
-                                  <a 
-                                    href={item.url} 
-                                    target="_blank" 
-                                    rel="noopener noreferrer"
-                                    onClick={(e) => e.stopPropagation()}
-                                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-600 text-[8px] sm:text-[9px] font-bold hover:bg-blue-100 transition-colors shrink-0"
-                                  >
-                                    Source <ExternalLink className="w-2 sm:w-2.5 h-2 sm:h-2.5" />
-                                  </a>
-                                )}
                               </div>
-                              <p className="text-[10px] sm:text-[11px] text-slate-500 line-clamp-2 leading-relaxed mt-0.5 sm:mt-1">
-                                {item.enrichment?.caption || <span className="italic opacity-50 text-[10px]">No caption content</span>}
-                              </p>
+                              <span className="text-[10px] sm:text-xs text-slate-600 line-clamp-2 leading-relaxed">
+                                {item.enrichment?.caption || <span className="italic text-slate-400">No caption content.</span>}
+                              </span>
                             </div>
                           </div>
                         </td>
 
                         {/* Violations */}
-                        <td className="px-6 py-4 align-middle hidden lg:table-cell border-b border-slate-50">
+                        <td className="px-4 py-2 align-middle hidden lg:table-cell border-b border-slate-50">
                           <div className="flex flex-wrap gap-1.5">
                             {item.threat_types?.length > 0 ? item.threat_types.map((type, idx) => (
-                              <span key={idx} className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[9px] font-bold uppercase tracking-wider border border-slate-200">
+                              <span key={idx} className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold border uppercase tracking-wider shadow-sm text-slate-600 bg-slate-50 border-slate-200">
                                 {type.replace(/_/g, ' ')}
                               </span>
                             )) : item.violations_unknown === false ? (
                               <span className="text-[9px] font-bold text-slate-400">-</span>
                             ) : (
-                              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest italic">Unknown</span>
+                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest italic">Unknown</span>
                             )}
                           </div>
                         </td>
 
                         {/* Alert Date */}
-                        <td className="px-6 py-4 whitespace-nowrap align-middle text-center hidden xl:table-cell border-b border-slate-50">
-                          <div className="flex flex-col gap-0.5">
-                            <span className="text-xs font-bold text-slate-700">
-                              {item.processed_at ? format(new Date(item.processed_at), "dd/MM/yyyy") : '-'}
-                            </span>
-                            <span className="text-[10px] font-medium text-slate-400">
-                              {item.processed_at ? format(new Date(item.processed_at), "hh:mm aa") : ''}
+                        <td className="px-3 py-2 whitespace-nowrap align-middle hidden lg:table-cell border-b border-slate-50">
+                          <div className="flex flex-col gap-1 justify-center items-center text-sm font-semibold text-slate-500">
+                            <span>{item.processed_at ? format(new Date(item.processed_at), "dd/MM/yyyy") : '-'}</span>
+                            <span className="text-xs text-slate-400">
+                              {item.processed_at ? format(new Date(item.processed_at), "hh:mm a") : ''}
                             </span>
                           </div>
                         </td>
 
                         {/* Publish Date */}
-                        <td className="px-6 py-4 whitespace-nowrap align-middle text-center hidden xl:table-cell border-b border-slate-50">
-                          <div className="flex flex-col gap-0.5">
-                            <span className="text-xs font-bold text-slate-400">
-                              {item.posted_at ? format(new Date(item.posted_at), "dd/MM/yyyy") : '-'}
+                        <td className="px-3 py-2 whitespace-nowrap align-middle hidden xl:table-cell border-b border-slate-50">
+                          <div className="flex flex-col gap-1 justify-center items-center text-sm font-semibold text-slate-500">
+                            <span>{item.posted_at ? format(new Date(item.posted_at), "dd/MM/yyyy") : '-'}</span>
+                            <span className="text-xs text-slate-400">
+                              {item.posted_at ? format(new Date(item.posted_at), "hh:mm a") : ''}
                             </span>
-                            <span className="text-[10px] font-medium text-slate-300">
-                              {item.posted_at ? format(new Date(item.posted_at), "hh:mm aa") : ''}
+                          </div>
+                        </td>
+
+                        {/* Takedown Date */}
+                        <td className="px-3 py-2 whitespace-nowrap align-middle hidden xl:table-cell border-b border-slate-50">
+                          <div className="flex flex-col gap-1 justify-center items-center text-sm font-semibold text-slate-500">
+                            <span>{item.takedown_date ? format(new Date(item.takedown_date), "dd/MM/yyyy") : '-'}</span>
+                            <span className="text-xs text-slate-400">
+                              {item.takedown_date ? format(new Date(item.takedown_date), "hh:mm a") : ''}
                             </span>
                           </div>
                         </td>
 
                         {/* Actions */}
-                        <td className="px-2 sm:px-4 py-3 sm:py-4 whitespace-nowrap align-middle text-right border-b border-slate-50">
+                        <td className="px-2 sm:px-4 py-2 whitespace-nowrap align-middle text-right border-b border-slate-50">
                           <Button 
                             variant="ghost" 
                             size="sm" 
@@ -754,7 +751,7 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
       {/* Pagination Controls */}
       {totalCount > 0 && (
         <div className="px-3 sm:px-6 pb-2 pt-2">
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 px-3 sm:px-4 py-3 flex flex-col lg:flex-row items-center justify-between gap-3 lg:gap-0">
+          <div className="px-3 sm:px-4 py-1 flex flex-col lg:flex-row items-center justify-between gap-3 lg:gap-0">
             <div className="flex items-center justify-between w-full lg:w-auto gap-4 sm:gap-6">
               <div className="flex items-center gap-2 sm:gap-3">
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap hidden sm:inline">Show:</span>
