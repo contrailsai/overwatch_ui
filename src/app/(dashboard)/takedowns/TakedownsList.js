@@ -209,8 +209,10 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
 
   const FilterControls = ({ isMobile = false }) => (
     <div className={cn("flex flex-wrap items-end gap-2.5 sm:gap-3 w-full", isMobile && "flex-col items-stretch")}>
-      <div className="space-y-1 w-full lg:w-auto lg:flex-1 lg:max-w-[160px]">
+      <div className="space-y-1 w-full lg:w-auto lg:flex-1 lg:max-w-[180px]">
         <StatusFilter
+          label="Takedown Status"
+          placeholder="All Statuses"
           initialStatus={initialFilters.status}
           onChange={(val) => {
             handleFilterChange('status', val);
@@ -298,6 +300,17 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
           }}
         />
       </div>
+
+      {hasActiveFilters && (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={clearFilters}
+          className="h-9 px-3 text-rose-600 hover:text-rose-700 hover:bg-rose-50 font-bold text-[10px] uppercase tracking-wider cursor-pointer transition-colors w-full lg:w-auto shrink-0"
+        >
+          <X className="w-3.5 h-3.5 mr-1 text-rose-500" /> Clear Filters
+        </Button>
+      )}
     </div>
   )
 
@@ -349,12 +362,12 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
       </div>
 
       {/* Filters Section */}
-         <div className="px-3 sm:px-6 pt-2 shrink-0">
+         <div className="px-3 sm:px-6 pt-5 shrink-0">
            <div>
              <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
 
                {/* Left: Filters */}
-               <div className="flex flex-col lg:flex-row gap-4 w-full">
+               <div className="flex flex-col lg:flex-row lg:items-end gap-4 w-full">
 
                  {/* Header Row: Title & Summary Box */}
                  <div className="flex flex-col w-full lg:w-[160px] xl:w-[180px] shrink-0 relative">
@@ -617,8 +630,8 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
                                   alt=""
                                 />
                               ) : (
-                                <div className="h-12 w-12 sm:h-16 sm:w-16 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-center">
-                                  <ImageIcon className="h-5 w-5 text-slate-300" />
+                                <div className="w-full h-full bg-slate-50 flex items-center justify-center">
+                                  <ImageIcon className="h-6 w-6 sm:h-8 sm:w-8 text-slate-300" />
                                 </div>
                               )}
                             </div>
