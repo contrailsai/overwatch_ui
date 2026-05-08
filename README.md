@@ -126,6 +126,25 @@ Overwatch leverages **Next.js Server Actions** and **React Server Components (RS
 2. **Permission Check:** The `getUserPermission()` utility (in `src/utils/permissions.js`) fetches the user's role from the `client_details` table to gate access to specific routes (e.g., only Reviewers can see `review-cases`).
 3. **Session Management:** Auth is handled via Supabase GoTrue, with sessions persisted in secure, HTTP-only cookies.
 
+### Session Persistence Policy (Production)
+To avoid unexpected idle logouts, cookie lifetime alone is not sufficient. Supabase token/session policy must be aligned with app middleware refresh behavior.
+
+Recommended policy for this app:
+- Target persistence: **30 days** (unless user signs out or session is revoked)
+- Access token (JWT) lifetime: **30-60 minutes**
+- Refresh/session maximum lifetime: **30 days**
+- Token rotation/reuse: keep Supabase secure defaults enabled
+
+Supabase dashboard checklist:
+- Authentication -> Sessions:
+  - Configure session maximum lifetime to 30 days
+  - Confirm access token lifetime is not set to an extremely short value
+- Authentication -> URL configuration:
+  - Ensure site URL and redirect URLs match your deployed domain(s)
+- After changing auth settings:
+  - Sign out and sign back in once to establish a fresh session
+  - Validate idle scenarios (15m, 30m, 60m, overnight) on protected routes
+
 ---
 
 ## 📊 Database Schema Reference

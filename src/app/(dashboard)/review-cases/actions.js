@@ -9,6 +9,7 @@ import { sendContentModerationSqsMessage } from '@/utils/aws/sqs'
 import { updateDailyMetrics } from '@/utils/supabase/metrics'
 import { sendEmail } from '@/utils/email'
 import { traceAction } from '@/utils/tracing'
+import { requireRole } from '@/utils/auth-context'
 
 export const normalized_S3_post = traceAction('normalized_S3_post', async (post) => {
   if (!post) return null;
@@ -81,8 +82,9 @@ export const normalized_S3_post = traceAction('normalized_S3_post', async (post)
   return JSON.parse(JSON.stringify(normalized));
 })
 
-export const getPosts = traceAction('getPosts_review', async (project_mongo_db_map, page = 1, limit = 20, filters = {}) => {
+export const getPosts = traceAction('getPosts_review', async (_project_mongo_db_map, page = 1, limit = 20, filters = {}) => {
   try {
+    const { dbName } = await requireRole(['reviewer'])
 
     // const supabase = await createClient()
     // let { data } = await supabase
@@ -96,7 +98,7 @@ export const getPosts = traceAction('getPosts_review', async (project_mongo_db_m
     // }
     // console.log(data.mongo_db_map)
     const client = await clientPromise
-    const db = client.db(project_mongo_db_map)
+    const db = client.db(dbName)
     const collection = db.collection('Posts')
 
     const skip = (page - 1) * limit
@@ -244,10 +246,11 @@ export const getPosts = traceAction('getPosts_review', async (project_mongo_db_m
 })
 
 // SHOWCASE A SINGLE POST link
-export const getPostById = traceAction('getPostById', async (project, case_id) => {
+export const getPostById = traceAction('getPostById', async (_project, case_id) => {
   try {
+    const { dbName } = await requireRole(['reviewer'])
     const client = await clientPromise
-    const db = client.db(project.mongo_db_map)
+    const db = client.db(dbName)
     const collection = db.collection('Posts')
 
     const post = await collection.findOne(
@@ -266,7 +269,7 @@ export const getPostById = traceAction('getPostById', async (project, case_id) =
 })
 
 // CSV EXPORT
-export const getAllPostsForExport = traceAction('getAllPostsForExport', async (project_mongo_db_map, filters = {}) => {
+export const getAllPostsForExport = traceAction('getAllPostsForExport', async (_project_mongo_db_map, filters = {}) => {
   try {
     // const supabase = await createClient()
     // let { data } = await supabase
@@ -275,12 +278,10 @@ export const getAllPostsForExport = traceAction('getAllPostsForExport', async (p
     //   .eq('project_name', project_name)
     //   .single()
 
-    if (!project_mongo_db_map) {
-      return { posts: [] }
-    }
+    const { dbName } = await requireRole(['reviewer'])
 
     const client = await clientPromise
-    const db = client.db(project_mongo_db_map)
+    const db = client.db(dbName)
     const collection = db.collection('Posts')
 
     const query = { _id: { $ne: null } }
@@ -457,13 +458,8 @@ async function sendNotification(notification_config, type) {
   }
 }
 
-export const submitCaseReview = traceAction('submitCaseReview', async (project, client_details, prevState, formData) => {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { success: false, error: 'Authentication required' }
-  }
+export const submitCaseReview = traceAction('submitCaseReview', async (_project, _client_details, prevState, formData) => {
+  const { dbName, clientDetails, project } = await requireRole(['reviewer'])
 
   // 1. Fetch Client Details & Project Config FIRST
   // const { data: client_details } = await supabase
@@ -471,20 +467,6 @@ export const submitCaseReview = traceAction('submitCaseReview', async (project, 
   //   .select('*')
   //   .eq('id', user.id)
   //   .single()
-
-  if (!client_details?.project_name) {
-    return { success: false, error: 'User not assigned to a project' }
-  }
-
-  // const { data: project } = await supabase
-  //   .from('project')
-  //   .select('project_name, mongo_db_map')
-  //   .eq('project_name', client_details.project_name)
-  //   .single()
-
-  if (!project?.mongo_db_map) {
-    return { success: false, error: 'Project database configuration missing' }
-  }
 
   const mongoId = formData.get('mongo_id')
 
@@ -543,7 +525,7 @@ export const submitCaseReview = traceAction('submitCaseReview', async (project, 
 
   try {
     const client = await clientPromise
-    const db = client.db(project.mongo_db_map) // Use Correct DB
+    const db = client.db(dbName) // Use Correct DB
     const collection = db.collection('Posts')
 
     // 1. Fetch existing post to get previous state
@@ -602,7 +584,7 @@ export const submitCaseReview = traceAction('submitCaseReview', async (project, 
         $push: {
           "metadata.update_history": {
             updated_at: new Date(),
-            updated_by: client_details.email,
+            updated_by: clientDetails.email,
             changes_summary: "Case Alerted "
           }
         }
@@ -690,11 +672,9 @@ export const getCaseMetadata = traceAction('getCaseMetadata', async (postId) => 
   }
 })
 
-export const uploadCaseImage = traceAction('uploadCaseImage', async (postId, project, clientDetails, formData) => {
+export const uploadCaseImage = traceAction('uploadCaseImage', async (postId, _project, _clientDetails, formData) => {
   try {
-    if (!project?.mongo_db_map) {
-      return { success: false, error: 'Project database configuration missing' }
-    }
+    const { dbName, clientDetails } = await requireRole(['reviewer'])
 
     if (!postId) {
       return { success: false, error: 'Missing Post ID' }
@@ -717,7 +697,7 @@ export const uploadCaseImage = traceAction('uploadCaseImage', async (postId, pro
     const buffer = Buffer.from(await file.arrayBuffer())
     const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_')
     const fileType = file.type
-    const s3Key = `case-images/${project.mongo_db_map}/${postId}/${Date.now()}-${sanitizedFileName}`
+    const s3Key = `case-images/${dbName}/${postId}/${Date.now()}-${sanitizedFileName}`
 
     // 1. Upload to S3
     await uploadFileToS3(buffer, s3Key, fileType)
@@ -727,7 +707,7 @@ export const uploadCaseImage = traceAction('uploadCaseImage', async (postId, pro
 
     // 3. Update MongoDB — set post_content.media_urls with the new image
     const client = await clientPromise
-    const db = client.db(project.mongo_db_map)
+    const db = client.db(dbName)
     const collection = db.collection('Posts')
 
     await collection.updateOne(
@@ -761,18 +741,16 @@ export const uploadCaseImage = traceAction('uploadCaseImage', async (postId, pro
   }
 })
 
-export const deleteCaseImage = traceAction('deleteCaseImage', async (postId, project, clientDetails) => {
+export const deleteCaseImage = traceAction('deleteCaseImage', async (postId, _project, _clientDetails) => {
   try {
-    if (!project?.mongo_db_map) {
-      return { success: false, error: 'Project database configuration missing' }
-    }
+    const { dbName, clientDetails } = await requireRole(['reviewer'])
 
     if (!postId) {
       return { success: false, error: 'Missing Post ID' }
     }
 
     const client = await clientPromise
-    const db = client.db(project.mongo_db_map)
+    const db = client.db(dbName)
     const collection = db.collection('Posts')
 
     const existingPost = await collection.findOne(
@@ -823,18 +801,16 @@ export const deleteCaseImage = traceAction('deleteCaseImage', async (postId, pro
   }
 })
 
-export const updatePostVisibility = traceAction('updatePostVisibility', async (postId, project, clientDetails, status) => {
+export const updatePostVisibility = traceAction('updatePostVisibility', async (postId, _project, _clientDetails, status) => {
   try {
-    if (!project?.mongo_db_map) {
-      return { success: false, error: 'Project database configuration missing' }
-    }
+    const { dbName, clientDetails } = await requireRole(['reviewer'])
 
     if (!postId) {
       return { success: false, error: 'Missing Post ID' }
     }
 
     const client = await clientPromise
-    const db = client.db(project.mongo_db_map)
+    const db = client.db(dbName)
     const collection = db.collection('Posts')
 
     await collection.updateOne(
@@ -861,17 +837,15 @@ export const updatePostVisibility = traceAction('updatePostVisibility', async (p
   }
 })
 
-export const runAIAnalysis = traceAction('runAIAnalysis', async (postId, project, clientDetails) => {
+export const runAIAnalysis = traceAction('runAIAnalysis', async (postId, _project, _clientDetails) => {
   try {
-    if (!project?.mongo_db_map) {
-      return { success: false, error: 'Project database configuration missing' }
-    }
+    const { dbName } = await requireRole(['reviewer'])
 
     if (!postId) {
       return { success: false, error: 'Missing Post ID' }
     }
 
-    const response = await sendContentModerationSqsMessage(project.mongo_db_map, 'Posts', postId);
+    const response = await sendContentModerationSqsMessage(dbName, 'Posts', postId);
     
     if (!response) {
       return { success: false, error: 'AI analysis queue not configured' }

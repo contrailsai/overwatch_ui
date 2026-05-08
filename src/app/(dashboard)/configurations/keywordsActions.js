@@ -1,10 +1,12 @@
 'use server'
 
 import clientPromise from '@/utils/mongodb/client'
+import { requireRole } from '@/utils/auth-context'
 
-export async function get_keywords(project_db, text = "", limit = 50) {
+export async function get_keywords(_project_db, text = "", limit = 50) {
+  const { dbName } = await requireRole(['client-admin', 'reviewer'])
   const client = await clientPromise
-  const db = client.db(project_db)
+  const db = client.db(dbName)
   const collection = db.collection('Keywords')
 
   const sort = { importance: -1, last_used: -1, keyword: 1 }
@@ -45,14 +47,15 @@ export async function get_keywords(project_db, text = "", limit = 50) {
   return { keywords, totalCount }
 }
 
-export async function add_keyword(project_db, keyword, highImportance = false) {
+export async function add_keyword(_project_db, keyword, highImportance = false) {
+  const { dbName } = await requireRole(['client-admin', 'reviewer'])
   if (!keyword || !keyword.trim()) {
     return { error: 'Keyword cannot be empty' }
   }
 
   const trimmed = keyword.trim().toLowerCase()
   const client = await clientPromise
-  const db = client.db(project_db)
+  const db = client.db(dbName)
   const collection = db.collection('Keywords')
 
   const existing = await collection.findOne({ keyword: trimmed })
@@ -74,10 +77,11 @@ export async function add_keyword(project_db, keyword, highImportance = false) {
   return { success: true }
 }
 
-export async function delete_keyword(project_db, keywordId) {
+export async function delete_keyword(_project_db, keywordId) {
+  const { dbName } = await requireRole(['client-admin', 'reviewer'])
   const { ObjectId } = await import('mongodb')
   const client = await clientPromise
-  const db = client.db(project_db)
+  const db = client.db(dbName)
   const collection = db.collection('Keywords')
 
   await collection.deleteOne({ _id: new ObjectId(keywordId) })

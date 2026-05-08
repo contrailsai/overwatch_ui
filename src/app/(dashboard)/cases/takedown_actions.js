@@ -37,7 +37,7 @@ export const getProjectDetails = traceAction('getProjectDetails_cases', async ()
 //
 // FOR TAKEDOWNS DETAILS ( WE REFACTOR LATER WHEN WE SEE THE TAKEDOWNS )
 //
-export const initiateTakedown = traceAction('initiateTakedown', async (caseIds, client_email) => {
+export const initiateTakedown = traceAction('initiateTakedown', async (caseIds, _client_email) => {
     try {
         const ids = Array.isArray(caseIds) ? caseIds : [caseIds]
         if (ids.length === 0) {
@@ -75,7 +75,7 @@ export const initiateTakedown = traceAction('initiateTakedown', async (caseIds, 
         const nowIso = new Date().toISOString()
         const status = "Takedown"
         const changesSummary = isBulk ? "client initiated bulk case takedown" : "client initiated case takedown"
-        const eventDetails = `Takedown initiated by client ${client_email}${isBulk ? ' (bulk)' : ''}`
+        const eventDetails = `Takedown initiated by client ${projectDetails.client_email}${isBulk ? ' (bulk)' : ''}`
 
         const bulkOps = posts.map(post => ({
             updateOne: {
@@ -134,7 +134,7 @@ export const initiateTakedown = traceAction('initiateTakedown', async (caseIds, 
 
             await updateClientMetaStats(
                 projectDetails.projectName,
-                client_email,
+                projectDetails.client_email,
                 "reviewed_case"
             ).catch(err => console.error('Failed to update meta stats:', err))
         }))

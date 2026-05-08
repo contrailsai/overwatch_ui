@@ -6,11 +6,25 @@ import { createClient } from '@/utils/supabase/server'
 import { generateReportHash } from '@/utils/report-hash'
 import { sendReportSqsMessage } from '@/utils/aws/sqs'
 import { getAuthenticatedUser } from '@/utils/supabase/server'
+import { requireAuthContext } from '@/utils/auth-context'
+import clientPromise from '@/utils/mongodb/client'
+import { ObjectId } from 'mongodb'
 
 export const getReportDownloadUrl = traceAction('getReportDownloadUrl', async (s3Url, originalName) => {
   if (!s3Url) return null
 
   try {
+    const { user } = await requireAuthContext()
+    const supabase = await createClient()
+    const { data: ownedReport } = await supabase
+      .from('reports_generation')
+      .select('id')
+      .eq('client_id', user.id)
+      .eq('s3_path', s3Url)
+      .maybeSingle()
+
+    if (!ownedReport) return null
+
     const url = new URL(s3Url)
     let key = url.pathname.substring(1) // remove leading '/'
 
@@ -23,12 +37,34 @@ export const getReportDownloadUrl = traceAction('getReportDownloadUrl', async (s
 
 export const getOrCreateReportJob = traceAction('getOrCreateReportJob', async ({ posts, project, profile, reportType }) => {
   const supabase = await createClient();
-  const user = await getAuthenticatedUser();
-  if (!user) throw new Error('Authentication required to generate reports');
+  const { user, project: resolvedProject, dbName } = await requireAuthContext()
 
   const postIds = posts.map(p => p._id);
   const profileId = profile?.id || profile?._id || '';
-  const hash = generateReportHash(project?.project_name || 'unknown', postIds, reportType, profileId);
+  const hash = generateReportHash(resolvedProject?.project_name || 'unknown', postIds, reportType, profileId);
+
+  const client = await clientPromise
+  const db = client.db(dbName)
+  const objectIds = postIds
+    .filter(Boolean)
+    .map((id) => {
+      try {
+        return new ObjectId(id)
+      } catch {
+        return null
+      }
+    })
+    .filter(Boolean)
+  if (objectIds.length === 0) {
+    throw new Error('No valid post IDs for report generation')
+  }
+  const validatedPosts = await db.collection('Posts').find(
+    { _id: { $in: objectIds } },
+    { projection: { _id: 1 } }
+  ).toArray()
+  if (validatedPosts.length !== objectIds.length) {
+    throw new Error('Some requested posts do not belong to your project scope')
+  }
 
   // Calculate 2 mins ago
   const twoMinsAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString();
@@ -62,7 +98,7 @@ export const getOrCreateReportJob = traceAction('getOrCreateReportJob', async ({
     .from('reports_generation')
     .insert({
       report_hash: hash,
-      project: project?.project_name,
+      project: resolvedProject?.project_name,
       status: 'Waiting in queue...',
       report_type: reportType,
       client_id: user.id
@@ -77,11 +113,11 @@ export const getOrCreateReportJob = traceAction('getOrCreateReportJob', async ({
 
   // Send request to SQS
   const sqsPayload = {
-    projectId: project?.project_name || 'unknown',
-    postIds: postIds,
-    database_name: project?.mongo_db_map,
+    projectId: resolvedProject?.project_name || 'unknown',
+    postIds: objectIds.map((id) => id.toString()),
+    database_name: dbName,
     reportType: reportType,
-    project: project,
+    project: resolvedProject,
     profile: profile || null,
     jobId: newJob.id
   };

@@ -5,14 +5,13 @@ import { ObjectId } from 'mongodb'
 import { traceAction } from '@/utils/tracing'
 import { getSignedImageUrl } from '@/utils/aws/s3'
 import { normalized_S3_post } from '@/app/(dashboard)/profiles/actions'
+import { requireRole } from '@/utils/auth-context'
 
-export const getProfiles = traceAction('getProfiles', async (project, page = 1, limit = 20, filters = {}) => {
+export const getProfiles = traceAction('getProfiles', async (_project, page = 1, limit = 20, filters = {}) => {
     try {
-        if (!project?.mongo_db_map) {
-            return { profiles: [], totalCount: 0, page: 1, totalPages: 0 }
-        }
+        const { dbName } = await requireRole(['reviewer'])
         const client = await clientPromise
-        const db = client.db(project.mongo_db_map)
+        const db = client.db(dbName)
         const collection = db.collection('Profiles')
 
         const skip = (page - 1) * limit
@@ -136,12 +135,13 @@ export const getProfiles = traceAction('getProfiles', async (project, page = 1, 
     }
 })
 
-export const getProfileCases = traceAction('getProfileCases', async (project, postIds = []) => {
+export const getProfileCases = traceAction('getProfileCases', async (_project, postIds = []) => {
     try {
-        if (!project?.mongo_db_map || postIds.length === 0) return []
+        if (postIds.length === 0) return []
+        const { dbName } = await requireRole(['reviewer'])
 
         const client = await clientPromise
-        const db = client.db(project.mongo_db_map)
+        const db = client.db(dbName)
         const collection = db.collection('Posts')
 
         const objectIds = postIds.map(id => {
@@ -161,14 +161,15 @@ export const getProfileCases = traceAction('getProfileCases', async (project, po
     }
 })
 
-export const submitProfileReview = traceAction('submitProfileReview', async (project, profileId, reviewData) => {
+export const submitProfileReview = traceAction('submitProfileReview', async (_project, profileId, reviewData) => {
     try {
-        if (!project?.mongo_db_map || !profileId) {
+        if (!profileId) {
             return { success: false, error: 'Missing project or profile ID' }
         }
+        const { dbName } = await requireRole(['reviewer'])
 
         const client = await clientPromise
-        const db = client.db(project.mongo_db_map)
+        const db = client.db(dbName)
         const collection = db.collection('Profiles')
 
         const { risk, violations, reasoning, reviewer_comments, action } = reviewData
