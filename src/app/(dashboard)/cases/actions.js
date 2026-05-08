@@ -1,21 +1,19 @@
 'use server'
 
-import { createClient, getAuthenticatedUser } from '@/utils/supabase/server'
 import clientPromise from '@/utils/mongodb/client'
 import { getSignedImageUrl } from '@/utils/aws/s3'
 import { sendSlackNotification } from '@/utils/slack'
 import { updateClientReviewedMetrics, updateDailyMetrics, updateClientMetaStats } from '@/utils/supabase/metrics'
 import { ObjectId } from 'mongodb'
 // import { getClientandProjectDetails } from '@/app/(dashboard)/actions'
-import { traceAction, recordClickMetric } from '@/utils/tracing'
-import { metadata } from '../layout'
+import { traceAction, recordClickMetric, runInSpan } from '@/utils/tracing'
 import { requireAuthContext } from '@/utils/auth-context'
 
 export const trackClientClick = traceAction('trackClientClick', async (buttonName, attributes = {}) => {
   recordClickMetric(buttonName, attributes);
 })
 
-export const normalized_S3_post = traceAction('normalized_S3_post', async (post) => {
+const normalizeS3Post = async (post) => {
   // Find S3 URL to sign
   let s3UrlToSign = null;
   if (post.post_content?.media_urls && post.post_content.media_urls.length > 0) {
@@ -85,11 +83,45 @@ export const normalized_S3_post = traceAction('normalized_S3_post', async (post)
   };
 
   return normalized;
-})
+}
 
 // GET POSTS WITH PAGINATIONS AND FILTERS
 const buildUniqueClustersStage = (filters) => {
   if (filters.unique_clusters === 'true' || filters.unique_clusters === true) {
+    const useStrictUniqueClustering = process.env.USE_STRICT_UNIQUE_CLUSTERING === 'true';
+    if (!useStrictUniqueClustering) {
+      return [
+        {
+          $addFields: {
+            _unique_group_key: {
+              $ifNull: [{ $toString: "$cluster_id" }, { $toString: "$_id" }]
+            }
+          }
+        },
+        {
+          // Pick one "best" post per cluster (or per post when no cluster_id)
+          $sort: {
+            _unique_group_key: 1,
+            "review_details.threat_score": -1,
+            "review_details.reviewed_at": -1,
+            "_id": 1
+          }
+        },
+        {
+          $group: {
+            _id: "$_unique_group_key",
+            doc: { $first: "$$ROOT" }
+          }
+        },
+        { $replaceRoot: { newRoot: "$doc" } },
+        {
+          $project: {
+            _unique_group_key: 0
+          }
+        }
+      ];
+    }
+
     return [
       {
         $addFields: {
@@ -309,6 +341,7 @@ const buildCasesMatchQuery = (filters = {}) => {
 
 export const getPosts = traceAction('getPosts', async (_project, page = 1, limit = 20, filters = {}, sort = { field: 'created_at', direction: 'desc' }) => {
   try {
+    const handlerStart = Date.now()
     const { dbName } = await requireAuthContext()
     const client = await clientPromise
     const db = client.db(dbName)
@@ -377,19 +410,19 @@ export const getPosts = traceAction('getPosts', async (_project, page = 1, limit
 
     const hasDateFilters = Object.keys(dateFilterStage).length > 0;
 
-    const posts = await collection.aggregate([
+    const basePipeline = [
       { $match: matchStage },
+      // Embeddings are large and never needed for cases listing/count paths.
+      // Drop them early so downstream stages ($lookup/$group/$facet) process smaller documents.
       { $project: { text_embedding: 0, image_embedding: 0 } },
       {
         $addFields: {
           sort_original_date: {
-            // $toDate standardizes the field so comparisons and sorting work flawlessly
             $toDate: {
               $ifNull: ["$engagement.posted_at", "$metadata.posted_date"]
             }
           },
           sort_processed_after: {
-            // $toDate standardizes the field so comparisons and sorting work flawlessly
             $toDate: {
               $ifNull: ["$review_details.reviewed_at", "$metadata.updated_at"]
             }
@@ -398,52 +431,60 @@ export const getPosts = traceAction('getPosts', async (_project, page = 1, limit
       },
       ...(hasDateFilters ? [{ $match: dateFilterStage }] : []),
       ...buildUniqueClustersStage(filters),
-      { $sort: sortPipeline },
-      { $skip: skip },
-      { $limit: limit }
-    ]).toArray();
+    ]
+
+    const facetStart = Date.now()
+    const facetResult = await runInSpan(
+      'cases.getPosts.mongo_data_and_count_query',
+      async () => collection.aggregate([
+        ...basePipeline,
+        {
+          $facet: {
+            data: [
+              { $sort: sortPipeline },
+              { $skip: skip },
+              { $limit: limit },
+              { $project: { text_embedding: 0, image_embedding: 0 } },
+            ],
+            total: [{ $count: 'total' }],
+          }
+        }
+      ]).toArray(),
+      { 'app.span_type': 'mongo_query', 'app.query_kind': 'data_and_count' }
+    )
+    const mongoFacetMs = Date.now() - facetStart
+
+    const posts = facetResult?.[0]?.data || []
+    const totalCount = facetResult?.[0]?.total?.[0]?.total || 0
+
+    // Keep legacy timing keys so existing dashboards stay valid.
+    const mongoPostsQueryMs = mongoFacetMs
+    const mongoCountQueryMs = 0
 
     // Serialize and Sign URLs
-    const processedPosts = await Promise.all(posts.map(normalized_S3_post));
+    const signingStart = Date.now()
+    const processedPosts = await runInSpan(
+      'cases.getPosts.s3_signing',
+      async () => Promise.all(posts.map(normalizeS3Post)),
+      { 'app.span_type': 's3_signing' }
+    )
+    const s3SigningMs = Date.now() - signingStart
+    const totalHandlerMs = Date.now() - handlerStart
 
-    // For count, we need to respect the date filters if present
-    let totalCount;
-    if (hasDateFilters) {
-      const countResult = await collection.aggregate([
-        { $match: matchStage },
-        {
-          $addFields: {
-            sort_original_date: {
-              // $toDate standardizes the field so comparisons and sorting work flawlessly
-              $toDate: {
-                $ifNull: ["$engagement.posted_at", "$metadata.posted_date"]
-              }
-            },
-            sort_processed_after: {
-              // $toDate standardizes the field so comparisons and sorting work flawlessly
-              $toDate: {
-                $ifNull: ["$review_details.reviewed_at", "$metadata.updated_at"]
-              }
-            }
-          }
-        },
-        { $match: dateFilterStage },
-        ...buildUniqueClustersStage(filters),
-        { $count: "total" }
-      ]).toArray();
-      totalCount = countResult[0]?.total || 0;
-    } else {
-      if (filters.unique_clusters === 'true' || filters.unique_clusters === true) {
-        const countResult = await collection.aggregate([
-          { $match: matchStage },
-          ...buildUniqueClustersStage(filters),
-          { $count: "total" }
-        ]).toArray();
-        totalCount = countResult[0]?.total || 0;
-      } else {
-        totalCount = await collection.countDocuments(query);
-      }
-    }
+    console.debug('[cases.getPosts] timing', {
+      db_name: dbName,
+      page,
+      limit,
+      unique_clusters: filters.unique_clusters === 'true' || filters.unique_clusters === true,
+      has_date_filters: hasDateFilters,
+      result_count: processedPosts.length,
+      total_count: totalCount,
+      mongo_data_and_count_query_ms: mongoFacetMs,
+      mongo_posts_query_ms: mongoPostsQueryMs,
+      mongo_count_query_ms: mongoCountQueryMs,
+      s3_signing_ms: s3SigningMs,
+      total_handler_ms: totalHandlerMs,
+    })
 
     return {
       posts: processedPosts,
@@ -474,7 +515,7 @@ export const getPostById = traceAction('getPostById', async (_project, id) => {
     if (!post) return null;
 
     // get normalized post
-    return await normalized_S3_post(post);
+    return await normalizeS3Post(post);
 
   } catch (e) {
     console.error('getPostById Error:', e);
@@ -563,7 +604,7 @@ export const getIdenticalPosts = traceAction('getIdenticalPosts', async (_projec
     const objectIds = otherMemberIds.map(id => new ObjectId(id));
     const posts = await db.collection('Posts').find(withReviewedThreatScoreFilter({ _id: { $in: objectIds } })).toArray();
     
-    return await Promise.all(posts.map(normalized_S3_post));
+    return await Promise.all(posts.map(normalizeS3Post));
   } catch (e) {
     console.error('getIdenticalPosts Error:', e);
     return [];
@@ -590,7 +631,7 @@ export const getPostsByIds = traceAction('getPostsByIds', async (_project, ids) 
     ).toArray()
 
     // Normalize and Sign URLs (using the existing helper)
-    const processedPosts = await Promise.all(posts.map(normalized_S3_post))
+    const processedPosts = await Promise.all(posts.map(normalizeS3Post))
 
     // Important: Maintain the order of IDs if possible, or just return them
     // Returning processedPosts is enough for the export components
@@ -711,10 +752,10 @@ export const getSimilarPosts = traceAction('getSimilarPosts', async (_project, s
     );
 
     const posts = await collection.aggregate(pipeline).toArray()
-    const processedPosts = await Promise.all(posts.map(normalized_S3_post))
+    const processedPosts = await Promise.all(posts.map(normalizeS3Post))
 
     // 3. Prepend the source post to the results to show it at the top
-    const normalizedSourcePost = await normalized_S3_post(sourcePost)
+    const normalizedSourcePost = await normalizeS3Post(sourcePost)
     const finalPosts = [normalizedSourcePost, ...processedPosts]
 
     return {
@@ -912,7 +953,7 @@ export const getSemanticSearchPosts = traceAction('getSemanticSearchPosts', asyn
 
     // Apply the final threshold/limit
     const finalLimitedPosts = mergedPosts.slice(0, limit);
-    const processedPosts = await Promise.all(finalLimitedPosts.map(normalized_S3_post));
+    const processedPosts = await Promise.all(finalLimitedPosts.map(normalizeS3Post));
 
     return {
       posts: processedPosts,
@@ -930,27 +971,6 @@ export const getSemanticSearchPosts = traceAction('getSemanticSearchPosts', asyn
   }
 })
 
-export const getProjectDetails = traceAction('getProjectDetails_cases', async () => {
-  const user = await getAuthenticatedUser()
-
-  if (!user) return null
-
-  const supabase = await createClient()
-  const { data: clientDetails } = await supabase
-    .from('client_details')
-    .select('email, project_name, project:project_name(mongo_db_map, project_details)')
-    .eq('id', user.id)
-    .single()
-
-  if (!clientDetails?.project_name) return null
-
-  return {
-    client_email: clientDetails.email,
-    projectName: clientDetails.project_name,
-    dbName: clientDetails.project?.mongo_db_map
-  }
-})
-
 // UPDATE CLIENT STATUS FLAG FOR TAKEDOWN / NO ACTION
 // Accepts a single caseId (string) OR an array of caseIds for bulk operation.
 export const updateClientStatus = traceAction('updateClientStatus', async (caseId, status, _client_email) => {
@@ -960,13 +980,13 @@ export const updateClientStatus = traceAction('updateClientStatus', async (caseI
       return { success: false, error: "No cases provided" }
     }
 
-    const projectDetails = await getProjectDetails()
-    if (!projectDetails?.dbName) {
+    const authContext = await requireAuthContext()
+    if (!authContext?.dbName) {
       return { success: false, error: "Project configuration not found" }
     }
 
     const client = await clientPromise
-    const db = client.db(projectDetails.dbName)
+    const db = client.db(authContext.dbName)
     const collection = db.collection('Posts')
 
     const objectIds = ids.map(id => new ObjectId(id))
@@ -990,13 +1010,13 @@ export const updateClientStatus = traceAction('updateClientStatus', async (caseI
         update: {
           $set: {
             client_status: status,
-            "content_reviewed_by": projectDetails.client_email,
+            "content_reviewed_by": authContext.clientDetails.email,
             "metadata.updated_at": nowIso,
           },
           $push: {
             "metadata.update_history": {
               updated_at: new Date(),
-              updated_by: projectDetails.client_email,
+              updated_by: authContext.clientDetails.email,
               changes_summary: changesSummary
             }
           }
@@ -1021,14 +1041,14 @@ export const updateClientStatus = traceAction('updateClientStatus', async (caseI
       } : null
 
       await updateClientReviewedMetrics(
-        { project_name: projectDetails.projectName },
+        { project_name: authContext.clientDetails.project_name },
         currentReviewData,
         previousReviewData
       ).catch(err => console.error('Failed to update client metrics:', err))
 
       await updateClientMetaStats(
-        projectDetails.projectName,
-        projectDetails.client_email,
+        authContext.clientDetails.project_name,
+        authContext.clientDetails.email,
         "reviewed_case"
       ).catch(err => console.error('Failed to update meta stats:', err))
     }))

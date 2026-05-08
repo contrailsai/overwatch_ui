@@ -1,7 +1,8 @@
 import { CasesList } from './CasesList'
 import { getPosts, getPostById, getSimilarPosts, getSemanticSearchPosts } from './actions'
 import { fetch_clients_in_project } from './feature_actions'
-import { getClientandProjectDetails } from '@/app/(dashboard)/actions'
+import { requireAuthContext } from '@/utils/auth-context'
+import { runInSpan } from '@/utils/tracing'
 import PageHeader from '@/components/PageHeader'
 
 export const metadata = {
@@ -10,11 +11,15 @@ export const metadata = {
 }
 
 export default async function CasesPage({ searchParams }) {
-  const { user, clientDetails, project } = await getClientandProjectDetails()
+  const [{ clientDetails, project }, resolvedParams] = await Promise.all([
+    requireAuthContext(),
+    searchParams,
+  ])
 
-  const resolvedParams = await searchParams;
-  const currentPage = resolvedParams.page ? parseInt(resolvedParams.page, 10) : 1;
-  const itemsPerPage = Math.min(parseInt(resolvedParams.limit, 10) || 25, 100);
+  const parsedPage = Number.parseInt(resolvedParams.page, 10)
+  const parsedLimit = Number.parseInt(resolvedParams.limit, 10)
+  const currentPage = Number.isNaN(parsedPage) ? 1 : Math.max(parsedPage, 1)
+  const itemsPerPage = Math.min(Number.isNaN(parsedLimit) ? 25 : Math.max(parsedLimit, 1), 100)
 
   const filters = {
     platform: resolvedParams.platform || 'all',
@@ -36,34 +41,47 @@ export default async function CasesPage({ searchParams }) {
     direction: resolvedParams.sortDirection || 'desc'
   }
 
-  let cases;
-  if (resolvedParams.semantic_search) {
-    cases = await getSemanticSearchPosts(
-      project,
-      resolvedParams.semantic_search,
-      itemsPerPage,
-      filters,
-      sort
-    )
-  } else if (resolvedParams.similar_to) {
-    cases = await getSimilarPosts(
-      project, 
-      resolvedParams.similar_to, 
-      resolvedParams.search_type || 'text', 
-      itemsPerPage,
-      filters,
-      sort
-    )
-  } else {
-    cases = await getPosts(project, currentPage, itemsPerPage, filters, sort)
-  }
+  const casesPromise = runInSpan(
+    'rsc.cases_page.cases_query',
+    async () => (resolvedParams.semantic_search
+      ? getSemanticSearchPosts(
+        project,
+        resolvedParams.semantic_search,
+        itemsPerPage,
+        filters,
+        sort
+      )
+      : resolvedParams.similar_to
+        ? getSimilarPosts(
+          project,
+          resolvedParams.similar_to,
+          resolvedParams.search_type || 'text',
+          itemsPerPage,
+          filters,
+          sort
+        )
+        : getPosts(project, currentPage, itemsPerPage, filters, sort)),
+    { 'app.span_type': 'rsc_fetch', 'app.surface': 'rsc', 'app.fetch_target': 'cases' }
+  )
 
-  let initialCase = null;
-  if (resolvedParams.case_id) {
-    initialCase = await getPostById(project, resolvedParams.case_id);
-  }
+  const initialCasePromise = resolvedParams.case_id
+    ? runInSpan(
+      'rsc.cases_page.selected_case_query',
+      async () => getPostById(project, resolvedParams.case_id),
+      { 'app.span_type': 'rsc_fetch', 'app.surface': 'rsc', 'app.fetch_target': 'selected_case' }
+    )
+    : Promise.resolve(null)
 
-  const email_n_alias = await fetch_clients_in_project(clientDetails.project_name);
+  const projectEmailsPromise = runInSpan(
+    'rsc.cases_page.project_emails_query',
+    async () => fetch_clients_in_project(clientDetails.project_name),
+    { 'app.span_type': 'rsc_fetch', 'app.surface': 'rsc', 'app.fetch_target': 'project_emails' }
+  )
+  const [cases, initialCase, email_n_alias] = await Promise.all([
+    casesPromise,
+    initialCasePromise,
+    projectEmailsPromise,
+  ])
 
   // console.log("got clients in project as: ", emails)
 

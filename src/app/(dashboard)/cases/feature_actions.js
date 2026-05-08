@@ -11,8 +11,6 @@ import { traceAction, recordClickMetric } from '@/utils/tracing'
 import { metadata } from '../layout'
 import { requireAuthContext, requireRole } from '@/utils/auth-context'
 
-import { normalized_S3_post } from './actions'
-
 // ADD NOTE
 export const addReviewNote = traceAction('addReviewNote', async (caseId, noteText) => {
     try {
@@ -221,15 +219,18 @@ export const submitCaseReview = traceAction('submitCaseReview', async (_project,
 })
 
 // fetch other clients emails in the same project
-export const fetch_clients_in_project = traceAction('fetch_clients_in_project', async () => {
-    const { clientDetails } = await requireAuthContext()
+export const fetch_clients_in_project = traceAction('fetch_clients_in_project', async (projectName) => {
+    const resolvedProjectName = projectName || (await requireAuthContext())?.clientDetails?.project_name
+    if (!resolvedProjectName) {
+        return []
+    }
     const supabase = await createClient();
 
     // Fetch
     const { data: client_details, error: dbError } = await supabase
         .from('client_details')
         .select('email, alias')
-        .eq('project_name', clientDetails.project_name)
+        .eq('project_name', resolvedProjectName)
         .neq('permission', 'reviewer'); // anyone except reviewers
 
     if (dbError) {

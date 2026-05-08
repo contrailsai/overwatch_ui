@@ -1,23 +1,56 @@
 'use server'
 
+import { cache } from 'react'
 import { createClient, getAuthenticatedUser } from '@/utils/supabase/server'
+import { runInSpan } from '@/utils/tracing'
 
-export async function getAuthContext() {
+const TENANT_CONTEXT_TTL_MS = 30 * 1000
+const tenantContextCache = new Map()
+
+export const getAuthContext = cache(async () => {
+  const authContextStart = Date.now()
   const user = await getAuthenticatedUser()
   if (!user) return null
 
-  const supabase = await createClient()
-  const { data: clientDetails, error } = await supabase
-    .from('client_details')
-    .select('id, email, permission, project_name, project:project_name(project_name, mongo_db_map, project_details)')
-    .eq('id', user.id)
-    .single()
+  const cachedEntry = tenantContextCache.get(user.id)
+  if (cachedEntry && cachedEntry.expiresAt > Date.now()) {
+    return {
+      user,
+      clientDetails: cachedEntry.clientDetails,
+      project: cachedEntry.project,
+      dbName: cachedEntry.dbName,
+    }
+  }
+
+  const tenantLookupStart = Date.now()
+  const { data: clientDetails, error } = await runInSpan(
+    'auth_context.supabase_tenant_lookup',
+    async (span) => {
+      const supabase = await createClient()
+      span.setAttribute('app.user_id', user.id)
+      return supabase
+        .from('client_details')
+        .select('id, email, permission, project_name, project:project_name(project_name, mongo_db_map, project_details)')
+        .eq('id', user.id)
+        .single()
+    },
+    { 'app.span_type': 'auth_context' }
+  )
+  const supabaseTenantLookupMs = Date.now() - tenantLookupStart
+  const authContextMs = Date.now() - authContextStart
+
+  console.debug('[auth-context] resolved tenant metadata', {
+    userId: user.id,
+    success: !error && !!clientDetails?.project?.mongo_db_map,
+    supabase_tenant_lookup_ms: supabaseTenantLookupMs,
+    auth_context_ms: authContextMs,
+  })
 
   if (error || !clientDetails?.project?.mongo_db_map) {
     return null
   }
 
-  return {
+  const context = {
     user,
     clientDetails: {
       id: clientDetails.id,
@@ -28,7 +61,16 @@ export async function getAuthContext() {
     project: clientDetails.project,
     dbName: clientDetails.project.mongo_db_map
   }
-}
+
+  tenantContextCache.set(user.id, {
+    clientDetails: context.clientDetails,
+    project: context.project,
+    dbName: context.dbName,
+    expiresAt: Date.now() + TENANT_CONTEXT_TTL_MS,
+  })
+
+  return context
+})
 
 export async function requireAuthContext() {
   const context = await getAuthContext()
