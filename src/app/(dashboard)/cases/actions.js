@@ -91,23 +91,216 @@ const buildUniqueClustersStage = (filters) => {
   if (filters.unique_clusters === 'true' || filters.unique_clusters === true) {
     return [
       {
+        $addFields: {
+          _cluster_id_str: {
+            $cond: [
+              { $ifNull: ["$cluster_id", false] },
+              { $toString: "$cluster_id" },
+              null
+            ]
+          },
+          _doc_id_str: { $toString: "$_id" }
+        }
+      },
+      {
         $lookup: {
           from: 'unique_clusters',
-          localField: 'cluster_id',
-          foreignField: '_id',
+          let: { clusterIdObj: "$cluster_id", clusterIdStr: "$_cluster_id_str" },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $or: [
+                    // Handles normal ObjectId-to-ObjectId joins.
+                    { $eq: ["$_id", "$$clusterIdObj"] },
+                    // Handles mismatches where one side is stringified.
+                    { $eq: [{ $toString: "$_id" }, "$$clusterIdStr"] }
+                  ]
+                }
+              }
+            }
+          ],
           as: 'cluster_info'
+        }
+      },
+      {
+        $unwind: {
+          path: "$cluster_info",
+          preserveNullAndEmptyArrays: true
+        }
+      },
+      {
+        $addFields: {
+          _representative_post_id_str: {
+            $cond: [
+              { $ifNull: ["$cluster_info.representative_post_id", false] },
+              { $toString: "$cluster_info.representative_post_id" },
+              null
+            ]
+          },
+          _member_ids_str: {
+            $map: {
+              input: { $ifNull: ["$cluster_info.member_ids", []] },
+              as: "memberId",
+              in: { $toString: "$$memberId" }
+            }
+          }
+        }
+      },
+      {
+        $addFields: {
+          _is_representative: { $eq: ["$_doc_id_str", "$_representative_post_id_str"] },
+          _is_member: { $in: ["$_doc_id_str", "$_member_ids_str"] },
+          // If cluster doc is missing, treat the post as unique on its own.
+          _has_cluster_info: { $ne: ["$cluster_info", null] },
+          _unique_group_key: {
+            $ifNull: [{ $toString: "$cluster_info._id" }, "$_doc_id_str"]
+          }
         }
       },
       {
         $match: {
           $expr: {
-            $eq: [{ $toString: "$_id" }, { $arrayElemAt: ["$cluster_info.representative_post_id", 0] }]
+            $or: [
+              { $not: ["$_has_cluster_info"] },
+              "$_is_representative",
+              "$_is_member"
+            ]
           }
+        }
+      },
+      {
+        // Prefer representative if present; else best-ranked recent member.
+        $sort: {
+          _unique_group_key: 1,
+          _is_representative: -1,
+          "review_details.threat_score": -1,
+          "review_details.reviewed_at": -1,
+          "_id": 1
+        }
+      },
+      {
+        $group: {
+          _id: "$_unique_group_key",
+          doc: { $first: "$$ROOT" }
+        }
+      },
+      { $replaceRoot: { newRoot: "$doc" } },
+      {
+        $project: {
+          _cluster_id_str: 0,
+          _doc_id_str: 0,
+          _representative_post_id_str: 0,
+          _member_ids_str: 0,
+          _is_representative: 0,
+          _is_member: 0,
+          _has_cluster_info: 0,
+          _unique_group_key: 0,
+          cluster_info: 0
         }
       }
     ];
   }
   return [];
+};
+
+const ONLINE_VISIBILITY_VALUES = ['active', 'online', 'available'];
+
+const escapeRegex = (value = '') => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const buildCasesMatchQuery = (filters = {}) => {
+  const query = {
+    // Only reviewed posts should be shown to clients.
+    "review_details.threat_score": { $exists: true }
+  };
+
+  const andConditions = [];
+
+  // Platform filter
+  if (filters.platform && filters.platform !== 'all') {
+    const escapedPlatform = escapeRegex(filters.platform);
+    query.platform = { $regex: new RegExp(`^${escapedPlatform}$`, 'i') };
+  }
+
+  // Visibility status filter
+  if (filters.visibility_status && filters.visibility_status !== 'all') {
+    const visibilityLower = String(filters.visibility_status).toLowerCase();
+    if (visibilityLower === 'down') {
+      query.visibility_status = 'down';
+    } else if (visibilityLower === 'active' || visibilityLower === 'online' || visibilityLower === 'available') {
+      andConditions.push({
+        $or: [
+          { visibility_status: { $in: ONLINE_VISIBILITY_VALUES } },
+          { visibility_status: { $exists: false } },
+          { visibility_status: null }
+        ]
+      });
+    }
+  }
+
+  // Client Status filter
+  if (filters.client_status && filters.client_status !== 'all') {
+    const statusLower = filters.client_status.toLowerCase();
+    const escapedStatus = escapeRegex(filters.client_status);
+    if (statusLower === 'to be reviewed') {
+      andConditions.push({
+        $or: [
+          { client_status: { $exists: false } },
+          { client_status: null },
+          { client_status: { $regex: new RegExp('^to be reviewed$', 'i') } }
+        ]
+      });
+    } else if (statusLower === 'takedown' || statusLower === 'takedowns') {
+      query.client_status = { $regex: new RegExp('^takedowns?$', 'i') };
+    } else {
+      query.client_status = { $regex: new RegExp(`^${escapedStatus}$`, 'i') };
+    }
+  }
+
+  // Risk Priority filter
+  // high > 95 >= medium > 75 >= low > 40 >= safe
+  if (filters.risk_priority && filters.risk_priority !== 'all') {
+    if (filters.risk_priority === 'high') {
+      query['review_details.threat_score'] = { $gt: 95 };
+    } else if (filters.risk_priority === 'medium') {
+      query['review_details.threat_score'] = { $gt: 75, $lte: 95 };
+    } else if (filters.risk_priority === 'low') {
+      query['review_details.threat_score'] = { $gt: 40, $lte: 75 };
+    } else if (filters.risk_priority === 'safe') {
+      query['review_details.threat_score'] = { $lte: 40 };
+    }
+  }
+
+  // Violations filter
+  if (filters.violations && filters.violations !== 'all') {
+    const violationsArray = filters.violations.split(',');
+    if (violationsArray.length > 0) {
+      const normalViolations = violationsArray.filter(v => v !== 'aigc');
+      const hasAigc = violationsArray.includes('aigc');
+
+      const violationConditions = [];
+      if (normalViolations.length > 0) {
+        violationConditions.push({ 'review_details.threat_types': { $in: normalViolations } });
+        const flagConditions = normalViolations.map(v => ({ [`review_details.flags.${v}`]: true }));
+        violationConditions.push(...flagConditions);
+      }
+      if (hasAigc) {
+        violationConditions.push({ 'review_details.is_aigc': true });
+      }
+
+      if (violationConditions.length > 0) {
+        andConditions.push({
+          $and: violationConditions
+        });
+      }
+    }
+  }
+
+  if (andConditions.length > 0) {
+    query.$and = andConditions;
+  }
+
+  return query;
 };
 
 export const getPosts = traceAction('getPosts', async (project, page = 1, limit = 20, filters = {}, sort = { field: 'created_at', direction: 'desc' }) => {
@@ -121,106 +314,7 @@ export const getPosts = traceAction('getPosts', async (project, page = 1, limit 
 
     const skip = (page - 1) * limit
 
-    // Build query
-    // CLIENT VIEW: Enforce processed = true
-    const query = {
-      // CONTENT MUST BE REVIEWED ON REVIEW-CASES PAGE BEFORE COMMING HERE
-      "review_details.threat_score": { $exists: true }
-      // processed: true
-    }
-
-    // Only exclude raised cases if we are not explicitly asking for 'all' or 'Flag for Takedown'
-    // if (filters.client_status !== 'all' && filters.client_status !== 'Flag for Takedown') {
-    //   query['takedown_info.takedown_status'] = { $ne: 'raised' }
-    // }
-
-    const andConditions = []
-
-    // Platform filter
-    if (filters.platform && filters.platform !== 'all') {
-      query.platform = { $regex: new RegExp(`^${filters.platform}\$`, 'i') }
-    }
-
-    // Visibility status filter
-    if (filters.visibility_status && filters.visibility_status !== 'all') {
-      if (filters.visibility_status === 'down') {
-        query.visibility_status = 'down';
-      } else if (filters.visibility_status === 'active') {
-        andConditions.push({
-          $or: [
-            { visibility_status: 'active' },
-            { visibility_status: { $exists: false } },
-            { visibility_status: null }
-          ]
-        });
-      }
-    }
-
-    // Client Status filter
-    if (filters.client_status && filters.client_status !== 'all') {
-      // To Be Reviewed edge case: 
-      // ---> any case that doesnt have the key, 
-      // ---> key is null or 
-      // ---> the key is explicitly "To Be Reviewed" 
-      // should be included in this filter.
-      const statusLower = filters.client_status.toLowerCase();
-      if (statusLower === 'to be reviewed') {
-        andConditions.push({
-          $or: [
-            { client_status: { $exists: false } },
-            { client_status: null },
-            { client_status: { $regex: new RegExp('^to be reviewed$', 'i') } }
-          ]
-        })
-      } else if (statusLower === 'takedown' || statusLower === 'takedowns') {
-        query.client_status = { $regex: new RegExp('^takedowns?$', 'i') }
-      } else {
-        query.client_status = { $regex: new RegExp(`^${filters.client_status}$`, 'i') }
-      }
-    }
-
-    // Risk Priority filter
-    // high > 95 >= medium > 75 >= low > 40 >= safe
-    if (filters.risk_priority && filters.risk_priority !== 'all') {
-      if (filters.risk_priority === 'high') {
-        query['review_details.threat_score'] = { $gt: 95 }
-      } else if (filters.risk_priority === 'medium') {
-        query['review_details.threat_score'] = { $gt: 75, $lte: 95 }
-      } else if (filters.risk_priority === 'low') {
-        query['review_details.threat_score'] = { $gt: 40, $lte: 75 }
-      } else if (filters.risk_priority === 'safe') {
-        query['review_details.threat_score'] = { $lte: 40 }
-      }
-    }
-
-    // Violations filter
-    if (filters.violations && filters.violations !== 'all') {
-      const violationsArray = filters.violations.split(',');
-      if (violationsArray.length > 0) {
-        const normalViolations = violationsArray.filter(v => v !== 'aigc');
-        const hasAigc = violationsArray.includes('aigc');
-        
-        const violationConditions = [];
-        if (normalViolations.length > 0) {
-          violationConditions.push({ 'review_details.threat_types': { $in: normalViolations } });
-          const flagConditions = normalViolations.map(v => ({ [`review_details.flags.${v}`]: true }));
-          violationConditions.push(...flagConditions);
-        }
-        if (hasAigc) {
-          violationConditions.push({ 'review_details.is_aigc': true });
-        }
-        
-        if (violationConditions.length > 0) {
-          andConditions.push({
-            $and: violationConditions
-          });
-        }
-      }
-    }
-
-    if (andConditions.length > 0) {
-      query.$and = andConditions
-    }
+    const query = buildCasesMatchQuery(filters);
 
     // SORT STUFF OUT
     let sortPipeline = {};
@@ -283,7 +377,6 @@ export const getPosts = traceAction('getPosts', async (project, page = 1, limit 
 
     const posts = await collection.aggregate([
       { $match: matchStage },
-      ...buildUniqueClustersStage(filters),
       { $project: { text_embedding: 0, image_embedding: 0 } },
       {
         $addFields: {
@@ -302,6 +395,7 @@ export const getPosts = traceAction('getPosts', async (project, page = 1, limit 
         }
       },
       ...(hasDateFilters ? [{ $match: dateFilterStage }] : []),
+      ...buildUniqueClustersStage(filters),
       { $sort: sortPipeline },
       { $skip: skip },
       { $limit: limit }
@@ -315,7 +409,6 @@ export const getPosts = traceAction('getPosts', async (project, page = 1, limit 
     if (hasDateFilters) {
       const countResult = await collection.aggregate([
         { $match: matchStage },
-        ...buildUniqueClustersStage(filters),
         {
           $addFields: {
             sort_original_date: {
@@ -333,6 +426,7 @@ export const getPosts = traceAction('getPosts', async (project, page = 1, limit 
           }
         },
         { $match: dateFilterStage },
+        ...buildUniqueClustersStage(filters),
         { $count: "total" }
       ]).toArray();
       totalCount = countResult[0]?.total || 0;
@@ -394,73 +488,8 @@ export const getAllPostIds = traceAction('getAllPostIds', async (project, filter
     const db = client.db(project.mongo_db_map)
     const collection = db.collection('Posts')
 
-    // Build the same query as getPosts
-    const query = { processed: true }
-    const andConditions = []
-
-    if (filters.platform && filters.platform !== 'all') {
-      query.platform = { $regex: new RegExp(`^${filters.platform}$`, 'i') }
-    }
-
-    if (filters.client_status && filters.client_status !== 'all') {
-      const statusLower = filters.client_status.toLowerCase();
-      const escapedStatus = filters.client_status.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-      if (statusLower === 'to be reviewed') {
-        andConditions.push({
-          $or: [
-            { client_status: { $exists: false } },
-            { client_status: null },
-            { client_status: { $regex: '^to be reviewed$', $options: 'i' } }
-          ]
-        })
-      } else if (statusLower === 'takedown' || statusLower === 'takedowns') {
-        query.client_status = { $regex: '^takedowns?$', $options: 'i' }
-      } else {
-        query.client_status = { $regex: `^${escapedStatus}$`, $options: 'i' }
-      }
-    }
-
-    query['review_details.threat_score'] = { $exists: true }
-
-    if (filters.risk_priority && filters.risk_priority !== 'all') {
-      if (filters.risk_priority === 'high') {
-        query['review_details.threat_score'] = { $gt: 95 }
-      } else if (filters.risk_priority === 'medium') {
-        query['review_details.threat_score'] = { $gt: 75, $lte: 95 }
-      } else if (filters.risk_priority === 'low') {
-        query['review_details.threat_score'] = { $gt: 40, $lte: 75 }
-      } else if (filters.risk_priority === 'safe') {
-        query['review_details.threat_score'] = { $lte: 40 }
-      }
-    }
-
-    // Violations filter
-    if (filters.violations && filters.violations !== 'all') {
-      const violationsArray = filters.violations.split(',');
-      if (violationsArray.length > 0) {
-        const normalViolations = violationsArray.filter(v => v !== 'aigc');
-        const hasAigc = violationsArray.includes('aigc');
-        
-        const orConditions = [];
-        if (normalViolations.length > 0) {
-          orConditions.push({ 'review_details.threat_types': { $in: normalViolations } });
-          const flagConditions = normalViolations.map(v => ({ [`review_details.flags.${v}`]: true }));
-          orConditions.push(...flagConditions);
-        }
-        if (hasAigc) {
-          orConditions.push({ 'review_details.is_aigc': true });
-        }
-        
-        if (orConditions.length > 0) {
-          andConditions.push({
-            $or: orConditions
-          });
-        }
-      }
-    }
-
-    if (andConditions.length > 0) query.$and = andConditions
+    // Keep filter parity with getPosts (including visibility + reviewed gate)
+    const query = buildCasesMatchQuery(filters)
 
     const matchStage = { ...query }
     const dateFilterStage = {}
@@ -489,7 +518,6 @@ export const getAllPostIds = traceAction('getAllPostIds', async (project, filter
 
     const pipeline = [
       { $match: matchStage },
-      ...buildUniqueClustersStage(filters),
       ...(hasDateFilters ? [
         {
           $addFields: {
@@ -503,6 +531,7 @@ export const getAllPostIds = traceAction('getAllPostIds', async (project, filter
         },
         { $match: dateFilterStage }
       ] : []),
+      ...buildUniqueClustersStage(filters),
       { $project: { _id: 1 } }
     ]
 
@@ -595,74 +624,11 @@ export const getSimilarPosts = traceAction('getSimilarPosts', async (project, so
       return { posts: [], totalCount: 0, page: 1, totalPages: 0 }
     }
 
-    // Prepare match stage based on existing filters
+    // Keep filtering parity with the main cases list (including visibility logic).
     const matchQuery = {
-      _id: { $ne: new ObjectId(sourcePostId) }, // Exclude self
-      "review_details.threat_score": { $exists: true } // Only cases (reviewed)
+      ...buildCasesMatchQuery(filters),
+      _id: { $ne: new ObjectId(sourcePostId) } // Exclude self
     };
-
-    const andConditions = [];
-
-    if (filters.platform && filters.platform !== 'all') {
-      matchQuery.platform = { $regex: new RegExp(`^${filters.platform}$`, 'i') }
-    }
-
-    if (filters.client_status && filters.client_status !== 'all') {
-      const statusLower = filters.client_status.toLowerCase();
-      const escapedStatus = filters.client_status.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-      if (statusLower === 'to be reviewed') {
-        andConditions.push({
-          $or: [
-            { client_status: { $exists: false } },
-            { client_status: null },
-            { client_status: { $regex: '^to be reviewed$', $options: 'i' } }
-          ]
-        })
-      } else if (statusLower === 'takedown' || statusLower === 'takedowns') {
-        matchQuery.client_status = { $regex: '^takedowns?$', $options: 'i' }
-      } else {
-        matchQuery.client_status = { $regex: `^${escapedStatus}$`, $options: 'i' }
-      }
-    }
-
-    if (filters.risk_priority && filters.risk_priority !== 'all') {
-      if (filters.risk_priority === 'high') {
-        matchQuery['review_details.threat_score'] = { $gt: 95 }
-      } else if (filters.risk_priority === 'medium') {
-        matchQuery['review_details.threat_score'] = { $gt: 75, $lte: 95 }
-      } else if (filters.risk_priority === 'low') {
-        matchQuery['review_details.threat_score'] = { $gt: 40, $lte: 75 }
-      } else if (filters.risk_priority === 'safe') {
-        matchQuery['review_details.threat_score'] = { $lte: 40 }
-      }
-    }
-
-    if (filters.violations && filters.violations !== 'all') {
-      const violationsArray = filters.violations.split(',');
-      if (violationsArray.length > 0) {
-        const normalViolations = violationsArray.filter(v => v !== 'aigc');
-        const hasAigc = violationsArray.includes('aigc');
-        
-        const violationConditions = [];
-        if (normalViolations.length > 0) {
-          violationConditions.push({ 'review_details.threat_types': { $in: normalViolations } });
-          const flagConditions = normalViolations.map(v => ({ [`review_details.flags.${v}`]: true }));
-          violationConditions.push(...flagConditions);
-        }
-        if (hasAigc) {
-          violationConditions.push({ 'review_details.is_aigc': true });
-        }
-        
-        if (violationConditions.length > 0) {
-          andConditions.push({ $and: violationConditions });
-        }
-      }
-    }
-
-    if (andConditions.length > 0) {
-      matchQuery.$and = andConditions;
-    }
 
     // Build Sort Pipeline
     let sortPipeline = {};
@@ -794,72 +760,7 @@ export const getSemanticSearchPosts = traceAction('getSemanticSearchPosts', asyn
     const collection = db.collection('Posts')
 
     // 2. Build common match and date filters
-    const matchQuery = {
-      "review_details.threat_score": { $exists: true }
-    };
-
-    const andConditions = [];
-
-    if (filters.platform && filters.platform !== 'all') {
-      matchQuery.platform = { $regex: new RegExp(`^${filters.platform}$`, 'i') }
-    }
-
-    if (filters.client_status && filters.client_status !== 'all') {
-      const statusLower = filters.client_status.toLowerCase();
-      const escapedStatus = filters.client_status.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-      if (statusLower === 'to be reviewed') {
-        andConditions.push({
-          $or: [
-            { client_status: { $exists: false } },
-            { client_status: null },
-            { client_status: { $regex: '^to be reviewed$', $options: 'i' } }
-          ]
-        })
-      } else if (statusLower === 'takedown' || statusLower === 'takedowns') {
-        matchQuery.client_status = { $regex: '^takedowns?$', $options: 'i' }
-      } else {
-        matchQuery.client_status = { $regex: `^${escapedStatus}$`, $options: 'i' }
-      }
-    }
-
-    if (filters.risk_priority && filters.risk_priority !== 'all') {
-      if (filters.risk_priority === 'high') {
-        matchQuery['review_details.threat_score'] = { $gt: 95 }
-      } else if (filters.risk_priority === 'medium') {
-        matchQuery['review_details.threat_score'] = { $gt: 75, $lte: 95 }
-      } else if (filters.risk_priority === 'low') {
-        matchQuery['review_details.threat_score'] = { $gt: 40, $lte: 75 }
-      } else if (filters.risk_priority === 'safe') {
-        matchQuery['review_details.threat_score'] = { $lte: 40 }
-      }
-    }
-
-    if (filters.violations && filters.violations !== 'all') {
-      const violationsArray = filters.violations.split(',');
-      if (violationsArray.length > 0) {
-        const normalViolations = violationsArray.filter(v => v !== 'aigc');
-        const hasAigc = violationsArray.includes('aigc');
-        
-        const violationConditions = [];
-        if (normalViolations.length > 0) {
-          violationConditions.push({ 'review_details.threat_types': { $in: normalViolations } });
-          const flagConditions = normalViolations.map(v => ({ [`review_details.flags.${v}`]: true }));
-          violationConditions.push(...flagConditions);
-        }
-        if (hasAigc) {
-          violationConditions.push({ 'review_details.is_aigc': true });
-        }
-        
-        if (violationConditions.length > 0) {
-          andConditions.push({ $and: violationConditions });
-        }
-      }
-    }
-
-    if (andConditions.length > 0) {
-      matchQuery.$and = andConditions;
-    }
+    const matchQuery = buildCasesMatchQuery(filters);
 
     let sortPipeline = null;
     if (sort.field === 'threat_score') {
@@ -996,8 +897,10 @@ export const getSemanticSearchPosts = traceAction('getSemanticSearchPosts', asyn
 
     // Add semantic results
     for (const post of semanticPosts) {
-      mergedPosts.push(post);
-      seenIds.add(post._id.toString());
+      if (!seenIds.has(post._id.toString())) {
+        mergedPosts.push(post);
+        seenIds.add(post._id.toString());
+      }
     }
 
     // Apply the final threshold/limit
