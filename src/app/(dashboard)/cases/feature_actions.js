@@ -9,18 +9,15 @@ import { ObjectId } from 'mongodb'
 // import { getClientandProjectDetails } from '@/app/(dashboard)/actions'
 import { traceAction, recordClickMetric } from '@/utils/tracing'
 import { metadata } from '../layout'
-
-import { normalized_S3_post } from './actions'
+import { requireAuthContext, requireRole } from '@/utils/auth-context'
 
 // ADD NOTE
-export const addReviewNote = traceAction('addReviewNote', async (caseId, noteText, project, clientDetails) => {
+export const addReviewNote = traceAction('addReviewNote', async (caseId, noteText) => {
     try {
-        if (!project?.mongo_db_map) {
-            return { success: false, error: "Project configuration not found" }
-        }
+        const { dbName, clientDetails } = await requireAuthContext()
 
         const client = await clientPromise
-        const db = client.db(project.mongo_db_map)
+        const db = client.db(dbName)
         const collection = db.collection('Posts')
 
         const newNote = {
@@ -56,11 +53,8 @@ export const addReviewNote = traceAction('addReviewNote', async (caseId, noteTex
 })
 
 // FOR RESULTS EDIT FUNCTIONALITY
-export const submitCaseReview = traceAction('submitCaseReview', async (project, clientDetails, prevState, formData) => {
-
-    if (!project?.mongo_db_map) {
-        return { success: false, error: 'Project database configuration missing' }
-    }
+export const submitCaseReview = traceAction('submitCaseReview', async (_project, _clientDetails, prevState, formData) => {
+    const { dbName, clientDetails, project } = await requireAuthContext()
 
     const mongoId = formData.get('mongo_id')
 
@@ -126,7 +120,7 @@ export const submitCaseReview = traceAction('submitCaseReview', async (project, 
     // ----------------------
     try {
         const client = await clientPromise
-        const db = client.db(project.mongo_db_map) // Use Correct DB
+        const db = client.db(dbName) // Use Correct DB
         const collection = db.collection('Posts')
 
         // 1. Fetch existing post to get previous state
@@ -225,14 +219,18 @@ export const submitCaseReview = traceAction('submitCaseReview', async (project, 
 })
 
 // fetch other clients emails in the same project
-export const fetch_clients_in_project = traceAction('fetch_clients_in_project', async (project_name) => {
+export const fetch_clients_in_project = traceAction('fetch_clients_in_project', async (projectName) => {
+    const resolvedProjectName = projectName || (await requireAuthContext())?.clientDetails?.project_name
+    if (!resolvedProjectName) {
+        return []
+    }
     const supabase = await createClient();
 
     // Fetch
     const { data: client_details, error: dbError } = await supabase
         .from('client_details')
         .select('email, alias')
-        .eq('project_name', project_name)
+        .eq('project_name', resolvedProjectName)
         .neq('permission', 'reviewer'); // anyone except reviewers
 
     if (dbError) {
@@ -247,10 +245,8 @@ export const fetch_clients_in_project = traceAction('fetch_clients_in_project', 
 });
 
 // ASSIGN TO OTHER CLIENTS (emails)
-export const assignCaseTo = traceAction('assignCaseTo', async (project, clientDetails, post_id, assigned_email) => {
-    if (!project?.mongo_db_map) {
-        return { success: false, error: 'Project database configuration missing' }
-    }
+export const assignCaseTo = traceAction('assignCaseTo', async (_project, _clientDetails, post_id, assigned_email) => {
+    const { dbName, clientDetails } = await requireRole(['client-admin'])
 
     if (!post_id) {
         return { success: false, error: 'Missing Post ID' }
@@ -258,7 +254,7 @@ export const assignCaseTo = traceAction('assignCaseTo', async (project, clientDe
 
     try {
         const client = await clientPromise
-        const db = client.db(project.mongo_db_map) // Use Correct DB
+        const db = client.db(dbName) // Use Correct DB
         const collection = db.collection('Posts')
 
         const result = await collection.updateOne(
@@ -305,10 +301,8 @@ export const assignCaseTo = traceAction('assignCaseTo', async (project, clientDe
 })
 
 // BULK ASSIGN TO OTHER CLIENTS (emails)
-export const bulkAssignCasesTo = traceAction('bulkAssignCasesTo', async (project, clientDetails, post_ids, assigned_email) => {
-    if (!project?.mongo_db_map) {
-        return { success: false, error: 'Project database configuration missing' }
-    }
+export const bulkAssignCasesTo = traceAction('bulkAssignCasesTo', async (_project, _clientDetails, post_ids, assigned_email) => {
+    const { dbName, clientDetails } = await requireRole(['client-admin'])
 
     if (!post_ids || !Array.isArray(post_ids) || post_ids.length === 0) {
         return { success: false, error: 'Missing or invalid Post IDs' }
@@ -316,7 +310,7 @@ export const bulkAssignCasesTo = traceAction('bulkAssignCasesTo', async (project
 
     try {
         const client = await clientPromise
-        const db = client.db(project.mongo_db_map) // Use Correct DB
+        const db = client.db(dbName) // Use Correct DB
         const collection = db.collection('Posts')
 
         const objectIds = post_ids.map(id => new ObjectId(id))

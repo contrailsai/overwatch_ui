@@ -6,6 +6,7 @@ import clientPromise from '@/utils/mongodb/client'
 import { getSignedImageUrl } from '@/utils/aws/s3'
 import { traceAction } from '@/utils/tracing'
 import { posthogServer } from '@/utils/posthog'
+import { getAuthContext } from '@/utils/auth-context'
 
 export const getDashboardData = traceAction('getDashboardData', async (project, queryParams) => {
   const supabase = await createClient()
@@ -386,32 +387,13 @@ export const getUser = traceAction('getUser', cache(async () => {
 }))
 
 export const getClientandProjectDetails = traceAction('getClientandProjectDetails', cache(async () => {
-  const user = await getAuthenticatedUser()
-
-  if (!user) return null
-
-  const supabase = await createClient()
-
-  // Combine fetching client details and project details into a single query using a JOIN
-  // This significantly reduces latency by avoiding sequential network round-trips.
-  const { data: clientDetails, error } = await supabase
-    .from('client_details')
-    .select('*, project:project_name(*)')
-    .eq('id', user.id)
-    .single()
-
-  if (error) {
-    console.error('Error fetching client/project details:', error)
-    return { user, clientDetails: null, project: null }
-  }
-
-  // Extract project from the JOINed result and normalize
-  const project = clientDetails.project
+  const context = await getAuthContext()
+  if (!context) return null
 
   return {
-    user,
-    clientDetails: { ...clientDetails, project: undefined }, // Clean up JOINed field if necessary
-    project
+    user: context.user,
+    clientDetails: context.clientDetails,
+    project: context.project,
   }
 }))
 

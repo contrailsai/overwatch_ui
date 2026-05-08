@@ -35,9 +35,14 @@ export async function createClient() {
  */
 export const getAuthenticatedUser = cache(async () => {
   const supabase = await createClient()
-  // Use getSession() for performance - it reads from the cookie without a network round-trip.
-  // This is safe because our middleware already verifies the user with getUser() on every request.
-  // const { data: { session } } = await supabase.auth.getSession()
-  const { data: { user } } = await supabase.auth.getUser()
+  // Note: keep getUser() here to force server-side validation after middleware refresh.
+  const { data: { user }, error } = await supabase.auth.getUser()
+  if (error) {
+    console.warn('[auth.server] getAuthenticatedUser failed', {
+      code: error.code ?? null,
+      status: error.status ?? null,
+      message: error.message ?? 'unknown',
+    })
+  }
   return user ?? null
 })

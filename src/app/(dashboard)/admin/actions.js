@@ -3,16 +3,18 @@ import { revalidatePath } from 'next/cache'
 
 import { traceAction, recordClickMetric } from '@/utils/tracing'
 import { createClient, getAuthenticatedUser } from '@/utils/supabase/server'
+import { requireRole } from '@/utils/auth-context'
 
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 
-export const fetch_clients_in_project = traceAction('fetch_clients_in_project', async (project_name) => {
+export const fetch_clients_in_project = traceAction('fetch_clients_in_project', async (_project_name) => {
+    const { clientDetails } = await requireRole(['client-admin', 'reviewer'])
     const supabase = await createClient()
 
     const { data: client_details, error } = await supabase
         .from('client_details')
         .select('*')
-        .eq('project_name', project_name)
+        .eq('project_name', clientDetails.project_name)
         .neq('permission', 'reviewer')
 
     if (error) {
@@ -46,7 +48,7 @@ export const fetch_clients_in_project = traceAction('fetch_clients_in_project', 
         .from('client_logs')
         .select('*')
         .in('client_id', clientIds)
-        .eq('project_name', project_name)
+        .eq('project_name', clientDetails.project_name)
 
     if (logsError) {
         console.error("ERROR fetching client logs: ", logsError)
@@ -148,6 +150,7 @@ export const fetch_clients_in_project = traceAction('fetch_clients_in_project', 
 })
 
 export const create_new_client = traceAction('create_new_client', async (email, password, projectName) => {
+    await requireRole(['client-admin'])
 
     // 1. Initialize the Admin Client using the Service Role Key
     // This bypasses RLS and prevents overwriting the Admin's current session cookies.
@@ -198,6 +201,7 @@ export const create_new_client = traceAction('create_new_client', async (email, 
 })
 
 export const delete_client = traceAction('delete_client', async (userId) => {
+    await requireRole(['client-admin'])
     const supabaseAdmin = createSupabaseClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL,
         process.env.SUPABASE_SERVICE_ROLE_KEY,
@@ -232,6 +236,7 @@ export const delete_client = traceAction('delete_client', async (userId) => {
 })
 
 export const update_client_alias = traceAction('update_client_alias', async (userId, alias) => {
+    await requireRole(['client-admin'])
     const supabaseAdmin = createSupabaseClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL,
         process.env.SUPABASE_SERVICE_ROLE_KEY,
@@ -258,6 +263,7 @@ export const update_client_alias = traceAction('update_client_alias', async (use
 })
 
 export const update_client_organization = traceAction('update_client_organization', async (userId, organization) => {
+    await requireRole(['client-admin'])
     const supabaseAdmin = createSupabaseClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL,
         process.env.SUPABASE_SERVICE_ROLE_KEY,

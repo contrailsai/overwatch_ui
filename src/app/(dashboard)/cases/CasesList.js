@@ -114,8 +114,6 @@ function BulkActionMenu({
 }
 
 export function CasesList({ cases, project, clientDetails, initialFilters, initialSort, currentPage, itemsPerPage, initialCase, projectEmails }) {
-console.log("🔍 ~ CasesList ~ src/app/(dashboard)/cases/CasesList.js:116 ~ project:", project);
-
   // console.log(cases)
 
   // console.log(project)
@@ -228,7 +226,6 @@ console.log("🔍 ~ CasesList ~ src/app/(dashboard)/cases/CasesList.js:116 ~ pro
 
   // Merged posts for current page view
   const [mergedPosts, setMergedPosts] = useState([])
-  console.log("🔍 ~ CasesList ~ src/app/(dashboard)/cases/CasesList.js:229 ~ mergedPosts:", mergedPosts);
 
   useEffect(() => {
     setMergedPosts(cases?.posts || [])

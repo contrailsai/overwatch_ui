@@ -2,11 +2,12 @@
 
 import clientPromise from '@/utils/mongodb/client'
 import { ObjectId } from 'mongodb'
+import { requireRole } from '@/utils/auth-context'
 
-export async function get_research_projects(project_db) {
-    if (!project_db) return { projects: [] }
+export async function get_research_projects(_project_db) {
+    const { dbName } = await requireRole(['client-admin', 'reviewer'])
     const client = await clientPromise
-    const db = client.db(project_db)
+    const db = client.db(dbName)
     const collection = db.collection('ResearchWatchlist')
 
     const projects = await collection.find({}).sort({ created_at: -1 }).toArray()
@@ -19,11 +20,12 @@ export async function get_research_projects(project_db) {
     }
 }
 
-export async function create_research_project(project_db, title, description) {
-    if (!project_db || !title?.trim()) return { error: 'Project db and title are required' }
+export async function create_research_project(_project_db, title, description) {
+    const { dbName } = await requireRole(['client-admin', 'reviewer'])
+    if (!title?.trim()) return { error: 'Project db and title are required' }
     
     const client = await clientPromise
-    const db = client.db(project_db)
+    const db = client.db(dbName)
     const collection = db.collection('ResearchWatchlist')
 
     const newProject = {
@@ -38,22 +40,24 @@ export async function create_research_project(project_db, title, description) {
     return { success: true, insertedId: result.insertedId.toString() }
 }
 
-export async function delete_research_project(project_db, projectId) {
-    if (!project_db || !projectId) return { error: 'Invalid project or ID' }
+export async function delete_research_project(_project_db, projectId) {
+    const { dbName } = await requireRole(['client-admin', 'reviewer'])
+    if (!projectId) return { error: 'Invalid project or ID' }
     
     const client = await clientPromise
-    const db = client.db(project_db)
+    const db = client.db(dbName)
     const collection = db.collection('ResearchWatchlist')
 
     await collection.deleteOne({ _id: new ObjectId(projectId) })
     return { success: true }
 }
 
-export async function add_keyword_to_project(project_db, projectId, keyword, priority = 'low') {
-    if (!project_db || !projectId || !keyword?.trim()) return { error: 'Invalid inputs' }
+export async function add_keyword_to_project(_project_db, projectId, keyword, priority = 'low') {
+    const { dbName } = await requireRole(['client-admin', 'reviewer'])
+    if (!projectId || !keyword?.trim()) return { error: 'Invalid inputs' }
     
     const client = await clientPromise
-    const db = client.db(project_db)
+    const db = client.db(dbName)
     const collection = db.collection('ResearchWatchlist')
 
     const trimmed = keyword.trim()
@@ -80,11 +84,12 @@ export async function add_keyword_to_project(project_db, projectId, keyword, pri
     return { success: true }
 }
 
-export async function remove_keyword_from_project(project_db, projectId, keyword) {
-    if (!project_db || !projectId || !keyword) return { error: 'Invalid inputs' }
+export async function remove_keyword_from_project(_project_db, projectId, keyword) {
+    const { dbName } = await requireRole(['client-admin', 'reviewer'])
+    if (!projectId || !keyword) return { error: 'Invalid inputs' }
     
     const client = await clientPromise
-    const db = client.db(project_db)
+    const db = client.db(dbName)
     const collection = db.collection('ResearchWatchlist')
 
     await collection.updateOne(
@@ -95,8 +100,9 @@ export async function remove_keyword_from_project(project_db, projectId, keyword
     return { success: true }
 }
 
-export async function add_profile_to_project(project_db, projectId, url) {
-    if (!project_db || !projectId || !url?.trim()) return { error: 'Invalid inputs' }
+export async function add_profile_to_project(_project_db, projectId, url) {
+    const { dbName } = await requireRole(['client-admin', 'reviewer'])
+    if (!projectId || !url?.trim()) return { error: 'Invalid inputs' }
     
     const trimmedUrl = url.trim()
     try {
@@ -109,7 +115,7 @@ export async function add_profile_to_project(project_db, projectId, url) {
     }
     
     const client = await clientPromise
-    const db = client.db(project_db)
+    const db = client.db(dbName)
     const collection = db.collection('ResearchWatchlist')
 
     const project = await collection.findOne({ _id: new ObjectId(projectId) })
@@ -132,11 +138,12 @@ export async function add_profile_to_project(project_db, projectId, url) {
     return { success: true }
 }
 
-export async function remove_profile_from_project(project_db, projectId, url) {
-    if (!project_db || !projectId || !url) return { error: 'Invalid inputs' }
+export async function remove_profile_from_project(_project_db, projectId, url) {
+    const { dbName } = await requireRole(['client-admin', 'reviewer'])
+    if (!projectId || !url) return { error: 'Invalid inputs' }
     
     const client = await clientPromise
-    const db = client.db(project_db)
+    const db = client.db(dbName)
     const collection = db.collection('ResearchWatchlist')
 
     await collection.updateOne(

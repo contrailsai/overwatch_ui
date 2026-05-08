@@ -4,13 +4,13 @@ import { createClient, getAuthenticatedUser } from '@/utils/supabase/server'
 import { traceAction } from '@/utils/tracing'
 import { posthogServer } from '@/utils/posthog'
 import { getSignedDownloadUrl } from '@/utils/aws/s3'
+import { requireAuthContext } from '@/utils/auth-context'
 
-export const getReports = traceAction('getReports', async (project, filters = {}) => {
+export const getReports = traceAction('getReports', async (_project, filters = {}) => {
   const supabase = await createClient()
-  const projectName = typeof project === 'string' ? project : project?.project_name
   
-  const user = await getAuthenticatedUser()
-  if (!user) return []
+  const { user, project } = await requireAuthContext()
+  const projectName = project?.project_name
 
   if (user) {
     posthogServer.capture({
@@ -69,6 +69,16 @@ export const getReportDownloadUrlAction = traceAction('getReportDownloadUrlActio
   if (!s3Url) return null
 
   try {
+    const { user } = await requireAuthContext()
+    const supabase = await createClient()
+    const { data: ownedReport } = await supabase
+      .from('reports_generation')
+      .select('id')
+      .eq('client_id', user.id)
+      .eq('s3_path', s3Url)
+      .maybeSingle()
+    if (!ownedReport) return null
+
     const url = new URL(s3Url)
     const key = url.pathname.substring(1) // remove leading '/'
     

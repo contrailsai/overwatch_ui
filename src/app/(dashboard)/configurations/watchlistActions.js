@@ -1,18 +1,17 @@
 'use server'
 
 import { createClient } from '@/utils/supabase/server'
+import { requireRole, requireAuthContext } from '@/utils/auth-context'
 
-export async function get_watchlist(project_name, search = "") {
-  if (!project_name) return { error: 'Project name is required' }
+export async function get_watchlist(_project_name, search = "") {
+  const { clientDetails } = await requireAuthContext()
 
   const supabase = await createClient()
-  // const { data: { user } } = await supabase.auth.getUser()
-  // if (!user) return { error: 'Not authenticated' }
 
   let query = supabase
     .from('watchlist')
     .select('*')
-    .eq('project_name', project_name)
+    .eq('project_name', clientDetails.project_name)
     .order('created_at', { ascending: false })
 
   if (search) {
@@ -28,8 +27,8 @@ export async function get_watchlist(project_name, search = "") {
   return data
 }
 
-export async function add_to_watchlist(project_name, link) {
-  if (!project_name) return { error: 'Project name is required' }
+export async function add_to_watchlist(_project_name, link) {
+  const { clientDetails } = await requireRole(['client-admin', 'reviewer'])
   if (!link || !link.trim()) {
     return { error: 'Link cannot be empty' }
   }
@@ -42,14 +41,12 @@ export async function add_to_watchlist(project_name, link) {
   }
 
   const supabase = await createClient()
-  // const { data: { user } } = await supabase.auth.getUser()
-  // if (!user) return { error: 'Not authenticated' }
 
   // Check if already exists for this project
   const { data: existing } = await supabase
     .from('watchlist')
     .select('id')
-    .eq('project_name', project_name)
+    .eq('project_name', clientDetails.project_name)
     .eq('link', trimmedLink)
     .single()
 
@@ -60,7 +57,7 @@ export async function add_to_watchlist(project_name, link) {
   const { error } = await supabase
     .from('watchlist')
     .insert([{
-      project_name,
+      project_name: clientDetails.project_name,
       link: trimmedLink,
       type: 'profile'
     }])
@@ -75,10 +72,21 @@ export async function add_to_watchlist(project_name, link) {
 
 export async function delete_from_watchlist(id) {
   if (!id) return { error: 'Invalid item ID' }
+  const { clientDetails } = await requireRole(['client-admin', 'reviewer'])
 
   const supabase = await createClient()
-  // const { data: { user } } = await supabase.auth.getUser()
-  // if (!user) return { error: 'Not authenticated' }
+  const { data: existing, error: existingError } = await supabase
+    .from('watchlist')
+    .select('project_name')
+    .eq('id', id)
+    .single()
+
+  if (existingError || !existing) {
+    return { error: 'Item not found' }
+  }
+  if (existing.project_name !== clientDetails.project_name) {
+    return { error: 'Unauthorized access to watchlist item' }
+  }
 
   const { error } = await supabase
     .from('watchlist')
