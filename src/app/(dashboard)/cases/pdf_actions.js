@@ -41,7 +41,7 @@ export const getOrCreateReportJob = traceAction('getOrCreateReportJob', async ({
 
   const postIds = posts.map(p => p._id);
   const profileId = profile?.id || profile?._id || '';
-  const hash = generateReportHash(resolvedProject?.project_name || 'unknown', postIds, reportType, profileId);
+  const hash = generateReportHash(resolvedProject?.project_name || 'unknown', postIds, reportType, profileId, pdf);
 
   const client = await clientPromise
   const db = client.db(dbName)
@@ -101,7 +101,8 @@ export const getOrCreateReportJob = traceAction('getOrCreateReportJob', async ({
       project: resolvedProject?.project_name,
       status: 'Waiting in queue...',
       report_type: reportType,
-      client_id: user.id
+      client_id: user.id,
+    last_update: new Date().toISOString()
     })
     .select('id')
     .single();
