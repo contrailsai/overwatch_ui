@@ -41,7 +41,7 @@ export const getOrCreateReportJob = traceAction('getOrCreateReportJob', async ({
 
   const postIds = posts.map(p => p._id);
   const profileId = profile?.id || profile?._id || '';
-  const hash = generateReportHash(resolvedProject?.project_name || 'unknown', postIds, reportType, profileId, pdf);
+  const hash = generateReportHash(resolvedProject?.project_name || 'unknown', postIds, reportType, profileId, 'pdf');
 
   const client = await clientPromise
   const db = client.db(dbName)

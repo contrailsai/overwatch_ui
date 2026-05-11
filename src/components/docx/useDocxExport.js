@@ -52,11 +52,13 @@ export function useDocxExport() {
                     let pollInterval;
                     let channel;
                     let consecutiveErrors = 0;
+                    let timeoutId;
 
                     const cleanup = () => {
                         isResolved = true;
                         if (pollInterval) clearInterval(pollInterval);
                         if (channel) supabase.removeChannel(channel);
+                        if (timeoutId) clearTimeout(timeoutId);
                     };
 
                     const checkStatus = async () => {
@@ -137,7 +139,7 @@ export function useDocxExport() {
                                 }
                             });
 
-                        setTimeout(() => {
+                        timeoutId = setTimeout(() => {
                             if (!isResolved) {
                                 cleanup();
                                 reject(new Error('An error occurred while creating the DOCX'));

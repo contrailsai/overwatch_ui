@@ -5,7 +5,9 @@ import { traceAction } from '@/utils/tracing'
 import { createClient } from '@/utils/supabase/server'
 import { generateReportHash } from '@/utils/report-hash'
 import { sendReportSqsMessage } from '@/utils/aws/sqs'
-import { getAuthenticatedUser } from '@/utils/supabase/server'
+import { requireAuthContext } from '@/utils/auth-context'
+import clientPromise from '@/utils/mongodb/client'
+import { ObjectId } from 'mongodb'
 
 /**
  * Signs a storage URL so the client can download the DOCX file.
@@ -14,6 +16,17 @@ export const getReportDownloadUrl = traceAction('getDocxReportDownloadUrl', asyn
   if (!s3Url) return null
 
   try {
+    const { user } = await requireAuthContext()
+    const supabase = await createClient()
+    const { data: ownedReport } = await supabase
+      .from('reports_generation')
+      .select('id')
+      .eq('client_id', user.id)
+      .eq('s3_path', s3Url)
+      .maybeSingle()
+
+    if (!ownedReport) return null
+
     const url = new URL(s3Url)
     let key = url.pathname.substring(1) // remove leading '/'
     return await getSignedDownloadUrl(key, originalName)
@@ -23,24 +36,37 @@ export const getReportDownloadUrl = traceAction('getDocxReportDownloadUrl', asyn
   }
 })
 
-/**
- * Creates (or retrieves a recent cached) DOCX report generation job and dispatches
- * it to the overwatch-pdf-creation-service with reportFormat='docx'.
- *
- * The shape mirrors getOrCreateReportJob from pdf_actions.js so useDocxExport.js
- * can follow the exact same polling / realtime pattern.
- */
-export const getOrCreateDocxReportJob = traceAction('getOrCreateDocxReportJob', async ({ posts, project, profile, reportType }) => {
+export const getOrCreateDocxReportJob = traceAction('getOrCreateDocxReportJob', async ({ posts, profile, reportType }) => {
   const supabase = await createClient();
-  const user = await getAuthenticatedUser();
-  if (!user) throw new Error('Authentication required to generate reports');
+  const { user, project: resolvedProject, dbName } = await requireAuthContext()
 
   const postIds = posts.map(p => p._id);
   const profileId = profile?.id || profile?._id || '';
-  // Append 'docx' to keep the hash space separate from PDF hashes
-  const hash = generateReportHash(project?.project_name || 'unknown', postIds, reportType, profileId, 'docx');
+  const hash = generateReportHash(resolvedProject?.project_name || 'unknown', postIds, reportType, profileId, 'docx');
 
-  // Calculate 2 mins ago (same dedup window as PDF)
+  const client = await clientPromise
+  const db = client.db(dbName)
+  const objectIds = postIds
+    .filter(Boolean)
+    .map((id) => {
+      try {
+        return new ObjectId(id)
+      } catch {
+        return null
+      }
+    })
+    .filter(Boolean)
+  if (objectIds.length === 0) {
+    throw new Error('No valid post IDs for report generation')
+  }
+  const validatedPosts = await db.collection('Posts').find(
+    { _id: { $in: objectIds } },
+    { projection: { _id: 1 } }
+  ).toArray()
+  if (validatedPosts.length !== objectIds.length) {
+    throw new Error('Some requested posts do not belong to your project scope')
+  }
+
   const twoMinsAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString();
 
   // Check for a recent matching DOCX request by THIS client
@@ -71,7 +97,7 @@ export const getOrCreateDocxReportJob = traceAction('getOrCreateDocxReportJob', 
     .from('reports_generation')
     .insert({
       report_hash: hash,
-      project: project?.project_name,
+      project: resolvedProject?.project_name,
       status: 'Waiting in queue...',
       report_type: reportType,
       client_id: user.id,
@@ -86,12 +112,12 @@ export const getOrCreateDocxReportJob = traceAction('getOrCreateDocxReportJob', 
   }
 
   const sqsPayload = {
-    projectId: project?.project_name || 'unknown',
-    postIds,
-    database_name: project?.mongo_db_map,
+    projectId: resolvedProject?.project_name || 'unknown',
+    postIds: objectIds.map((id) => id.toString()),
+    database_name: dbName,
     reportType,
-    reportFormat: 'docx',          // ← tells the service to use the DOCX pipeline
-    project: project,
+    reportFormat: 'docx',
+    project: resolvedProject,
     profile: profile || null,
     jobId: newJob.id
   };
