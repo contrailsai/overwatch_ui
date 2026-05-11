@@ -2,19 +2,20 @@
 
 import { createClient } from '@/utils/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { getAuthContext } from '@/utils/auth-context'
+import { traceAction } from '@/utils/tracing'
 
-export async function getConfiguration() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-
-  if (!user) {
+export const getConfiguration = traceAction('configurations.getConfiguration', async () => {
+  const ctx = await getAuthContext()
+  if (!ctx?.user?.id) {
     return { error: 'Not authenticated' }
   }
 
+  const supabase = await createClient()
   const { data, error } = await supabase
     .from('client_details')
     .select('email, notification_config, permission, organization, alias, created_at')
-    .eq('id', user.id)
+    .eq('id', ctx.user.id)
     .single()
 
   if (error) {
@@ -23,21 +24,19 @@ export async function getConfiguration() {
   }
 
   return { data }
-}
+})
 
-export async function updateConfiguration(prevState, formData) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-
-  if (!user) {
+export const updateConfiguration = traceAction('configurations.updateConfiguration', async (prevState, formData) => {
+  const ctx = await getAuthContext()
+  if (!ctx?.user?.id) {
     return { error: 'Not authenticated' }
   }
 
-  // Fetch current config to preserve other methods' data
+  const supabase = await createClient()
   const { data: currentData } = await supabase
     .from('client_details')
     .select('notification_config')
-    .eq('id', user.id)
+    .eq('id', ctx.user.id)
     .single()
 
   const currentConfig = currentData?.notification_config || { methods: {} }
@@ -45,7 +44,6 @@ export async function updateConfiguration(prevState, formData) {
   let activeMethod = formData.get('active_method')
   const notificationConfigStr = formData.get('notification_config')
 
-  // Initialize methods structure if it doesn't exist
   const methods = currentConfig.methods || {
     email: { receiving_email: '' },
     slack: { slack_token: '', slack_channel: '' },
@@ -85,7 +83,6 @@ export async function updateConfiguration(prevState, formData) {
       return { error: 'Invalid configuration data' }
     }
   } else {
-    // Update the specific method's config based on form data
     if (activeMethod === 'email') {
       const receivingEmail = formData.get('receiving_email')
       if (!receivingEmail || !receivingEmail.includes('@')) {
@@ -117,7 +114,6 @@ export async function updateConfiguration(prevState, formData) {
     return { error: 'Invalid notification method selected' }
   }
 
-  // Construct the new notification config
   const notificationConfig = {
     active_method: activeMethod,
     methods: methods
@@ -126,7 +122,7 @@ export async function updateConfiguration(prevState, formData) {
   const { error } = await supabase
     .from('client_details')
     .update({ notification_config: notificationConfig })
-    .eq('id', user.id)
+    .eq('id', ctx.user.id)
 
   if (error) {
     console.error('Error updating configuration:', error)
@@ -135,4 +131,4 @@ export async function updateConfiguration(prevState, formData) {
 
   revalidatePath('/configurations')
   return { success: true, message: 'Configuration saved successfully' }
-}
+})

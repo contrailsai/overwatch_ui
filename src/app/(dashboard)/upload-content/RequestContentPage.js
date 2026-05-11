@@ -12,11 +12,9 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 import { Loader2, Link as LinkIcon, CheckCircle2, AlertCircle, Send, Clock, History, RefreshCw, FileUp, ListChecks, Trash2 } from 'lucide-react'
 import { format } from 'date-fns'
 import PageHeader from '@/components/PageHeader'
-import { useClient } from '@/context/ClientContext'
 
 
 export default function RequestContentPage() {
-    const { clientDetails } = useClient()
     const [submissionResult, setSubmissionResult] = useState(null)
     const [requestedLinks, setRequestedLinks] = useState([])
 
@@ -101,7 +99,7 @@ export default function RequestContentPage() {
 
         setIsSubmittingBulk(true)
         setSubmissionResult(null)
-        const result = await bulkRequestLinks(parsedLinks, clientDetails.project_name)
+        const result = await bulkRequestLinks(parsedLinks)
 
         setSubmissionResult(result)
         if (result.success) {

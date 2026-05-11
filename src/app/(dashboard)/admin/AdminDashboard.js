@@ -57,7 +57,7 @@ const formatTime = (timeStr) => {
     }
 }
 
-const AdminDashboard = ({ project_name, clients }) => {
+const AdminDashboard = ({ project_name, clients, isClientAdmin = false }) => {
     const router = useRouter()
     const [searchTerm, setSearchTerm] = useState('')
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
@@ -246,13 +246,15 @@ const AdminDashboard = ({ project_name, clients }) => {
                                 onChange={(e) => setSearchTerm(e.target.value)}
                             />
                         </div>
-                        <Button
-                            onClick={() => setIsCreateModalOpen(true)}
-                            className="bg-blue-600 hover:bg-blue-700 text-white w-full sm:w-auto shrink-0 shadow-sm"
-                        >
-                            <Plus className="w-4 h-4 mr-2" />
-                            Add Member
-                        </Button>
+                        {isClientAdmin && (
+                            <Button
+                                onClick={() => setIsCreateModalOpen(true)}
+                                className="bg-blue-600 hover:bg-blue-700 text-white w-full sm:w-auto shrink-0 shadow-sm"
+                            >
+                                <Plus className="w-4 h-4 mr-2" />
+                                Add Member
+                            </Button>
+                        )}
                     </div>
                 </div>
 
@@ -356,18 +358,24 @@ const AdminDashboard = ({ project_name, clients }) => {
                                     </div>
                                 </div>
                                 <div className="p-3 bg-slate-100/50 flex flex-wrap justify-end gap-2 border-t border-slate-100">
-                                    <Button variant="outline" size="sm" className="h-8 text-xs bg-white text-slate-600 hover:text-purple-600" onClick={() => { setClientToEditOrg(client); setNewOrg(client.organization || '') }}>
-                                        <Building2 className="h-3.5 w-3.5 mr-1" /> Org
-                                    </Button>
-                                    <Button variant="outline" size="sm" className="h-8 text-xs bg-white text-slate-600 hover:text-blue-600" onClick={() => { setClientToEditAlias(client); setNewAlias(client.alias || '') }}>
-                                        <Edit2 className="h-3.5 w-3.5 mr-1" /> Alias
-                                    </Button>
-                                    {client.permission !== 'client-admin' ? (
-                                        <Button variant="outline" size="sm" className="h-8 text-xs bg-white text-red-600 hover:bg-red-50" onClick={() => setClientToDelete(client)}>
-                                            <Trash2 className="h-3.5 w-3.5 mr-1" /> Delete
-                                        </Button>
+                                    {isClientAdmin ? (
+                                        <>
+                                            <Button variant="outline" size="sm" className="h-8 text-xs bg-white text-slate-600 hover:text-purple-600" onClick={() => { setClientToEditOrg(client); setNewOrg(client.organization || '') }}>
+                                                <Building2 className="h-3.5 w-3.5 mr-1" /> Org
+                                            </Button>
+                                            <Button variant="outline" size="sm" className="h-8 text-xs bg-white text-slate-600 hover:text-blue-600" onClick={() => { setClientToEditAlias(client); setNewAlias(client.alias || '') }}>
+                                                <Edit2 className="h-3.5 w-3.5 mr-1" /> Alias
+                                            </Button>
+                                            {client.permission !== 'client-admin' ? (
+                                                <Button variant="outline" size="sm" className="h-8 text-xs bg-white text-red-600 hover:bg-red-50" onClick={() => setClientToDelete(client)}>
+                                                    <Trash2 className="h-3.5 w-3.5 mr-1" /> Delete
+                                                </Button>
+                                            ) : (
+                                                <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wider flex items-center px-2">Admin</span>
+                                            )}
+                                        </>
                                     ) : (
-                                        <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wider flex items-center px-2">Admin</span>
+                                        <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wider flex items-center px-2">View only</span>
                                     )}
                                 </div>
                             </Card>
@@ -523,46 +531,52 @@ const AdminDashboard = ({ project_name, clients }) => {
                                         </TableCell>
                                         <TableCell className="py-4 text-right">
                                             <div className="flex items-center justify-end gap-1 opacity-60 group-hover:opacity-100 transition-opacity">
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    className="h-8 w-8 rounded-full text-slate-400 hover:text-purple-600 hover:bg-purple-50 transition-colors"
-                                                    onClick={() => {
-                                                        setClientToEditOrg(client)
-                                                        setNewOrg(client.organization || '')
-                                                    }}
-                                                    title="Edit Organization"
-                                                >
-                                                    <Building2 className="h-4 w-4" />
-                                                </Button>
+                                                {isClientAdmin ? (
+                                                    <>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="h-8 w-8 rounded-full text-slate-400 hover:text-purple-600 hover:bg-purple-50 transition-colors"
+                                                            onClick={() => {
+                                                                setClientToEditOrg(client)
+                                                                setNewOrg(client.organization || '')
+                                                            }}
+                                                            title="Edit Organization"
+                                                        >
+                                                            <Building2 className="h-4 w-4" />
+                                                        </Button>
 
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    className="h-8 w-8 rounded-full text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
-                                                    onClick={() => {
-                                                        setClientToEditAlias(client)
-                                                        setNewAlias(client.alias || '')
-                                                    }}
-                                                    title="Edit Alias"
-                                                >
-                                                    <Edit2 className="h-4 w-4" />
-                                                </Button>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="h-8 w-8 rounded-full text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                                                            onClick={() => {
+                                                                setClientToEditAlias(client)
+                                                                setNewAlias(client.alias || '')
+                                                            }}
+                                                            title="Edit Alias"
+                                                        >
+                                                            <Edit2 className="h-4 w-4" />
+                                                        </Button>
 
-                                                {client.permission !== 'client-admin' ? (
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        className="h-8 w-8 rounded-full text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                                                        onClick={() => setClientToDelete(client)}
-                                                        title="Delete Member"
-                                                    >
-                                                        <Trash2 className="h-4 w-4" />
-                                                    </Button>
+                                                        {client.permission !== 'client-admin' ? (
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                className="h-8 w-8 rounded-full text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                                                                onClick={() => setClientToDelete(client)}
+                                                                title="Delete Member"
+                                                            >
+                                                                <Trash2 className="h-4 w-4" />
+                                                            </Button>
+                                                        ) : (
+                                                            <div className="h-8 flex items-center px-2">
+                                                                <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider">Admin</span>
+                                                            </div>
+                                                        )}
+                                                    </>
                                                 ) : (
-                                                    <div className="h-8 flex items-center px-2">
-                                                        <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider">Admin</span>
-                                                    </div>
+                                                    <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wider pr-2">View only</span>
                                                 )}
                                             </div>
                                         </TableCell>
@@ -587,10 +601,11 @@ const AdminDashboard = ({ project_name, clients }) => {
                 </Card>
             </div>
 
+            {isClientAdmin && (
             <CreateUserModal
                 isOpen={isCreateModalOpen}
                 onClose={() => setIsCreateModalOpen(false)}
-                projectName={project_name}
+                projectDisplayName={project_name}
                 onSuccess={() => {
                     setNotification({
                         title: 'User Created',
@@ -602,6 +617,7 @@ const AdminDashboard = ({ project_name, clients }) => {
                     setTimeout(() => setNotification(null), 5000)
                 }}
             />
+            )}
 
             {/* Toast Notification */}
             {notification && (

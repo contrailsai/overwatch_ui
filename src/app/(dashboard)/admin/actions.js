@@ -1,13 +1,13 @@
 'use server'
 import { revalidatePath } from 'next/cache'
 
-import { traceAction, recordClickMetric } from '@/utils/tracing'
-import { createClient, getAuthenticatedUser } from '@/utils/supabase/server'
+import { traceAction } from '@/utils/tracing'
+import { createClient } from '@/utils/supabase/server'
 import { requireRole } from '@/utils/auth-context'
 
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 
-export const fetch_clients_in_project = traceAction('fetch_clients_in_project', async (_project_name) => {
+export const fetch_clients_in_project = traceAction('fetch_clients_in_project', async () => {
     const { clientDetails } = await requireRole(['client-admin', 'reviewer'])
     const supabase = await createClient()
 
@@ -149,8 +149,17 @@ export const fetch_clients_in_project = traceAction('fetch_clients_in_project', 
     return enrichedClients
 })
 
-export const create_new_client = traceAction('create_new_client', async (email, password, projectName) => {
-    await requireRole(['client-admin'])
+export const create_new_client = traceAction('create_new_client', async (email, password) => {
+    const { clientDetails } = await requireRole(['client-admin'])
+    const projectName = clientDetails.project_name
+    if (!projectName) {
+        return { error: 'Your account is not assigned to a project.' }
+    }
+
+    const trimmedEmail = typeof email === 'string' ? email.trim() : ''
+    if (!trimmedEmail || !password || String(password).length < 6) {
+        return { error: 'Valid email and password (at least 6 characters) are required.' }
+    }
 
     // 1. Initialize the Admin Client using the Service Role Key
     // This bypasses RLS and prevents overwriting the Admin's current session cookies.
@@ -167,8 +176,8 @@ export const create_new_client = traceAction('create_new_client', async (email, 
 
     // 2. Create the user using the Admin API 
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
-        email: email.trim(), // Added .trim() to prevent the invalid email error!
-        password: password,
+        email: trimmedEmail,
+        password,
         email_confirm: true,
     })
 
@@ -182,7 +191,7 @@ export const create_new_client = traceAction('create_new_client', async (email, 
         .from('client_details')
         .upsert({
             id: authData.user.id,
-            email: email.trim(),
+            email: trimmedEmail,
             project_name: projectName,
             permission: 'client'
         }, {
@@ -201,7 +210,15 @@ export const create_new_client = traceAction('create_new_client', async (email, 
 })
 
 export const delete_client = traceAction('delete_client', async (userId) => {
-    await requireRole(['client-admin'])
+    const { user, clientDetails } = await requireRole(['client-admin'])
+    const tenantProject = clientDetails.project_name
+    if (!userId || !tenantProject) {
+        return { error: 'Invalid request.' }
+    }
+    if (userId === user.id) {
+        return { error: 'You cannot delete your own account.' }
+    }
+
     const supabaseAdmin = createSupabaseClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL,
         process.env.SUPABASE_SERVICE_ROLE_KEY,
@@ -213,22 +230,25 @@ export const delete_client = traceAction('delete_client', async (userId) => {
         }
     )
 
-    // Explicitly delete from client_details
-    const { error: dbError } = await supabaseAdmin
+    const { data: deletedRows, error: dbError } = await supabaseAdmin
         .from('client_details')
         .delete()
         .eq('id', userId)
-
-    // Delete user from auth.users
-    const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(userId)
-    if (authError) {
-        console.error("Auth Delete Error:", authError)
-        return { error: authError.message }
-    }
+        .eq('project_name', tenantProject)
+        .select('id')
 
     if (dbError) {
-        console.error("DB Delete Error:", dbError)
+        console.error('DB Delete Error:', dbError)
         return { error: dbError.message }
+    }
+    if (!deletedRows?.length) {
+        return { error: 'User not found or you do not have permission to remove this account.' }
+    }
+
+    const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(userId)
+    if (authError) {
+        console.error('Auth Delete Error:', authError)
+        return { error: authError.message }
     }
 
     revalidatePath('/admin')
@@ -236,7 +256,12 @@ export const delete_client = traceAction('delete_client', async (userId) => {
 })
 
 export const update_client_alias = traceAction('update_client_alias', async (userId, alias) => {
-    await requireRole(['client-admin'])
+    const { clientDetails } = await requireRole(['client-admin'])
+    const tenantProject = clientDetails.project_name
+    if (!userId || !tenantProject) {
+        return { error: 'Invalid request.' }
+    }
+
     const supabaseAdmin = createSupabaseClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL,
         process.env.SUPABASE_SERVICE_ROLE_KEY,
@@ -248,14 +273,19 @@ export const update_client_alias = traceAction('update_client_alias', async (use
         }
     )
 
-    const { error: dbError } = await supabaseAdmin
+    const { data: updatedRows, error: dbError } = await supabaseAdmin
         .from('client_details')
-        .update({ alias: alias })
+        .update({ alias })
         .eq('id', userId)
+        .eq('project_name', tenantProject)
+        .select('id')
 
     if (dbError) {
-        console.error("DB Update Alias Error:", dbError)
+        console.error('DB Update Alias Error:', dbError)
         return { error: dbError.message }
+    }
+    if (!updatedRows?.length) {
+        return { error: 'User not found or you do not have permission to update this account.' }
     }
 
     revalidatePath('/admin')
@@ -263,7 +293,12 @@ export const update_client_alias = traceAction('update_client_alias', async (use
 })
 
 export const update_client_organization = traceAction('update_client_organization', async (userId, organization) => {
-    await requireRole(['client-admin'])
+    const { clientDetails } = await requireRole(['client-admin'])
+    const tenantProject = clientDetails.project_name
+    if (!userId || !tenantProject) {
+        return { error: 'Invalid request.' }
+    }
+
     const supabaseAdmin = createSupabaseClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL,
         process.env.SUPABASE_SERVICE_ROLE_KEY,
@@ -275,14 +310,19 @@ export const update_client_organization = traceAction('update_client_organizatio
         }
     )
 
-    const { error: dbError } = await supabaseAdmin
+    const { data: updatedRows, error: dbError } = await supabaseAdmin
         .from('client_details')
-        .update({ organization: organization })
+        .update({ organization })
         .eq('id', userId)
+        .eq('project_name', tenantProject)
+        .select('id')
 
     if (dbError) {
-        console.error("DB Update Organization Error:", dbError)
+        console.error('DB Update Organization Error:', dbError)
         return { error: dbError.message }
+    }
+    if (!updatedRows?.length) {
+        return { error: 'User not found or you do not have permission to update this account.' }
     }
 
     revalidatePath('/admin')

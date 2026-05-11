@@ -15,7 +15,7 @@ import { Label } from "@/components/ui/label"
 import { create_new_client } from './actions'
 import { Loader2, CheckCircle2 } from 'lucide-react'
 
-export function CreateUserModal({ isOpen, onClose, projectName, onSuccess }) {
+export function CreateUserModal({ isOpen, onClose, projectDisplayName, onSuccess }) {
     const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')
     const [loading, setLoading] = useState(false)
@@ -28,7 +28,7 @@ export function CreateUserModal({ isOpen, onClose, projectName, onSuccess }) {
         setError(null)
 
         try {
-            const result = await create_new_client(email, password, projectName)
+            const result = await create_new_client(email, password)
             if (result.error) {
                 setError(result.error)
             } else {
@@ -63,7 +63,7 @@ export function CreateUserModal({ isOpen, onClose, projectName, onSuccess }) {
                         </div>
                         <h3 className="text-2xl font-bold text-slate-900 text-center tracking-tight">User Created!</h3>
                         <p className="text-sm text-slate-500 text-center mt-3 max-w-[280px] leading-relaxed">
-                            <span className="font-medium text-slate-700">{email}</span> has been successfully added to {projectName}.
+                            <span className="font-medium text-slate-700">{email}</span> has been successfully added to {projectDisplayName}.
                         </p>
                     </div>
                 ) : (
@@ -72,7 +72,7 @@ export function CreateUserModal({ isOpen, onClose, projectName, onSuccess }) {
                             <DialogHeader>
                                 <DialogTitle className="text-xl font-bold text-slate-900">Create New User</DialogTitle>
                                 <DialogDescription className="text-slate-500 mt-1.5 leading-relaxed">
-                                    Add a new team member to <span className="font-medium text-slate-700">{projectName}</span>. They will be able to log in with the provided credentials.
+                                    Add a new team member to <span className="font-medium text-slate-700">{projectDisplayName}</span>. They will be able to log in with the provided credentials.
                                 </DialogDescription>
                             </DialogHeader>
                         </div>

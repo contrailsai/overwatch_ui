@@ -1,40 +1,34 @@
 'use server'
 
-import { createClient, getAuthenticatedUser } from '@/utils/supabase/server'
+import { createClient } from '@/utils/supabase/server'
 import { traceAction } from '@/utils/tracing'
 import { posthogServer } from '@/utils/posthog'
 import { getSignedDownloadUrl } from '@/utils/aws/s3'
 import { requireAuthContext } from '@/utils/auth-context'
 
-export const getReports = traceAction('getReports', async (_project, filters = {}) => {
+export const getReports = traceAction('getReports', async (filters = {}) => {
+  const { user, clientDetails } = await requireAuthContext()
   const supabase = await createClient()
-  
-  const { user, project } = await requireAuthContext()
-  const projectName = project?.project_name
+  const projectName = clientDetails.project_name
 
-  if (user) {
-    posthogServer.capture({
-      distinctId: user.email || user.id,
-      event: 'server_action_called',
-      properties: {
-        action_name: 'getReports',
-        project: projectName,
-        filters
-      }
-    })
-  }
+  posthogServer.capture({
+    distinctId: clientDetails.email || user.id,
+    event: 'server_action_called',
+    properties: {
+      action_name: 'getReports',
+      project: projectName,
+      filters,
+    },
+  })
 
   const { from, to, report_type } = filters
-  
+
   let query = supabase
     .from('reports_generation')
     .select('*')
     .eq('client_id', user.id)
+    .eq('project', projectName)
     .order('last_update', { ascending: false })
-
-  if (projectName) {
-    query = query.eq('project', projectName)
-  }
 
   if (report_type && report_type !== 'all') {
     query = query.eq('report_type', report_type)
@@ -69,12 +63,13 @@ export const getReportDownloadUrlAction = traceAction('getReportDownloadUrlActio
   if (!s3Url) return null
 
   try {
-    const { user } = await requireAuthContext()
+    const { user, clientDetails } = await requireAuthContext()
     const supabase = await createClient()
     const { data: ownedReport } = await supabase
       .from('reports_generation')
       .select('id')
       .eq('client_id', user.id)
+      .eq('project', clientDetails.project_name)
       .eq('s3_path', s3Url)
       .maybeSingle()
     if (!ownedReport) return null

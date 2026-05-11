@@ -73,7 +73,7 @@ export default async function AdminPage({ searchParams }) {
   // }
 
   // fetch all other clients metadata and stats
-  const clients = await fetch_clients_in_project(clientDetails.project_name);
+  const clients = await fetch_clients_in_project()
 
 
   return (
@@ -85,6 +85,7 @@ export default async function AdminPage({ searchParams }) {
         <AdminDashboard
           project_name={project.project_name}
           clients={clients}
+          isClientAdmin={clientDetails.permission === 'client-admin'}
         />
       </div>
     </main>
