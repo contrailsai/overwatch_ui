@@ -1,6 +1,7 @@
 import TakedownsList from './TakedownsList'
 import { getTakedowns, checkReviewerPermission, getTakedownMetrics } from './actions'
 import { getClientandProjectDetails } from '@/app/(dashboard)/actions'
+import { runInSpan } from '@/utils/tracing'
 import PageHeader from "@/components/PageHeader"
 export const metadata = {
   title: 'overwatch - Takedowns',
@@ -8,7 +9,7 @@ export const metadata = {
 };
 
 export default async function TakedownsPage({ searchParams }) {
-  const resolvedParams = await searchParams
+  const [resolvedParams, clientData] = await Promise.all([searchParams, getClientandProjectDetails()])
 
   const filters = {
     status: resolvedParams.status || 'all',
@@ -25,12 +26,21 @@ export default async function TakedownsPage({ searchParams }) {
     pageSize: resolvedParams.pageSize || '25'
   }
 
-  const [{ takedowns, totalCount }, metrics, { project }, isReviewer] = await Promise.all([
-    getTakedowns(filters),
-    getTakedownMetrics(filters),
-    getClientandProjectDetails(),
-    checkReviewerPermission()
+  const [{ takedowns, totalCount }, metrics, isReviewer] = await Promise.all([
+    runInSpan(
+      'rsc.takedowns_page.takedowns_query',
+      async () => getTakedowns(filters),
+      { 'app.span_type': 'rsc_fetch', 'app.surface': 'rsc', 'app.fetch_target': 'takedowns_list' }
+    ),
+    runInSpan(
+      'rsc.takedowns_page.metrics_query',
+      async () => getTakedownMetrics(filters),
+      { 'app.span_type': 'rsc_fetch', 'app.surface': 'rsc', 'app.fetch_target': 'takedown_metrics' }
+    ),
+    checkReviewerPermission(),
   ])
+
+  const { project } = clientData || {}
 
   return (
     <div className="absolute inset-0 flex flex-col overflow-hidden">

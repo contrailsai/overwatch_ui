@@ -1,13 +1,14 @@
 'use server'
 
-import { createClient, getAuthenticatedUser } from '@/utils/supabase/server'
 import { updateClientMetaStats } from '@/utils/supabase/metrics'
 import clientPromise from '@/utils/mongodb/client'
 import { ObjectId } from 'mongodb'
 import { traceAction } from '@/utils/tracing'
 import { getSignedImageUrl } from '@/utils/aws/s3'
+import { requireAuthContext } from '@/utils/auth-context'
 
-export const normalized_S3_post = traceAction('normalized_S3_post', async (post) => {
+/** Exported for review-profiles; not a traced server action (avoids per-row trace overhead). */
+export async function normalized_S3_post(post) {
   // Find S3 URL to sign
   let s3UrlToSign = null;
   if (post.post_content?.media_urls && post.post_content.media_urls.length > 0) {
@@ -72,16 +73,14 @@ export const normalized_S3_post = traceAction('normalized_S3_post', async (post)
     }
   };
 
-  return normalized;
-})
+  return normalized
+}
 
-export const getProfiles = traceAction('getProfiles', async (project, page = 1, limit = 20, filters = {}, sort = { field: null, direction: 'desc' }) => {
+export const getProfiles = traceAction('getProfiles', async (page = 1, limit = 20, filters = {}, sort = { field: null, direction: 'desc' }) => {
     try {
-        if (!project?.mongo_db_map) {
-            return { profiles: [], totalCount: 0, page: 1, totalPages: 0 }
-        }
+        const { dbName } = await requireAuthContext()
         const client = await clientPromise
-        const db = client.db(project.mongo_db_map)
+        const db = client.db(dbName)
         const collection = db.collection('Profiles')
 
         const skip = (page - 1) * limit
@@ -188,13 +187,12 @@ export const getProfiles = traceAction('getProfiles', async (project, page = 1, 
             sortPipeline = { 'review_details.reviewed_at': -1, _id: 1 }
         }
 
-        const profiles = await collection.aggregate([
+        const basePipeline = [
             { $match: query },
             { $project: { text_embedding: 0, image_embedding: 0 } },
             {
                 $addFields: {
                     cases_count: { $size: { $ifNull: ['$posts', []] } },
-                    // Map risk band → numeric rank so categorical sort gives high → mid → low → safe (desc).
                     risk_rank: {
                         $switch: {
                             branches: [
@@ -206,7 +204,6 @@ export const getProfiles = traceAction('getProfiles', async (project, page = 1, 
                             default: 0,
                         },
                     },
-                    // Coerce last_relevant_publish_date to a Date so sorting works regardless of stored type.
                     sort_last_active: {
                         $convert: {
                             input: '$last_relevant_publish_date',
@@ -217,12 +214,26 @@ export const getProfiles = traceAction('getProfiles', async (project, page = 1, 
                     },
                 },
             },
-            { $sort: sortPipeline },
-            { $skip: skip },
-            { $limit: limit },
-        ]).toArray()
+        ]
 
-        const totalCount = await collection.countDocuments(query)
+        const facetResult = await collection
+            .aggregate([
+                ...basePipeline,
+                {
+                    $facet: {
+                        data: [
+                            { $sort: sortPipeline },
+                            { $skip: skip },
+                            { $limit: limit },
+                        ],
+                        total: [{ $count: 'total' }],
+                    },
+                },
+            ])
+            .toArray()
+
+        const profiles = facetResult?.[0]?.data || []
+        const totalCount = facetResult?.[0]?.total?.[0]?.total || 0
 
         const serialized = await Promise.all(profiles.map(async (p) => {
             let signedProfilePic = null
@@ -261,12 +272,13 @@ export const getProfiles = traceAction('getProfiles', async (project, page = 1, 
     }
 })
 
-export const getProfileCases = traceAction('getProfileCases', async (project, postIds = []) => {
+export const getProfileCases = traceAction('getProfileCases', async (postIds = []) => {
     try {
-        if (!project?.mongo_db_map || postIds.length === 0) return []
+        if (postIds.length === 0) return []
+        const { dbName } = await requireAuthContext()
 
         const client = await clientPromise
-        const db = client.db(project.mongo_db_map)
+        const db = client.db(dbName)
         const collection = db.collection('Posts')
 
         const objectIds = postIds.map(id => {
@@ -279,25 +291,23 @@ export const getProfileCases = traceAction('getProfileCases', async (project, po
             .find({ _id: { $in: objectIds } }, { projection: { text_embedding: 0, image_embedding: 0 } })
             .toArray()
 
-        return Promise.all(
-            posts.map(
-                async (p) => await normalized_S3_post(p)
-            )
-        )
+        return Promise.all(posts.map((p) => normalized_S3_post(p)))
     } catch (e) {
         console.error('getProfileCases MongoDB Error:', e)
         return []
     }
 })
 
-export const updateProfileClientStatus = traceAction('updateProfileClientStatus', async (project, profileId, status, client_email) => {
+export const updateProfileClientStatus = traceAction('updateProfileClientStatus', async (profileId, status) => {
     try {
-        if (!project?.mongo_db_map || !profileId) {
-            return { success: false, error: "Project configuration not found" }
+        if (!profileId) {
+            return { success: false, error: 'Missing profile ID' }
         }
 
+        const { dbName, clientDetails } = await requireAuthContext()
+
         const client = await clientPromise
-        const db = client.db(project.mongo_db_map)
+        const db = client.db(dbName)
         const collection = db.collection('Profiles')
 
         const result = await collection.updateOne(
@@ -306,11 +316,10 @@ export const updateProfileClientStatus = traceAction('updateProfileClientStatus'
         )
 
         if (result.matchedCount > 0) {
-            // 2. CLIENT's META STATS UPDATE
             await updateClientMetaStats(
-                project.project_name,
-                client_email,
-                "reviewed_profile"
+                clientDetails.project_name,
+                clientDetails.email,
+                'reviewed_profile'
             )
             return { success: true }
         } else {
@@ -322,26 +331,21 @@ export const updateProfileClientStatus = traceAction('updateProfileClientStatus'
     }
 })
 
-export const addProfileClientNote = traceAction('addProfileClientNote', async (project, profileId, noteText) => {
+export const addProfileClientNote = traceAction('addProfileClientNote', async (profileId, noteText) => {
     try {
-        const supabase = await createClient()
-        const { data: { user } } = await supabase.auth.getUser()
+        const { dbName, clientDetails } = await requireAuthContext()
 
-        if (!user) {
-            return { success: false, error: "Unauthorized" }
-        }
-
-        if (!project?.mongo_db_map || !profileId) {
-            return { success: false, error: "Project configuration not found" }
+        if (!profileId) {
+            return { success: false, error: 'Missing profile ID' }
         }
 
         const client = await clientPromise
-        const db = client.db(project.mongo_db_map)
+        const db = client.db(dbName)
         const collection = db.collection('Profiles')
 
         const newNote = {
             text: noteText,
-            email: user.email,
+            email: clientDetails.email,
             created_at: new Date().toISOString()
         }
 

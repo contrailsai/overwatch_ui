@@ -111,7 +111,7 @@ const SafeDate = ({ date }) => {
     return <span>{formatted || '...'}</span>
 }
 
-export default function ProfileDetailPanel({ profile, project, isOpen, onClose, onUpdate, clientDetails, onNext, onPrev, hasNext, hasPrev }) {
+export default function ProfileDetailPanel({ profile, project, isOpen, onClose, onUpdate, onNext, onPrev, hasNext, hasPrev }) {
     const [cases, setCases] = useState(null)
     const [loading, setLoading] = useState(false)
     const [localNotes, setLocalNotes] = useState([])
@@ -137,17 +137,17 @@ export default function ProfileDetailPanel({ profile, project, isOpen, onClose, 
         }
         setShowProcessed("")
         setLoading(true)
-        getProfileCases(project, profile.posts)
+        getProfileCases(profile.posts)
             .then(result => { if (!cancelled) setCases(result) })
             .catch(() => { if (!cancelled) setCases([]) })
             .finally(() => { if (!cancelled) setLoading(false) })
         return () => { cancelled = true }
-    }, [isOpen, profile?._id, project])
+    }, [isOpen, profile?._id])
 
     const handleAddNote = async () => {
         if (!noteText.trim() || isSubmittingNote) return
         setIsSubmittingNote(true)
-        const res = await addProfileClientNote(project, profile._id, noteText)
+        const res = await addProfileClientNote(profile._id, noteText)
         if (res.success) {
             const updatedNotes = [...localNotes, res.note]
             setLocalNotes(updatedNotes)
@@ -160,7 +160,7 @@ export default function ProfileDetailPanel({ profile, project, isOpen, onClose, 
     const handleUpdateStatus = async (newStatus) => {
         if (isUpdatingStatus) return
         setIsUpdatingStatus(true)
-        const res = await updateProfileClientStatus(project, profile._id, newStatus, clientDetails.email)
+        const res = await updateProfileClientStatus(profile._id, newStatus)
         if (res.success) {
             setClientStatus(newStatus)
             setCases(prev => prev?.map(c => ({ ...c, client_status: newStatus })))

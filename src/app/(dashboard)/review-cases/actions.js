@@ -1,8 +1,6 @@
 'use server'
 
-import { createClient } from '@/utils/supabase/server'
 import clientPromise from '@/utils/mongodb/client'
-import { redirect } from 'next/navigation'
 import { ObjectId } from 'mongodb'
 import { getSignedImageUrl, uploadFileToS3, deleteFileFromS3 } from '@/utils/aws/s3'
 import { sendContentModerationSqsMessage } from '@/utils/aws/sqs'
@@ -11,7 +9,8 @@ import { sendEmail } from '@/utils/email'
 import { traceAction } from '@/utils/tracing'
 import { requireRole } from '@/utils/auth-context'
 
-export const normalized_S3_post = traceAction('normalized_S3_post', async (post) => {
+/** Local helper — not a traced server action (avoids per-row trace overhead on list loads). */
+async function normalizeReviewS3Post(post) {
   if (!post) return null;
 
   // Find S3 URL to sign from post_content.media_urls
@@ -80,7 +79,7 @@ export const normalized_S3_post = traceAction('normalized_S3_post', async (post)
   normalized.user.profile_pic_url = post.profile?.profile_pic_url || post.profile?.profile_url || post.profile?.profile_pic || '';
 
   return JSON.parse(JSON.stringify(normalized));
-})
+}
 
 export const getPosts = traceAction('getPosts_review', async (_project_mongo_db_map, page = 1, limit = 20, filters = {}) => {
   try {
@@ -170,73 +169,56 @@ export const getPosts = traceAction('getPosts_review', async (_project_mongo_db_
 
     const hasDateFilters = Object.keys(dateFilterStage).length > 0;
 
-    const posts = await collection.aggregate([
-      { $match: matchStage },
-      { $project: { text_embedding: 0, image_embedding: 0 } },
-      {
-        $addFields: {
-          sort_posted_at: {
-            $convert: {
-              input: { $ifNull: ["$engagement.posted_at", "$metadata.posted_date"] },
-              to: "date",
-              onError: {
-                $toDate: { $toLong: { $ifNull: ["$engagement.posted_at", "$metadata.posted_date"] } }
-              },
-              onNull: null
-            }
-          },
-          sort_sourced_at: {
-            $convert: {
-              input: "$metadata.created_at",
-              to: "date",
-              onError: { $toDate: { $toLong: "$metadata.created_at" } },
-              onNull: null
-            }
-          }
-        }
-      },
-      ...(hasDateFilters ? [{ $match: dateFilterStage }] : []),
-      { $sort: { sort_sourced_at: -1 } },
-      { $skip: skip },
-      { $limit: limit }
-    ]).toArray();
-
-    // Serialize and Sign URLs
-    const processedPosts = await Promise.all(posts.map(normalized_S3_post));
-
-    let totalCount;
-    if (hasDateFilters) {
-      const countResult = await collection.aggregate([
-        { $match: matchStage },
-        {
-          $addFields: {
-            sort_posted_at: {
-              $convert: {
-                input: { $ifNull: ["$engagement.posted_at", "$metadata.posted_date"] },
-                to: "date",
-                onError: {
-                  $toDate: { $toLong: { $ifNull: ["$engagement.posted_at", "$metadata.posted_date"] } }
-                },
-                onNull: null
-              }
+    const addFieldsStage = {
+      $addFields: {
+        sort_posted_at: {
+          $convert: {
+            input: { $ifNull: ['$engagement.posted_at', '$metadata.posted_date'] },
+            to: 'date',
+            onError: {
+              $toDate: { $toLong: { $ifNull: ['$engagement.posted_at', '$metadata.posted_date'] } }
             },
-            sort_sourced_at: {
-              $convert: {
-                input: "$metadata.created_at",
-                to: "date",
-                onError: { $toDate: { $toLong: "$metadata.created_at" } },
-                onNull: null
-              }
-            }
+            onNull: null
           }
         },
-        { $match: dateFilterStage },
-        { $count: "total" }
-      ]).toArray();
-      totalCount = countResult[0]?.total || 0;
-    } else {
-      totalCount = await collection.countDocuments(query)
+        sort_sourced_at: {
+          $convert: {
+            input: '$metadata.created_at',
+            to: 'date',
+            onError: { $toDate: { $toLong: '$metadata.created_at' } },
+            onNull: null
+          }
+        }
+      }
     }
+
+    const basePipeline = [
+      { $match: matchStage },
+      { $project: { text_embedding: 0, image_embedding: 0 } },
+      addFieldsStage,
+      ...(hasDateFilters ? [{ $match: dateFilterStage }] : [])
+    ]
+
+    const facetResult = await collection
+      .aggregate([
+        ...basePipeline,
+        {
+          $facet: {
+            data: [
+              { $sort: { sort_sourced_at: -1 } },
+              { $skip: skip },
+              { $limit: limit }
+            ],
+            total: [{ $count: 'total' }]
+          }
+        }
+      ])
+      .toArray()
+
+    const posts = facetResult?.[0]?.data || []
+    const totalCount = facetResult?.[0]?.total?.[0]?.total || 0
+
+    const processedPosts = await Promise.all(posts.map((p) => normalizeReviewS3Post(p)))
 
     return { posts: processedPosts, totalCount, page, totalPages: Math.ceil(totalCount / limit) }
   } catch (e) {
@@ -259,7 +241,7 @@ export const getPostById = traceAction('getPostById', async (_project, case_id) 
     )
 
     // Serialize and Sign URLs - use new unified schema
-    const processedPost = await normalized_S3_post(post);
+    const processedPost = await normalizeReviewS3Post(post);
 
     return processedPost
   } catch (e) {
@@ -648,8 +630,9 @@ export const submitCaseReview = traceAction('submitCaseReview', async (_project,
 
 export const getCaseMetadata = traceAction('getCaseMetadata', async (postId) => {
   try {
+    const { dbName } = await requireRole(['reviewer'])
     const client = await clientPromise
-    const db = client.db(process.env.MONGO_DB_NAME)
+    const db = client.db(dbName)
     const collection = db.collection('Posts')
 
     const post = await collection.findOne(

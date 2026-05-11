@@ -10,7 +10,7 @@ export const metadata = {
 }
 
 export default async function ProfilesPage({ searchParams }) {
-    const { user, clientDetails, project } = await getClientandProjectDetails()
+    const { project } = await getClientandProjectDetails()
 
     const resolvedParams = await searchParams
     const currentPage = resolvedParams.page ? parseInt(resolvedParams.page, 10) : 1
@@ -34,7 +34,7 @@ export default async function ProfilesPage({ searchParams }) {
         direction: resolvedParams.sortDirection || 'desc',
     }
 
-    const profiles = await getProfiles(project, currentPage, itemsPerPage, filters, sort)
+    const profiles = await getProfiles(currentPage, itemsPerPage, filters, sort)
 
     return (
         <main className="flex-1 flex flex-col h-full overflow-hidden bg-slate-50">
@@ -56,7 +56,6 @@ export default async function ProfilesPage({ searchParams }) {
                     initialSort={sort}
                     currentPage={currentPage}
                     itemsPerPage={itemsPerPage}
-                    clientDetails={clientDetails}
                 />
             </div>
         </main>

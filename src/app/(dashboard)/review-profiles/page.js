@@ -1,6 +1,7 @@
 import { ProfilesList } from './ProfilesList'
 import { getProfiles } from './actions'
 import { getClientandProjectDetails } from '@/app/(dashboard)/actions'
+import { runInSpan } from '@/utils/tracing'
 import PageHeader from '@/components/PageHeader'
 
 export const metadata = {
@@ -9,7 +10,10 @@ export const metadata = {
 }
 
 export default async function ProfilesPage({ searchParams }) {
-    const { user, clientDetails, project } = await getClientandProjectDetails()
+    const [{ clientDetails, project }, resolvedParams] = await Promise.all([
+        getClientandProjectDetails(),
+        searchParams,
+    ])
 
     if (!clientDetails || !clientDetails.project_name || clientDetails.permission !== "reviewer") {
         return (
@@ -21,8 +25,6 @@ export default async function ProfilesPage({ searchParams }) {
             </main>
         )
     }
-
-    const resolvedParams = await searchParams
     const currentPage = resolvedParams.page ? parseInt(resolvedParams.page, 10) : 1
     const itemsPerPage = 20
 
@@ -34,7 +36,11 @@ export default async function ProfilesPage({ searchParams }) {
         publish_date_to: resolvedParams.publish_date_to || null,
     }
 
-    const profiles = await getProfiles(project, currentPage, itemsPerPage, filters)
+    const profiles = await runInSpan(
+        'rsc.review_profiles_page.profiles_query',
+        async () => getProfiles(project, currentPage, itemsPerPage, filters),
+        { 'app.span_type': 'rsc_fetch', 'app.surface': 'rsc', 'app.fetch_target': 'review_profiles' }
+    )
 
     return (
         <main className="flex-1 flex flex-col h-full overflow-hidden bg-slate-50">

@@ -1,4 +1,3 @@
-import { getClientandProjectDetails } from '@/app/(dashboard)/actions'
 import { getReports } from './actions'
 import { ReportsList } from './ReportsList'
 import PageHeader from '@/components/PageHeader'
@@ -9,7 +8,6 @@ export const metadata = {
 }
 
 export default async function ReportsPage({ searchParams }) {
-  const { project } = await getClientandProjectDetails()
   const resolvedParams = await searchParams
 
   const filters = {
@@ -18,7 +16,7 @@ export default async function ReportsPage({ searchParams }) {
     report_type: resolvedParams.report_type || 'all'
   }
 
-  const reports = await getReports(project, filters)
+  const reports = await getReports(filters)
 
   return (
     <main className="flex-1 flex flex-col h-full overflow-y-auto bg-slate-50/50">

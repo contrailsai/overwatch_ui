@@ -1,37 +1,17 @@
 'use server'
 
-import { createClient, getAuthenticatedUser } from '@/utils/supabase/server'
 import clientPromise from '@/utils/mongodb/client'
 import { ObjectId } from 'mongodb'
 import { getSignedImageUrl, uploadFileToS3, getSignedDownloadUrl, getSignedViewUrl } from '@/utils/aws/s3'
 import { revalidatePath } from 'next/cache'
-import { traceAction, recordClickMetric } from '@/utils/tracing'
+import { traceAction, recordClickMetric, runInSpan } from '@/utils/tracing'
+import { getAuthContext } from '@/utils/auth-context'
 import { omitSafeThreatTypes } from '@/lib/utils'
 import crypto from 'crypto'
 
 export const trackClientClick = traceAction('trackClientClick', async (buttonName, attributes = {}) => {
   recordClickMetric(buttonName, attributes);
 })
-
-async function getProjectDetails() {
-  const user = await getAuthenticatedUser()
-
-  if (!user) return null
-
-  const supabase = await createClient()
-  const { data: clientDetails } = await supabase
-    .from('client_details')
-    .select('project_name, project:project_name(mongo_db_map)')
-    .eq('id', user.id)
-    .single()
-
-  if (!clientDetails?.project_name) return null
-
-  return {
-    projectName: clientDetails.project_name,
-    dbName: clientDetails.project?.mongo_db_map
-  }
-}
 
 /** List payload: never surface `safe` as a displayed threat type. */
 function getListThreatTypes(reviewDetails) {
@@ -47,25 +27,8 @@ function getListThreatTypes(reviewDetails) {
  * Check if the current user has reviewer permissions
  */
 export const checkReviewerPermission = traceAction('checkReviewerPermission', async () => {
-  const supabase = await createClient()
-
-  const { data: { user } } = await supabase.auth.getUser()
-
-  if (!user) {
-    return false
-  }
-
-  const { data: clientDetails, error } = await supabase
-    .from('client_details')
-    .select('permission')
-    .eq('id', user.id)
-    .maybeSingle()
-
-  if (error || !clientDetails) {
-    return false
-  }
-
-  return clientDetails.permission === 'reviewer'
+  const ctx = await getAuthContext()
+  return ctx?.clientDetails?.permission === 'reviewer'
 })
 
 const buildTakedownMatchQuery = (filters = {}) => {
@@ -151,9 +114,9 @@ const buildTakedownMatchQuery = (filters = {}) => {
 /**
  * Fetch active takedowns with filters, server-side pagination, and enriched MongoDB data
  */
-export const getTakedowns = traceAction('getTakedowns', async (filters = {}) => {
-  const projectDetails = await getProjectDetails()
-  if (!projectDetails?.projectName) return { takedowns: [], totalCount: 0 }
+export const getTakedowns = traceAction('getTakedowns_list', async (filters = {}) => {
+  const ctx = await getAuthContext()
+  if (!ctx?.clientDetails?.project_name || !ctx.dbName) return { takedowns: [], totalCount: 0 }
 
   const page = parseInt(filters.page) || 1
   const pageSize = parseInt(filters.pageSize) || 25
@@ -161,7 +124,7 @@ export const getTakedowns = traceAction('getTakedowns', async (filters = {}) => 
 
   try {
     const client = await clientPromise
-    const db = client.db(projectDetails.dbName)
+    const db = client.db(ctx.dbName)
     const collection = db.collection('Posts')
 
     const matchStage = buildTakedownMatchQuery(filters)
@@ -235,11 +198,17 @@ export const getTakedowns = traceAction('getTakedowns', async (filters = {}) => 
       }
     ];
 
-    const result = await collection.aggregate(aggregationPipeline).toArray()
+    const result = await runInSpan(
+      'takedowns.getTakedowns.mongo_data_and_count',
+      async () => collection.aggregate(aggregationPipeline).toArray(),
+      { 'app.span_type': 'mongo_query', 'app.query_kind': 'data_and_count' }
+    )
     const posts = result[0].data || []
     const totalCount = result[0].metadata[0]?.totalCount || 0
 
-    const enrichedTakedowns = await Promise.all(posts.map(async (post) => {
+    const enrichedTakedowns = await runInSpan(
+      'takedowns.getTakedowns.s3_signing',
+      async () => Promise.all(posts.map(async (post) => {
       let thumbnail = null
       let caption = post.post_content?.caption || post.caption || ''
       let username = post.user?.username || post.profile?.username || 'Unknown'
@@ -293,7 +262,9 @@ export const getTakedowns = traceAction('getTakedowns', async (filters = {}) => 
           username
         }
       }
-    }))
+    })),
+      { 'app.span_type': 's3_signing' }
+    )
 
     return {
       takedowns: enrichedTakedowns,
@@ -305,13 +276,13 @@ export const getTakedowns = traceAction('getTakedowns', async (filters = {}) => 
   }
 })
 
-export const getTakedownMetrics = traceAction('getTakedownMetrics', async (filters = {}) => {
-  const projectDetails = await getProjectDetails()
-  if (!projectDetails?.projectName) return { inProgress: 0, successful: 0, reAppeal: 0, failed: 0 }
+export const getTakedownMetrics = traceAction('getTakedownMetrics_page', async (filters = {}) => {
+  const ctx = await getAuthContext()
+  if (!ctx?.clientDetails?.project_name || !ctx.dbName) return { inProgress: 0, successful: 0, reAppeal: 0, failed: 0 }
 
   try {
     const client = await clientPromise
-    const db = client.db(projectDetails.dbName)
+    const db = client.db(ctx.dbName)
     const collection = db.collection('Posts')
     
     // Create filters clone without status
@@ -355,9 +326,10 @@ export const getTakedownMetrics = traceAction('getTakedownMetrics', async (filte
     const hasDateFilters = Object.keys(dateFilterStage).length > 0;
 
     const pipeline = [
-      { $match: matchStage }
+      { $match: matchStage },
+      { $project: { text_embedding: 0, image_embedding: 0 } },
     ]
-    
+
     if (hasDateFilters) {
       pipeline.push({
         $addFields: {
@@ -388,7 +360,11 @@ export const getTakedownMetrics = traceAction('getTakedownMetrics', async (filte
       }
     })
 
-    const metrics = await collection.aggregate(pipeline).toArray()
+    const metrics = await runInSpan(
+      'takedowns.getTakedownMetrics.mongo_aggregate',
+      async () => collection.aggregate(pipeline).toArray(),
+      { 'app.span_type': 'mongo_query' }
+    )
 
     return metrics.reduce((acc, curr) => {
       const status = curr._id ? curr._id.toLowerCase() : 'unknown'
@@ -409,17 +385,16 @@ export const getTakedownMetrics = traceAction('getTakedownMetrics', async (filte
  * Upload a document for a takedown case
  */
 export const uploadTakedownDocument = traceAction('uploadTakedownDocument', async (takedownId, formData) => {
-  const isReviewer = await checkReviewerPermission()
-  if (!isReviewer) return { success: false, error: 'Unauthorized: Reviewer access required' }
-
-  const projectDetails = await getProjectDetails()
-  if (!projectDetails?.projectName) return { success: false, error: 'Unauthorized' }
+  const ctx = await getAuthContext()
+  if (!ctx?.clientDetails?.project_name || !ctx.dbName) return { success: false, error: 'Unauthorized' }
+  if (ctx.clientDetails.permission !== 'reviewer') {
+    return { success: false, error: 'Unauthorized: Reviewer access required' }
+  }
 
   const file = formData.get('file')
   if (!file) return { success: false, error: 'No file provided' }
 
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = ctx.user
   if (!user) return { success: false, error: 'Unauthorized' }
 
   try {
@@ -434,7 +409,7 @@ export const uploadTakedownDocument = traceAction('uploadTakedownDocument', asyn
 
     // 2. Update MongoDB
     const client = await clientPromise
-    const db = client.db(projectDetails.dbName)
+    const db = client.db(ctx.dbName)
     
     const documentRecord = {
       id: crypto.randomUUID(),
@@ -478,16 +453,21 @@ export const uploadTakedownDocument = traceAction('uploadTakedownDocument', asyn
  * Get documents for a takedown case
  */
 export const getTakedownDocuments = traceAction('getTakedownDocuments', async (takedownId) => {
-  const projectDetails = await getProjectDetails()
-  if (!projectDetails?.projectName) return []
+  const ctx = await getAuthContext()
+  if (!ctx?.clientDetails?.project_name || !ctx.dbName) return []
 
   try {
     const client = await clientPromise
-    const db = client.db(projectDetails.dbName)
+    const db = client.db(ctx.dbName)
     
-    const post = await db.collection('Posts').findOne(
-      { _id: new ObjectId(takedownId) },
-      { projection: { text_embedding: 0, image_embedding: 0 } }
+    const post = await runInSpan(
+      'takedowns.getTakedownDocuments.mongo_query',
+      async () =>
+        db.collection('Posts').findOne(
+          { _id: new ObjectId(takedownId) },
+          { projection: { text_embedding: 0, image_embedding: 0 } }
+        ),
+      { 'app.span_type': 'mongo_query' }
     )
     if (!post || !post.takedown_info || !post.takedown_info.documents) {
       return []
@@ -496,10 +476,15 @@ export const getTakedownDocuments = traceAction('getTakedownDocuments', async (t
     const sortedDocs = post.takedown_info.documents.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
     
     // Generate signed view URLs for all documents so frontend can preview them
-    const docsWithUrls = await Promise.all(sortedDocs.map(async (doc) => {
-      const viewUrl = await getSignedViewUrl(doc.s3_key)
-      return { ...doc, view_url: viewUrl }
-    }))
+    const docsWithUrls = await runInSpan(
+      'takedowns.getTakedownDocuments.s3_signing',
+      async () =>
+        Promise.all(sortedDocs.map(async (doc) => {
+          const viewUrl = await getSignedViewUrl(doc.s3_key)
+          return { ...doc, view_url: viewUrl }
+        })),
+      { 'app.span_type': 's3_signing' }
+    )
     
     return docsWithUrls
   } catch (error) {
@@ -512,12 +497,12 @@ export const getTakedownDocuments = traceAction('getTakedownDocuments', async (t
  * Generate download URL for a document
  */
 export const getDocumentDownloadUrl = traceAction('getDocumentDownloadUrl', async (documentId) => {
-  const projectDetails = await getProjectDetails()
-  if (!projectDetails?.projectName) return null
+  const ctx = await getAuthContext()
+  if (!ctx?.clientDetails?.project_name || !ctx.dbName) return null
 
   try {
     const client = await clientPromise
-    const db = client.db(projectDetails.dbName)
+    const db = client.db(ctx.dbName)
     
     const post = await db.collection('Posts').findOne(
       { 'takedown_info.documents.id': documentId },
@@ -539,16 +524,21 @@ export const getDocumentDownloadUrl = traceAction('getDocumentDownloadUrl', asyn
  * Fetch specific takedown details including Mongo post data and history
  */
 export const getTakedownDetails = traceAction('getTakedownDetails', async (id) => {
-  const projectDetails = await getProjectDetails()
-  if (!projectDetails?.projectName) return null
+  const ctx = await getAuthContext()
+  if (!ctx?.clientDetails?.project_name || !ctx.dbName) return null
 
   try {
     const client = await clientPromise
-    const db = client.db(projectDetails.dbName)
+    const db = client.db(ctx.dbName)
 
-    let post = await db.collection('Posts').findOne(
-      { _id: new ObjectId(id) },
-      { projection: { text_embedding: 0, image_embedding: 0 } }
+    let post = await runInSpan(
+      'takedowns.getTakedownDetails.mongo_query',
+      async () =>
+        db.collection('Posts').findOne(
+          { _id: new ObjectId(id) },
+          { projection: { text_embedding: 0, image_embedding: 0 } }
+        ),
+      { 'app.span_type': 'mongo_query' }
     )
 
     if (!post) return null
@@ -567,7 +557,11 @@ export const getTakedownDetails = traceAction('getTakedownDetails', async (id) =
     } else if (post.s3_url) {
       s3UrlToSign = post.s3_url
     }
-    post.signedImageUrl = s3UrlToSign ? await getSignedImageUrl(s3UrlToSign) : null
+    post.signedImageUrl = await runInSpan(
+      'takedowns.getTakedownDetails.s3_signing',
+      async () => (s3UrlToSign ? getSignedImageUrl(s3UrlToSign) : null),
+      { 'app.span_type': 's3_signing' }
+    )
 
     // NORMALIZE USER DATA HERE for consistency across UI
     post.user = {
@@ -627,19 +621,17 @@ export const getTakedownDetails = traceAction('getTakedownDetails', async (id) =
  * Update takedown status/details and log history
  */
 export const updateTakedown = traceAction('updateTakedown', async (id, updates, message) => {
-  // Permission Check
-  const isReviewer = await checkReviewerPermission()
-  if (!isReviewer) return { success: false, error: 'Unauthorized: Reviewer access required' }
+  const ctx = await getAuthContext()
+  if (!ctx?.clientDetails?.project_name || !ctx.dbName) return { success: false, error: 'Unauthorized' }
+  if (ctx.clientDetails.permission !== 'reviewer') {
+    return { success: false, error: 'Unauthorized: Reviewer access required' }
+  }
 
-  const projectDetails = await getProjectDetails()
-  if (!projectDetails?.projectName) return { success: false, error: 'Unauthorized' }
-
-  const supabase = await createClient()
-  const user = (await supabase.auth.getUser()).data.user
+  const user = ctx.user
 
   try {
     const client = await clientPromise
-    const db = client.db(projectDetails.dbName)
+    const db = client.db(ctx.dbName)
     
     const updateFields = {}
     if (updates.status !== undefined) {
@@ -680,19 +672,17 @@ export const updateTakedown = traceAction('updateTakedown', async (id, updates, 
  * Add a note to the takedown
  */
 export const addTakedownNote = traceAction('addTakedownNote', async (id, noteContent) => {
-  // Permission Check
-  const isReviewer = await checkReviewerPermission()
-  if (!isReviewer) return { success: false, error: 'Unauthorized: Reviewer access required' }
+  const ctx = await getAuthContext()
+  if (!ctx?.clientDetails?.project_name || !ctx.dbName) return { success: false, error: 'Unauthorized' }
+  if (ctx.clientDetails.permission !== 'reviewer') {
+    return { success: false, error: 'Unauthorized: Reviewer access required' }
+  }
 
-  const projectDetails = await getProjectDetails()
-  if (!projectDetails?.projectName) return { success: false, error: 'Unauthorized' }
-
-  const supabase = await createClient()
-  const user = (await supabase.auth.getUser()).data.user
+  const user = ctx.user
 
   try {
     const client = await clientPromise
-    const db = client.db(projectDetails.dbName)
+    const db = client.db(ctx.dbName)
 
     const formattedNote = `[${new Date().toLocaleString()}] ${noteContent}`
     
@@ -728,12 +718,12 @@ export const addTakedownNote = traceAction('addTakedownNote', async (id, noteCon
  * Fetch all takedown IDs matching the current filters for bulk actions
  */
 export const getAllTakedownIds = traceAction('getAllTakedownIds', async (filters = {}) => {
-  const projectDetails = await getProjectDetails()
-  if (!projectDetails?.projectName) return []
+  const ctx = await getAuthContext()
+  if (!ctx?.clientDetails?.project_name || !ctx.dbName) return []
 
   try {
     const client = await clientPromise
-    const db = client.db(projectDetails.dbName)
+    const db = client.db(ctx.dbName)
     const collection = db.collection('Posts')
 
     const matchStage = buildTakedownMatchQuery(filters)
@@ -761,6 +751,7 @@ export const getAllTakedownIds = traceAction('getAllTakedownIds', async (filters
 
     const pipeline = [
       { $match: matchStage },
+      { $project: { text_embedding: 0, image_embedding: 0 } },
       {
         $addFields: {
           sort_original_date: { $toDate: { $ifNull: ["$engagement.posted_at", "$metadata.posted_date"] } },
@@ -772,7 +763,11 @@ export const getAllTakedownIds = traceAction('getAllTakedownIds', async (filters
       { $project: { _id: 1 } }
     ]
 
-    const result = await collection.aggregate(pipeline).toArray()
+    const result = await runInSpan(
+      'takedowns.getAllTakedownIds.mongo_aggregate',
+      async () => collection.aggregate(pipeline).toArray(),
+      { 'app.span_type': 'mongo_query' }
+    )
     return result.map(doc => doc._id.toString())
   } catch (error) {
     console.error('Error fetching all takedown IDs:', error)

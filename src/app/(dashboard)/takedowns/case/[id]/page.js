@@ -24,14 +24,13 @@ export async function generateMetadata({ params }) {
 }
 
 export default async function TakedownCasePage({ params }) {
-  const resolvedParams = await params;
-  const { id } = resolvedParams;
+  const [resolvedParams, clientData] = await Promise.all([params, getClientandProjectDetails()])
+  const { id } = resolvedParams
 
-  const [details, docs, permission, clientData] = await Promise.all([
+  const [details, docs, permission] = await Promise.all([
     getTakedownDetails(id),
     getTakedownDocuments(id),
     checkReviewerPermission(),
-    getClientandProjectDetails()
   ])
 
   return (

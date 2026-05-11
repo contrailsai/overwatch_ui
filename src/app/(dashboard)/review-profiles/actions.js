@@ -2,12 +2,12 @@
 
 import clientPromise from '@/utils/mongodb/client'
 import { ObjectId } from 'mongodb'
-import { traceAction } from '@/utils/tracing'
+import { traceAction, runInSpan } from '@/utils/tracing'
 import { getSignedImageUrl } from '@/utils/aws/s3'
 import { normalized_S3_post } from '@/app/(dashboard)/profiles/actions'
 import { requireRole } from '@/utils/auth-context'
 
-export const getProfiles = traceAction('getProfiles', async (_project, page = 1, limit = 20, filters = {}) => {
+export const getProfiles = traceAction('getProfiles_review', async (_project, page = 1, limit = 20, filters = {}) => {
     try {
         const { dbName } = await requireRole(['reviewer'])
         const client = await clientPromise
@@ -38,7 +38,7 @@ export const getProfiles = traceAction('getProfiles', async (_project, page = 1,
 
         matchQuery.metadata = { $exists: true }
 
-        let pipeline = []
+        const pipeline = []
 
         if (filters.searchText) {
             pipeline.push({
@@ -60,6 +60,7 @@ export const getProfiles = traceAction('getProfiles', async (_project, page = 1,
         }
 
         pipeline.push({ $match: matchQuery })
+        pipeline.push({ $project: { text_embedding: 0, image_embedding: 0 } })
 
         pipeline.push({
             $addFields: {
@@ -78,50 +79,47 @@ export const getProfiles = traceAction('getProfiles', async (_project, page = 1,
             pipeline.push({ $sort: { posts_count: -1, _id: 1 } })
         }
 
-        const countPipeline = [...pipeline]
+        pipeline.push({
+            $facet: {
+                data: [{ $skip: skip }, { $limit: limit }],
+                total: [{ $count: "total" }],
+            },
+        })
 
-        pipeline.push({ $skip: skip })
-        pipeline.push({ $limit: limit })
+        const facetResult = await runInSpan(
+            'review_profiles.getProfiles.mongo_data_and_count',
+            async () => collection.aggregate(pipeline).toArray(),
+            { 'app.span_type': 'mongo_query', 'app.query_kind': 'data_and_count' }
+        )
 
-        const profiles = await collection.aggregate(pipeline).toArray()
+        const profiles = facetResult?.[0]?.data || []
+        const totalCount = facetResult?.[0]?.total?.[0]?.total || 0
 
-        let totalCount = 0
-        if (filters.searchText) {
-            const countResult = await collection.aggregate([
-                ...countPipeline,
-                { $count: "total" }
-            ]).toArray()
-            totalCount = countResult[0]?.total || 0
-        } else {
-            totalCount = await collection.countDocuments(matchQuery)
-        }
+        const serialized = await runInSpan(
+            'review_profiles.getProfiles.s3_signing',
+            async () => Promise.all(profiles.map(async (p) => {
+                let signedProfilePic = null
+                if (p.metadata?.s3_url) {
+                    signedProfilePic = await getSignedImageUrl(p.metadata.s3_url)
+                }
 
-        const serialized = await Promise.all(profiles.map(async (p) => {
-            let signedProfilePic = null
-            if (p.metadata?.s3_url) {
-                signedProfilePic = await getSignedImageUrl(p.metadata.s3_url)
-            }
-            // else if (p.metadata?.profile_pic) {
-            //     // If it's already a URL, we might want to sign it if it's an S3 URL
-            //     // But usually we prefer s3_url if available
-            //     signedProfilePic = p.metadata.profile_pic
-            // }
-
-            return {
-                _id: p._id.toString(),
-                display_name: p.metadata?.display_name || p.display_name || p.username || 'Unknown',
-                username: p.metadata?.username || p.username || null,
-                platform: p.platform || 'unknown',
-                is_verified: p.metadata?.is_verified ?? p.is_verified ?? false,
-                posts: (p.posts || []).map(id => id.toString()),
-                profile_url: p.metadata?.profile_url || p.profile_url || null,
-                review_details: p.review_details || {},
-                metadata: p.metadata ? {
-                    ...p.metadata,
-                    profile_pic: signedProfilePic
-                } : null
-            }
-        }))
+                return {
+                    _id: p._id.toString(),
+                    display_name: p.metadata?.display_name || p.display_name || p.username || 'Unknown',
+                    username: p.metadata?.username || p.username || null,
+                    platform: p.platform || 'unknown',
+                    is_verified: p.metadata?.is_verified ?? p.is_verified ?? false,
+                    posts: (p.posts || []).map(id => id.toString()),
+                    profile_url: p.metadata?.profile_url || p.profile_url || null,
+                    review_details: p.review_details || {},
+                    metadata: p.metadata ? {
+                        ...p.metadata,
+                        profile_pic: signedProfilePic
+                    } : null
+                }
+            })),
+            { 'app.span_type': 's3_signing' }
+        )
 
         return {
             profiles: serialized,
@@ -135,7 +133,7 @@ export const getProfiles = traceAction('getProfiles', async (_project, page = 1,
     }
 })
 
-export const getProfileCases = traceAction('getProfileCases', async (_project, postIds = []) => {
+export const getProfileCases = traceAction('getProfileCases_review', async (_project, postIds = []) => {
     try {
         if (postIds.length === 0) return []
         const { dbName } = await requireRole(['reviewer'])
@@ -150,11 +148,20 @@ export const getProfileCases = traceAction('getProfileCases', async (_project, p
 
         if (objectIds.length === 0) return []
 
-        const posts = await collection
-            .find({ _id: { $in: objectIds } }, { projection: { text_embedding: 0, image_embedding: 0 } })
-            .toArray()
+        const posts = await runInSpan(
+            'review_profiles.getProfileCases.mongo_query',
+            async () =>
+                collection
+                    .find({ _id: { $in: objectIds } }, { projection: { text_embedding: 0, image_embedding: 0 } })
+                    .toArray(),
+            { 'app.span_type': 'mongo_query' }
+        )
 
-        return Promise.all(posts.map(normalized_S3_post))
+        return runInSpan(
+            'review_profiles.getProfileCases.s3_signing',
+            async () => Promise.all(posts.map((p) => normalized_S3_post(p))),
+            { 'app.span_type': 's3_signing' }
+        )
     } catch (e) {
         console.error('getProfileCases MongoDB Error:', e)
         return []

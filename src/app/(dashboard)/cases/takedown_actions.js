@@ -1,37 +1,14 @@
 'use server'
 
-import { createClient, getAuthenticatedUser } from '@/utils/supabase/server'
 import clientPromise from '@/utils/mongodb/client'
 import { getSignedImageUrl } from '@/utils/aws/s3'
 import { sendSlackNotification } from '@/utils/slack'
-import { updateClientReviewedMetrics, updateDailyMetrics, updateClientMetaStats } from '@/utils/supabase/metrics'
+import { updateClientReviewedMetrics, updateClientMetaStats } from '@/utils/supabase/metrics'
 import { ObjectId } from 'mongodb'
 // import { getClientandProjectDetails } from '@/app/(dashboard)/actions'
 import { traceAction } from '@/utils/tracing'
+import { requireAuthContext } from '@/utils/auth-context'
 // import { metadata } from '../layout'
-
-
-
-export const getProjectDetails = traceAction('getProjectDetails_cases', async () => {
-    const user = await getAuthenticatedUser()
-
-    if (!user) return null
-
-    const supabase = await createClient()
-    const { data: clientDetails } = await supabase
-        .from('client_details')
-        .select('email, project_name, project:project_name(mongo_db_map, project_details)')
-        .eq('id', user.id)
-        .single()
-
-    if (!clientDetails?.project_name) return null
-
-    return {
-        client_email: clientDetails.email,
-        projectName: clientDetails.project_name,
-        dbName: clientDetails.project?.mongo_db_map
-    }
-})
 
 //--------- TAKEDOWNS RELATED SETUP
 //
@@ -39,18 +16,14 @@ export const getProjectDetails = traceAction('getProjectDetails_cases', async ()
 //
 export const initiateTakedown = traceAction('initiateTakedown', async (caseIds, _client_email) => {
     try {
+        const { dbName, clientDetails } = await requireAuthContext()
         const ids = Array.isArray(caseIds) ? caseIds : [caseIds]
         if (ids.length === 0) {
             return { success: false, error: "No cases provided" }
         }
 
-        const projectDetails = await getProjectDetails()
-        if (!projectDetails?.dbName) {
-            return { success: false, error: "Project configuration not found" }
-        }
-
         const client = await clientPromise
-        const db = client.db(projectDetails.dbName)
+        const db = client.db(dbName)
         const collection = db.collection('Posts')
 
         const objectIds = ids.map(id => new ObjectId(id))
@@ -75,7 +48,7 @@ export const initiateTakedown = traceAction('initiateTakedown', async (caseIds, 
         const nowIso = new Date().toISOString()
         const status = "Takedown"
         const changesSummary = isBulk ? "client initiated bulk case takedown" : "client initiated case takedown"
-        const eventDetails = `Takedown initiated by client ${projectDetails.client_email}${isBulk ? ' (bulk)' : ''}`
+        const eventDetails = `Takedown initiated by client ${clientDetails.email}${isBulk ? ' (bulk)' : ''}`
 
         const bulkOps = posts.map(post => ({
             updateOne: {
@@ -83,7 +56,7 @@ export const initiateTakedown = traceAction('initiateTakedown', async (caseIds, 
                 update: {
                     $set: {
                         client_status: status,
-                        content_reviewed_by: projectDetails.client_email,
+                        content_reviewed_by: clientDetails.email,
                         "metadata.updated_at": nowIso,
                         takedown_info: {
                             in_takedown_process: true,
@@ -103,7 +76,7 @@ export const initiateTakedown = traceAction('initiateTakedown', async (caseIds, 
                     $push: {
                         "metadata.update_history": {
                             updated_at: new Date(),
-                            updated_by: projectDetails.client_email,
+                            updated_by: clientDetails.email,
                             changes_summary: changesSummary
                         }
                     }
@@ -127,14 +100,14 @@ export const initiateTakedown = traceAction('initiateTakedown', async (caseIds, 
             } : null
 
             await updateClientReviewedMetrics(
-                { project_name: projectDetails.projectName },
+                { project_name: clientDetails.project_name },
                 currentReviewData,
                 previousReviewData
             ).catch(err => console.error('Failed to update client metrics:', err))
 
             await updateClientMetaStats(
-                projectDetails.projectName,
-                projectDetails.client_email,
+                clientDetails.project_name,
+                clientDetails.email,
                 "reviewed_case"
             ).catch(err => console.error('Failed to update meta stats:', err))
         }))
@@ -155,13 +128,10 @@ export const initiateTakedown = traceAction('initiateTakedown', async (caseIds, 
 
 export const getPriorityTakedowns = traceAction('getPriorityTakedowns', async () => {
     try {
-        const projectDetails = await getProjectDetails()
-        if (!projectDetails?.dbName) {
-            return []
-        }
+        const { dbName } = await requireAuthContext()
 
         const client = await clientPromise
-        const db = client.db(projectDetails.dbName)
+        const db = client.db(dbName)
         const collection = db.collection('Posts')
 
         // Fetch all requested takedowns (priority)
@@ -220,12 +190,9 @@ export const getPriorityTakedowns = traceAction('getPriorityTakedowns', async ()
 
 export const getRaisedCount = traceAction('getRaisedCount', async () => {
     try {
-        const projectDetails = await getProjectDetails()
-        if (!projectDetails?.dbName) {
-            return 0
-        }
+        const { dbName } = await requireAuthContext()
         const client = await clientPromise
-        const db = client.db(projectDetails.dbName)
+        const db = client.db(dbName)
         const collection = db.collection('Posts')
         return await collection.countDocuments({ 'takedown_info.takedown_status': 'raised' })
     } catch (e) {

@@ -55,7 +55,7 @@ const getStatusConfig = (status) => {
     return { label: status, color: 'text-slate-600 bg-slate-50 border-slate-200', icon: Info }
 }
 
-export function ProfilesList({ profiles, project, initialFilters, initialSort = { field: null, direction: 'desc' }, currentPage, itemsPerPage, clientDetails }) {
+export function ProfilesList({ profiles, project, initialFilters, initialSort = { field: null, direction: 'desc' }, currentPage, itemsPerPage }) {
     const router = useRouter()
     const pathname = usePathname()
     const searchParams = useSearchParams()
@@ -880,7 +880,6 @@ export function ProfilesList({ profiles, project, initialFilters, initialSort = 
                 isOpen={!!selectedProfile}
                 onClose={() => setSelectedProfile(null)}
                 onUpdate={handleProfileUpdate}
-                clientDetails={clientDetails}
                 onNext={() => navigateProfile('next')}
                 onPrev={() => navigateProfile('prev')}
                 hasNext={selectedIndex >= 0 && selectedIndex < localProfiles.length - 1}
