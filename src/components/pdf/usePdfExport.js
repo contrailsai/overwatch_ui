@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { sendGAEvent } from '@next/third-parties/google';
 import { getReportDownloadUrl, getOrCreateReportJob } from '@/app/(dashboard)/cases/pdf_actions';
 import { createClient } from '@/utils/supabase/client';
+import { isReportSuccess } from '@/utils/reports/report-generation-status';
+import { waitForReportGenerationRow } from '@/utils/reports/waitForReportGenerationRow';
 
 export function usePdfExport() {
     const [loading, setLoading] = useState(false);
@@ -24,128 +26,29 @@ export function usePdfExport() {
             setLoading(true);
             setStatusText('Initializing...');
 
-            // 1. Get or create the report job in the database
             const jobData = await getOrCreateReportJob({ posts, project, profile, reportType });
             
             if (!jobData || !jobData.jobId) {
                 throw new Error('Failed to initiate PDF generation');
             }
 
-            let s3Url = jobData.s3Path;
+            let s3Url =
+                jobData.s3Path && isReportSuccess(jobData.s3Path, jobData.status)
+                    ? jobData.s3Path
+                    : null;
 
-            // 2. If not already complete, listen for realtime updates
             if (!s3Url) {
-                setStatusText(jobData.status || 'Waiting in queue...');
-                
+                setStatusText(jobData.status || '[0%] Queued');
                 const supabase = createClient();
-                s3Url = await new Promise((resolve, reject) => {
-                    let retryCount = 0;
-                    let isResolved = false;
-                    let pollInterval;
-                    let channel;
-                    let consecutiveErrors = 0;
-                    
-                    const cleanup = () => {
-                        isResolved = true;
-                        if (pollInterval) clearInterval(pollInterval);
-                        if (channel) supabase.removeChannel(channel);
-                    };
-
-                    const checkStatus = async () => {
-                        if (isResolved) return;
-                        try {
-                            const { data, error } = await supabase
-                                .from('reports_generation')
-                                .select('status, s3_path')
-                                .eq('id', jobData.jobId)
-                                .single();
-                            
-                            if (error) throw error;
-                            
-                            // Reset consecutive errors on a successful fetch
-                            consecutiveErrors = 0;
-                            
-                            if (data) {
-                                if (data.status) {
-                                    setStatusText(data.status);
-                                }
-                                if (data.s3_path) {
-                                    cleanup();
-                                    setStatusText('100% - Complete!');
-                                    resolve(data.s3_path);
-                                } else if (data.status && data.status.toLowerCase().includes('failed')) {
-                                    cleanup();
-                                    reject(new Error(data.status || 'An error occurred while creating the PDF'));
-                                }
-                            }
-                        } catch (err) {
-                            console.error('Error polling status:', err);
-                            consecutiveErrors++;
-                            
-                            if (consecutiveErrors >= 5) {
-                                cleanup();
-                                reject(new Error('Network connection lost or server unreachable. Please check your connection and try again.'));
-                            } else if (consecutiveErrors >= 2) {
-                                setStatusText(`Network issue, retrying... (${consecutiveErrors}/5)`);
-                            }
-                        }
-                    };
-
-                    // Start polling as a fallback every 3 seconds
-                    pollInterval = setInterval(checkStatus, 3000);
-                    
-                    const subscribeToChannel = () => {
-                        if (isResolved) return;
-                        channel = supabase.channel(`report-${jobData.jobId}-${retryCount}`)
-                            .on(
-                                'postgres_changes',
-                                {
-                                    event: 'UPDATE',
-                                    schema: 'public',
-                                    table: 'reports_generation',
-                                    filter: `id=eq.${jobData.jobId}`
-                                },
-                                (payload) => {
-                                    if (isResolved) return;
-                                    const newStatus = payload.new.status;
-                                    if (newStatus) {
-                                        setStatusText(newStatus);
-                                    }
-                                    
-                                    if (payload.new.s3_path) {
-                                        cleanup();
-                                        setStatusText('100% - Complete!');
-                                        resolve(payload.new.s3_path);
-                                    } else if (newStatus && newStatus.toLowerCase().includes('failed')) {
-                                        cleanup();
-                                        reject(new Error('An error occurred while creating the PDF'));
-                                    }
-                                }
-                            )
-                            .subscribe((status) => {
-                                if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-                                    console.error(`Subscription failed with status: ${status}, retrying...`);
-                                    if (channel) supabase.removeChannel(channel);
-                                    if (retryCount < 3 && !isResolved) {
-                                        retryCount++;
-                                        setTimeout(subscribeToChannel, 1000 * retryCount);
-                                    } else if (!isResolved) {
-                                        // Just rely on polling if realtime completely fails
-                                        console.warn('Realtime connection failed, falling back completely to polling');
-                                    }
-                                }
-                            });
-                            
-                        // Add a timeout fallback just in case Lambda dies without updating status (wait 5 minutes)
-                        setTimeout(() => {
-                            if (!isResolved) {
-                                cleanup();
-                                reject(new Error('An error occurred while creating the PDF'));
-                            }
-                        }, 5 * 60 * 1000);
-                    };
-
-                    subscribeToChannel();
+                s3Url = await waitForReportGenerationRow(supabase, {
+                    jobId: jobData.jobId,
+                    channelPrefix: 'report',
+                    initialStatus: jobData.status,
+                    initialS3Path: jobData.s3Path,
+                    onStatus: (s) => setStatusText(s),
+                    timeoutMessage: 'An error occurred while creating the PDF',
+                    failureMessageFallback: 'An error occurred while creating the PDF',
+                    telemetry: { reportFormat: 'pdf', reportType },
                 });
             }
 
@@ -156,14 +59,12 @@ export function usePdfExport() {
             setStatusText('Preparing download...');
             const fileName = `${fileNamePrefix}_${new Date().toISOString().split('T')[0]}.pdf`;
             
-            // 3. Sign URL for download
             const signedUrl = await getReportDownloadUrl(s3Url, fileName);
 
             if (!signedUrl) {
                 throw new Error('Failed to sign download URL');
             }
 
-            // 4. Trigger download
             const a = document.createElement('a');
             a.href = signedUrl;
             a.download = fileName;

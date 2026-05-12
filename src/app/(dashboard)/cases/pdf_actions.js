@@ -5,10 +5,12 @@ import { traceAction } from '@/utils/tracing'
 import { createClient } from '@/utils/supabase/server'
 import { generateReportHash } from '@/utils/report-hash'
 import { sendReportSqsMessage } from '@/utils/aws/sqs'
-import { getAuthenticatedUser } from '@/utils/supabase/server'
 import { requireAuthContext } from '@/utils/auth-context'
 import clientPromise from '@/utils/mongodb/client'
 import { ObjectId } from 'mongodb'
+import { resolveExistingReportJob } from '@/utils/reports/report-generation-jobs'
+
+const OBJECT_ID_HEX = /^[a-fA-F0-9]{24}$/
 
 export const getReportDownloadUrl = traceAction('getReportDownloadUrl', async (s3Url, originalName) => {
   if (!s3Url) return null
@@ -40,8 +42,14 @@ export const getOrCreateReportJob = traceAction('getOrCreateReportJob', async ({
   const { user, project: resolvedProject, dbName } = await requireAuthContext()
 
   const postIds = posts.map(p => p._id);
-  const profileId = profile?.id || profile?._id || '';
+  const profileId = String(profile?._id ?? profile?.id ?? '');
   const hash = generateReportHash(resolvedProject?.project_name || 'unknown', postIds, reportType, profileId, 'pdf');
+
+  for (const id of postIds) {
+    if (id != null && String(id) !== '' && !OBJECT_ID_HEX.test(String(id))) {
+      throw new Error('Invalid post ID format (expected 24-character hex)')
+    }
+  }
 
   const client = await clientPromise
   const db = client.db(dbName)
@@ -66,43 +74,27 @@ export const getOrCreateReportJob = traceAction('getOrCreateReportJob', async ({
     throw new Error('Some requested posts do not belong to your project scope')
   }
 
-  // Calculate 2 mins ago
-  const twoMinsAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString();
-
-  // Check for recent matching request by THIS client
-  const { data: existingJob, error: checkError } = await supabase
-    .from('reports_generation')
-    .select('*')
-    .eq('report_hash', hash)
-    .eq('client_id', user.id)
-    .gte('last_update', twoMinsAgo)
-    .order('last_update', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (checkError) {
-    console.error("Error checking existing report job:", checkError);
+  const resolved = await resolveExistingReportJob(supabase, hash, user.id)
+  if (resolved.action === 'reuse_complete' || resolved.action === 'reuse_inflight') {
+    const job = resolved.job
+    return {
+      jobId: job.id,
+      status: job.status,
+      s3Path: job.s3_path
+    }
   }
 
-  // If we found a recent matching job, return it
-  if (existingJob) {
-    return { 
-      jobId: existingJob.id, 
-      status: existingJob.status, 
-      s3Path: existingJob.s3_path 
-    };
-  }
-
-  // Otherwise, create a new job
   const { data: newJob, error: insertError } = await supabase
     .from('reports_generation')
     .insert({
       report_hash: hash,
       project: resolvedProject?.project_name,
-      status: 'Waiting in queue...',
+      status: '[0%] Queued',
       report_type: reportType,
       client_id: user.id,
-    last_update: new Date().toISOString()
+      last_update: new Date().toISOString(),
+      s3_path: null,
+      finish_time: null
     })
     .select('id')
     .single();
@@ -112,12 +104,12 @@ export const getOrCreateReportJob = traceAction('getOrCreateReportJob', async ({
     throw new Error('Failed to create report job record: ' + insertError.message);
   }
 
-  // Send request to SQS
   const sqsPayload = {
     projectId: resolvedProject?.project_name || 'unknown',
     postIds: objectIds.map((id) => id.toString()),
     database_name: dbName,
     reportType: reportType,
+    reportFormat: 'pdf',
     project: resolvedProject,
     profile: profile || null,
     jobId: newJob.id
@@ -127,15 +119,14 @@ export const getOrCreateReportJob = traceAction('getOrCreateReportJob', async ({
     await sendReportSqsMessage(sqsPayload);
   } catch (sqsError) {
     console.error("Failed to send message to SQS:", sqsError);
-    
-    // Optionally update the job status to failed
+
     await supabase
       .from('reports_generation')
       .update({ status: 'Failed: SQS Delivery Error', finish_time: new Date().toISOString() })
       .eq('id', newJob.id);
-      
+
     throw new Error('Failed to start report generation job.');
   }
 
-  return { jobId: newJob.id, status: 'Waiting in queue...', s3Path: null };
+  return { jobId: newJob.id, status: '[0%] Queued', s3Path: null };
 });
