@@ -458,12 +458,15 @@ const TableRow = ({ post, project, compressedImage }) => {
   const projectLabels = projectDetails?.labels || [];
   const resolvedThreats = [];
   const severityMap = { high: 1, medium: 2, low: 3 };
+  const threatTypes = Array.isArray(review.threat_types) ? review.threat_types : [];
 
   // Check if it's a legacy case
   const isLegacyCase = projectLabels.length > 0 && projectLabels.every(l => !l.severity);
 
   projectLabels.forEach(label => {
-    if (review.flags?.[label.name] === true) {
+    const inFlags = review.flags?.[label.name] === true;
+    const inThreatTypes = threatTypes.includes(label.name);
+    if (inFlags || inThreatTypes) {
       resolvedThreats.push({
         label: label.name.replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
         severity: label.severity || 'medium',
@@ -488,6 +491,20 @@ const TableRow = ({ post, project, compressedImage }) => {
     if (review.flags?.[key] === true && !resolvedThreats.some(t => t.label === label)) {
       resolvedThreats.push({
         label,
+        severity: 'medium',
+        order: severityMap['medium']
+      });
+    }
+  });
+
+  // Fallback: include any threat_types that haven't been matched via project labels or legacy flags.
+  // Covers cases where review_details was saved with threat_types but no matching flags entry.
+  threatTypes.forEach(type => {
+    if (!type || type === 'safe') return;
+    const formattedLabel = type.replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    if (!resolvedThreats.some(t => t.label.toLowerCase() === formattedLabel.toLowerCase())) {
+      resolvedThreats.push({
+        label: formattedLabel,
         severity: 'medium',
         order: severityMap['medium']
       });
