@@ -326,7 +326,7 @@ const buildCasesMatchQuery = (filters = {}) => {
 
       if (violationConditions.length > 0) {
         andConditions.push({
-          $and: violationConditions
+          $or: violationConditions
         });
       }
     }

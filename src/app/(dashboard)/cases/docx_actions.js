@@ -5,12 +5,14 @@ import { traceAction } from '@/utils/tracing'
 import { createClient } from '@/utils/supabase/server'
 import { generateReportHash } from '@/utils/report-hash'
 import { sendReportSqsMessage } from '@/utils/aws/sqs'
-import { getAuthenticatedUser } from '@/utils/supabase/server'
 import { requireAuthContext } from '@/utils/auth-context'
 import clientPromise from '@/utils/mongodb/client'
 import { ObjectId } from 'mongodb'
 
-export const getReportDownloadUrl = traceAction('getReportDownloadUrl', async (s3Url, originalName) => {
+/**
+ * Signs a storage URL so the client can download the DOCX file.
+ */
+export const getReportDownloadUrl = traceAction('getDocxReportDownloadUrl', async (s3Url, originalName) => {
   if (!s3Url) return null
 
   try {
@@ -27,21 +29,20 @@ export const getReportDownloadUrl = traceAction('getReportDownloadUrl', async (s
 
     const url = new URL(s3Url)
     let key = url.pathname.substring(1) // remove leading '/'
-
     return await getSignedDownloadUrl(key, originalName)
   } catch (error) {
-    console.error("Error generating signed download URL for report:", error)
+    console.error('Error generating signed download URL for DOCX report:', error)
     return null
   }
 })
 
-export const getOrCreateReportJob = traceAction('getOrCreateReportJob', async ({ posts, project, profile, reportType }) => {
+export const getOrCreateDocxReportJob = traceAction('getOrCreateDocxReportJob', async ({ posts, profile, reportType }) => {
   const supabase = await createClient();
   const { user, project: resolvedProject, dbName } = await requireAuthContext()
 
   const postIds = posts.map(p => p._id);
   const profileId = profile?.id || profile?._id || '';
-  const hash = generateReportHash(resolvedProject?.project_name || 'unknown', postIds, reportType, profileId, 'pdf');
+  const hash = generateReportHash(resolvedProject?.project_name || 'unknown', postIds, reportType, profileId, 'docx');
 
   const client = await clientPromise
   const db = client.db(dbName)
@@ -66,10 +67,9 @@ export const getOrCreateReportJob = traceAction('getOrCreateReportJob', async ({
     throw new Error('Some requested posts do not belong to your project scope')
   }
 
-  // Calculate 2 mins ago
   const twoMinsAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString();
 
-  // Check for recent matching request by THIS client
+  // Check for a recent matching DOCX request by THIS client
   const { data: existingJob, error: checkError } = await supabase
     .from('reports_generation')
     .select('*')
@@ -81,19 +81,18 @@ export const getOrCreateReportJob = traceAction('getOrCreateReportJob', async ({
     .maybeSingle();
 
   if (checkError) {
-    console.error("Error checking existing report job:", checkError);
+    console.error('Error checking existing DOCX report job:', checkError);
   }
 
-  // If we found a recent matching job, return it
   if (existingJob) {
-    return { 
-      jobId: existingJob.id, 
-      status: existingJob.status, 
-      s3Path: existingJob.s3_path 
+    return {
+      jobId: existingJob.id,
+      status: existingJob.status,
+      s3Path: existingJob.s3_path
     };
   }
 
-  // Otherwise, create a new job
+  // Create a new job row
   const { data: newJob, error: insertError } = await supabase
     .from('reports_generation')
     .insert({
@@ -102,40 +101,39 @@ export const getOrCreateReportJob = traceAction('getOrCreateReportJob', async ({
       status: 'Waiting in queue...',
       report_type: reportType,
       client_id: user.id,
-    last_update: new Date().toISOString()
+      last_update: new Date().toISOString()
     })
     .select('id')
     .single();
 
   if (insertError) {
-    console.error("Failed to create report job record:", insertError);
-    throw new Error('Failed to create report job record: ' + insertError.message);
+    console.error('Failed to create DOCX report job record:', insertError);
+    throw new Error('Failed to create DOCX report job record: ' + insertError.message);
   }
 
-  // Send request to SQS
   const sqsPayload = {
     projectId: resolvedProject?.project_name || 'unknown',
     postIds: objectIds.map((id) => id.toString()),
     database_name: dbName,
-    reportType: reportType,
+    reportType,
+    reportFormat: 'docx',
     project: resolvedProject,
     profile: profile || null,
     jobId: newJob.id
   };
 
   try {
-    await sendReportSqsMessage(sqsPayload);
-  } catch (sqsError) {
-    console.error("Failed to send message to SQS:", sqsError);
-    
-    // Optionally update the job status to failed
+      await sendReportSqsMessage(sqsPayload);
+  } catch (dispatchError) {
+    console.error('Failed to dispatch DOCX report job:', dispatchError);
+
     await supabase
       .from('reports_generation')
-      .update({ status: 'Failed: SQS Delivery Error', finish_time: new Date().toISOString() })
+      .update({ status: "Failed: SQS Delivery Error", finish_time: new Date().toISOString() })
       .eq('id', newJob.id);
-      
-    throw new Error('Failed to start report generation job.');
+
+    throw new Error('Failed to start DOCX report generation job.');
   }
 
   return { jobId: newJob.id, status: 'Waiting in queue...', s3Path: null };
-});
+})
