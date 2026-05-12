@@ -10,8 +10,12 @@ import ProjectSection from './ProjectSection'
 import ResearchSection from './ResearchSection'
 
 
+const PROJECT_DETAILS_EDITOR_ROLES = ['client-admin', 'reviewer']
+
 export default function ConfigurationsPage({ clientDetails, project }) {
-    const isEditable = project?.editable
+    const projectAllowsEdits = project?.editable === true
+    const isEditable =
+        projectAllowsEdits && PROJECT_DETAILS_EDITOR_ROLES.includes(clientDetails?.permission)
 
     return (
         <main className="flex-1 flex flex-col h-full w-full overflow-hidden bg-slate-50">
