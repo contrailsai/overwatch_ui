@@ -17,6 +17,15 @@ export async function updateLabels(prevState, formData) {
     return { error: 'Project not found' }
   }
 
+  const allowedRoles = ['client-admin', 'reviewer']
+  if (!allowedRoles.includes(ctx.clientDetails.permission)) {
+    return { error: 'Insufficient permissions to update project settings' }
+  }
+
+  if (projectData.editable !== true) {
+    return { error: 'Project details are locked for this project' }
+  }
+
   let projectDetails = {}
   try {
     projectDetails = typeof projectData?.project_details === 'string'

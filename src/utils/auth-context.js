@@ -30,7 +30,7 @@ export const getAuthContext = cache(async () => {
       span.setAttribute('app.user_id', user.id)
       return supabase
         .from('client_details')
-        .select('id, email, permission, project_name, project:project_name(project_name, mongo_db_map, project_details)')
+        .select('id, email, permission, project_name, project:project_name(project_name, mongo_db_map, project_details, editable)')
         .eq('id', user.id)
         .single()
     },
