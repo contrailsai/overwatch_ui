@@ -9,12 +9,14 @@ import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card'
-import { Loader2, Link as LinkIcon, CheckCircle2, AlertCircle, Send, Clock, History, RefreshCw, FileUp, ListChecks, Trash2 } from 'lucide-react'
+import { Loader2, Link as LinkIcon, CheckCircle2, AlertCircle, Send, Clock, History, RefreshCw, FileUp, ListChecks, Trash2, GitPullRequestCreateArrow, FileText } from 'lucide-react'
 import { format } from 'date-fns'
 import PageHeader from '@/components/PageHeader'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import ManualPostForm from './ManualPostForm'
 
 
-export default function RequestContentPage() {
+function RequestLinksTabContent() {
     const [submissionResult, setSubmissionResult] = useState(null)
     const [requestedLinks, setRequestedLinks] = useState([])
 
@@ -119,13 +121,7 @@ export default function RequestContentPage() {
 
 
     return (
-        <main className="flex-1 flex flex-col h-full overflow-hidden bg-slate-50 font-outfit">
-            {/* Header */}
-            <PageHeader title="Request Content" description="Submit new links for data ingestion and analysis" />
-
-            {/* Content Area */}
-            <div className="flex-1 overflow-y-auto p-4 sm:p-8">
-                <div className="max-w-5xl mx-auto space-y-6 sm:space-y-8 pb-12">
+        <div className="space-y-6 sm:space-y-8">
                     {/* Request Form */}
                     <section className="space-y-6">
                         <Card className="border-slate-200 shadow-xl shadow-slate-200/50 rounded-2xl overflow-hidden p-0 bg-white">
@@ -364,6 +360,52 @@ export default function RequestContentPage() {
                             </CardContent>
                         </Card>
                     </section>
+        </div>
+    )
+}
+
+export default function RequestContentPage({ isReviewer = false, moderationQueueConfigured = false }) {
+    return (
+        <main className="flex-1 flex flex-col h-full overflow-hidden bg-slate-50 font-outfit">
+            <PageHeader title="Request Content" description="Submit new links for data ingestion and analysis" />
+
+            <div className="flex-1 overflow-y-auto p-4 sm:p-8">
+                <div className="max-w-5xl mx-auto space-y-6 sm:space-y-8 pb-12">
+                    {isReviewer ? (
+                        <Tabs defaultValue="request" className="w-full space-y-6 sm:space-y-8">
+                            <TabsList className="flex w-full overflow-x-auto justify-start p-1 bg-slate-100 rounded-xl mb-2 gap-2 md:grid md:grid-cols-2 px-2 md:px-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                                <TabsTrigger
+                                    value="request"
+                                    className="flex-none shrink-0 px-4 md:px-8 py-2.5 md:py-2 text-[13px] md:text-sm whitespace-nowrap rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm flex items-center justify-center gap-2"
+                                >
+                                    <GitPullRequestCreateArrow className="w-4 h-4 shrink-0" />
+                                    Request links
+                                </TabsTrigger>
+                                <TabsTrigger
+                                    value="manual"
+                                    className="flex-none shrink-0 px-4 md:px-8 py-2.5 md:py-2 text-[13px] md:text-sm whitespace-nowrap rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm flex items-center justify-center gap-2"
+                                >
+                                    <FileText className="w-4 h-4 shrink-0" />
+                                    Manual post
+                                </TabsTrigger>
+                            </TabsList>
+                            <TabsContent
+                                value="request"
+                                forceMount
+                                className="mt-0 space-y-6 sm:space-y-8 data-[state=inactive]:hidden ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2"
+                            >
+                                <RequestLinksTabContent />
+                            </TabsContent>
+                            <TabsContent
+                                value="manual"
+                                className="ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2"
+                            >
+                                <ManualPostForm moderationQueueConfigured={moderationQueueConfigured} />
+                            </TabsContent>
+                        </Tabs>
+                    ) : (
+                        <RequestLinksTabContent />
+                    )}
                 </div>
             </div>
         </main>

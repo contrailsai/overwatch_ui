@@ -41,6 +41,30 @@ export async function uploadFileToS3(buffer, key, contentType) {
   }
 }
 
+/**
+ * Values in `reports_generation.s3_path` may be a full S3 HTTPS URL, a virtual-hosted URL,
+ * or a raw object key. Some pipelines append `&...` without `?`, which breaks naive URL parsing.
+ */
+export function resolveS3ObjectKeyFromStoredPath(storedPath) {
+  const raw = (storedPath || '').trim()
+  if (!raw) return null
+
+  if (/^https?:\/\//i.test(raw)) {
+    try {
+      const forParse = raw.includes('?') ? raw : raw.replace(/(\.[a-z0-9]{2,5})&/i, '$1?')
+      const url = new URL(forParse)
+      let key = url.pathname.replace(/^\//, '')
+      const amp = key.indexOf('&')
+      if (amp !== -1) key = key.slice(0, amp)
+      return key || null
+    } catch {
+      return null
+    }
+  }
+
+  return raw.replace(/^\//, '')
+}
+
 export async function getSignedDownloadUrl(key, originalName) {
   try {
     const encodedName = encodeURIComponent(originalName || 'document');

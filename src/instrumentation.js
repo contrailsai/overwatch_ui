@@ -9,6 +9,9 @@ export function register() {
         diag.setLogger(new DiagConsoleLogger(), DiagLogLevel.DEBUG);
     }
 
+    // Node server + server actions: traces/metrics export via Vercel OTEL → Grafana (Tempo/Mimir).
+    // Browser-only flows (e.g. report export wait) emit via server action flushReportWaitTelemetry
+    // (see src/app/(dashboard)/cases/report_wait_telemetry_action.js).
     registerOTel({
         serviceName: 'overwatch-client-app',
         instrumentations: [
