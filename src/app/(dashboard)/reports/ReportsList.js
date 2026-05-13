@@ -79,8 +79,7 @@ export function ReportsList({ reports, initialFilters }) {
     
     try {
       setDownloadingId(report.id)
-      const signedUrl = await getReportDownloadUrlAction(report.s3_path, report.report_type, report.last_update)
-      
+      const signedUrl = await getReportDownloadUrlAction(report.id, report.report_type, report.last_update)
       if (signedUrl) {
         window.open(signedUrl, '_blank')
       } else {

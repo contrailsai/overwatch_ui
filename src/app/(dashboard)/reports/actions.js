@@ -3,7 +3,7 @@
 import { createClient } from '@/utils/supabase/server'
 import { traceAction } from '@/utils/tracing'
 import { posthogServer } from '@/utils/posthog'
-import { getSignedDownloadUrl } from '@/utils/aws/s3'
+import { getSignedDownloadUrl, resolveS3ObjectKeyFromStoredPath } from '@/utils/aws/s3'
 import { requireAuthContext } from '@/utils/auth-context'
 
 export const getReports = traceAction('getReports', async (filters = {}) => {
@@ -59,30 +59,38 @@ export const getReports = traceAction('getReports', async (filters = {}) => {
   return data || []
 })
 
-export const getReportDownloadUrlAction = traceAction('getReportDownloadUrlAction', async (s3Url, reportType, timestamp) => {
-  if (!s3Url) return null
+export const getReportDownloadUrlAction = traceAction(
+  'getReportDownloadUrlAction',
+  async (reportId, reportType, timestamp) => {
+    if (reportId == null || reportId === '') return null
 
-  try {
-    const { user, clientDetails } = await requireAuthContext()
-    const supabase = await createClient()
-    const { data: ownedReport } = await supabase
-      .from('reports_generation')
-      .select('id')
-      .eq('client_id', user.id)
-      .eq('project', clientDetails.project_name)
-      .eq('s3_path', s3Url)
-      .maybeSingle()
-    if (!ownedReport) return null
+    try {
+      const { user, clientDetails } = await requireAuthContext()
+      const supabase = await createClient()
+      const { data: row, error } = await supabase
+        .from('reports_generation')
+        .select('s3_path')
+        .eq('id', reportId)
+        .eq('client_id', user.id)
+        .eq('project', clientDetails.project_name)
+        .maybeSingle()
 
-    const url = new URL(s3Url)
-    const key = url.pathname.substring(1) // remove leading '/'
-    
-    const formattedDate = timestamp ? new Date(timestamp).toISOString().split('T')[0] : 'report'
-    const fileName = `${reportType || 'Summary'}_Report_${formattedDate}.pdf`
+      if (error) {
+        console.error('getReportDownloadUrlAction: ownership lookup failed', error)
+        return null
+      }
+      if (!row?.s3_path) return null
 
-    return await getSignedDownloadUrl(key, fileName)
-  } catch (error) {
-    console.error("Error generating signed download URL for report:", error)
-    return null
+      const key = resolveS3ObjectKeyFromStoredPath(row.s3_path)
+      if (!key) return null
+
+      const formattedDate = timestamp ? new Date(timestamp).toISOString().split('T')[0] : 'report'
+      const fileName = `${reportType || 'Summary'}_Report_${formattedDate}.pdf`
+
+      return await getSignedDownloadUrl(key, fileName)
+    } catch (error) {
+      console.error('Error generating signed download URL for report:', error)
+      return null
+    }
   }
-})
+)
