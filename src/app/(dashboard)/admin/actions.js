@@ -149,6 +149,187 @@ export const fetch_clients_in_project = traceAction('fetch_clients_in_project', 
     return enrichedClients
 })
 
+// Helper to format local date as YYYY-MM-DD (kept identical to fetch_clients_in_project)
+const _getLocalDateStr = (date) => {
+    const tzOffsetMs = date.getTimezoneOffset() * 60000
+    return new Date(date.getTime() - tzOffsetMs).toISOString().slice(0, 10)
+}
+
+export const fetch_capacity_metrics = traceAction('fetch_capacity_metrics', async () => {
+    const { clientDetails } = await requireRole(['client-admin', 'reviewer'])
+    const supabase = await createClient()
+    const projectName = clientDetails.project_name
+    if (!projectName) return null
+
+    const now = new Date()
+    const last30Days = new Date(now)
+    last30Days.setDate(last30Days.getDate() - 29)
+    const startStr = _getLocalDateStr(last30Days)
+
+    const [casesRes, reviewedRes, teamLogsRes] = await Promise.all([
+        supabase
+            .from('daily_case_metrics')
+            .select('date, total_cases')
+            .eq('project_name', projectName)
+            .gte('date', startStr),
+        supabase
+            .from('daily_reviewed_metrics')
+            .select('date, total_reviewed')
+            .eq('project_name', projectName)
+            .gte('date', startStr),
+        supabase
+            .from('client_logs')
+            .select('date, client_id, reviewed_cases, reviewed_profiles, last_activity')
+            .eq('project_name', projectName)
+            .gte('date', startStr)
+    ])
+
+    if (casesRes.error) console.error('ERROR fetching daily_case_metrics:', casesRes.error)
+    if (reviewedRes.error) console.error('ERROR fetching daily_reviewed_metrics:', reviewedRes.error)
+    if (teamLogsRes.error) console.error('ERROR fetching team client_logs:', teamLogsRes.error)
+
+    // Aggregate project-level (across platforms) by date
+    const casesByDate = {}
+    const reviewedByDate = {}
+    ;(casesRes.data || []).forEach(r => {
+        if (!r.date) return
+        casesByDate[r.date] = (casesByDate[r.date] || 0) + (r.total_cases || 0)
+    })
+    ;(reviewedRes.data || []).forEach(r => {
+        if (!r.date) return
+        reviewedByDate[r.date] = (reviewedByDate[r.date] || 0) + (r.total_reviewed || 0)
+    })
+
+    // Aggregate team-side (per-user logs rolled up by date)
+    const teamByDate = {}
+    ;(teamLogsRes.data || []).forEach(r => {
+        if (!r.date) return
+        const bucket = teamByDate[r.date] || (teamByDate[r.date] = {
+            cases: 0,
+            profiles: 0,
+            activeMemberIds: new Set()
+        })
+        bucket.cases += r.reviewed_cases || 0
+        bucket.profiles += r.reviewed_profiles || 0
+        if (r.last_activity || (r.reviewed_cases || 0) > 0 || (r.reviewed_profiles || 0) > 0) {
+            bucket.activeMemberIds.add(r.client_id)
+        }
+    })
+
+    // Fill dense 30-day series (oldest to newest)
+    const dailySeries = []
+    for (let i = 29; i >= 0; i--) {
+        const d = new Date(now)
+        d.setDate(d.getDate() - i)
+        const ds = _getLocalDateStr(d)
+        const team = teamByDate[ds]
+        dailySeries.push({
+            date: ds,
+            cases: casesByDate[ds] || 0,
+            reviewed: reviewedByDate[ds] || 0,
+            teamCases: team?.cases || 0,
+            teamProfiles: team?.profiles || 0,
+            activeMembers: team ? team.activeMemberIds.size : 0
+        })
+    }
+
+    const last7 = dailySeries.slice(-7)
+    const prior7 = dailySeries.slice(-14, -7)
+    const sum = (arr, k) => arr.reduce((s, r) => s + (r[k] || 0), 0)
+    const avg = (arr, k) => arr.length ? sum(arr, k) / arr.length : 0
+    const pctDelta = (curr, prev) => {
+        if (!prev) return curr > 0 ? 100 : null
+        return Math.round(((curr - prev) / prev) * 100)
+    }
+
+    return {
+        dailySeries,
+        last7: {
+            cases: sum(last7, 'cases'),
+            reviewed: sum(last7, 'reviewed'),
+            teamCases: sum(last7, 'teamCases'),
+            teamProfiles: sum(last7, 'teamProfiles'),
+            avgActiveMembers: avg(last7, 'activeMembers')
+        },
+        last30: {
+            cases: sum(dailySeries, 'cases'),
+            reviewed: sum(dailySeries, 'reviewed'),
+            teamCases: sum(dailySeries, 'teamCases'),
+            teamProfiles: sum(dailySeries, 'teamProfiles')
+        },
+        deltas: {
+            teamCases: pctDelta(sum(last7, 'teamCases'), sum(prior7, 'teamCases')),
+            teamProfiles: pctDelta(sum(last7, 'teamProfiles'), sum(prior7, 'teamProfiles')),
+            activeMembers: pctDelta(avg(last7, 'activeMembers'), avg(prior7, 'activeMembers'))
+        }
+    }
+})
+
+export const fetch_client_activity_history = traceAction('fetch_client_activity_history', async (clientId, days = 30) => {
+    const { clientDetails } = await requireRole(['client-admin', 'reviewer'])
+    const supabase = await createClient()
+    const projectName = clientDetails.project_name
+    if (!clientId || !projectName) return { error: 'Invalid request.' }
+
+    const range = Math.max(1, Math.min(Number(days) || 30, 180))
+    const now = new Date()
+    const start = new Date(now)
+    start.setDate(start.getDate() - (range - 1))
+    const startStr = _getLocalDateStr(start)
+
+    const { data, error } = await supabase
+        .from('client_logs')
+        .select('date, login_time, last_activity, reviewed_cases, reviewed_profiles, reports_download')
+        .eq('client_id', clientId)
+        .eq('project_name', projectName)
+        .gte('date', startStr)
+        .order('date', { ascending: true })
+
+    if (error) {
+        console.error('ERROR fetching client_logs:', error)
+        return { error: error.message }
+    }
+
+    // Build dense series so the heatmap has every day
+    const byDate = {}
+    ;(data || []).forEach(r => { if (r.date) byDate[r.date] = r })
+
+    const series = []
+    for (let i = range - 1; i >= 0; i--) {
+        const d = new Date(now)
+        d.setDate(d.getDate() - i)
+        const ds = _getLocalDateStr(d)
+        const row = byDate[ds]
+        series.push({
+            date: ds,
+            cases: row?.reviewed_cases || 0,
+            profiles: row?.reviewed_profiles || 0,
+            loginTime: row?.login_time || null,
+            lastActivity: row?.last_activity || null,
+            reports: row?.reports_download || {}
+        })
+    }
+
+    // Aggregate report counts across the window
+    const reportTotals = {}
+    series.forEach(d => {
+        Object.entries(d.reports || {}).forEach(([k, v]) => {
+            reportTotals[k] = (reportTotals[k] || 0) + (v || 0)
+        })
+    })
+
+    return {
+        days: range,
+        series,
+        totals: {
+            cases: series.reduce((s, d) => s + d.cases, 0),
+            profiles: series.reduce((s, d) => s + d.profiles, 0),
+            activeDays: series.filter(d => d.cases > 0 || d.profiles > 0 || d.loginTime).length,
+            reports: reportTotals
+        }
+    }
+})
+
 export const create_new_client = traceAction('create_new_client', async (email, password) => {
     const { clientDetails } = await requireRole(['client-admin'])
     const projectName = clientDetails.project_name
@@ -282,6 +463,51 @@ export const update_client_alias = traceAction('update_client_alias', async (use
 
     if (dbError) {
         console.error('DB Update Alias Error:', dbError)
+        return { error: dbError.message }
+    }
+    if (!updatedRows?.length) {
+        return { error: 'User not found or you do not have permission to update this account.' }
+    }
+
+    revalidatePath('/admin')
+    return { success: true }
+})
+
+export const update_client_permission = traceAction('update_client_permission', async (userId, permission) => {
+    const { user, clientDetails } = await requireRole(['client-admin'])
+    const tenantProject = clientDetails.project_name
+    if (!userId || !tenantProject) {
+        return { error: 'Invalid request.' }
+    }
+    if (userId === user.id) {
+        return { error: 'You cannot change your own role.' }
+    }
+
+    const allowed = ['client-admin', 'client-reviewer', 'client']
+    if (!allowed.includes(permission)) {
+        return { error: 'Invalid role.' }
+    }
+
+    const supabaseAdmin = createSupabaseClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL,
+        process.env.SUPABASE_SERVICE_ROLE_KEY,
+        {
+            auth: {
+                autoRefreshToken: false,
+                persistSession: false
+            }
+        }
+    )
+
+    const { data: updatedRows, error: dbError } = await supabaseAdmin
+        .from('client_details')
+        .update({ permission })
+        .eq('id', userId)
+        .eq('project_name', tenantProject)
+        .select('id')
+
+    if (dbError) {
+        console.error('DB Update Permission Error:', dbError)
         return { error: dbError.message }
     }
     if (!updatedRows?.length) {
