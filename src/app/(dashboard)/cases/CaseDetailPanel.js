@@ -398,6 +398,7 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
 
                     <div className=" flex flex-col gap-6 sm:gap-8 px-4 sm:px-8 pb-8 pt-4 sm:pt-0 ">
                         {/* Media Display */}
+                        {post.signedImageUrl &&
                         <div className="bg-slate-900 rounded-xl sm:rounded-2xl overflow-hidden shadow-lg border border-slate-800 relative group flex items-center justify-center min-h-[300px] sm:min-h-[400px]">
                             <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-slate-800/50 to-slate-950 pointer-events-none" />
                               {post.signedImageUrl ? (
@@ -413,6 +414,7 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
                                 </div>
                             )}
                         </div>
+                        }
 
                         {/* Unified User Context & Caption Card */}
                         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
@@ -483,7 +485,7 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
                             <div className="px-5 pb-5 pt-0">
                                 <div className="bg-slate-50/50 rounded-lg p-4 border border-slate-100">
                                     <h4 className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">
-                                        <MessageCircle className="w-3 h-3" />  {post.platform.toLowerCase() === "website" ? "Post Content" : "Post Caption"}
+                                        <MessageCircle className="w-3 h-3" />  Post Content
                                     </h4>
                                     <div className="text-slate-800 leading-relaxed whitespace-pre-wrap font-medium text-sm font-sans">
                                         {post.caption || <span className="italic text-slate-400">No caption content available.</span>}

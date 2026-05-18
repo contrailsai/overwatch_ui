@@ -820,6 +820,54 @@ export const updatePostVisibility = traceAction('updatePostVisibility', async (p
   }
 })
 
+export const deleteCase = traceAction('deleteCase', async (postId, _project, _clientDetails) => {
+  try {
+    const { dbName, clientDetails } = await requireRole(['reviewer'])
+
+    if (!postId) {
+      return { success: false, error: 'Missing Post ID' }
+    }
+
+    const client = await clientPromise
+    const db = client.db(dbName)
+    const collection = db.collection('Posts')
+
+    // Fetch media to attempt S3 cleanup before deleting the document
+    const existingPost = await collection.findOne(
+      { _id: new ObjectId(postId) },
+      { projection: { 'post_content.media_urls': 1 } }
+    )
+
+    if (!existingPost) {
+      return { success: false, error: 'Case not found' }
+    }
+
+    // Best-effort: delete any manually uploaded S3 files
+    const mediaUrls = existingPost?.post_content?.media_urls || []
+    for (const m of mediaUrls) {
+      if (m?.uploaded_manually && m?.s3_url) {
+        try {
+          const url = new URL(m.s3_url)
+          const key = url.pathname.substring(1)
+          if (key) await deleteFileFromS3(key)
+        } catch (err) {
+          console.error('S3 delete failed (continuing):', err)
+        }
+      }
+    }
+
+    // Hard-delete the document
+    await collection.deleteOne({ _id: new ObjectId(postId) })
+
+    console.log(`Case ${postId} deleted by ${clientDetails.email}`)
+
+    return { success: true }
+  } catch (error) {
+    console.error('deleteCase Error:', error)
+    return { success: false, error: error.message }
+  }
+})
+
 export const runAIAnalysis = traceAction('runAIAnalysis', async (postId, _project, _clientDetails) => {
   try {
     const { dbName } = await requireRole(['reviewer'])
