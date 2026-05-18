@@ -7,6 +7,68 @@ import { getSignedImageUrl } from '@/utils/aws/s3'
 import { normalized_S3_post } from '@/app/(dashboard)/profiles/actions'
 import { requireRole } from '@/utils/auth-context'
 
+function escapeRegex(text) {
+    return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function buildProfileMatchQuery(filters) {
+    const matchQuery = {}
+    const andConditions = []
+
+    if (filters.platform && filters.platform !== 'all') {
+        matchQuery.platform = { $regex: new RegExp(`^${filters.platform}$`, 'i') }
+    }
+
+    if (filters.is_verified !== undefined && filters.is_verified !== 'all') {
+        matchQuery.is_verified = filters.is_verified === 'true'
+    }
+
+    if (filters.publish_date_from || filters.publish_date_to) {
+        matchQuery.last_relevant_publish_date = {}
+        if (filters.publish_date_from) {
+            matchQuery.last_relevant_publish_date.$gte = new Date(filters.publish_date_from)
+        }
+        if (filters.publish_date_to) {
+            matchQuery.last_relevant_publish_date.$lte = new Date(filters.publish_date_to)
+        }
+    }
+
+    matchQuery.metadata = { $exists: true }
+
+    if (filters.reviewStatus === 'reviewed') {
+        andConditions.push({ 'review_details.reviewed_at': { $exists: true, $ne: null } })
+    } else if (filters.reviewStatus === 'pending') {
+        andConditions.push({
+            $or: [
+                { review_details: { $exists: false } },
+                { review_details: null },
+                { 'review_details.reviewed_at': { $exists: false } },
+                { 'review_details.reviewed_at': null },
+            ],
+        })
+    }
+
+    if (filters.searchText?.trim()) {
+        const searchRegex = new RegExp(escapeRegex(filters.searchText.trim()), 'i')
+        andConditions.push({
+            $or: [
+                { 'metadata.profile_url': { $regex: searchRegex } },
+                { profile_url: { $regex: searchRegex } },
+                { 'metadata.username': { $regex: searchRegex } },
+                { username: { $regex: searchRegex } },
+                { 'metadata.display_name': { $regex: searchRegex } },
+                { display_name: { $regex: searchRegex } },
+            ],
+        })
+    }
+
+    if (andConditions.length > 0) {
+        matchQuery.$and = andConditions
+    }
+
+    return matchQuery
+}
+
 export const getProfiles = traceAction('getProfiles_review', async (_project, page = 1, limit = 20, filters = {}) => {
     try {
         const { dbName } = await requireRole(['reviewer'])
@@ -15,69 +77,18 @@ export const getProfiles = traceAction('getProfiles_review', async (_project, pa
         const collection = db.collection('Profiles')
 
         const skip = (page - 1) * limit
+        const matchQuery = buildProfileMatchQuery(filters)
 
-        const matchQuery = {}
-
-        if (filters.platform && filters.platform !== 'all') {
-            matchQuery.platform = { $regex: new RegExp(`^${filters.platform}\$`, 'i') }
-        }
-
-        if (filters.is_verified !== undefined && filters.is_verified !== 'all') {
-            matchQuery.is_verified = filters.is_verified === 'true'
-        }
-
-        if (filters.publish_date_from || filters.publish_date_to) {
-            matchQuery.last_relevant_publish_date = {}
-            if (filters.publish_date_from) {
-                matchQuery.last_relevant_publish_date.$gte = new Date(filters.publish_date_from)
-            }
-            if (filters.publish_date_to) {
-                matchQuery.last_relevant_publish_date.$lte = new Date(filters.publish_date_to)
-            }
-        }
-
-        matchQuery.metadata = { $exists: true }
-
-        const pipeline = []
-
-        if (filters.searchText) {
-            pipeline.push({
-                $search: {
-                    index: "default",
-                    compound: {
-                        should: [
-                            {
-                                autocomplete: {
-                                    query: filters.searchText,
-                                    path: "profile_url"
-                                }
-                            }
-                        ],
-                        minimumShouldMatch: 1
-                    }
-                }
-            })
-        }
-
-        pipeline.push({ $match: matchQuery })
-        pipeline.push({ $project: { text_embedding: 0, image_embedding: 0 } })
-
-        pipeline.push({
-            $addFields: {
-                posts_count: { $size: { $ifNull: ["$posts", []] } }
-            }
-        })
-
-        if (filters.searchText) {
-            pipeline.push({
+        const pipeline = [
+            { $match: matchQuery },
+            { $project: { text_embedding: 0, image_embedding: 0 } },
+            {
                 $addFields: {
-                    score: { $meta: "searchScore" }
-                }
-            })
-            pipeline.push({ $sort: { score: -1, posts_count: -1, _id: 1 } })
-        } else {
-            pipeline.push({ $sort: { posts_count: -1, _id: 1 } })
-        }
+                    posts_count: { $size: { $ifNull: ['$posts', []] } },
+                },
+            },
+            { $sort: { posts_count: -1, _id: 1 } },
+        ]
 
         pipeline.push({
             $facet: {

@@ -1641,6 +1641,7 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
           }
         }}
         onUpdateStatus={(id, status) => setUpdatedCases(prev => ({ ...prev, [id]: status }))}
+        onShowToast={showToast}
         onNavigate={navigatePost}
         hasPrev={mergedPosts.findIndex(p => p._id === selectedPost?._id) > 0}
         hasNext={mergedPosts.findIndex(p => p._id === selectedPost?._id) < mergedPosts.length - 1}
