@@ -3,7 +3,7 @@
 import * as React from "react"
 import { useState, useEffect, useActionState, useRef, useTransition } from 'react'
 import { format } from "date-fns"
-import { submitCaseReview, uploadCaseImage, deleteCaseImage, updatePostVisibility, runAIAnalysis } from './actions'
+import { submitCaseReview, uploadCaseImage, deleteCaseImage, updatePostVisibility, runAIAnalysis, deleteCase } from './actions'
 import {
     Loader2, X, CheckCircle, ExternalLink,
     ChevronLeft, ChevronRight, Calendar, Plus,
@@ -49,6 +49,10 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
     const [uploadedImageUrl, setUploadedImageUrl] = useState(null);
     const [mediaError, setMediaError] = useState(false);
     const fileInputRef = useRef(null);
+
+    // Delete Case state
+    const [showDeleteCaseModal, setShowDeleteCaseModal] = useState(false);
+    const [isDeletingCase, setIsDeletingCase] = useState(false);
 
     // Toast Notification State
     const [toast, setToast] = useState(null); // { message, type: 'success' | 'error' }
@@ -340,6 +344,37 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
         }
     };
 
+    const handleDeleteCase = async () => {
+        setIsDeletingCase(true);
+        try {
+            const result = await deleteCase(localPost._id, project, clientDetails);
+            if (result.success) {
+                // Remove from parent list
+                if (setPosts) {
+                    setPosts(prevPosts => prevPosts.filter(p => p._id !== localPost._id));
+                }
+                setShowDeleteCaseModal(false);
+                // Navigate to next/prev if available, otherwise close the panel
+                if (hasNext) {
+                    onNavigate('next');
+                } else if (hasPrev) {
+                    onNavigate('prev');
+                } else {
+                    onClose();
+                }
+            } else {
+                showToast('Failed to delete case: ' + result.error);
+                setShowDeleteCaseModal(false);
+            }
+        } catch (error) {
+            showToast('Failed to delete case. Please try again.');
+            setShowDeleteCaseModal(false);
+        } finally {
+            setIsDeletingCase(false);
+            onClose()
+        }
+    };
+
     const handleReset = () => {
         setFacePresent(false)
         setNamePresent(false)
@@ -390,6 +425,7 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
     }
 
     return (
+        <>
         <div className="h-full flex flex-col bg-white">
 
             <div className="flex-1 overflow-hidden flex divide-x divide-slate-100">
@@ -449,12 +485,15 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
                             >
                                 <FileJson className="w-5 h-5" />
                             </Button>
-
-                            {/* {isRequested && (
-                                <Badge className="bg-orange-50 text-orange-700 border-orange-200 gap-1.5 pl-2 animate-pulse">
-                                    <Siren className="w-3.5 h-3.5" /> Takedown Requested
-                                </Badge>
-                            )} */}
+                            <Button
+                                variant="outline"
+                                size="icon"
+                                onClick={() => setShowDeleteCaseModal(true)}
+                                className="h-9 w-9 text-red-500 hover:bg-red-50 hover:text-red-600 border-red-200 rounded-full"
+                                title="Delete case"
+                            >
+                                <Trash2 className="w-5 h-5" />
+                            </Button>
                             <Button variant="ghost" size="icon" onClick={onClose} className="rounded-full hover:bg-slate-100 text-slate-400">
                                 <X className="w-6 h-6" />
                             </Button>
@@ -475,8 +514,9 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
                             />
 
                             {(() => {
-                                const showManualImage = !!uploadedImageUrl || (localPost.signedImageUrl && !mediaError && localPost.uploadedManually);
-                                if (!showManualImage) return null;
+                                // Show action buttons for ANY image that is currently displayed
+                                const hasDisplayedImage = !!uploadedImageUrl || (!!localPost.signedImageUrl && !mediaError);
+                                if (!hasDisplayedImage) return null;
                                 return (
                                     <div className="absolute top-4 right-4 z-20 flex gap-2">
                                         {showDeleteConfirm ? (
@@ -1181,5 +1221,61 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
                 </div>
             </div>
         </div>
+
+            {/* ── Delete Case Confirmation Modal ── */}
+            {showDeleteCaseModal && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                    {/* Backdrop */}
+                    <div
+                        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+                        onClick={() => !isDeletingCase && setShowDeleteCaseModal(false)}
+                    />
+
+                    {/* Modal Card */}
+                    <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md mx-auto animate-in zoom-in-95 fade-in duration-200 overflow-hidden">
+
+                        <div className="p-6">
+                            {/* Icon + Title */}
+                            <div className="flex items-start gap-4 mb-5">
+                                <div className="shrink-0 w-12 h-12 rounded-full bg-rose-100 flex items-center justify-center">
+                                    <Trash2 className="w-6 h-6 text-rose-600" />
+                                </div>
+                                <div>
+                                    <h2 className="text-lg font-bold text-slate-900">Delete this case?</h2>
+                                    <p className="text-sm text-slate-500 mt-1 leading-relaxed">
+                                        This action is <span className="font-semibold text-rose-600">permanent and irreversible</span>.
+                                        The case will be permanently deleted.
+                                    </p>
+                                </div>
+                            </div>
+
+
+                            {/* Actions */}
+                            <div className="flex gap-3">
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={() => setShowDeleteCaseModal(false)}
+                                    disabled={isDeletingCase}
+                                    className="flex-1 font-semibold border-slate-200 text-slate-600 hover:bg-slate-50"
+                                >
+                                    Cancel
+                                </Button>
+                                <Button
+                                    type="button"
+                                    onClick={handleDeleteCase}
+                                    disabled={isDeletingCase}
+                                    className="flex-1 font-bold bg-rose-600 hover:bg-rose-700 text-white flex items-center justify-center gap-2"
+                                >
+                                    {isDeletingCase
+                                        ? <><Loader2 className="w-4 h-4 animate-spin" /> Deleting...</>
+                                        : <><Trash2 className="w-4 h-4" /> Delete Case</>}
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </>
     )
 }
