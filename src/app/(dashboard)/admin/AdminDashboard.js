@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useMemo } from 'react'
-import { Plus, Users, CheckCircle2, UserCheck, Search, Mail, ShieldCheck, Activity, Trash2, Loader2, Clock, Edit2, Building2, X, AlertCircle, ArrowUpDown, ArrowUp, ArrowDown, RotateCcw, Zap, Shield, Download, } from 'lucide-react'
+import { Plus, Users, CheckCircle2, UserCheck, Search, Mail, ShieldCheck, Activity, Trash2, Loader2, Clock, Edit2, Building2, X, AlertCircle, ArrowUpDown, ArrowUp, ArrowDown, RotateCcw, Shield, Download, } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -30,7 +30,6 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select"
-import Sparkline from '@/components/Sparkline'
 import { CreateUserModal } from './CreateUserModal'
 import CapacityWidget from './CapacityWidget'
 import MemberDetailDialog from './MemberDetailDialog'
@@ -73,45 +72,6 @@ const roleLabel = (permission) => {
     return 'Analyst'
 }
 
-const TrendPill = ({ delta }) => {
-    if (delta === null || delta === undefined) return null
-    const isUp = delta > 0
-    const isFlat = delta === 0
-    const Icon = isUp ? ArrowUp : ArrowDown
-    const tone = isFlat
-        ? 'bg-slate-50 text-slate-500 border-slate-200'
-        : isUp
-            ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
-            : 'bg-rose-50 text-rose-700 border-rose-100'
-    return (
-        <span className={`inline-flex items-center gap-0.5 text-[11px] font-bold tabular-nums px-1.5 py-0.5 rounded-md border ${tone}`}>
-            {!isFlat && <Icon className="w-3 h-3" strokeWidth={2.5} />}
-            <span>{isUp ? '+' : ''}{delta}%</span>
-        </span>
-    )
-}
-
-const KpiCard = ({ icon: Icon, label, value, delta, sparkData, sparkLabel, color = '#3b82f6' }) => (
-    <div className="bg-white border border-slate-200 rounded-2xl p-4 md:p-5 transition-all duration-300 group">
-        <div className="flex justify-between items-start">
-            <div className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-600">
-                <Icon className="w-5 h-5" strokeWidth={2} />
-            </div>
-            <div className="w-[50%] h-10">
-                <Sparkline data={sparkData} color={color} label={sparkLabel} />
-            </div>
-        </div>
-        <div className="mt-4 flex items-baseline justify-between gap-2">
-            <div className="min-w-0">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 truncate">{label}</p>
-                <p className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight tabular-nums leading-none mt-1.5">
-                    {(value ?? 0).toLocaleString()}
-                </p>
-            </div>
-            <TrendPill delta={delta} />
-        </div>
-    </div>
-)
 
 const matchesRoleFilter = (permission, roleFilter) => {
     if (roleFilter === 'all') return true
@@ -332,78 +292,6 @@ const AdminDashboard = ({ project_name, clients, isClientAdmin = false, currentU
         }
     }
 
-    const stats = useMemo(() => {
-        const totalClients = clients?.length || 0
-        const activeToday = clients?.filter(c => !!c.activityStats?.todayLastActivity).length || 0
-        const totalReviewedCases = clients?.reduce((acc, client) => acc + (client.meta_stats?.reviewed_cases || 0), 0) || 0
-        const totalReviewedProfiles = clients?.reduce((acc, client) => acc + (client.meta_stats?.reviewed_profiles || 0), 0) || 0
-
-        const series = capacityMetrics?.dailySeries || []
-        const deltas = capacityMetrics?.deltas || {}
-
-        // Member growth sparkline: cumulative member count at end of each day
-        const memberGrowth = series.map(d => {
-            const endOfDay = new Date(`${d.date}T23:59:59`)
-            const count = (clients || []).filter(c => {
-                if (!c.created_at) return true
-                return new Date(c.created_at) <= endOfDay
-            }).length
-            return { date: d.date, value: count }
-        })
-
-        // Member delta: joined last 7d vs prior 7d (% change in new joins)
-        let memberDelta = null
-        if (memberGrowth.length >= 14) {
-            const today = memberGrowth[memberGrowth.length - 1].value
-            const sevenAgo = memberGrowth[memberGrowth.length - 8].value
-            const fourteenAgo = memberGrowth[memberGrowth.length - 15]?.value ?? sevenAgo
-            const joinedLast7 = today - sevenAgo
-            const joinedPrior7 = sevenAgo - fourteenAgo
-            if (joinedPrior7 > 0) memberDelta = Math.round(((joinedLast7 - joinedPrior7) / joinedPrior7) * 100)
-            else if (joinedLast7 > 0) memberDelta = 100
-            else memberDelta = 0
-        }
-
-        return [
-            {
-                label: 'Total Team Members',
-                count: totalClients,
-                icon: Users,
-                color: '#3b82f6',
-                delta: memberDelta,
-                sparkData: memberGrowth,
-                sparkLabel: 'members'
-            },
-            {
-                label: 'Active Today',
-                count: activeToday,
-                icon: Zap,
-                color: '#10b981',
-                delta: deltas.activeMembers ?? null,
-                sparkData: series.map(d => ({ date: d.date, value: d.activeMembers })),
-                sparkLabel: 'active'
-            },
-            {
-                label: 'All-Time Cases Reviewed',
-                count: totalReviewedCases,
-                icon: CheckCircle2,
-                color: '#8b5cf6',
-                delta: deltas.teamCases ?? null,
-                sparkData: series.map(d => ({ date: d.date, value: d.teamCases })),
-                sparkLabel: 'cases'
-            },
-            {
-                label: 'All-Time Profiles Reviewed',
-                count: totalReviewedProfiles,
-                icon: UserCheck,
-                color: '#f59e0b',
-                delta: deltas.teamProfiles ?? null,
-                sparkData: series.map(d => ({ date: d.date, value: d.teamProfiles })),
-                sparkLabel: 'profiles'
-            },
-        ]
-    }, [clients, capacityMetrics])
-
     const hasActiveFilters = searchTerm !== '' || roleFilter !== 'all' || statusFilter !== 'all'
 
     const filteredClients = useMemo(() => {
@@ -477,22 +365,6 @@ const AdminDashboard = ({ project_name, clients, isClientAdmin = false, currentU
 
     return (
         <div className="p-4 md:p-6 h-full overflow-y-auto overflow-x-hidden space-y-6 md:space-y-8 animate-in fade-in duration-500">
-            {/* KPI cards */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
-                {stats.map((stat, i) => (
-                    <KpiCard
-                        key={i}
-                        icon={stat.icon}
-                        label={stat.label}
-                        value={stat.count}
-                        delta={stat.delta}
-                        sparkData={stat.sparkData}
-                        sparkLabel={stat.sparkLabel}
-                        color={stat.color}
-                    />
-                ))}
-            </div>
-
             {/* Capacity widget */}
             <CapacityWidget metrics={capacityMetrics} />
 

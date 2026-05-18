@@ -485,7 +485,7 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
                             <div className="px-5 pb-5 pt-0">
                                 <div className="bg-slate-50/50 rounded-lg p-4 border border-slate-100">
                                     <h4 className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">
-                                        <MessageCircle className="w-3 h-3" />  {post.platform.toLowerCase() === "website" ? "Post Content" : "Post Caption"}
+                                        <MessageCircle className="w-3 h-3" />  Post Content
                                     </h4>
                                     <div className="text-slate-800 leading-relaxed whitespace-pre-wrap font-medium text-sm font-sans">
                                         {post.caption || <span className="italic text-slate-400">No caption content available.</span>}
