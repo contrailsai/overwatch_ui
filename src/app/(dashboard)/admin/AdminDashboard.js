@@ -1,9 +1,9 @@
 "use client"
 
 import React, { useState, useMemo } from 'react'
-import { Plus, Users, CheckCircle2, UserCheck, Search, Mail, ShieldCheck, ArrowUpRight, Activity, Trash2, Loader2, Clock, CalendarDays, Calendar, Edit2, Building2 } from 'lucide-react'
+import { Plus, Users, CheckCircle2, UserCheck, Search, Mail, ShieldCheck, Activity, Trash2, Loader2, Clock, Edit2, Building2, X, AlertCircle, ArrowUpDown, ArrowUp, ArrowDown, RotateCcw, Zap, Shield, Download, } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -23,8 +23,18 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog"
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select"
+import Sparkline from '@/components/Sparkline'
 import { CreateUserModal } from './CreateUserModal'
-import { delete_client, update_client_alias, update_client_organization } from './actions'
+import CapacityWidget from './CapacityWidget'
+import MemberDetailDialog from './MemberDetailDialog'
+import { delete_client, update_client_alias, update_client_organization, update_client_permission } from './actions'
 import { useRouter } from 'next/navigation'
 
 // Helper to format timetz strings (e.g. "14:30:00Z" or "14:30:00+00") to local time
@@ -57,9 +67,68 @@ const formatTime = (timeStr) => {
     }
 }
 
-const AdminDashboard = ({ project_name, clients, isClientAdmin = false }) => {
+const roleLabel = (permission) => {
+    if (permission === 'client-admin') return 'Admin'
+    if (permission === 'client-reviewer') return 'Reviewer'
+    return 'Analyst'
+}
+
+const TrendPill = ({ delta }) => {
+    if (delta === null || delta === undefined) return null
+    const isUp = delta > 0
+    const isFlat = delta === 0
+    const Icon = isUp ? ArrowUp : ArrowDown
+    const tone = isFlat
+        ? 'bg-slate-50 text-slate-500 border-slate-200'
+        : isUp
+            ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+            : 'bg-rose-50 text-rose-700 border-rose-100'
+    return (
+        <span className={`inline-flex items-center gap-0.5 text-[11px] font-bold tabular-nums px-1.5 py-0.5 rounded-md border ${tone}`}>
+            {!isFlat && <Icon className="w-3 h-3" strokeWidth={2.5} />}
+            <span>{isUp ? '+' : ''}{delta}%</span>
+        </span>
+    )
+}
+
+const KpiCard = ({ icon: Icon, label, value, delta, sparkData, sparkLabel, color = '#3b82f6' }) => (
+    <div className="bg-white border border-slate-200 rounded-2xl p-4 md:p-5 transition-all duration-300 group">
+        <div className="flex justify-between items-start">
+            <div className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-600">
+                <Icon className="w-5 h-5" strokeWidth={2} />
+            </div>
+            <div className="w-[50%] h-10">
+                <Sparkline data={sparkData} color={color} label={sparkLabel} />
+            </div>
+        </div>
+        <div className="mt-4 flex items-baseline justify-between gap-2">
+            <div className="min-w-0">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 truncate">{label}</p>
+                <p className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight tabular-nums leading-none mt-1.5">
+                    {(value ?? 0).toLocaleString()}
+                </p>
+            </div>
+            <TrendPill delta={delta} />
+        </div>
+    </div>
+)
+
+const matchesRoleFilter = (permission, roleFilter) => {
+    if (roleFilter === 'all') return true
+    if (roleFilter === 'admin') return permission === 'client-admin'
+    if (roleFilter === 'reviewer') return permission === 'client-reviewer'
+    if (roleFilter === 'analyst') return permission !== 'client-admin' && permission !== 'client-reviewer'
+    return true
+}
+
+const AdminDashboard = ({ project_name, clients, isClientAdmin = false, currentUserId = null, capacityMetrics = null }) => {
     const router = useRouter()
     const [searchTerm, setSearchTerm] = useState('')
+    const [roleFilter, setRoleFilter] = useState('all')
+    const [statusFilter, setStatusFilter] = useState('all')
+    const [sortBy, setSortBy] = useState('member')
+    const [sortDir, setSortDir] = useState('asc')
+
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
     const [notification, setNotification] = useState(null)
     const [clientToDelete, setClientToDelete] = useState(null)
@@ -70,6 +139,99 @@ const AdminDashboard = ({ project_name, clients, isClientAdmin = false }) => {
     const [clientToEditOrg, setClientToEditOrg] = useState(null)
     const [newOrg, setNewOrg] = useState('')
     const [isUpdatingOrg, setIsUpdatingOrg] = useState(false)
+    const [clientToEditRole, setClientToEditRole] = useState(null)
+    const [newRole, setNewRole] = useState('client')
+    const [isUpdatingRole, setIsUpdatingRole] = useState(false)
+    const [clientToView, setClientToView] = useState(null)
+
+    const handleUpdateRole = async () => {
+        if (!clientToEditRole) return
+
+        setIsUpdatingRole(true)
+        try {
+            const result = await update_client_permission(clientToEditRole.id, newRole)
+            if (result.error) {
+                setNotification({
+                    title: 'Error Updating Role',
+                    message: result.error,
+                    isError: true
+                })
+            } else {
+                setNotification({
+                    title: 'Role Updated',
+                    message: `${clientToEditRole.email} is now ${roleLabel(newRole)}.`
+                })
+                router.refresh()
+            }
+        } catch (error) {
+            setNotification({
+                title: 'Error Updating Role',
+                message: 'An unexpected error occurred.',
+                isError: true
+            })
+        } finally {
+            setIsUpdatingRole(false)
+            setClientToEditRole(null)
+
+            setTimeout(() => setNotification(null), 5000)
+        }
+    }
+
+    const exportToCsv = () => {
+        const headers = [
+            'Email', 'Alias', 'Organization', 'Role', 'Status',
+            'Today Login', 'Today Last Activity',
+            'Today Cases', 'Today Profiles',
+            '7d Cases', '7d Profiles',
+            '30d Cases', '30d Profiles',
+            'All-time Cases', 'All-time Profiles',
+            'Reports Downloaded (All Time)'
+        ]
+
+        const escape = (val) => {
+            if (val === null || val === undefined) return ''
+            const str = String(val)
+            if (/[",\n\r]/.test(str)) return `"${str.replace(/"/g, '""')}"`
+            return str
+        }
+
+        const rows = filteredClients.map(c => {
+            const s = c.activityStats || {}
+            const reports = Object.entries(s.allTimeReports || {})
+                .map(([k, v]) => `${k.replace(/_/g, ' ')}: ${v}`).join('; ')
+            return [
+                c.email,
+                c.alias || '',
+                c.organization || '',
+                roleLabel(c.permission),
+                s.todayLastActivity ? 'Active Today' : 'Offline',
+                formatTime(s.todayLoginTime),
+                formatTime(s.todayLastActivity),
+                s.todayCases || 0,
+                s.todayProfiles || 0,
+                s.last7DaysCases || 0,
+                s.last7DaysProfiles || 0,
+                s.last30DaysCases || 0,
+                s.last30DaysProfiles || 0,
+                c.meta_stats?.reviewed_cases || 0,
+                c.meta_stats?.reviewed_profiles || 0,
+                reports
+            ].map(escape).join(',')
+        })
+
+        const csv = [headers.join(','), ...rows].join('\n')
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+        const url = URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        const dateStr = format(new Date(), 'yyyy-MM-dd')
+        const safeProject = (project_name || 'project').replace(/[^a-z0-9_-]+/gi, '_')
+        link.href = url
+        link.setAttribute('download', `${safeProject}_members_${dateStr}.csv`)
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        URL.revokeObjectURL(url)
+    }
 
     const handleUpdateOrg = async () => {
         if (!clientToEditOrg) return
@@ -172,84 +334,191 @@ const AdminDashboard = ({ project_name, clients, isClientAdmin = false }) => {
 
     const stats = useMemo(() => {
         const totalClients = clients?.length || 0
+        const activeToday = clients?.filter(c => !!c.activityStats?.todayLastActivity).length || 0
         const totalReviewedCases = clients?.reduce((acc, client) => acc + (client.meta_stats?.reviewed_cases || 0), 0) || 0
         const totalReviewedProfiles = clients?.reduce((acc, client) => acc + (client.meta_stats?.reviewed_profiles || 0), 0) || 0
-        // console.log("clients = ", clients)
+
+        const series = capacityMetrics?.dailySeries || []
+        const deltas = capacityMetrics?.deltas || {}
+
+        // Member growth sparkline: cumulative member count at end of each day
+        const memberGrowth = series.map(d => {
+            const endOfDay = new Date(`${d.date}T23:59:59`)
+            const count = (clients || []).filter(c => {
+                if (!c.created_at) return true
+                return new Date(c.created_at) <= endOfDay
+            }).length
+            return { date: d.date, value: count }
+        })
+
+        // Member delta: joined last 7d vs prior 7d (% change in new joins)
+        let memberDelta = null
+        if (memberGrowth.length >= 14) {
+            const today = memberGrowth[memberGrowth.length - 1].value
+            const sevenAgo = memberGrowth[memberGrowth.length - 8].value
+            const fourteenAgo = memberGrowth[memberGrowth.length - 15]?.value ?? sevenAgo
+            const joinedLast7 = today - sevenAgo
+            const joinedPrior7 = sevenAgo - fourteenAgo
+            if (joinedPrior7 > 0) memberDelta = Math.round(((joinedLast7 - joinedPrior7) / joinedPrior7) * 100)
+            else if (joinedLast7 > 0) memberDelta = 100
+            else memberDelta = 0
+        }
+
         return [
             {
                 label: 'Total Team Members',
                 count: totalClients,
                 icon: Users,
-                color: 'text-blue-600',
-                bg: 'bg-blue-50'
+                color: '#3b82f6',
+                delta: memberDelta,
+                sparkData: memberGrowth,
+                sparkLabel: 'members'
+            },
+            {
+                label: 'Active Today',
+                count: activeToday,
+                icon: Zap,
+                color: '#10b981',
+                delta: deltas.activeMembers ?? null,
+                sparkData: series.map(d => ({ date: d.date, value: d.activeMembers })),
+                sparkLabel: 'active'
             },
             {
                 label: 'All-Time Cases Reviewed',
                 count: totalReviewedCases,
                 icon: CheckCircle2,
-                color: 'text-emerald-600',
-                bg: 'bg-emerald-50'
+                color: '#8b5cf6',
+                delta: deltas.teamCases ?? null,
+                sparkData: series.map(d => ({ date: d.date, value: d.teamCases })),
+                sparkLabel: 'cases'
             },
             {
                 label: 'All-Time Profiles Reviewed',
                 count: totalReviewedProfiles,
                 icon: UserCheck,
-                color: 'text-amber-600',
-                bg: 'bg-amber-50'
-            }
+                color: '#f59e0b',
+                delta: deltas.teamProfiles ?? null,
+                sparkData: series.map(d => ({ date: d.date, value: d.teamProfiles })),
+                sparkLabel: 'profiles'
+            },
         ]
-    }, [clients])
+    }, [clients, capacityMetrics])
+
+    const hasActiveFilters = searchTerm !== '' || roleFilter !== 'all' || statusFilter !== 'all'
 
     const filteredClients = useMemo(() => {
-        if (!searchTerm) return clients || []
-        return (clients || []).filter(client =>
-            client.email?.toLowerCase().includes(searchTerm.toLowerCase())
-        )
-    }, [clients, searchTerm])
+        let result = clients || []
+
+        if (searchTerm) {
+            const q = searchTerm.toLowerCase()
+            result = result.filter(c =>
+                c.email?.toLowerCase().includes(q) ||
+                c.alias?.toLowerCase().includes(q) ||
+                c.organization?.toLowerCase().includes(q)
+            )
+        }
+
+        if (roleFilter !== 'all') {
+            result = result.filter(c => matchesRoleFilter(c.permission, roleFilter))
+        }
+
+        if (statusFilter !== 'all') {
+            result = result.filter(c => {
+                const isActive = !!c.activityStats?.todayLastActivity
+                return statusFilter === 'active' ? isActive : !isActive
+            })
+        }
+
+        const getSortValue = (c) => {
+            const s = c.activityStats || {}
+            switch (sortBy) {
+                case 'today': return (s.todayCases || 0) + (s.todayProfiles || 0)
+                case 'week': return (s.last7DaysCases || 0) + (s.last7DaysProfiles || 0)
+                case 'month': return (s.last30DaysCases || 0) + (s.last30DaysProfiles || 0)
+                case 'activity': return s.todayLastActivity || ''
+                case 'member':
+                default: return (c.email || '').toLowerCase()
+            }
+        }
+
+        return [...result].sort((a, b) => {
+            const va = getSortValue(a)
+            const vb = getSortValue(b)
+            if (va < vb) return sortDir === 'asc' ? -1 : 1
+            if (va > vb) return sortDir === 'asc' ? 1 : -1
+            return 0
+        })
+    }, [clients, searchTerm, roleFilter, statusFilter, sortBy, sortDir])
+
+    const resetFilters = () => {
+        setSearchTerm('')
+        setRoleFilter('all')
+        setStatusFilter('all')
+    }
+
+    const toggleSort = (col) => {
+        if (sortBy === col) {
+            setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+        } else {
+            setSortBy(col)
+            setSortDir(col === 'member' ? 'asc' : 'desc')
+        }
+    }
+
+    const SortIcon = ({ col }) => {
+        if (sortBy !== col) return <ArrowUpDown className="w-3 h-3 opacity-40" />
+        return sortDir === 'asc'
+            ? <ArrowUp className="w-3 h-3 text-blue-600" />
+            : <ArrowDown className="w-3 h-3 text-blue-600" />
+    }
+
+    const totalCount = clients?.length || 0
+    const isError = notification?.isError
 
     return (
         <div className="p-4 md:p-6 h-full overflow-y-auto overflow-x-hidden space-y-6 md:space-y-8 animate-in fade-in duration-500">
-            {/* Header section with Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* KPI cards */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
                 {stats.map((stat, i) => (
-                    <Card key={i} className="border-none shadow-sm bg-white overflow-hidden group transition-all duration-300">
-                        <CardContent className="p-6">
-                            <div className="flex items-center justify-between">
-                                <div className="space-y-1">
-                                    <p className="text-sm font-medium text-slate-500">{stat.label}</p>
-                                    <p className="text-3xl font-bold text-slate-900">{stat.count.toLocaleString()}</p>
-                                </div>
-                                <div className={`p-3 rounded-2xl ${stat.bg} group-hover:scale-110 transition-transform duration-300`}>
-                                    <stat.icon className={`w-6 h-6 ${stat.color}`} />
-                                </div>
-                            </div>
-                        </CardContent>
-                    </Card>
+                    <KpiCard
+                        key={i}
+                        icon={stat.icon}
+                        label={stat.label}
+                        value={stat.count}
+                        delta={stat.delta}
+                        sparkData={stat.sparkData}
+                        sparkLabel={stat.sparkLabel}
+                        color={stat.color}
+                    />
                 ))}
             </div>
 
+            {/* Capacity widget */}
+            <CapacityWidget metrics={capacityMetrics} />
+
             {/* Main Content */}
             <div className="space-y-4 pb-12">
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
                     <div>
                         <h2 className="text-xl font-semibold text-slate-900">Project Contributors</h2>
                         <p className="text-sm text-slate-500">Manage and monitor team performance for <span className="text-blue-600 font-medium">{project_name}</span></p>
                     </div>
 
-                    <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
-                        <div className="relative w-full sm:w-80">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                            <Input
-                                placeholder="Search by email..."
-                                className="pl-10 w-full bg-white border-slate-200 focus:border-blue-300 transition-colors shadow-sm"
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                            />
-                        </div>
+                    <div className="flex flex-row gap-2 self-start md:self-auto">
+                        <Button
+                            variant="outline"
+                            onClick={exportToCsv}
+                            disabled={filteredClients.length === 0}
+                            className="bg-white text-slate-700 border-slate-200 hover:bg-slate-50 hover:text-slate-900 shrink-0 shadow-sm"
+                            title="Export current view as CSV"
+                        >
+                            <Download className="w-4 h-4 mr-2" />
+                            Export CSV
+                        </Button>
                         {isClientAdmin && (
                             <Button
                                 onClick={() => setIsCreateModalOpen(true)}
-                                className="bg-blue-600 hover:bg-blue-700 text-white w-full sm:w-auto shrink-0 shadow-sm"
+                                className="bg-blue-600 hover:bg-blue-700 text-white shrink-0 shadow-sm"
                             >
                                 <Plus className="w-4 h-4 mr-2" />
                                 Add Member
@@ -258,7 +527,76 @@ const AdminDashboard = ({ project_name, clients, isClientAdmin = false }) => {
                     </div>
                 </div>
 
-                {/* Mobile Card View */}
+                {/* Toolbar: search + filters */}
+                <div className="">
+                    <div className="flex flex-col lg:flex-row lg:items-center gap-3">
+                        <div className="relative flex-1 min-w-0">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                            <Input
+                                placeholder="Search by email, alias, or organization..."
+                                className="pl-10 pr-9 w-full bg-slate-50 border-slate-200 focus:border-blue-300 focus:bg-white transition-colors"
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                            />
+                            {searchTerm && (
+                                <button
+                                    onClick={() => setSearchTerm('')}
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+                                    aria-label="Clear search"
+                                >
+                                    <X className="w-3.5 h-3.5" />
+                                </button>
+                            )}
+                        </div>
+
+                        <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+                            <Select value={roleFilter} onValueChange={setRoleFilter}>
+                                <SelectTrigger className="w-full sm:w-[150px] bg-white">
+                                    <SelectValue placeholder="Role" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Roles</SelectItem>
+                                    <SelectItem value="admin">Admin</SelectItem>
+                                    <SelectItem value="reviewer">Reviewer</SelectItem>
+                                    <SelectItem value="analyst">Analyst</SelectItem>
+                                </SelectContent>
+                            </Select>
+
+                            <Select value={statusFilter} onValueChange={setStatusFilter}>
+                                <SelectTrigger className="w-full sm:w-[160px] bg-white">
+                                    <SelectValue placeholder="Status" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Statuses</SelectItem>
+                                    <SelectItem value="active">Active Today</SelectItem>
+                                    <SelectItem value="offline">Offline</SelectItem>
+                                </SelectContent>
+                            </Select>
+
+                            {hasActiveFilters && (
+                                <Button
+                                    variant="ghost"
+                                    onClick={resetFilters}
+                                    className="text-slate-500 hover:text-slate-900 h-9 px-3"
+                                >
+                                    <RotateCcw className="w-3.5 h-3.5 mr-1.5" />
+                                    Reset
+                                </Button>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+                        <span>
+                            Showing <span className="font-semibold text-slate-900">{filteredClients.length}</span> of <span className="font-semibold text-slate-900">{totalCount}</span> {totalCount === 1 ? 'member' : 'members'}
+                        </span>
+                        {hasActiveFilters && (
+                            <span className="text-blue-600 font-medium">Filters applied</span>
+                        )}
+                    </div>
+                </div>
+
+                {/* Mobile card view */}
                 <div className="md:hidden space-y-4">
                     {filteredClients.map((client) => {
                         const stats = client.activityStats || {}
@@ -273,7 +611,14 @@ const AdminDashboard = ({ project_name, clients, isClientAdmin = false }) => {
                                         </div>
                                         <div className="min-w-0 flex-1">
                                             <div className="flex flex-col gap-1.5 mb-1.5">
-                                                <div className="font-medium text-slate-900 break-words break-all leading-snug">{client.email}</div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setClientToView(client)}
+                                                    className="font-medium text-slate-900 break-words break-all leading-snug hover:text-blue-700 hover:underline decoration-dotted underline-offset-4 transition-colors text-left"
+                                                    title={`View ${client.email}'s activity`}
+                                                >
+                                                    {client.email}
+                                                </button>
                                                 {client.alias && (
                                                     <div className="text-[10px] text-blue-600 font-medium flex items-center gap-1 bg-blue-50/80 px-1.5 py-0.5 rounded-md border border-blue-100/50 w-fit max-w-full" title={`Alias: ${client.alias}`}>
                                                         <UserCheck className="w-3 h-3 text-blue-500 shrink-0" />
@@ -291,7 +636,7 @@ const AdminDashboard = ({ project_name, clients, isClientAdmin = false }) => {
                                     </div>
                                     <div className="flex flex-row sm:flex-col items-center sm:items-end justify-between w-full sm:w-auto gap-2 shrink-0 pl-12 sm:pl-0">
                                         <Badge variant={client.permission === 'client-admin' ? 'default' : 'secondary'} className="capitalize text-[10px] font-semibold shrink-0">
-                                            {client.permission === 'client-admin' ? 'Admin' : client.permission === 'client-reviewer' ? 'Reviewer' : "Analyst"}
+                                            {roleLabel(client.permission)}
                                         </Badge>
                                         {isActiveToday ? (
                                             <span className="inline-flex items-center gap-1.5 text-[10px] text-emerald-600 font-medium bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100 shrink-0">
@@ -315,7 +660,7 @@ const AdminDashboard = ({ project_name, clients, isClientAdmin = false }) => {
                                         </div>
                                     </div>
                                     <div className="space-y-1 min-w-0">
-                                        <p className="text-xs text-slate-500 font-medium">Today's Reviews</p>
+                                        <p className="text-xs text-slate-500 font-medium">Today&apos;s Reviews</p>
                                         <div className="flex flex-wrap gap-2">
                                             <Badge variant="outline" className="bg-white px-2 py-1 flex gap-1 items-center font-medium">
                                                 <ShieldCheck className="w-3 h-3 text-emerald-600 shrink-0" /> {stats.todayCases || 0}
@@ -366,6 +711,11 @@ const AdminDashboard = ({ project_name, clients, isClientAdmin = false }) => {
                                             <Button variant="outline" size="sm" className="h-8 text-xs bg-white text-slate-600 hover:text-blue-600" onClick={() => { setClientToEditAlias(client); setNewAlias(client.alias || '') }}>
                                                 <Edit2 className="h-3.5 w-3.5 mr-1" /> Alias
                                             </Button>
+                                            {client.id !== currentUserId && (
+                                                <Button variant="outline" size="sm" className="h-8 text-xs bg-white text-slate-600 hover:text-emerald-600" onClick={() => { setClientToEditRole(client); setNewRole(client.permission || 'client') }}>
+                                                    <Shield className="h-3.5 w-3.5 mr-1" /> Role
+                                                </Button>
+                                            )}
                                             {client.permission !== 'client-admin' ? (
                                                 <Button variant="outline" size="sm" className="h-8 text-xs bg-white text-red-600 hover:bg-red-50" onClick={() => setClientToDelete(client)}>
                                                     <Trash2 className="h-3.5 w-3.5 mr-1" /> Delete
@@ -387,22 +737,63 @@ const AdminDashboard = ({ project_name, clients, isClientAdmin = false }) => {
                                 <Users className="w-8 h-8 text-slate-300" />
                             </div>
                             <p className="font-medium text-slate-900">No members found</p>
-                            <p className="text-sm">We couldn't find any team members matching your search.</p>
+                            <p className="text-sm">Try a different search term or reset filters.</p>
+                            {hasActiveFilters && (
+                                <Button variant="outline" size="sm" onClick={resetFilters} className="mt-3">
+                                    <RotateCcw className="w-3.5 h-3.5 mr-1.5" /> Reset filters
+                                </Button>
+                            )}
                         </div>
                     )}
                 </div>
 
-                {/* Desktop Table View */}
-                <Card className="hidden md:block border-slate-200 bg-white shadow-sm overflow-hidden">
+                {/* Desktop table */}
+                <Card className="hidden md:block border-slate-200 bg-white shadow-sm overflow-hidden p-0">
+                <div className="overflow-x-auto">
                     <Table>
-                        <TableHeader className="bg-slate-50/80 border-b border-slate-100">
+                        <TableHeader className="bg-slate-50/80 border-b border-slate-100 sticky top-0 z-10 backdrop-blur-sm">
                             <TableRow className="hover:bg-transparent">
-                                <TableHead className="w-[300px] font-semibold text-slate-700">Member Details</TableHead>
-                                <TableHead className="font-semibold text-slate-700">Status & Activity</TableHead>
-                                <TableHead className="text-center font-semibold text-slate-700">Today</TableHead>
+                                <TableHead className="w-[300px] font-semibold text-slate-700">
+                                    <button
+                                        onClick={() => toggleSort('member')}
+                                        className="inline-flex items-center gap-1.5 hover:text-blue-700 transition-colors"
+                                    >
+                                        Member Details <SortIcon col="member" />
+                                    </button>
+                                </TableHead>
+                                <TableHead className="font-semibold text-slate-700">
+                                    <button
+                                        onClick={() => toggleSort('activity')}
+                                        className="inline-flex items-center gap-1.5 hover:text-blue-700 transition-colors"
+                                    >
+                                        Status & Activity <SortIcon col="activity" />
+                                    </button>
+                                </TableHead>
+                                <TableHead className="text-center font-semibold text-slate-700">
+                                    <button
+                                        onClick={() => toggleSort('today')}
+                                        className="inline-flex items-center gap-1.5 hover:text-blue-700 transition-colors mx-auto"
+                                    >
+                                        Today <SortIcon col="today" />
+                                    </button>
+                                </TableHead>
                                 <TableHead className="text-center font-semibold text-slate-700">Reports Downloaded</TableHead>
-                                <TableHead className="text-center font-semibold text-slate-700">Last 7 Days</TableHead>
-                                <TableHead className="text-center font-semibold text-slate-700">Last 30 Days</TableHead>
+                                <TableHead className="text-center font-semibold text-slate-700">
+                                    <button
+                                        onClick={() => toggleSort('week')}
+                                        className="inline-flex items-center gap-1.5 hover:text-blue-700 transition-colors mx-auto"
+                                    >
+                                        Last 7 Days <SortIcon col="week" />
+                                    </button>
+                                </TableHead>
+                                <TableHead className="text-center font-semibold text-slate-700">
+                                    <button
+                                        onClick={() => toggleSort('month')}
+                                        className="inline-flex items-center gap-1.5 hover:text-blue-700 transition-colors mx-auto"
+                                    >
+                                        Last 30 Days <SortIcon col="month" />
+                                    </button>
+                                </TableHead>
                                 <TableHead className="text-right font-semibold text-slate-700">Manage</TableHead>
                             </TableRow>
                         </TableHeader>
@@ -420,9 +811,14 @@ const AdminDashboard = ({ project_name, clients, isClientAdmin = false }) => {
                                                 </div>
                                                 <div className="min-w-0 flex-1">
                                                     <div className="flex items-center gap-2 flex-wrap">
-                                                        <span className="font-semibold text-slate-900 break-all" title={client.email}>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setClientToView(client)}
+                                                            className="font-semibold text-slate-900 break-all hover:text-blue-700 hover:underline decoration-dotted underline-offset-4 transition-colors text-left"
+                                                            title={`View ${client.email}'s activity`}
+                                                        >
                                                             {client.email}
-                                                        </span>
+                                                        </button>
                                                         {client.alias && (
                                                             <div className="text-[10px] text-blue-600 font-medium flex items-center gap-1 bg-blue-50/80 px-1.5 py-0.5 rounded-md border border-blue-100/50" title={`Alias: ${client.alias}`}>
                                                                 <UserCheck className="w-3 h-3 text-blue-500" />
@@ -430,7 +826,7 @@ const AdminDashboard = ({ project_name, clients, isClientAdmin = false }) => {
                                                             </div>
                                                         )}
                                                         <Badge variant={client.permission === 'client-admin' ? 'default' : 'secondary'} className="capitalize px-1.5 py-0 text-[9px] font-bold tracking-wide shrink-0">
-                                                            {client.permission === 'client-admin' ? 'Admin' : client.permission === 'client-reviewer' ? 'Reviewer' : "Analyst"}
+                                                            {roleLabel(client.permission)}
                                                         </Badge>
                                                     </div>
                                                     
@@ -559,6 +955,21 @@ const AdminDashboard = ({ project_name, clients, isClientAdmin = false }) => {
                                                             <Edit2 className="h-4 w-4" />
                                                         </Button>
 
+                                                        {client.id !== currentUserId && (
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                className="h-8 w-8 rounded-full text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors"
+                                                                onClick={() => {
+                                                                    setClientToEditRole(client)
+                                                                    setNewRole(client.permission || 'client')
+                                                                }}
+                                                                title="Change Role"
+                                                            >
+                                                                <Shield className="h-4 w-4" />
+                                                            </Button>
+                                                        )}
+
                                                         {client.permission !== 'client-admin' ? (
                                                             <Button
                                                                 variant="ghost"
@@ -591,15 +1002,28 @@ const AdminDashboard = ({ project_name, clients, isClientAdmin = false }) => {
                                                 <Users className="w-8 h-8 text-slate-300" />
                                             </div>
                                             <p className="text-lg font-semibold text-slate-900">No members found</p>
-                                            <p className="text-sm mt-1 max-w-sm">We couldn't find any team members matching your search criteria. Try a different term or add a new member.</p>
+                                            <p className="text-sm mt-1 max-w-sm">
+                                                We couldn&apos;t find any team members matching your filters. Try adjusting your search or resetting.
+                                            </p>
+                                            {hasActiveFilters && (
+                                                <Button variant="outline" size="sm" onClick={resetFilters} className="mt-4">
+                                                    <RotateCcw className="w-3.5 h-3.5 mr-1.5" /> Reset filters
+                                                </Button>
+                                            )}
                                         </div>
                                     </TableCell>
                                 </TableRow>
                             )}
                         </TableBody>
                     </Table>
+                </div>
                 </Card>
             </div>
+
+            <MemberDetailDialog
+                client={clientToView}
+                onClose={() => setClientToView(null)}
+            />
 
             {isClientAdmin && (
             <CreateUserModal
@@ -622,9 +1046,18 @@ const AdminDashboard = ({ project_name, clients, isClientAdmin = false }) => {
             {/* Toast Notification */}
             {notification && (
                 <div className="fixed bottom-6 right-6 z-50 animate-in slide-in-from-right-full fade-in duration-500">
-                    <div className="bg-white border border-emerald-100 shadow-2xl shadow-emerald-500/10 rounded-2xl p-4 flex items-start gap-4 max-w-sm">
-                        <div className="bg-emerald-50 p-2 rounded-xl">
-                            <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                    <div
+                        className={
+                            isError
+                                ? "bg-white border border-red-100 shadow-2xl shadow-red-500/10 rounded-2xl p-4 flex items-start gap-4 max-w-sm"
+                                : "bg-white border border-emerald-100 shadow-2xl shadow-emerald-500/10 rounded-2xl p-4 flex items-start gap-4 max-w-sm"
+                        }
+                        role={isError ? "alert" : "status"}
+                    >
+                        <div className={isError ? "bg-red-50 p-2 rounded-xl" : "bg-emerald-50 p-2 rounded-xl"}>
+                            {isError
+                                ? <AlertCircle className="w-5 h-5 text-red-600" />
+                                : <CheckCircle2 className="w-5 h-5 text-emerald-600" />}
                         </div>
                         <div className="flex-1 min-w-0">
                             <p className="text-sm font-semibold text-slate-900 leading-tight">
@@ -637,8 +1070,9 @@ const AdminDashboard = ({ project_name, clients, isClientAdmin = false }) => {
                         <button
                             onClick={() => setNotification(null)}
                             className="p-1 hover:bg-slate-50 rounded-lg text-slate-400 hover:text-slate-600 transition-colors"
+                            aria-label="Dismiss notification"
                         >
-                            <Plus className="w-4 h-4 rotate-45" />
+                            <X className="w-4 h-4" />
                         </button>
                     </div>
                 </div>
@@ -695,6 +1129,7 @@ const AdminDashboard = ({ project_name, clients, isClientAdmin = false }) => {
                             placeholder="e.g. John Doe"
                             value={newAlias}
                             onChange={(e) => setNewAlias(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === 'Enter' && !isUpdatingAlias) handleUpdateAlias() }}
                             className="w-full bg-slate-50 border-slate-200 focus:bg-white focus:ring-2 focus:ring-blue-100 transition-all duration-200"
                             autoFocus
                         />
@@ -720,6 +1155,59 @@ const AdminDashboard = ({ project_name, clients, isClientAdmin = false }) => {
                 </DialogContent>
             </Dialog>
 
+            {/* Change Role Dialog */}
+            <Dialog open={!!clientToEditRole} onOpenChange={(open) => !open && !isUpdatingRole && setClientToEditRole(null)}>
+                <DialogContent className="p-0 overflow-hidden bg-white shadow-2xl border-slate-100 rounded-2xl sm:max-w-[425px]">
+                    <div className="px-6 pt-6 pb-0">
+                        <DialogHeader>
+                            <DialogTitle className="text-xl font-bold text-slate-900 flex items-center gap-2">
+                                <Shield className="w-5 h-5 text-emerald-600" />
+                                Change Role
+                            </DialogTitle>
+                            <DialogDescription className="text-slate-500 mt-1.5 leading-relaxed">
+                                Update access level for <span className="font-semibold text-slate-900">{clientToEditRole?.email}</span>.
+                            </DialogDescription>
+                        </DialogHeader>
+                    </div>
+                    <div className="p-6 space-y-3">
+                        <Select value={newRole} onValueChange={setNewRole}>
+                            <SelectTrigger className="w-full bg-slate-50 border-slate-200">
+                                <SelectValue placeholder="Select a role" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="client-admin">Admin — full access, manage team</SelectItem>
+                                <SelectItem value="client-reviewer">Reviewer — review cases & profiles</SelectItem>
+                                <SelectItem value="client">Analyst — standard access</SelectItem>
+                            </SelectContent>
+                        </Select>
+                        {clientToEditRole?.permission === 'client-admin' && newRole !== 'client-admin' && (
+                            <div className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg p-2.5 flex items-start gap-2">
+                                <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                                <span>Demoting an admin will revoke their team management access.</span>
+                            </div>
+                        )}
+                    </div>
+                    <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-2">
+                        <Button
+                            variant="outline"
+                            onClick={() => setClientToEditRole(null)}
+                            disabled={isUpdatingRole}
+                            className="bg-white hover:bg-slate-50 text-slate-600 border-slate-200"
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm transition-all duration-200"
+                            onClick={handleUpdateRole}
+                            disabled={isUpdatingRole || newRole === clientToEditRole?.permission}
+                        >
+                            {isUpdatingRole ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <CheckCircle2 className="w-4 h-4 mr-2" />}
+                            Save Role
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
             {/* Edit Organization Dialog */}
             <Dialog open={!!clientToEditOrg} onOpenChange={(open) => !open && !isUpdatingOrg && setClientToEditOrg(null)}>
                 <DialogContent className="p-0 overflow-hidden bg-white shadow-2xl border-slate-100 rounded-2xl sm:max-w-[425px]">
@@ -736,6 +1224,7 @@ const AdminDashboard = ({ project_name, clients, isClientAdmin = false }) => {
                             placeholder="e.g. Acme Corp"
                             value={newOrg}
                             onChange={(e) => setNewOrg(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === 'Enter' && !isUpdatingOrg) handleUpdateOrg() }}
                             className="w-full bg-slate-50 border-slate-200 focus:bg-white focus:ring-2 focus:ring-blue-100 transition-all duration-200"
                             autoFocus
                         />

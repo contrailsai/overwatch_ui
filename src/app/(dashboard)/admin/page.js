@@ -4,15 +4,14 @@ import { getClientandProjectDetails } from '@/app/(dashboard)/actions'
 import PageHeader from '@/components/PageHeader'
 
 import AdminDashboard from './AdminDashboard'
-import { fetch_clients_in_project } from "./actions"
+import { fetch_clients_in_project, fetch_capacity_metrics } from "./actions"
 
 export const metadata = {
   title: 'Admin Dashboard',
   description: 'Admin Dashboard',
 }
 
-export default async function AdminPage({ searchParams }) {
-  // 1. Get current authenticated user and project details
+export default async function AdminPage() {
   const result = await getClientandProjectDetails()
 
   if (!result) return null // Should be handled by layout redirect
@@ -72,8 +71,11 @@ export default async function AdminPage({ searchParams }) {
   //   initialCase = await getPostById(project, resolvedParams.case_id);
   // }
 
-  // fetch all other clients metadata and stats
-  const clients = await fetch_clients_in_project()
+  // fetch all other clients metadata and stats + project-level capacity metrics
+  const [clients, capacityMetrics] = await Promise.all([
+    fetch_clients_in_project(),
+    fetch_capacity_metrics()
+  ])
 
 
   return (
@@ -85,7 +87,9 @@ export default async function AdminPage({ searchParams }) {
         <AdminDashboard
           project_name={project.project_name}
           clients={clients}
+          capacityMetrics={capacityMetrics}
           isClientAdmin={clientDetails.permission === 'client-admin'}
+          currentUserId={user.id}
         />
       </div>
     </main>

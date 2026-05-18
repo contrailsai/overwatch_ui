@@ -2,7 +2,7 @@
 
 import { ResponsiveContainer, AreaChart, Area, Tooltip } from 'recharts'
 
-export default function Sparkline({ data, color = '#3b82f6' }) {
+export default function Sparkline({ data, color = '#3b82f6', label = 'cases' }) {
     if (!data || data.length === 0) return <div className="h-full w-full bg-slate-50 rounded-md animate-pulse" />
 
     return (
@@ -34,7 +34,7 @@ export default function Sparkline({ data, color = '#3b82f6' }) {
                                                 {payload[0].payload.date}
                                             </p>
                                         )}
-                                        <p className="tabular-nums">{payload[0].value.toLocaleString()} cases</p>
+                                        <p className="tabular-nums">{payload[0].value.toLocaleString()} {label}</p>
                                     </div>
                                 )
                             }
