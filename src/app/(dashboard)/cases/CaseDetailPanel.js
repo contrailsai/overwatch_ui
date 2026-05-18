@@ -38,7 +38,7 @@ const getRiskLabel = (score) => {
     return { label: 'Safe', color: 'text-slate-500 bg-slate-50 border-slate-200' };
 }
 
-export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose, onNavigate, hasPrev, hasNext, onUpdateStatus, onUpdatePost, projectEmails }) {
+export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose, onNavigate, hasPrev, hasNext, onUpdateStatus, onUpdatePost, onShowToast, projectEmails }) {
     const [isProcessing, setIsProcessing] = useState(false)
     const [imgError, setImgError] = useState(false)
     const router = useRouter()
@@ -283,17 +283,33 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
 
     const handleTakedown = async () => {
         setIsProcessing('takedown');
+        trackClientClick('do_takedown', { page: 'CaseDetailPanel' });
         try {
             const result = await initiateTakedown([post._id], clientDetails.email);
             if (result.success) {
-                if (onUpdateStatus) onUpdateStatus(post._id, 'Takedown'); // CASE SENSITIVE BE CAREFULL
+                const nowIso = new Date().toISOString();
+                const updatedPost = {
+                    ...post,
+                    client_status: 'Takedown',
+                    takedown_info: {
+                        ...(post.takedown_info || {}),
+                        in_takedown_process: true,
+                        status: 'initiated',
+                        takedown_start_date: nowIso,
+                    },
+                };
+                if (onUpdatePost) {
+                    onUpdatePost(updatedPost);
+                } else if (onUpdateStatus) {
+                    onUpdateStatus(post._id, 'Takedown');
+                }
                 setShowProcessed(post._id);
-                onClose();
+                onShowToast?.('Takedown initiated', 'success');
             } else {
-                alert("Error: " + result.error);
+                onShowToast?.(`Takedown failed: ${result.error}`, 'error');
             }
         } catch (e) {
-            alert("Failed to initiate takedown.");
+            onShowToast?.('Failed to initiate takedown', 'error');
         } finally {
             setIsProcessing(false);
         }
@@ -1021,13 +1037,13 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
                                             {allowDoTakedown && (
                                                 <Button
                                                     onClick={handleTakedown}
-                                                    disabled={isProcessing === 'Takedown'}
+                                                    disabled={isProcessing === 'takedown'}
                                                     className={cn(
                                                         "flex-1 h-12 font-bold text-white transition-all duration-200 shadow-rose-900/20 bg-rose-600",
                                                         cn("opacity-50 hover:opacity-100 cursor-pointer hover:bg-rose-700", clientStatus === 'To Be Reviewed' ? "opacity-100" : "")
                                                     )}
                                                 >
-                                                    {isProcessing === 'Takedown' ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <ShieldAlert className="w-4 h-4 mr-2" />}
+                                                    {isProcessing === 'takedown' ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <ShieldAlert className="w-4 h-4 mr-2" />}
                                                     Do Takedown
                                                 </Button>
                                             )}

@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useCallback, useEffect, useTransition, useMemo } from 'react'
-import Link from 'next/link'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import {
   Filter, Search, ChevronRight, AlertTriangle, CheckCircle,
@@ -205,6 +204,10 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
     
     for (let i = start; i <= end; i++) pages.push(i)
     return pages
+  }
+
+  const openCaseInNewTab = (caseId) => {
+    window.open(`/takedowns/case/${caseId}`, '_blank', 'noopener,noreferrer')
   }
 
   const FilterControls = ({ isMobile = false }) => (
@@ -574,7 +577,7 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
                         className="group hover:bg-slate-50/80 transition-all cursor-pointer"
                         onClick={(e) => {
                           if (e.target.type === 'checkbox') return;
-                          router.push(`/takedowns/case/${item.id}`)
+                          openCaseInNewTab(item.id)
                         }}
                       >
                         {/* Checkbox */}
