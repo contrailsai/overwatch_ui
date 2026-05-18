@@ -808,7 +808,7 @@ export function ProfilesList({ profiles, project, initialFilters, currentPage })
 
     const clearFilters = () => router.push(pathname)
 
-    const hasActiveFilter = initialFilters.platform !== 'all' || initialFilters.is_verified !== 'all' || initialFilters.searchText || initialFilters.publish_date_from || initialFilters.publish_date_to
+    const hasActiveFilter = initialFilters.platform !== 'all' || initialFilters.is_verified !== 'all' || (initialFilters.reviewStatus && initialFilters.reviewStatus !== 'all') || initialFilters.searchText || initialFilters.publish_date_from || initialFilters.publish_date_to
 
     const [searchInput, setSearchInput] = useState(initialFilters.searchText || '')
 
@@ -893,6 +893,20 @@ export function ProfilesList({ profiles, project, initialFilters, currentPage })
                                             <SelectItem value="x">X (Twitter)</SelectItem>
                                             <SelectItem value="reddit">Reddit</SelectItem>
                                             <SelectItem value="youtube">YouTube</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                <div className="space-y-1">
+                                    <Label className="text-[10px] uppercase font-bold text-slate-400">Review Status</Label>
+                                    <Select value={initialFilters.reviewStatus || 'all'} onValueChange={(val) => handleFilterChange('reviewStatus', val)}>
+                                        <SelectTrigger className="w-[150px] bg-white border-slate-200 h-9 text-xs font-semibold">
+                                            <SelectValue placeholder="All" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">All Profiles</SelectItem>
+                                            <SelectItem value="pending">Not Reviewed</SelectItem>
+                                            <SelectItem value="reviewed">Reviewed</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>
