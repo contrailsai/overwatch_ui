@@ -81,7 +81,7 @@ const matchesRoleFilter = (permission, roleFilter) => {
     return true
 }
 
-const AdminDashboard = ({ project_name, clients, isClientAdmin = false, currentUserId = null, capacityMetrics = null }) => {
+const AdminDashboard = ({ project_name, clients, canManageTeam = false, currentUserId = null, capacityMetrics = null }) => {
     const router = useRouter()
     const [searchTerm, setSearchTerm] = useState('')
     const [roleFilter, setRoleFilter] = useState('all')
@@ -387,7 +387,7 @@ const AdminDashboard = ({ project_name, clients, isClientAdmin = false, currentU
                             <Download className="w-4 h-4 mr-2" />
                             Export CSV
                         </Button>
-                        {isClientAdmin && (
+                        {canManageTeam && (
                             <Button
                                 onClick={() => setIsCreateModalOpen(true)}
                                 className="bg-blue-600 hover:bg-blue-700 text-white shrink-0 shadow-sm"
@@ -575,7 +575,7 @@ const AdminDashboard = ({ project_name, clients, isClientAdmin = false, currentU
                                     </div>
                                 </div>
                                 <div className="p-3 bg-slate-100/50 flex flex-wrap justify-end gap-2 border-t border-slate-100">
-                                    {isClientAdmin ? (
+                                    {canManageTeam ? (
                                         <>
                                             <Button variant="outline" size="sm" className="h-8 text-xs bg-white text-slate-600 hover:text-purple-600" onClick={() => { setClientToEditOrg(client); setNewOrg(client.organization || '') }}>
                                                 <Building2 className="h-3.5 w-3.5 mr-1" /> Org
@@ -798,8 +798,8 @@ const AdminDashboard = ({ project_name, clients, isClientAdmin = false, currentU
                                             </div>
                                         </TableCell>
                                         <TableCell className="py-4 text-right">
-                                            <div className="flex items-center justify-end gap-1 opacity-60 group-hover:opacity-100 transition-opacity">
-                                                {isClientAdmin ? (
+                                            <div className="flex items-center justify-end gap-1 transition-opacity">
+                                                {canManageTeam ? (
                                                     <>
                                                         <Button
                                                             variant="ghost"
@@ -897,7 +897,7 @@ const AdminDashboard = ({ project_name, clients, isClientAdmin = false, currentU
                 onClose={() => setClientToView(null)}
             />
 
-            {isClientAdmin && (
+            {canManageTeam && (
             <CreateUserModal
                 isOpen={isCreateModalOpen}
                 onClose={() => setIsCreateModalOpen(false)}

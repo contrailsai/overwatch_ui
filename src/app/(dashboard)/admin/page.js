@@ -5,6 +5,7 @@ import PageHeader from '@/components/PageHeader'
 
 import AdminDashboard from './AdminDashboard'
 import { fetch_clients_in_project, fetch_capacity_metrics } from "./actions"
+import { canManageTeamMembers } from '@/utils/admin-roles'
 
 export const metadata = {
   title: 'Admin Dashboard',
@@ -88,7 +89,7 @@ export default async function AdminPage() {
           project_name={project.project_name}
           clients={clients}
           capacityMetrics={capacityMetrics}
-          isClientAdmin={clientDetails.permission === 'client-admin'}
+          canManageTeam={canManageTeamMembers(clientDetails.permission)}
           currentUserId={user.id}
         />
       </div>
