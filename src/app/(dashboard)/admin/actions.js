@@ -7,6 +7,8 @@ import { requireRole } from '@/utils/auth-context'
 
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 
+const TEAM_MANAGER_ROLES = ['client-admin', 'reviewer']
+
 export const fetch_clients_in_project = traceAction('fetch_clients_in_project', async () => {
     const { clientDetails } = await requireRole(['client-admin', 'reviewer'])
     const supabase = await createClient()
@@ -331,7 +333,7 @@ export const fetch_client_activity_history = traceAction('fetch_client_activity_
 })
 
 export const create_new_client = traceAction('create_new_client', async (email, password) => {
-    const { clientDetails } = await requireRole(['client-admin'])
+    const { clientDetails } = await requireRole(TEAM_MANAGER_ROLES)
     const projectName = clientDetails.project_name
     if (!projectName) {
         return { error: 'Your account is not assigned to a project.' }
@@ -391,7 +393,7 @@ export const create_new_client = traceAction('create_new_client', async (email, 
 })
 
 export const delete_client = traceAction('delete_client', async (userId) => {
-    const { user, clientDetails } = await requireRole(['client-admin'])
+    const { user, clientDetails } = await requireRole(TEAM_MANAGER_ROLES)
     const tenantProject = clientDetails.project_name
     if (!userId || !tenantProject) {
         return { error: 'Invalid request.' }
@@ -437,7 +439,7 @@ export const delete_client = traceAction('delete_client', async (userId) => {
 })
 
 export const update_client_alias = traceAction('update_client_alias', async (userId, alias) => {
-    const { clientDetails } = await requireRole(['client-admin'])
+    const { clientDetails } = await requireRole(TEAM_MANAGER_ROLES)
     const tenantProject = clientDetails.project_name
     if (!userId || !tenantProject) {
         return { error: 'Invalid request.' }
@@ -474,7 +476,7 @@ export const update_client_alias = traceAction('update_client_alias', async (use
 })
 
 export const update_client_permission = traceAction('update_client_permission', async (userId, permission) => {
-    const { user, clientDetails } = await requireRole(['client-admin'])
+    const { user, clientDetails } = await requireRole(TEAM_MANAGER_ROLES)
     const tenantProject = clientDetails.project_name
     if (!userId || !tenantProject) {
         return { error: 'Invalid request.' }
@@ -519,7 +521,7 @@ export const update_client_permission = traceAction('update_client_permission', 
 })
 
 export const update_client_organization = traceAction('update_client_organization', async (userId, organization) => {
-    const { clientDetails } = await requireRole(['client-admin'])
+    const { clientDetails } = await requireRole(TEAM_MANAGER_ROLES)
     const tenantProject = clientDetails.project_name
     if (!userId || !tenantProject) {
         return { error: 'Invalid request.' }
