@@ -9,12 +9,36 @@ import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card'
-import { Loader2, Link as LinkIcon, CheckCircle2, AlertCircle, Send, Clock, History, RefreshCw, FileUp, ListChecks, Trash2, GitPullRequestCreateArrow, FileText } from 'lucide-react'
+import { Loader2, Link as LinkIcon, CheckCircle2, AlertCircle, Send, History, RefreshCw, FileUp, ListChecks, Trash2, GitPullRequestCreateArrow, FileText } from 'lucide-react'
 import { format } from 'date-fns'
 import PageHeader from '@/components/PageHeader'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import ManualPostForm from './ManualPostForm'
 
+/** Always returns a string safe to render in JSX (booleans render as empty otherwise). */
+function formatIngestionStatus(status) {
+    if (status === null || status === undefined) return '—'
+    if (typeof status === 'boolean') return status ? 'processed' : 'pending'
+    const text = String(status).trim()
+    return text || '—'
+}
+
+function ingestionStatusBadgeClass(status) {
+    const key = formatIngestionStatus(status).toLowerCase()
+    switch (key) {
+        case 'resolved':
+        case 'processed':
+            return 'bg-emerald-50 text-emerald-700 border-emerald-100'
+        case 'failed':
+            return 'bg-rose-50 text-rose-700 border-rose-100'
+        case 'analyzing':
+            return 'bg-blue-50 text-blue-700 border-blue-100'
+        case 'pending':
+            return 'bg-amber-50 text-amber-700 border-amber-100'
+        default:
+            return 'bg-slate-50 text-slate-700 border-slate-100'
+    }
+}
 
 function RequestLinksTabContent() {
     const [submissionResult, setSubmissionResult] = useState(null)
@@ -316,7 +340,9 @@ function RequestLinksTabContent() {
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-slate-50">
-                                                {requestedLinks.map((item) => (
+                                                {requestedLinks.map((item) => {
+                                                    const statusLabel = formatIngestionStatus(item.ingested)
+                                                    return (
                                                     <tr key={item.id} className="hover:bg-slate-50/40 transition-colors group">
                                                         <td className="px-4 sm:px-8 py-4 sm:py-5">
                                                             <div className="flex items-center gap-3 min-w-[200px] max-w-[200px] sm:max-w-md">
@@ -333,17 +359,11 @@ function RequestLinksTabContent() {
                                                             </div>
                                                         </td>
                                                         <td className="px-4 sm:px-8 py-4 sm:py-5">
-                                                            {item.ingested ? (
-                                                                <div className="inline-flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg bg-emerald-50 text-emerald-700 text-[10px] sm:text-[11px] font-bold border border-emerald-100 shadow-sm">
-                                                                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                                                                    Processed
-                                                                </div>
-                                                            ) : (
-                                                                <div className="inline-flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg bg-amber-50 text-amber-700 text-[10px] sm:text-[11px] font-bold border border-amber-100 shadow-sm whitespace-nowrap">
-                                                                    <Clock className="w-3 h-3 shrink-0" />
-                                                                    Pending
-                                                                </div>
-                                                            )}
+                                                            <div
+                                                                className={`inline-flex items-center px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg text-[10px] sm:text-[11px] font-bold border shadow-sm whitespace-nowrap ${ingestionStatusBadgeClass(item.ingested)}`}
+                                                            >
+                                                                {statusLabel}
+                                                            </div>
                                                         </td>
                                                         <td className="px-4 sm:px-8 py-4 sm:py-5">
                                                             <div className="flex flex-col text-[10px] sm:text-[11px] text-slate-600 font-bold whitespace-nowrap">
@@ -352,7 +372,8 @@ function RequestLinksTabContent() {
                                                             </div>
                                                         </td>
                                                     </tr>
-                                                ))}
+                                                    )
+                                                })}
                                             </tbody>
                                         </table>
                                     </div>
