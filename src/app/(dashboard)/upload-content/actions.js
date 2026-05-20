@@ -38,7 +38,6 @@ export const bulkRequestLinks = traceAction('bulkRequestLinks_upload', async (li
   const rows = validLinks.map((link) => ({
     requested_by: user.id,
     link,
-    ingested: false,
     project: projectName
   }))
 
