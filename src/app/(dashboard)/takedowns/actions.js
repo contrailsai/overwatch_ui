@@ -111,6 +111,77 @@ const buildTakedownMatchQuery = (filters = {}) => {
   return query
 }
 
+const TAKEDOWN_SUCCESSFUL_STATUSES = ['takedown successful', 'takedown_successful']
+
+const buildTakedownDateAddFields = () => ({
+  sort_original_date: {
+    $toDate: {
+      $ifNull: ['$engagement.posted_at', '$metadata.posted_date']
+    }
+  },
+  sort_takedown_date: {
+    $toDate: {
+      $ifNull: ['$takedown_info.takedown_start_date', '$metadata.updated_at']
+    }
+  },
+  sort_takedown_successful_date: {
+    $toDate: '$takedown_info.takedown_end_date'
+  }
+})
+
+const buildTakedownDateFilterStages = (filters = {}) => {
+  const dateFilterStage = {}
+  let statusOverride = null
+
+  if (filters.original_date_from || filters.original_date_to) {
+    dateFilterStage.sort_original_date = {}
+    if (filters.original_date_from) {
+      dateFilterStage.sort_original_date.$gte = new Date(filters.original_date_from)
+    }
+    if (filters.original_date_to) {
+      dateFilterStage.sort_original_date.$lte = new Date(filters.original_date_to)
+    }
+  }
+
+  if (filters.takedown_date_from || filters.takedown_date_to) {
+    dateFilterStage.sort_takedown_date = {}
+    if (filters.takedown_date_from) {
+      dateFilterStage.sort_takedown_date.$gte = new Date(filters.takedown_date_from)
+    }
+    if (filters.takedown_date_to) {
+      dateFilterStage.sort_takedown_date.$lte = new Date(filters.takedown_date_to)
+    }
+  }
+
+  if (filters.takedown_successful_date_from || filters.takedown_successful_date_to) {
+    statusOverride = { $in: TAKEDOWN_SUCCESSFUL_STATUSES }
+    dateFilterStage.sort_takedown_successful_date = {}
+    if (filters.takedown_successful_date_from) {
+      dateFilterStage.sort_takedown_successful_date.$gte = new Date(filters.takedown_successful_date_from)
+    }
+    if (filters.takedown_successful_date_to) {
+      dateFilterStage.sort_takedown_successful_date.$lte = new Date(filters.takedown_successful_date_to)
+    }
+  }
+
+  return {
+    dateFilterStage,
+    statusOverride,
+    hasDateFilters: Object.keys(dateFilterStage).length > 0
+  }
+}
+
+const applyStatusOverride = (matchStage, statusOverride) => {
+  if (!statusOverride) return matchStage
+  return { ...matchStage, 'takedown_info.status': statusOverride }
+}
+
+const normalizeMongoDate = (value) => {
+  if (!value) return null
+  if (value.$date) return value.$date
+  return value
+}
+
 /**
  * Fetch active takedowns with filters, server-side pagination, and enriched MongoDB data
  */
@@ -127,64 +198,13 @@ export const getTakedowns = traceAction('getTakedowns_list', async (filters = {}
     const db = client.db(ctx.dbName)
     const collection = db.collection('Posts')
 
-    const matchStage = buildTakedownMatchQuery(filters)
-
-    const dateFilterStage = {}
-
-    if (filters.original_date_from || filters.original_date_to) {
-      dateFilterStage.sort_original_date = {};
-      if (filters.original_date_from) {
-        dateFilterStage.sort_original_date.$gte = new Date(filters.original_date_from);
-      }
-      if (filters.original_date_to) {
-        dateFilterStage.sort_original_date.$lte = new Date(filters.original_date_to);
-      }
-    }
-
-    if (filters.processed_from || filters.processed_to) {
-      dateFilterStage.sort_processed_after = {};
-      if (filters.processed_from) {
-        dateFilterStage.sort_processed_after.$gte = new Date(filters.processed_from);
-      }
-      if (filters.processed_to) {
-        dateFilterStage.sort_processed_after.$lte = new Date(filters.processed_to);
-      }
-    }
-
-    if (filters.takedown_date_from || filters.takedown_date_to) {
-      dateFilterStage.sort_takedown_date = {};
-      if (filters.takedown_date_from) {
-        dateFilterStage.sort_takedown_date.$gte = new Date(filters.takedown_date_from);
-      }
-      if (filters.takedown_date_to) {
-        dateFilterStage.sort_takedown_date.$lte = new Date(filters.takedown_date_to);
-      }
-    }
-
-    const hasDateFilters = Object.keys(dateFilterStage).length > 0;
+    const { dateFilterStage, statusOverride, hasDateFilters } = buildTakedownDateFilterStages(filters)
+    const matchStage = applyStatusOverride(buildTakedownMatchQuery(filters), statusOverride)
 
     const aggregationPipeline = [
       { $match: matchStage },
       { $project: { text_embedding: 0, image_embedding: 0 } },
-      {
-        $addFields: {
-          sort_original_date: {
-            $toDate: {
-              $ifNull: ["$engagement.posted_at", "$metadata.posted_date"]
-            }
-          },
-          sort_processed_after: {
-            $toDate: {
-              $ifNull: ["$review_details.reviewed_at", "$metadata.updated_at"]
-            }
-          },
-          sort_takedown_date: {
-            $toDate: {
-              $ifNull: ["$takedown_info.takedown_start_date", "$metadata.updated_at"]
-            }
-          }
-        }
-      },
+      { $addFields: buildTakedownDateAddFields() },
       ...(hasDateFilters ? [{ $match: dateFilterStage }] : []),
       {
         $facet: {
@@ -230,10 +250,10 @@ export const getTakedowns = traceAction('getTakedowns_list', async (filters = {}
         ? events[events.length - 1].date 
         : (post.takedown_info?.takedown_start_date || post.metadata?.updated_at || null)
 
-      if (lastUpdateDate && lastUpdateDate.$date) lastUpdateDate = lastUpdateDate.$date
-      
-      let takedownDate = post.takedown_info?.takedown_start_date || null
-      if (takedownDate && takedownDate.$date) takedownDate = takedownDate.$date
+      lastUpdateDate = normalizeMongoDate(lastUpdateDate)
+
+      const takedownStartDate = normalizeMongoDate(post.takedown_info?.takedown_start_date)
+      const takedownSuccessfulDate = normalizeMongoDate(post.takedown_info?.takedown_end_date)
 
       const { threat_types, violations_unknown } = getListThreatTypes(post.review_details)
 
@@ -249,8 +269,8 @@ export const getTakedowns = traceAction('getTakedowns_list', async (filters = {}
         threat_types,
         violations_unknown,
         last_update_date: lastUpdateDate,
-        takedown_date: takedownDate,
-        processed_at: post.review_details?.reviewed_at || post.metadata?.updated_at || null,
+        takedown_start_date: takedownStartDate,
+        takedown_successful_date: takedownSuccessfulDate,
         posted_at: post.engagement?.posted_at || post.metadata?.posted_date || null,
         url: post.url || post.metadata?.url || '',
         notes: post.takedown_info?.notes ? post.takedown_info.notes.join('\n\n') : '',
@@ -289,41 +309,8 @@ export const getTakedownMetrics = traceAction('getTakedownMetrics_page', async (
     const metricsFilters = { ...filters }
     delete metricsFilters.status
     
-    const matchStage = buildTakedownMatchQuery(metricsFilters)
-    
-    const dateFilterStage = {}
-
-    if (filters.original_date_from || filters.original_date_to) {
-      dateFilterStage.sort_original_date = {};
-      if (filters.original_date_from) {
-        dateFilterStage.sort_original_date.$gte = new Date(filters.original_date_from);
-      }
-      if (filters.original_date_to) {
-        dateFilterStage.sort_original_date.$lte = new Date(filters.original_date_to);
-      }
-    }
-
-    if (filters.processed_from || filters.processed_to) {
-      dateFilterStage.sort_processed_after = {};
-      if (filters.processed_from) {
-        dateFilterStage.sort_processed_after.$gte = new Date(filters.processed_from);
-      }
-      if (filters.processed_to) {
-        dateFilterStage.sort_processed_after.$lte = new Date(filters.processed_to);
-      }
-    }
-
-    if (filters.takedown_date_from || filters.takedown_date_to) {
-      dateFilterStage.sort_takedown_date = {};
-      if (filters.takedown_date_from) {
-        dateFilterStage.sort_takedown_date.$gte = new Date(filters.takedown_date_from);
-      }
-      if (filters.takedown_date_to) {
-        dateFilterStage.sort_takedown_date.$lte = new Date(filters.takedown_date_to);
-      }
-    }
-
-    const hasDateFilters = Object.keys(dateFilterStage).length > 0;
+    const { dateFilterStage, statusOverride, hasDateFilters } = buildTakedownDateFilterStages(filters)
+    const matchStage = applyStatusOverride(buildTakedownMatchQuery(metricsFilters), statusOverride)
 
     const pipeline = [
       { $match: matchStage },
@@ -331,25 +318,7 @@ export const getTakedownMetrics = traceAction('getTakedownMetrics_page', async (
     ]
 
     if (hasDateFilters) {
-      pipeline.push({
-        $addFields: {
-          sort_original_date: {
-            $toDate: {
-              $ifNull: ["$engagement.posted_at", "$metadata.posted_date"]
-            }
-          },
-          sort_processed_after: {
-            $toDate: {
-              $ifNull: ["$review_details.reviewed_at", "$metadata.updated_at"]
-            }
-          },
-          sort_takedown_date: {
-            $toDate: {
-              $ifNull: ["$takedown_info.takedown_start_date", "$metadata.updated_at"]
-            }
-          }
-        }
-      })
+      pipeline.push({ $addFields: buildTakedownDateAddFields() })
       pipeline.push({ $match: dateFilterStage })
     }
 
@@ -726,39 +695,13 @@ export const getAllTakedownIds = traceAction('getAllTakedownIds', async (filters
     const db = client.db(ctx.dbName)
     const collection = db.collection('Posts')
 
-    const matchStage = buildTakedownMatchQuery(filters)
-    const dateFilterStage = {}
-
-    if (filters.original_date_from || filters.original_date_to) {
-      dateFilterStage.sort_original_date = {};
-      if (filters.original_date_from) dateFilterStage.sort_original_date.$gte = new Date(filters.original_date_from);
-      if (filters.original_date_to) dateFilterStage.sort_original_date.$lte = new Date(filters.original_date_to);
-    }
-
-    if (filters.processed_from || filters.processed_to) {
-      dateFilterStage.sort_processed_after = {};
-      if (filters.processed_from) dateFilterStage.sort_processed_after.$gte = new Date(filters.processed_from);
-      if (filters.processed_to) dateFilterStage.sort_processed_after.$lte = new Date(filters.processed_to);
-    }
-
-    if (filters.takedown_date_from || filters.takedown_date_to) {
-      dateFilterStage.sort_takedown_date = {};
-      if (filters.takedown_date_from) dateFilterStage.sort_takedown_date.$gte = new Date(filters.takedown_date_from);
-      if (filters.takedown_date_to) dateFilterStage.sort_takedown_date.$lte = new Date(filters.takedown_date_to);
-    }
-
-    const hasDateFilters = Object.keys(dateFilterStage).length > 0;
+    const { dateFilterStage, statusOverride, hasDateFilters } = buildTakedownDateFilterStages(filters)
+    const matchStage = applyStatusOverride(buildTakedownMatchQuery(filters), statusOverride)
 
     const pipeline = [
       { $match: matchStage },
       { $project: { text_embedding: 0, image_embedding: 0 } },
-      {
-        $addFields: {
-          sort_original_date: { $toDate: { $ifNull: ["$engagement.posted_at", "$metadata.posted_date"] } },
-          sort_processed_after: { $toDate: { $ifNull: ["$review_details.reviewed_at", "$metadata.updated_at"] } },
-          sort_takedown_date: { $toDate: { $ifNull: ["$takedown_info.takedown_start_date", "$metadata.updated_at"] } }
-        }
-      },
+      { $addFields: buildTakedownDateAddFields() },
       ...(hasDateFilters ? [{ $match: dateFilterStage }] : []),
       { $project: { _id: 1 } }
     ]

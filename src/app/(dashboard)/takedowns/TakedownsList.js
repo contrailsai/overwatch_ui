@@ -184,10 +184,10 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
     initialFilters.risk_priority !== 'all' ||
     initialFilters.original_date_from ||
     initialFilters.original_date_to ||
-    initialFilters.processed_from ||
-    initialFilters.processed_to ||
     initialFilters.takedown_date_from ||
-    initialFilters.takedown_date_to;
+    initialFilters.takedown_date_to ||
+    initialFilters.takedown_successful_date_from ||
+    initialFilters.takedown_successful_date_to;
 
   // Reset isAllFilterSelected when filters change
   const filtersKey = JSON.stringify(initialFilters)
@@ -260,21 +260,6 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
       </div>
 
       <div className="space-y-1 w-full lg:w-auto lg:min-w-[140px] lg:max-w-[160px]">
-        <Label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Alert Date</Label>
-        <DateFilterPopover
-          title="Alert Date"
-          initialFrom={initialFilters.processed_from}
-          initialTo={initialFilters.processed_to}
-          onApply={(range) => {
-            updateQueryParams({
-              processed_from: range?.from ? format(range.from, "yyyy-MM-dd'T'HH:mm:ssXXX") : null,
-              processed_to: range?.to ? format(range.to, "yyyy-MM-dd'T'HH:mm:ssXXX") : null
-            });
-          }}
-        />
-      </div>
-
-      <div className="space-y-1 w-full lg:w-auto lg:min-w-[140px] lg:max-w-[160px]">
         <Label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Publish Date</Label>
         <DateFilterPopover
           title="Publish Date"
@@ -290,15 +275,30 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
       </div>
 
       <div className="space-y-1 w-full lg:w-auto lg:min-w-[140px] lg:max-w-[160px]">
-        <Label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Takedown Date</Label>
+        <Label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Takedown Start Date</Label>
         <DateFilterPopover
-          title="Takedown Date"
+          title="Takedown Start Date"
           initialFrom={initialFilters.takedown_date_from}
           initialTo={initialFilters.takedown_date_to}
           onApply={(range) => {
             updateQueryParams({
               takedown_date_from: range?.from ? format(range.from, "yyyy-MM-dd'T'HH:mm:ssXXX") : null,
               takedown_date_to: range?.to ? format(range.to, "yyyy-MM-dd'T'HH:mm:ssXXX") : null
+            });
+          }}
+        />
+      </div>
+
+      <div className="space-y-1 w-full lg:w-auto lg:min-w-[140px] lg:max-w-[160px]">
+        <Label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Takedown Success Date</Label>
+        <DateFilterPopover
+          title="Takedown Success Date"
+          initialFrom={initialFilters.takedown_successful_date_from}
+          initialTo={initialFilters.takedown_successful_date_to}
+          onApply={(range) => {
+            updateQueryParams({
+              takedown_successful_date_from: range?.from ? format(range.from, "yyyy-MM-dd'T'HH:mm:ssXXX") : null,
+              takedown_successful_date_to: range?.to ? format(range.to, "yyyy-MM-dd'T'HH:mm:ssXXX") : null
             });
           }}
         />
@@ -558,9 +558,9 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
                     <th scope="col" className="w-28 sm:w-32 px-2 sm:px-3 py-3 text-center text-[10px] font-bold text-slate-500 uppercase tracking-wider hidden md:table-cell border-b border-slate-100">Status</th>
                     <th scope="col" className="px-2 sm:px-4 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider w-full min-w-[200px] border-b border-slate-100">Content</th>
                     <th scope="col" className="w-64 px-4 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider hidden lg:table-cell border-b border-slate-100">Violations</th>
-                    <th scope="col" className="w-28 px-3 py-3 text-center text-[10px] font-bold text-slate-500 uppercase tracking-wider hidden lg:table-cell border-b border-slate-100">Alert Date</th>
                     <th scope="col" className="w-28 px-3 py-3 text-center text-[10px] font-bold text-slate-500 uppercase tracking-wider hidden xl:table-cell border-b border-slate-100">Publish Date</th>
-                    <th scope="col" className="w-28 px-3 py-3 text-center text-[10px] font-bold text-slate-500 uppercase tracking-wider hidden xl:table-cell border-b border-slate-100">Takedown Date</th>
+                    <th scope="col" className="w-28 px-3 py-3 text-center text-[10px] font-bold text-slate-500 uppercase tracking-wider hidden xl:table-cell border-b border-slate-100">Takedown Start Date</th>
+                    <th scope="col" className="w-28 px-3 py-3 text-center text-[10px] font-bold text-slate-500 uppercase tracking-wider hidden xl:table-cell border-b border-slate-100">Takedown Success Date</th>
                     <th scope="col" className="w-10 sm:w-12 px-2 sm:px-4 py-3 text-right border-b border-slate-100"></th>
                   </tr>
                 </thead>
@@ -699,16 +699,6 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
                           </div>
                         </td>
 
-                        {/* Alert Date */}
-                        <td className="px-3 py-2 whitespace-nowrap align-middle hidden lg:table-cell border-b border-slate-50">
-                          <div className="flex flex-col gap-1 justify-center items-center text-sm font-semibold text-slate-500">
-                            <span>{item.processed_at ? format(new Date(item.processed_at), "dd/MM/yyyy") : '-'}</span>
-                            <span className="text-xs text-slate-400">
-                              {item.processed_at ? format(new Date(item.processed_at), "hh:mm a") : ''}
-                            </span>
-                          </div>
-                        </td>
-
                         {/* Publish Date */}
                         <td className="px-3 py-2 whitespace-nowrap align-middle hidden xl:table-cell border-b border-slate-50">
                           <div className="flex flex-col gap-1 justify-center items-center text-sm font-semibold text-slate-500">
@@ -719,12 +709,22 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
                           </div>
                         </td>
 
-                        {/* Takedown Date */}
+                        {/* Takedown Start Date */}
                         <td className="px-3 py-2 whitespace-nowrap align-middle hidden xl:table-cell border-b border-slate-50">
                           <div className="flex flex-col gap-1 justify-center items-center text-sm font-semibold text-slate-500">
-                            <span>{item.takedown_date ? format(new Date(item.takedown_date), "dd/MM/yyyy") : '-'}</span>
+                            <span>{item.takedown_start_date ? format(new Date(item.takedown_start_date), "dd/MM/yyyy") : '-'}</span>
                             <span className="text-xs text-slate-400">
-                              {item.takedown_date ? format(new Date(item.takedown_date), "hh:mm a") : ''}
+                              {item.takedown_start_date ? format(new Date(item.takedown_start_date), "hh:mm a") : ''}
+                            </span>
+                          </div>
+                        </td>
+
+                        {/* Takedown Success Date */}
+                        <td className="px-3 py-2 whitespace-nowrap align-middle hidden xl:table-cell border-b border-slate-50">
+                          <div className="flex flex-col gap-1 justify-center items-center text-sm font-semibold text-slate-500">
+                            <span>{item.takedown_successful_date ? format(new Date(item.takedown_successful_date), "dd/MM/yyyy") : '-'}</span>
+                            <span className="text-xs text-slate-400">
+                              {item.takedown_successful_date ? format(new Date(item.takedown_successful_date), "hh:mm a") : ''}
                             </span>
                           </div>
                         </td>
