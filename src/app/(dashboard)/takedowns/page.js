@@ -18,10 +18,10 @@ export default async function TakedownsPage({ searchParams }) {
     risk_priority: resolvedParams.risk_priority || 'all',
     original_date_from: resolvedParams.original_date_from || null,
     original_date_to: resolvedParams.original_date_to || null,
-    processed_from: resolvedParams.processed_from || null,
-    processed_to: resolvedParams.processed_to || null,
     takedown_date_from: resolvedParams.takedown_date_from || null,
     takedown_date_to: resolvedParams.takedown_date_to || null,
+    takedown_successful_date_from: resolvedParams.takedown_successful_date_from || null,
+    takedown_successful_date_to: resolvedParams.takedown_successful_date_to || null,
     page: resolvedParams.page || '1',
     pageSize: resolvedParams.pageSize || '25'
   }
