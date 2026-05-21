@@ -5,6 +5,7 @@ import { ObjectId } from 'mongodb'
 import { getSignedImageUrl, uploadFileToS3, deleteFileFromS3 } from '@/utils/aws/s3'
 import { sendContentModerationSqsMessage } from '@/utils/aws/sqs'
 import { updateDailyMetrics } from '@/utils/supabase/metrics'
+import { markClientRequestedLinksEnlisted } from '@/utils/clientRequestedLinks/server'
 import { sendEmail } from '@/utils/email'
 import { traceAction } from '@/utils/tracing'
 import { requireRole } from '@/utils/auth-context'
@@ -585,6 +586,13 @@ export const submitCaseReview = traceAction('submitCaseReview', async (_project,
     // update the metrics for the analytics dashboard (important)
     await updateDailyMetrics(project, currentReviewData, previousReviewData).catch(err =>
       console.error('Background metrics update failed:', err)
+    )
+
+    await markClientRequestedLinksEnlisted({
+      post: existingPost,
+      projectName: project?.project_name,
+    }).catch((err) =>
+      console.error('client_requested_links enlisted update failed:', err)
     )
 
     // SEND A NOTIFICATION TO THE CLIENT ON THEIR SUPPORTED FORMAT

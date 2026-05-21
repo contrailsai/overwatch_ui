@@ -43,11 +43,24 @@ create table public.client_requested_links (
   created_at timestamp with time zone not null default now(),
   requested_by uuid null,
   link text null,
-  ingested boolean not null default false,
+  ingested text not null default 'pending'::text,
   project text null,
+  case_id text null,
   constraint client_requested_links_pkey primary key (id),
   constraint client_requested_links_project_fkey foreign KEY (project) references project (project_name),
-  constraint client_requested_links_requested_by_fkey foreign KEY (requested_by) references auth.users (id)
+  constraint client_requested_links_requested_by_fkey foreign KEY (requested_by) references auth.users (id),
+  constraint check_ingested_status check (
+    (
+      ingested = any (
+        array[
+          'pending'::text,
+          'ingested'::text,
+          'failed'::text,
+          'enlisted'::text
+        ]
+      )
+    )
+  )
 ) TABLESPACE pg_default;
 
 create table public.daily_case_metrics (
