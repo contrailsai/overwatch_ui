@@ -9,38 +9,19 @@ import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card'
-import { Loader2, Link as LinkIcon, CheckCircle2, AlertCircle, Send, History, RefreshCw, FileUp, ListChecks, Trash2, GitPullRequestCreateArrow, FileText } from 'lucide-react'
+import { Loader2, Link as LinkIcon, CheckCircle2, AlertCircle, Send, History, RefreshCw, FileUp, ListChecks, Trash2, GitPullRequestCreateArrow, FileText, ExternalLink } from 'lucide-react'
 import { format } from 'date-fns'
 import PageHeader from '@/components/PageHeader'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import ManualPostForm from './ManualPostForm'
+import {
+    parseUrlsFromText,
+    formatIngestionStatusLabel,
+    getIngestionStatusBadgeClass,
+    getClientRequestedLinkCaseHref,
+} from '@/utils/clientRequestedLinks'
 
-/** Always returns a string safe to render in JSX (booleans render as empty otherwise). */
-function formatIngestionStatus(status) {
-    if (status === null || status === undefined) return '—'
-    if (typeof status === 'boolean') return status ? 'processed' : 'pending'
-    const text = String(status).trim()
-    return text || '—'
-}
-
-function ingestionStatusBadgeClass(status) {
-    const key = formatIngestionStatus(status).toLowerCase()
-    switch (key) {
-        case 'resolved':
-        case 'processed':
-            return 'bg-emerald-50 text-emerald-700 border-emerald-100'
-        case 'failed':
-            return 'bg-rose-50 text-rose-700 border-rose-100'
-        case 'analyzing':
-            return 'bg-blue-50 text-blue-700 border-blue-100'
-        case 'pending':
-            return 'bg-amber-50 text-amber-700 border-amber-100'
-        default:
-            return 'bg-slate-50 text-slate-700 border-slate-100'
-    }
-}
-
-function RequestLinksTabContent() {
+function RequestLinksTabContent({ isReviewer = false }) {
     const [submissionResult, setSubmissionResult] = useState(null)
     const [requestedLinks, setRequestedLinks] = useState([])
 
@@ -73,33 +54,9 @@ function RequestLinksTabContent() {
     }, [submissionResult?.success, fetchLinks])
 
 
-    // Helper to validate and extract URLs from text
-    const extractLinks = (text) => {
-        // Robust regex to find http/https links in any block of text
-        const urlRegex = /(https?:\/\/[^\s,]+)/g
-        const matches = text.match(urlRegex) || []
-
-        const validLinks = matches
-            .map(link => link.trim())
-            .filter(link => {
-                if (!link) return false
-                try {
-                    new URL(link)
-                    return true
-                } catch {
-                    return false
-                }
-            })
-
-        // Return unique links only
-        return [...new Set(validLinks)]
-    }
-
-
     // Effect to update parsed links in real-time
     useEffect(() => {
-        const links = extractLinks(bulkInput)
-        setParsedLinks(links)
+        setParsedLinks(parseUrlsFromText(bulkInput))
     }, [bulkInput])
 
     const handleFileUpload = (event) => {
@@ -336,12 +293,18 @@ function RequestLinksTabContent() {
                                                 <tr className="bg-slate-50/50 border-b border-slate-100">
                                                     <th className="px-4 sm:px-8 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Link Source</th>
                                                     <th className="px-4 sm:px-8 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest whitespace-nowrap">Ingestion Status</th>
+                                                    <th className="px-4 sm:px-8 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest whitespace-nowrap">Case</th>
                                                     <th className="px-4 sm:px-8 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest whitespace-nowrap">Timestamp</th>
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-slate-50">
                                                 {requestedLinks.map((item) => {
-                                                    const statusLabel = formatIngestionStatus(item.ingested)
+                                                    const statusLabel = formatIngestionStatusLabel(item.ingested)
+                                                    const caseHref = getClientRequestedLinkCaseHref({
+                                                        ingested: item.ingested,
+                                                        caseId: item.case_id,
+                                                        isReviewer,
+                                                    })
                                                     return (
                                                     <tr key={item.id} className="hover:bg-slate-50/40 transition-colors group">
                                                         <td className="px-4 sm:px-8 py-4 sm:py-5">
@@ -360,10 +323,25 @@ function RequestLinksTabContent() {
                                                         </td>
                                                         <td className="px-4 sm:px-8 py-4 sm:py-5">
                                                             <div
-                                                                className={`inline-flex items-center px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg text-[10px] sm:text-[11px] font-bold border shadow-sm whitespace-nowrap ${ingestionStatusBadgeClass(item.ingested)}`}
+                                                                className={`inline-flex items-center px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg text-[10px] sm:text-[11px] font-bold border shadow-sm whitespace-nowrap ${getIngestionStatusBadgeClass(item.ingested)}`}
                                                             >
                                                                 {statusLabel}
                                                             </div>
+                                                        </td>
+                                                        <td className="px-4 sm:px-8 py-4 sm:py-5">
+                                                            {caseHref ? (
+                                                                <a
+                                                                    href={caseHref}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    className="inline-flex items-center gap-1.5 text-[10px] sm:text-[11px] font-bold text-blue-600 hover:text-blue-700 transition-colors whitespace-nowrap"
+                                                                >
+                                                                    View case
+                                                                    <ExternalLink className="w-3 h-3 shrink-0 opacity-70" />
+                                                                </a>
+                                                            ) : (
+                                                                <span className="text-[10px] sm:text-[11px] text-slate-300 font-medium">—</span>
+                                                            )}
                                                         </td>
                                                         <td className="px-4 sm:px-8 py-4 sm:py-5">
                                                             <div className="flex flex-col text-[10px] sm:text-[11px] text-slate-600 font-bold whitespace-nowrap">
@@ -415,7 +393,7 @@ export default function RequestContentPage({ isReviewer = false, moderationQueue
                                 forceMount
                                 className="mt-0 space-y-6 sm:space-y-8 data-[state=inactive]:hidden ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2"
                             >
-                                <RequestLinksTabContent />
+                                <RequestLinksTabContent isReviewer={isReviewer} />
                             </TabsContent>
                             <TabsContent
                                 value="manual"
@@ -425,7 +403,7 @@ export default function RequestContentPage({ isReviewer = false, moderationQueue
                             </TabsContent>
                         </Tabs>
                     ) : (
-                        <RequestLinksTabContent />
+                        <RequestLinksTabContent isReviewer={isReviewer} />
                     )}
                 </div>
             </div>
