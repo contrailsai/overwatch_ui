@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import {
     PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
@@ -429,6 +429,22 @@ export function DashboardContent({ data }) {
         0,
     )
 
+    const categoryNamesKey = topCategoryNames.join('\0')
+    const [hiddenCategories, setHiddenCategories] = useState(() => new Set())
+
+    useEffect(() => {
+        setHiddenCategories(new Set())
+    }, [categoryNamesKey])
+
+    const toggleCategoryLine = useCallback((name) => {
+        setHiddenCategories((prev) => {
+            const next = new Set(prev)
+            if (next.has(name)) next.delete(name)
+            else next.add(name)
+            return next
+        })
+    }, [])
+
     return (
         <div className="flex-1 flex flex-col h-full overflow-hidden bg-slate-50">
             <PageHeader Icon={LayoutDashboard} title="Analytics" />
@@ -793,17 +809,39 @@ export function DashboardContent({ data }) {
                                 </span>
                             </div>
                             <div className="flex flex-wrap gap-x-4 gap-y-2 sm:justify-end">
-                                {topCategoryNames.map(c => (
-                                    <div key={c} className="flex items-center gap-1.5 max-w-[180px]">
-                                        <span
-                                            className="w-2 h-2 rounded-full shrink-0"
-                                            style={{ backgroundColor: categoryColors[c] }}
-                                        />
-                                        <span className="text-[11px] font-bold tracking-wider uppercase text-slate-700 truncate">
-                                            {formatCategoryLabel(c)}
-                                        </span>
-                                    </div>
-                                ))}
+                                {topCategoryNames.map(c => {
+                                    const hidden = hiddenCategories.has(c)
+                                    return (
+                                        <button
+                                            key={c}
+                                            type="button"
+                                            onClick={() => toggleCategoryLine(c)}
+                                            title={hidden ? 'Show series' : 'Hide series'}
+                                            aria-pressed={!hidden}
+                                            className={cn(
+                                                'flex items-center gap-1.5 max-w-[180px] rounded-md px-0.5 -mx-0.5 transition-opacity cursor-pointer',
+                                                'hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60',
+                                                hidden && 'opacity-35',
+                                            )}
+                                        >
+                                            <span
+                                                className={cn(
+                                                    'w-2 h-2 rounded-full shrink-0',
+                                                    hidden && '!bg-slate-300',
+                                                )}
+                                                style={hidden ? undefined : { backgroundColor: categoryColors[c] }}
+                                            />
+                                            <span
+                                                className={cn(
+                                                    'text-[11px] font-bold tracking-wider uppercase truncate',
+                                                    hidden ? 'text-slate-400 line-through decoration-slate-300' : 'text-slate-700',
+                                                )}
+                                            >
+                                                {formatCategoryLabel(c)}
+                                            </span>
+                                        </button>
+                                    )
+                                })}
                             </div>
                         </div>
 
@@ -840,6 +878,7 @@ export function DashboardContent({ data }) {
                                                 type="linear"
                                                 dataKey={c}
                                                 name={c}
+                                                hide={hiddenCategories.has(c)}
                                                 stroke={categoryColors[c]}
                                                 strokeWidth={1.5}
                                                 dot={{ r: 2.5, fill: categoryColors[c], strokeWidth: 0 }}
