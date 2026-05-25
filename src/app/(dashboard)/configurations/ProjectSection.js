@@ -18,33 +18,164 @@ import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
 import {
+    Accordion, AccordionContent, AccordionItem, AccordionTrigger,
+} from '@/components/ui/accordion'
+import {
     Loader2, Globe, Calendar, FileText, Tag, Plus, Trash2, CheckCircle2, AlertCircle,
-    Clock, Pencil, X,
+    Clock, Pencil, X, MessageCircle, ChevronRight, Terminal,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { format } from 'date-fns'
 
-const PDF_COMMAND_TEMPLATE = '@bot pdf-fetch -r summary -risk high'
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+
+const REPORT_PRESETS = {
+    summary: {
+        id: 'summary',
+        label: 'PDF summary',
+        description: 'Compact high-risk highlights',
+        command: '@bot pdf-fetch -r summary -risk high',
+    },
+    detailed: {
+        id: 'detailed',
+        label: 'PDF detailed',
+        description: 'Full detailed PDF report',
+        command: '@bot pdf-fetch -r detailed -risk high',
+    },
+    custom: {
+        id: 'custom',
+        label: 'Custom',
+        description: 'Support-provided instruction only',
+        command: null,
+    },
+}
+
+const TIMEZONE_OPTIONS = [
+    { value: 'Asia/Kolkata', label: 'India (IST)' },
+    { value: 'Asia/Dubai', label: 'Gulf (GST)' },
+    { value: 'Asia/Singapore', label: 'Singapore' },
+    { value: 'Europe/London', label: 'UK (GMT/BST)' },
+    { value: 'America/New_York', label: 'US Eastern' },
+    { value: 'America/Los_Angeles', label: 'US Pacific' },
+    { value: 'UTC', label: 'UTC' },
+]
 
 function getJobSchedule(job) {
     return job?.schedule ?? job
 }
 
+function formatTime12h(time24) {
+    if (!time24 || !/^\d{2}:\d{2}$/.test(time24)) return time24 || '—'
+    const [h, m] = time24.split(':').map(Number)
+    const period = h >= 12 ? 'pm' : 'am'
+    const h12 = h % 12 || 12
+    return `${h12}:${String(m).padStart(2, '0')} ${period}`
+}
+
+function formatTimezoneShort(timezone) {
+    const match = TIMEZONE_OPTIONS.find((tz) => tz.value === timezone)
+    if (match) return match.label.split(' (')[0]
+    return timezone?.split('/').pop() || 'local'
+}
+
 function formatSchedule(job) {
     const schedule = getJobSchedule(job)
-    const tz = schedule?.timezone?.split('/').pop() || 'IST'
-    const time = schedule?.time || '—'
+    const tz = formatTimezoneShort(schedule?.timezone)
+    const time = formatTime12h(schedule?.time)
     const repeat = schedule?.repeat || 'daily'
 
     if (repeat === 'weekly' && schedule?.dayOfWeek != null) {
         const day = DAY_NAMES[schedule.dayOfWeek] ?? schedule.dayOfWeek
-        return `Every ${day} at ${time} ${tz}`
+        return `Every ${day} at ${time} (${tz})`
     }
     if (repeat === 'monthly' && schedule?.dayOfMonth != null) {
-        return `Day ${schedule.dayOfMonth} at ${time} ${tz}`
+        return `Monthly on day ${schedule.dayOfMonth} at ${time} (${tz})`
     }
-    return `Daily at ${time} ${tz}`
+    return `Daily at ${time} (${tz})`
+}
+
+function detectReportPreset(command) {
+    const normalized = (command || '').trim()
+    if (!normalized) return 'summary'
+    if (normalized.includes('-r detailed')) return 'detailed'
+    if (normalized.includes('-r summary')) return 'summary'
+    return 'custom'
+}
+
+function formatReportTypeLabel(command) {
+    const preset = detectReportPreset(command)
+    return REPORT_PRESETS[preset]?.label ?? 'Custom report'
+}
+
+function resolveFormCommand(form) {
+    if (form.reportPreset === 'custom') return form.customCommand.trim()
+    return REPORT_PRESETS[form.reportPreset]?.command ?? REPORT_PRESETS.summary.command
+}
+
+function CronCommandPreview({ command, collapsible = true, className }) {
+    const trimmed = command?.trim()
+    if (!trimmed) return null
+
+    const codeBlock = (
+        <pre className="font-mono text-[11px] sm:text-xs text-slate-600 leading-relaxed break-all whitespace-pre-wrap">
+            {trimmed}
+        </pre>
+    )
+
+    if (!collapsible) {
+        return (
+            <div
+                className={cn(
+                    'rounded-lg border border-slate-200/80 bg-slate-50/90 px-3 py-2.5',
+                    className
+                )}
+            >
+                <div className="flex items-center gap-1.5 mb-1.5">
+                    <Terminal className="w-3 h-3 text-slate-400 shrink-0" />
+                    <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
+                        Instruction preview
+                    </span>
+                </div>
+                {codeBlock}
+            </div>
+        )
+    }
+
+    return (
+        <details
+            className={cn(
+                'group/cmd rounded-lg border border-slate-100 bg-slate-50/60',
+                'open:bg-slate-50 open:border-slate-200/80 transition-colors',
+                className
+            )}
+        >
+            <summary
+                className={cn(
+                    'flex cursor-pointer list-none flex-col gap-1 px-3 py-2 sm:flex-row sm:items-center sm:gap-2',
+                    'text-xs font-medium text-slate-500 hover:text-slate-700 touch-manipulation',
+                    '[&::-webkit-details-marker]:hidden'
+                )}
+            >
+                <span className="flex min-w-0 items-center gap-1.5 shrink-0">
+                    <ChevronRight className="w-3.5 h-3.5 shrink-0 text-slate-400 transition-transform group-open/cmd:rotate-90" />
+                    <Terminal className="w-3.5 h-3.5 shrink-0 text-slate-400" />
+                    <span>Bot instruction</span>
+                </span>
+                <span
+                    className={cn(
+                        'min-w-0 font-mono text-[10px] sm:text-[11px] font-normal text-slate-400 truncate',
+                        'group-open/cmd:hidden'
+                    )}
+                    title={trimmed}
+                >
+                    {trimmed}
+                </span>
+            </summary>
+            <div className="border-t border-slate-100/80 px-3 pb-2.5 pt-2">
+                {codeBlock}
+            </div>
+        </details>
+    )
 }
 
 function getJobId(job) {
@@ -86,7 +217,8 @@ const defaultCronForm = () => ({
     dayOfWeek: '1',
     dayOfMonth: '1',
     timezone: 'Asia/Kolkata',
-    command: PDF_COMMAND_TEMPLATE,
+    reportPreset: 'summary',
+    customCommand: '',
     enabled: true,
 })
 
@@ -99,6 +231,7 @@ export default function ProjectSection({ project, isEditable }) {
     const [cronFeedback, setCronFeedback] = useState(null)
     const [cronPending, startCronTransition] = useTransition()
     const [editingJobId, setEditingJobId] = useState(null)
+    const [showCronForm, setShowCronForm] = useState(false)
     const [cronForm, setCronForm] = useState(defaultCronForm)
 
     const [projectDescription, setProjectDescription] = useState(project?.project_details?.description || '')
@@ -190,21 +323,31 @@ export default function ProjectSection({ project, isEditable }) {
     const resetCronForm = () => {
         setCronForm(defaultCronForm())
         setEditingJobId(null)
+        setShowCronForm(false)
+    }
+
+    const openNewCronForm = () => {
+        setCronForm(defaultCronForm())
+        setEditingJobId(null)
+        setShowCronForm(true)
     }
 
     const startEditCronJob = (job) => {
         const schedule = getJobSchedule(job)
         const timeValue = schedule?.time || '09:00'
         const htmlTime = timeValue.length === 5 ? timeValue : '09:00'
+        const preset = detectReportPreset(job.command)
 
         setEditingJobId(getJobId(job))
+        setShowCronForm(true)
         setCronForm({
             time: htmlTime,
             repeat: schedule?.repeat || 'daily',
             dayOfWeek: String(schedule?.dayOfWeek ?? 1),
             dayOfMonth: String(schedule?.dayOfMonth ?? 1),
             timezone: schedule?.timezone || 'Asia/Kolkata',
-            command: job.command || PDF_COMMAND_TEMPLATE,
+            reportPreset: preset,
+            customCommand: preset === 'custom' ? (job.command || '') : '',
             enabled: job.enabled !== false,
         })
     }
@@ -214,7 +357,7 @@ export default function ProjectSection({ project, isEditable }) {
             time: cronForm.time,
             repeat: cronForm.repeat,
             timezone: cronForm.timezone.trim() || 'Asia/Kolkata',
-            command: cronForm.command,
+            command: resolveFormCommand(cronForm),
             enabled: cronForm.enabled,
         }
         if (cronForm.repeat === 'weekly') {
@@ -342,268 +485,387 @@ export default function ProjectSection({ project, isEditable }) {
                     <h2 className="text-sm font-bold text-slate-500 uppercase tracking-widest">Scheduled WhatsApp Reports</h2>
                 </div>
 
-                <Card className="border-slate-200 shadow-sm rounded-xl overflow-hidden p-0">
-                    <CardHeader className="bg-slate-50/50 border-b border-slate-100 pt-8 pb-6">
-                        <CardTitle className="text-lg font-bold text-slate-800">Automatic WhatsApp Reports</CardTitle>
-                        <CardDescription className="text-slate-500">
-                            Choose when reports are generated and sent to your project&apos;s WhatsApp groups.
-                        </CardDescription>
+                <Card className="border-slate-200 shadow-sm rounded-xl overflow-hidden p-0 max-md:rounded-lg">
+                    <CardHeader className="bg-slate-50/50 border-b border-slate-100 px-4 pt-6 pb-4 sm:px-6 sm:pt-8 sm:pb-6">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+                            <div className="min-w-0">
+                                <CardTitle className="text-base sm:text-lg font-bold text-slate-800 leading-snug">
+                                    Automatic WhatsApp Reports
+                                </CardTitle>
+                                <CardDescription className="text-slate-500 mt-1 text-sm leading-relaxed">
+                                    Schedule PDF reports to be sent automatically to your project&apos;s WhatsApp groups.
+                                </CardDescription>
+                            </div>
+                            {cronConfigured && isEditable && !showCronForm && (
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    onClick={openNewCronForm}
+                                    disabled={cronPending}
+                                    className="w-full sm:w-auto shrink-0 min-h-11 touch-manipulation bg-blue-600 hover:bg-blue-700 text-white font-bold"
+                                >
+                                    <Plus className="w-4 h-4 mr-1.5" />
+                                    Add schedule
+                                </Button>
+                            )}
+                        </div>
                     </CardHeader>
                     <CardContent className="p-0">
                         {!cronConfigured && (
-                            <div className="px-6 py-8 text-sm text-slate-500 font-medium border-b border-slate-100">
+                            <div className="px-4 py-8 sm:px-6 text-sm text-slate-500 font-medium leading-relaxed">
                                 Automatic WhatsApp reports are not set up yet. Please contact your administrator to enable this feature.
                             </div>
                         )}
 
                         {cronConfigured && (
                             <>
-                                <div className="w-full overflow-x-auto">
-                                    <Table className="w-full table-fixed">
-                                        <TableHeader className="bg-slate-50/30">
-                                            <TableRow className="border-slate-100 hover:bg-transparent">
-                                                <TableHead className="pl-6">When</TableHead>
-                                                <TableHead className="w-[240px] max-w-[240px]">Command</TableHead>
-                                                <TableHead className="w-[90px]">Active</TableHead>
-                                                <TableHead className="w-[140px]">Last sent</TableHead>
-                                                <TableHead className="w-[120px]">Delivery</TableHead>
-                                                <TableHead className="text-right pr-6 w-[120px]">Actions</TableHead>
-                                            </TableRow>
-                                        </TableHeader>
-                                        <TableBody>
-                                            {cronLoading ? (
-                                                <TableRow>
-                                                    <TableCell colSpan={6} className="py-12 text-center">
-                                                        <Loader2 className="w-6 h-6 animate-spin mx-auto text-slate-400" />
-                                                    </TableCell>
-                                                </TableRow>
-                                            ) : cronJobs.length === 0 ? (
-                                                <TableRow>
-                                                    <TableCell colSpan={6} className="py-12 text-center text-slate-500 font-medium">
-                                                        No scheduled reports yet. Add one below.
-                                                    </TableCell>
-                                                </TableRow>
-                                            ) : (
-                                                cronJobs.map((job) => {
-                                                    const jobId = getJobId(job)
-                                                    const lastRun = job.last_run_at
-                                                        ? format(new Date(job.last_run_at), 'MMM d, yyyy HH:mm')
-                                                        : 'Never'
-                                                    const status = job.last_run_status ?? job.status ?? null
-                                                    return (
-                                                        <TableRow key={jobId} className="border-slate-100">
-                                                            <TableCell className="pl-6 font-medium text-slate-800">
-                                                                {formatSchedule(job)}
-                                                            </TableCell>
-                                                            <TableCell className="w-[240px] max-w-[240px] align-top py-4">
-                                                                <span className="text-sm text-slate-600 block break-words whitespace-normal leading-snug">
-                                                                    {job.command}
+                                {cronLoading ? (
+                                    <div className="py-16 flex justify-center">
+                                        <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
+                                    </div>
+                                ) : cronJobs.length === 0 && !showCronForm ? (
+                                    <div className="px-4 py-12 sm:px-6 sm:py-14 text-center">
+                                        <div className="inline-flex p-4 bg-emerald-50 rounded-full mb-4">
+                                            <MessageCircle className="w-8 h-8 text-emerald-500" />
+                                        </div>
+                                        <p className="text-slate-700 font-bold">No scheduled reports yet</p>
+                                        <p className="text-sm text-slate-500 mt-1 max-w-sm mx-auto leading-relaxed px-2">
+                                            Pick a send time and report type — we&apos;ll deliver a PDF to your WhatsApp groups automatically.
+                                        </p>
+                                        {isEditable && (
+                                            <Button
+                                                type="button"
+                                                onClick={openNewCronForm}
+                                                disabled={cronPending}
+                                                className="mt-6 w-full max-w-xs min-h-11 touch-manipulation bg-blue-600 hover:bg-blue-700 text-white font-bold sm:w-auto"
+                                            >
+                                                <Plus className="w-4 h-4 mr-1.5" />
+                                                Create first schedule
+                                            </Button>
+                                        )}
+                                    </div>
+                                ) : cronJobs.length > 0 && (
+                                    <ul className="flex flex-col gap-3 p-3 sm:gap-0 sm:p-0 sm:divide-y sm:divide-slate-100">
+                                        {cronJobs.map((job) => {
+                                            const jobId = getJobId(job)
+                                            const isEditing = editingJobId === jobId
+                                            const lastRun = job.last_run_at
+                                                ? format(new Date(job.last_run_at), 'MMM d, yyyy · h:mm a')
+                                                : 'Not sent yet'
+                                            const status = job.last_run_status ?? job.status ?? null
+                                            const isActive = job.enabled !== false
+
+                                            return (
+                                                <li
+                                                    key={jobId}
+                                                    className={cn(
+                                                        'rounded-xl border border-slate-200 bg-white shadow-sm transition-colors',
+                                                        'sm:rounded-none sm:border-0 sm:border-b sm:border-slate-100 sm:bg-transparent sm:shadow-none',
+                                                        'sm:px-6 sm:py-4',
+                                                        isEditing && 'ring-2 ring-blue-500/20 border-blue-200 bg-blue-50/30 sm:ring-0 sm:bg-blue-50/40'
+                                                    )}
+                                                >
+                                                    <div className="p-4 space-y-3 sm:p-0 sm:space-y-0 sm:flex sm:flex-col sm:gap-4 lg:flex-row lg:items-center">
+                                                        <div className="flex-1 min-w-0 space-y-2 sm:space-y-1.5">
+                                                            <div className="flex flex-wrap items-start gap-2">
+                                                                <span className="text-sm sm:text-base font-semibold text-slate-900 leading-snug break-words">
+                                                                    {formatSchedule(job)}
                                                                 </span>
-                                                            </TableCell>
-                                                            <TableCell>
+                                                                {!isActive && (
+                                                                    <Badge variant="outline" className="text-xs font-medium text-slate-500 border-slate-200 shrink-0">
+                                                                        Paused
+                                                                    </Badge>
+                                                                )}
+                                                            </div>
+                                                            <div className="flex flex-col gap-1.5 text-sm text-slate-500 sm:flex-row sm:flex-wrap sm:items-center sm:gap-2">
+                                                                <Badge variant="secondary" className="w-fit font-medium bg-slate-100 text-slate-700 hover:bg-slate-100">
+                                                                    {formatReportTypeLabel(job.command)}
+                                                                </Badge>
+                                                                <span className="hidden sm:inline text-slate-300">·</span>
+                                                                <span className="text-xs sm:text-sm text-slate-500">
+                                                                    Last sent: {lastRun}
+                                                                </span>
+                                                            </div>
+                                                            <Badge
+                                                                variant="outline"
+                                                                className={cn(
+                                                                    'w-full justify-center py-1.5 text-xs font-semibold sm:hidden',
+                                                                    statusBadgeClass(status)
+                                                                )}
+                                                            >
+                                                                {formatStatusLabel(status)}
+                                                            </Badge>
+                                                            {job.command?.trim() && (
+                                                                <CronCommandPreview command={job.command} />
+                                                            )}
+                                                        </div>
+
+                                                        <div className="flex flex-col gap-3 pt-3 border-t border-slate-100 sm:border-0 sm:pt-0 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3 lg:justify-end lg:shrink-0">
+                                                            <Badge
+                                                                variant="outline"
+                                                                className={cn(
+                                                                    'hidden sm:inline-flex text-xs font-semibold shrink-0',
+                                                                    statusBadgeClass(status)
+                                                                )}
+                                                            >
+                                                                {formatStatusLabel(status)}
+                                                            </Badge>
+                                                            <div className="flex items-center justify-between gap-3 sm:justify-start sm:gap-2 sm:pl-1 sm:border-l sm:border-slate-200">
+                                                                <Label className="text-sm font-medium text-slate-600 sm:sr-only">
+                                                                    Active
+                                                                </Label>
                                                                 <Switch
-                                                                    checked={job.enabled !== false}
+                                                                    checked={isActive}
                                                                     onCheckedChange={(checked) => handleToggleCronJob(job, checked)}
                                                                     disabled={!isEditable || cronPending}
+                                                                    className="touch-manipulation"
                                                                 />
-                                                            </TableCell>
-                                                            <TableCell className="text-sm text-slate-600">{lastRun}</TableCell>
-                                                            <TableCell>
-                                                                <Badge
+                                                            </div>
+                                                            <div className="grid grid-cols-[1fr_auto] gap-2 sm:flex sm:gap-1">
+                                                                <Button
+                                                                    type="button"
                                                                     variant="outline"
-                                                                    className={cn('text-xs font-bold capitalize', statusBadgeClass(status))}
+                                                                    size="sm"
+                                                                    onClick={() => startEditCronJob(job)}
+                                                                    disabled={!isEditable || cronPending}
+                                                                    className="min-h-11 touch-manipulation font-medium text-slate-600 sm:h-8"
                                                                 >
-                                                                    {formatStatusLabel(status)}
-                                                                </Badge>
-                                                            </TableCell>
-                                                            <TableCell className="text-right pr-6">
-                                                                <div className="flex justify-end gap-1">
-                                                                    <Button
-                                                                        type="button"
-                                                                        variant="ghost"
-                                                                        size="icon"
-                                                                        onClick={() => startEditCronJob(job)}
-                                                                        disabled={!isEditable || cronPending}
-                                                                        className="text-slate-400 hover:text-blue-600"
-                                                                    >
-                                                                        <Pencil className="w-4 h-4" />
-                                                                    </Button>
-                                                                    <Button
-                                                                        type="button"
-                                                                        variant="ghost"
-                                                                        size="icon"
-                                                                        onClick={() => handleDeleteCronJob(job)}
-                                                                        disabled={!isEditable || cronPending}
-                                                                        className="text-slate-300 hover:text-rose-600"
-                                                                    >
-                                                                        <Trash2 className="w-4 h-4" />
-                                                                    </Button>
-                                                                </div>
-                                                            </TableCell>
-                                                        </TableRow>
-                                                    )
-                                                })
-                                            )}
-                                        </TableBody>
-                                    </Table>
-                                </div>
+                                                                    <Pencil className="w-4 h-4 mr-1.5 sm:w-3.5 sm:h-3.5 sm:mr-1" />
+                                                                    Edit
+                                                                </Button>
+                                                                <Button
+                                                                    type="button"
+                                                                    variant="outline"
+                                                                    size="icon"
+                                                                    onClick={() => handleDeleteCronJob(job)}
+                                                                    disabled={!isEditable || cronPending}
+                                                                    aria-label="Delete schedule"
+                                                                    className="min-h-11 min-w-11 touch-manipulation text-slate-400 hover:text-rose-600 hover:border-rose-200 sm:h-8 sm:w-8 sm:border-transparent sm:hover:bg-transparent"
+                                                                >
+                                                                    <Trash2 className="w-4 h-4" />
+                                                                </Button>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </li>
+                                            )
+                                        })}
+                                    </ul>
+                                )}
 
-                                <div className="p-6 border-t border-slate-100 space-y-4 bg-slate-50/30">
-                                    <div className="flex items-center justify-between gap-4">
-                                        <h3 className="text-sm font-bold text-slate-700">
-                                            {editingJobId ? 'Edit report schedule' : 'Add a new report schedule'}
-                                        </h3>
-                                        {editingJobId && (
+                                {showCronForm && (
+                                    <div className="border-t border-slate-100 bg-slate-50/40 px-4 py-5 space-y-5 sm:px-6 sm:py-6 sm:space-y-6">
+                                        <div className="flex items-center justify-between gap-3">
+                                            <h3 className="text-sm font-bold text-slate-800">
+                                                {editingJobId ? 'Edit schedule' : 'New schedule'}
+                                            </h3>
                                             <Button
                                                 type="button"
                                                 variant="ghost"
                                                 size="sm"
                                                 onClick={resetCronForm}
                                                 disabled={cronPending}
-                                                className="text-slate-500"
+                                                className="shrink-0 min-h-10 touch-manipulation text-slate-500 -mr-2 sm:mr-0"
                                             >
-                                                <X className="w-4 h-4 mr-1" />
-                                                Cancel
+                                                <X className="w-4 h-4 sm:mr-1" />
+                                                <span className="sr-only sm:not-sr-only sm:inline">Cancel</span>
                                             </Button>
-                                        )}
-                                    </div>
+                                        </div>
 
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                                        <div className="space-y-2">
-                                            <Label className="text-xs font-bold text-slate-500 uppercase">Send at</Label>
-                                            <Input
-                                                type="time"
-                                                value={cronForm.time}
-                                                onChange={(e) => setCronForm((f) => ({ ...f, time: e.target.value }))}
-                                                disabled={!isEditable || cronPending}
-                                                className="bg-white"
-                                            />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label className="text-xs font-bold text-slate-500 uppercase">How often</Label>
-                                            <Select
-                                                value={cronForm.repeat}
-                                                onValueChange={(val) => setCronForm((f) => ({ ...f, repeat: val }))}
-                                                disabled={!isEditable || cronPending}
+                                        <div className="space-y-3">
+                                            <Label className="text-xs font-bold text-slate-500 uppercase tracking-wide">
+                                                Report type
+                                            </Label>
+                                            <div
+                                                className={cn(
+                                                    'flex gap-3 overflow-x-auto pb-1 -mx-1 px-1 snap-x snap-mandatory',
+                                                    'sm:grid sm:grid-cols-3 sm:overflow-visible sm:mx-0 sm:px-0 sm:pb-0 sm:snap-none'
+                                                )}
                                             >
-                                                <SelectTrigger className="bg-white">
-                                                    <SelectValue />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="daily">Daily</SelectItem>
-                                                    <SelectItem value="weekly">Weekly</SelectItem>
-                                                    <SelectItem value="monthly">Monthly</SelectItem>
-                                                </SelectContent>
-                                            </Select>
+                                                {Object.values(REPORT_PRESETS).map((preset) => (
+                                                    <button
+                                                        key={preset.id}
+                                                        type="button"
+                                                        disabled={!isEditable || cronPending}
+                                                        onClick={() => setCronForm((f) => ({ ...f, reportPreset: preset.id }))}
+                                                        className={cn(
+                                                            'min-w-[min(100%,220px)] shrink-0 snap-start sm:min-w-0 sm:w-auto',
+                                                            'rounded-xl border-2 p-4 text-left transition-all touch-manipulation disabled:opacity-50',
+                                                            cronForm.reportPreset === preset.id
+                                                                ? 'border-blue-500 bg-white shadow-sm ring-2 ring-blue-500/15'
+                                                                : 'border-slate-200 bg-white active:border-slate-300 sm:hover:border-slate-300'
+                                                        )}
+                                                    >
+                                                        <span className="block text-sm font-bold text-slate-800">{preset.label}</span>
+                                                        <span className="block text-xs text-slate-500 mt-1 leading-relaxed">{preset.description}</span>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                            <p className="text-[11px] text-slate-400 sm:hidden">Swipe to see all report types</p>
+                                            <CronCommandPreview
+                                                command={resolveFormCommand(cronForm)}
+                                                collapsible={false}
+                                            />
+                                            {cronForm.reportPreset === 'custom' && (
+                                                <Accordion type="single" collapsible defaultValue="custom" className="rounded-xl border border-amber-200 bg-amber-50/50 px-4">
+                                                    <AccordionItem value="custom" className="border-0">
+                                                        <AccordionTrigger className="py-3 text-sm font-semibold text-amber-900 hover:no-underline">
+                                                            Advanced custom instruction
+                                                        </AccordionTrigger>
+                                                        <AccordionContent className="pb-4">
+                                                            <p className="text-xs text-amber-800/80 mb-2">
+                                                                Paste the exact instruction from support. Leave unchanged if you are unsure.
+                                                            </p>
+                                                            <Textarea
+                                                                value={cronForm.customCommand}
+                                                                onChange={(e) => setCronForm((f) => ({ ...f, customCommand: e.target.value }))}
+                                                                placeholder="@bot pdf-fetch ..."
+                                                                disabled={!isEditable || cronPending}
+                                                                className="bg-white min-h-[72px] font-mono text-xs border-amber-200"
+                                                            />
+                                                        </AccordionContent>
+                                                    </AccordionItem>
+                                                </Accordion>
+                                            )}
                                         </div>
-                                        {cronForm.repeat === 'weekly' && (
+
+                                        <div className="grid grid-cols-1 gap-4 max-sm:gap-3 sm:grid-cols-2 lg:grid-cols-4">
                                             <div className="space-y-2">
-                                                <Label className="text-xs font-bold text-slate-500 uppercase">On day</Label>
+                                                <Label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Send at</Label>
+                                                <Input
+                                                    type="time"
+                                                    value={cronForm.time}
+                                                    onChange={(e) => setCronForm((f) => ({ ...f, time: e.target.value }))}
+                                                    disabled={!isEditable || cronPending}
+                                                    className="bg-white min-h-11 text-base sm:text-sm touch-manipulation"
+                                                />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <Label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Frequency</Label>
                                                 <Select
-                                                    value={cronForm.dayOfWeek}
-                                                    onValueChange={(val) => setCronForm((f) => ({ ...f, dayOfWeek: val }))}
+                                                    value={cronForm.repeat}
+                                                    onValueChange={(val) => setCronForm((f) => ({ ...f, repeat: val }))}
                                                     disabled={!isEditable || cronPending}
                                                 >
-                                                    <SelectTrigger className="bg-white">
+                                                    <SelectTrigger className="bg-white min-h-11 w-full touch-manipulation">
                                                         <SelectValue />
                                                     </SelectTrigger>
                                                     <SelectContent>
-                                                        {DAY_NAMES.map((name, i) => (
-                                                            <SelectItem key={name} value={String(i)}>{name}</SelectItem>
-                                                        ))}
+                                                        <SelectItem value="daily">Every day</SelectItem>
+                                                        <SelectItem value="weekly">Every week</SelectItem>
+                                                        <SelectItem value="monthly">Every month</SelectItem>
                                                     </SelectContent>
                                                 </Select>
                                             </div>
-                                        )}
-                                        {cronForm.repeat === 'monthly' && (
-                                            <div className="space-y-2">
-                                                <Label className="text-xs font-bold text-slate-500 uppercase">Date each month</Label>
+                                            {cronForm.repeat === 'weekly' && (
+                                                <div className="space-y-2">
+                                                    <Label className="text-xs font-bold text-slate-500 uppercase tracking-wide">On</Label>
+                                                    <Select
+                                                        value={cronForm.dayOfWeek}
+                                                        onValueChange={(val) => setCronForm((f) => ({ ...f, dayOfWeek: val }))}
+                                                        disabled={!isEditable || cronPending}
+                                                    >
+                                                        <SelectTrigger className="bg-white min-h-11 w-full touch-manipulation">
+                                                            <SelectValue />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            {DAY_NAMES.map((name, i) => (
+                                                                <SelectItem key={name} value={String(i)}>{name}</SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+                                            )}
+                                            {cronForm.repeat === 'monthly' && (
+                                                <div className="space-y-2">
+                                                    <Label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Day of month</Label>
+                                                    <Select
+                                                        value={cronForm.dayOfMonth}
+                                                        onValueChange={(val) => setCronForm((f) => ({ ...f, dayOfMonth: val }))}
+                                                        disabled={!isEditable || cronPending}
+                                                    >
+                                                        <SelectTrigger className="bg-white min-h-11 w-full touch-manipulation">
+                                                            <SelectValue />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            {Array.from({ length: 31 }, (_, i) => (
+                                                                <SelectItem key={i + 1} value={String(i + 1)}>
+                                                                    {i + 1}
+                                                                </SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+                                            )}
+                                            <div className="space-y-2 sm:col-span-2 lg:col-span-1">
+                                                <Label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Time zone</Label>
                                                 <Select
-                                                    value={cronForm.dayOfMonth}
-                                                    onValueChange={(val) => setCronForm((f) => ({ ...f, dayOfMonth: val }))}
+                                                    value={cronForm.timezone}
+                                                    onValueChange={(val) => setCronForm((f) => ({ ...f, timezone: val }))}
                                                     disabled={!isEditable || cronPending}
                                                 >
-                                                    <SelectTrigger className="bg-white">
+                                                    <SelectTrigger className="bg-white min-h-11 w-full touch-manipulation">
                                                         <SelectValue />
                                                     </SelectTrigger>
                                                     <SelectContent>
-                                                        {Array.from({ length: 31 }, (_, i) => (
-                                                            <SelectItem key={i + 1} value={String(i + 1)}>
-                                                                {i + 1}
+                                                        {TIMEZONE_OPTIONS.map((tz) => (
+                                                            <SelectItem key={tz.value} value={tz.value}>
+                                                                {tz.label}
                                                             </SelectItem>
                                                         ))}
+                                                        {!TIMEZONE_OPTIONS.some((tz) => tz.value === cronForm.timezone) && cronForm.timezone && (
+                                                            <SelectItem value={cronForm.timezone}>
+                                                                {cronForm.timezone}
+                                                            </SelectItem>
+                                                        )}
                                                     </SelectContent>
                                                 </Select>
                                             </div>
-                                        )}
-                                        <div className="space-y-2">
-                                            <Label className="text-xs font-bold text-slate-500 uppercase">Time zone</Label>
-                                            <Input
-                                                value={cronForm.timezone}
-                                                onChange={(e) => setCronForm((f) => ({ ...f, timezone: e.target.value }))}
-                                                placeholder="Asia/Kolkata"
-                                                disabled={!isEditable || cronPending}
-                                                className="bg-white"
-                                            />
                                         </div>
-                                    </div>
 
-                                    <div className="space-y-2">
-                                        <div className="flex items-center justify-between gap-2">
-                                            <Label className="text-xs font-bold text-slate-500 uppercase">Report type</Label>
+                                        <div
+                                            className={cn(
+                                                'flex flex-col gap-4 pt-4 border-t border-slate-200/80',
+                                                'max-sm:sticky max-sm:bottom-0 max-sm:-mx-4 max-sm:px-4',
+                                                'max-sm:py-3 max-sm:pb-[max(0.75rem,env(safe-area-inset-bottom))]',
+                                                'max-sm:bg-slate-50/95 max-sm:border-t max-sm:backdrop-blur-sm max-sm:shadow-[0_-4px_12px_rgba(0,0,0,0.06)]',
+                                                'sm:flex-row sm:items-center sm:justify-between sm:pt-2 sm:static sm:mx-0 sm:shadow-none'
+                                            )}
+                                        >
+                                            <div className="flex items-center justify-between gap-3 sm:justify-start">
+                                                <Label htmlFor="cron-enabled" className="text-sm font-medium text-slate-700 cursor-pointer">
+                                                    Schedule is active
+                                                </Label>
+                                                <Switch
+                                                    id="cron-enabled"
+                                                    checked={cronForm.enabled}
+                                                    onCheckedChange={(checked) => setCronForm((f) => ({ ...f, enabled: checked }))}
+                                                    disabled={!isEditable || cronPending}
+                                                    className="touch-manipulation"
+                                                />
+                                            </div>
                                             <Button
                                                 type="button"
-                                                variant="outline"
-                                                size="sm"
-                                                className="h-7 text-xs font-bold"
-                                                onClick={() => setCronForm((f) => ({ ...f, command: PDF_COMMAND_TEMPLATE }))}
-                                                disabled={!isEditable || cronPending}
+                                                onClick={handleCronSubmit}
+                                                disabled={
+                                                    !isEditable
+                                                    || cronPending
+                                                    || (cronForm.reportPreset === 'custom' && !cronForm.customCommand.trim())
+                                                }
+                                                className="min-h-12 touch-manipulation bg-blue-600 hover:bg-blue-700 text-white font-bold w-full sm:min-h-10 sm:w-auto"
                                             >
-                                                Use PDF summary
+                                                {cronPending ? (
+                                                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...</>
+                                                ) : editingJobId ? 'Save changes' : 'Add schedule'}
                                             </Button>
                                         </div>
-                                        <p className="text-xs text-slate-500">
-                                            Most teams use the PDF summary. Only change the advanced instruction below if support gave you one.
-                                        </p>
-                                        <Textarea
-                                            value={cronForm.command}
-                                            onChange={(e) => setCronForm((f) => ({ ...f, command: e.target.value }))}
-                                            placeholder={PDF_COMMAND_TEMPLATE}
-                                            disabled={!isEditable || cronPending}
-                                            className="bg-white min-h-[80px] font-mono text-sm"
-                                        />
                                     </div>
-
-                                    <div className="flex items-center gap-3">
-                                        <Switch
-                                            id="cron-enabled"
-                                            checked={cronForm.enabled}
-                                            onCheckedChange={(checked) => setCronForm((f) => ({ ...f, enabled: checked }))}
-                                            disabled={!isEditable || cronPending}
-                                        />
-                                        <Label htmlFor="cron-enabled" className="text-sm font-medium text-slate-700 cursor-pointer">
-                                            Schedule is active
-                                        </Label>
-                                    </div>
-
-                                    <div className="flex justify-end">
-                                        <Button
-                                            type="button"
-                                            onClick={handleCronSubmit}
-                                            disabled={!isEditable || cronPending || !cronForm.command.trim()}
-                                            className="bg-blue-600 hover:bg-blue-700 text-white font-bold"
-                                        >
-                                            {cronPending ? (
-                                                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...</>
-                                            ) : editingJobId ? 'Save changes' : 'Add schedule'}
-                                        </Button>
-                                    </div>
-                                </div>
+                                )}
                             </>
                         )}
 
                         {cronFeedback && (
-                            <div className="px-6 pb-6">
+                            <div className="px-4 py-3 sm:px-6 sm:py-4 border-t border-slate-100">
                                 <div
                                     className={cn(
                                         'flex items-center gap-3 p-4 rounded-xl border animate-in zoom-in-95 duration-200',
