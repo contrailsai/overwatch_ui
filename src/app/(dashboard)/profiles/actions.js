@@ -6,6 +6,7 @@ import { ObjectId } from 'mongodb'
 import { traceAction } from '@/utils/tracing'
 import { getSignedImageUrl } from '@/utils/aws/s3'
 import { requireAuthContext } from '@/utils/auth-context'
+import { logActionError, LOKI_STREAMS } from '@/utils/otel-logger'
 
 /** Exported for review-profiles; not a traced server action (avoids per-row trace overhead). */
 export async function normalized_S3_post(post) {
@@ -267,6 +268,7 @@ export const getProfiles = traceAction('getProfiles', async (page = 1, limit = 2
             totalPages: Math.ceil(totalCount / limit),
         }
     } catch (e) {
+        logActionError({ loki_stream: LOKI_STREAMS.profiles, app_action: 'getProfiles', message: 'getProfiles failed' }, e)
         console.error('getProfiles MongoDB Error:', e)
         return { profiles: [], totalCount: 0, page: 1, totalPages: 0 }
     }
@@ -293,6 +295,7 @@ export const getProfileCases = traceAction('getProfileCases', async (postIds = [
 
         return Promise.all(posts.map((p) => normalized_S3_post(p)))
     } catch (e) {
+        logActionError({ loki_stream: LOKI_STREAMS.profiles, app_action: 'getProfileCases', message: 'getProfileCases failed' }, e)
         console.error('getProfileCases MongoDB Error:', e)
         return []
     }
@@ -326,6 +329,7 @@ export const updateProfileClientStatus = traceAction('updateProfileClientStatus'
             return { success: false, error: "Profile not found" }
         }
     } catch (e) {
+        logActionError({ loki_stream: LOKI_STREAMS.profiles, app_action: 'updateProfileClientStatus', message: 'updateProfileClientStatus failed' }, e)
         console.error("updateProfileClientStatus Error:", e)
         return { success: false, error: e.message }
     }
@@ -360,6 +364,7 @@ export const addProfileClientNote = traceAction('addProfileClientNote', async (p
             return { success: false, error: "Profile not found" }
         }
     } catch (e) {
+        logActionError({ loki_stream: LOKI_STREAMS.profiles, app_action: 'addProfileClientNote', message: 'addProfileClientNote failed' }, e)
         console.error("addProfileClientNote Error:", e)
         return { success: false, error: e.message }
     }

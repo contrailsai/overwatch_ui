@@ -61,29 +61,27 @@ export default async function CasesPage({ searchParams }) {
           sort
         )
         : getPosts(project, currentPage, itemsPerPage, filters, sort)),
-    { 'app.span_type': 'rsc_fetch', 'app.surface': 'rsc', 'app.fetch_target': 'cases' }
+    { loki_stream: 'cases', 'app.span_type': 'rsc_fetch', 'app.surface': 'rsc', 'app.fetch_target': 'cases' }
   )
 
   const initialCasePromise = resolvedParams.case_id
     ? runInSpan(
       'rsc.cases_page.selected_case_query',
       async () => getPostById(project, resolvedParams.case_id),
-      { 'app.span_type': 'rsc_fetch', 'app.surface': 'rsc', 'app.fetch_target': 'selected_case' }
+      { loki_stream: 'cases', 'app.span_type': 'rsc_fetch', 'app.surface': 'rsc', 'app.fetch_target': 'selected_case' }
     )
     : Promise.resolve(null)
 
   const projectEmailsPromise = runInSpan(
     'rsc.cases_page.project_emails_query',
     async () => fetch_clients_in_project(clientDetails.project_name),
-    { 'app.span_type': 'rsc_fetch', 'app.surface': 'rsc', 'app.fetch_target': 'project_emails' }
+    { loki_stream: 'cases', 'app.span_type': 'rsc_fetch', 'app.surface': 'rsc', 'app.fetch_target': 'project_emails' }
   )
   const [cases, initialCase, email_n_alias] = await Promise.all([
     casesPromise,
     initialCasePromise,
     projectEmailsPromise,
   ])
-
-  // console.log("got clients in project as: ", emails)
 
   return (
     <main className="flex-1 flex flex-col h-full overflow-hidden bg-slate-50">

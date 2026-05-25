@@ -5,6 +5,7 @@ import clientPromise from '@/utils/mongodb/client'
 import { revalidatePath } from 'next/cache'
 import { getAuthContext, requireRole } from '@/utils/auth-context'
 import { runInSpan, traceAction } from '@/utils/tracing'
+import { logActionError, LOKI_STREAMS } from '@/utils/otel-logger'
 
 const TIME_PATTERN = /^\d{2}:\d{2}$/
 const CRON_WRITE_ROLES = ['client-admin', 'reviewer']
@@ -64,6 +65,13 @@ async function cronApiFetch(path, { method = 'GET', body } = {}) {
       details: data?.details,
     }
   } catch (err) {
+    logActionError({
+      loki_stream: LOKI_STREAMS.configurations,
+      app_action: 'cronApiFetch',
+      message: 'WhatsApp cron API fetch error',
+      cron_path: path,
+      cron_method: method,
+    }, err)
     console.error('WhatsApp cron API fetch error:', err)
     return { configured: true, error: 'Could not reach the report scheduling service' }
   }
@@ -238,7 +246,7 @@ export const delete_cron_job = traceAction('configurations.delete_cron_job', asy
   return { success: true }
 })
 
-export async function updateLabels(prevState, formData) {
+export const updateLabels = traceAction('configurations.updateLabels', async (prevState, formData) => {
   const ctx = await getAuthContext()
   if (!ctx?.clientDetails?.project_name || !ctx.dbName) {
     return { error: 'Not authenticated' }
@@ -264,6 +272,11 @@ export async function updateLabels(prevState, formData) {
       ? JSON.parse(projectData.project_details)
       : (projectData?.project_details || {})
   } catch (e) {
+    logActionError({
+      loki_stream: LOKI_STREAMS.configurations,
+      app_action: 'updateLabels',
+      message: 'Error parsing project_details',
+    }, e)
     console.error('Error parsing project_details:', e)
     projectDetails = {}
   }
@@ -315,6 +328,11 @@ export async function updateLabels(prevState, formData) {
         })
     }
   } catch (e) {
+    logActionError({
+      loki_stream: LOKI_STREAMS.configurations,
+      app_action: 'updateLabels',
+      message: 'Error parsing labels/legal_codes JSON',
+    }, e)
     console.error('Error parsing JSON:', e)
     return { error: 'Invalid data provided' }
   }
@@ -335,6 +353,12 @@ export async function updateLabels(prevState, formData) {
   )
 
   if (error) {
+    logActionError({
+      loki_stream: LOKI_STREAMS.configurations,
+      app_action: 'updateLabels',
+      message: 'Error updating project labels',
+      project_name: ctx.clientDetails.project_name,
+    }, error)
     console.error('Error updating project labels:', error)
     return { error: 'Failed to update labels' }
   }
@@ -372,6 +396,14 @@ export async function updateLabels(prevState, formData) {
         { 'app.span_type': 'mongo_query' }
       )
     } catch (err) {
+      logActionError({
+        loki_stream: LOKI_STREAMS.configurations,
+        app_action: 'updateLabels',
+        message: 'Error cascading label updates to MongoDB',
+        project_name: ctx.clientDetails.project_name,
+        renamed_labels_count: renamedLabels.length,
+        renamed_legal_codes_count: renamedLegalCodes.length,
+      }, err)
       console.error('Error cascading label updates to MongoDB:', err)
     }
   }
@@ -379,4 +411,4 @@ export async function updateLabels(prevState, formData) {
   revalidatePath('/configurations')
 
   return { success: true, message: 'Labels updated successfully' }
-}
+}, { loki_stream: LOKI_STREAMS.configurations })

@@ -6,6 +6,7 @@ import { traceAction, runInSpan } from '@/utils/tracing'
 import { getSignedImageUrl } from '@/utils/aws/s3'
 import { normalized_S3_post } from '@/app/(dashboard)/profiles/actions'
 import { requireRole } from '@/utils/auth-context'
+import { logActionError, logActionWarn, LOKI_STREAMS } from '@/utils/otel-logger'
 
 function escapeRegex(text) {
     return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -139,6 +140,11 @@ export const getProfiles = traceAction('getProfiles_review', async (_project, pa
             totalPages: Math.ceil(totalCount / limit),
         }
     } catch (e) {
+        logActionError({
+            loki_stream: LOKI_STREAMS.review_profiles,
+            app_action: 'getProfiles_review',
+            message: 'review_profiles.getProfiles failed',
+        }, e)
         console.error('getProfiles MongoDB Error:', e)
         return { profiles: [], totalCount: 0, page: 1, totalPages: 0 }
     }
@@ -174,6 +180,11 @@ export const getProfileCases = traceAction('getProfileCases_review', async (_pro
             { 'app.span_type': 's3_signing' }
         )
     } catch (e) {
+        logActionError({
+            loki_stream: LOKI_STREAMS.review_profiles,
+            app_action: 'getProfileCases_review',
+            message: 'review_profiles.getProfileCases failed',
+        }, e)
         console.error('getProfileCases MongoDB Error:', e)
         return []
     }
@@ -208,6 +219,11 @@ export const submitProfileReview = traceAction('submitProfileReview', async (_pr
 
         return { success: true, review_details }
     } catch (e) {
+        logActionError({
+            loki_stream: LOKI_STREAMS.review_profiles,
+            app_action: 'submitProfileReview',
+            message: 'review_profiles.submitProfileReview failed',
+        }, e)
         console.error('submitProfileReview MongoDB Error:', e)
         return { success: false, error: e.message }
     }

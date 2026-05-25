@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer';
+import { logActionError, LOKI_STREAMS } from '@/utils/otel-logger';
 
 const transporter = nodemailer.createTransport({
   service: 'gmail',
@@ -39,6 +40,12 @@ export async function sendEmail({ to, subject, html }) {
     console.log('Message sent: %s', info.messageId);
     return { success: true, messageId: info.messageId };
   } catch (error) {
+    logActionError({
+      loki_stream: LOKI_STREAMS.shared,
+      app_caller: 'email',
+      app_action: 'sendEmail',
+      message: 'Error sending email',
+    }, error)
     console.error('Error sending email:', error);
     return { success: false, error: error.message };
   }

@@ -3,6 +3,7 @@
 import { cache } from 'react'
 import { createClient, getAuthenticatedUser } from '@/utils/supabase/server'
 import { runInSpan } from '@/utils/tracing'
+import { logActionWarn, LOKI_STREAMS } from '@/utils/otel-logger'
 
 const TENANT_CONTEXT_TTL_MS = 30 * 1000
 const tenantContextCache = new Map()
@@ -47,6 +48,15 @@ export const getAuthContext = cache(async () => {
   })
 
   if (error || !clientDetails?.project?.mongo_db_map) {
+    logActionWarn({
+      loki_stream: LOKI_STREAMS.auth,
+      app_action: 'getAuthContext',
+      message: 'auth_context tenant lookup failed or incomplete',
+      user_id: user.id,
+      has_client_details: !!clientDetails,
+      has_mongo_db_map: !!clientDetails?.project?.mongo_db_map,
+      supabase_error: error?.message ?? null,
+    })
     return null
   }
 

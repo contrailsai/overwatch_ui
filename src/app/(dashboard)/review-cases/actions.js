@@ -9,6 +9,7 @@ import { markClientRequestedLinksEnlisted } from '@/utils/clientRequestedLinks/s
 import { sendEmail } from '@/utils/email'
 import { traceAction } from '@/utils/tracing'
 import { requireRole } from '@/utils/auth-context'
+import { logActionError, logActionWarn, LOKI_STREAMS } from '@/utils/otel-logger'
 
 /** Local helper — not a traced server action (avoids per-row trace overhead on list loads). */
 async function normalizeReviewS3Post(post) {
@@ -223,6 +224,11 @@ export const getPosts = traceAction('getPosts_review', async (_project_mongo_db_
 
     return { posts: processedPosts, totalCount, page, totalPages: Math.ceil(totalCount / limit) }
   } catch (e) {
+    logActionError({
+      loki_stream: LOKI_STREAMS.review_cases,
+      app_action: 'getPosts_review',
+      message: 'review_cases.getPosts failed',
+    }, e)
     console.error('MongoDB Error:', e)
     return { posts: [], totalCount: 0, page: 1, totalPages: 0 }
   }
@@ -246,6 +252,11 @@ export const getPostById = traceAction('getPostById', async (_project, case_id) 
 
     return processedPost
   } catch (e) {
+    logActionError({
+      loki_stream: LOKI_STREAMS.review_cases,
+      app_action: 'getPostById',
+      message: 'review_cases.getPostById failed',
+    }, e)
     console.error('MongoDB Error:', e)
     return null
   }
@@ -383,6 +394,11 @@ export const getAllPostsForExport = traceAction('getAllPostsForExport', async (_
 
     return { posts: processedPosts }
   } catch (e) {
+    logActionError({
+      loki_stream: LOKI_STREAMS.review_cases,
+      app_action: 'getAllPostsForExport',
+      message: 'review_cases.getAllPostsForExport failed',
+    }, e)
     console.error('MongoDB Export Error:', e)
     return { posts: [] }
   }
@@ -424,6 +440,11 @@ async function sendNotification(notification_config, type) {
         })
 
         if (error) {
+          logActionError({
+            loki_stream: LOKI_STREAMS.review_cases,
+            app_action: 'sendNotification',
+            message: 'review_cases.sendNotification email failed',
+          }, error)
           console.error('Email Error:', error)
           return { success: false, error: 'Failed to send email' }
         }
@@ -436,6 +457,11 @@ async function sendNotification(notification_config, type) {
 
     return { success: false, error: `Notification type ${type} not supported` }
   } catch (error) {
+    logActionError({
+      loki_stream: LOKI_STREAMS.review_cases,
+      app_action: 'sendNotification',
+      message: 'review_cases.sendNotification failed',
+    }, error)
     console.error('Send Notification Error:', error)
     return { success: false, error: error.message }
   }
@@ -585,14 +611,22 @@ export const submitCaseReview = traceAction('submitCaseReview', async (_project,
 
     // update the metrics for the analytics dashboard (important)
     await updateDailyMetrics(project, currentReviewData, previousReviewData).catch(err =>
-      console.error('Background metrics update failed:', err)
+      logActionError({
+        loki_stream: LOKI_STREAMS.review_cases,
+        app_action: 'submitCaseReview',
+        message: 'Background metrics update failed',
+      }, err)
     )
 
     await markClientRequestedLinksEnlisted({
       post: existingPost,
       projectName: project?.project_name,
     }).catch((err) =>
-      console.error('client_requested_links enlisted update failed:', err)
+      logActionError({
+        loki_stream: LOKI_STREAMS.review_cases,
+        app_action: 'submitCaseReview',
+        message: 'client_requested_links enlisted update failed',
+      }, err)
     )
 
     // SEND A NOTIFICATION TO THE CLIENT ON THEIR SUPPORTED FORMAT
@@ -631,6 +665,11 @@ export const submitCaseReview = traceAction('submitCaseReview', async (_project,
       }
     }
   } catch (error) {
+    logActionError({
+      loki_stream: LOKI_STREAMS.review_cases,
+      app_action: 'submitCaseReview',
+      message: 'review_cases.submitCaseReview failed',
+    }, error)
     console.error('MongoDB Update Error:', error)
     return { success: false, error: error.message }
   }
@@ -658,6 +697,11 @@ export const getCaseMetadata = traceAction('getCaseMetadata', async (postId) => 
       analysis_results: post.analysis_results
     }
   } catch (e) {
+    logActionError({
+      loki_stream: LOKI_STREAMS.review_cases,
+      app_action: 'getCaseMetadata',
+      message: 'review_cases.getCaseMetadata failed',
+    }, e)
     console.error('Error fetching case metadata:', e)
     return null
   }
@@ -727,6 +771,11 @@ export const uploadCaseImage = traceAction('uploadCaseImage', async (postId, _pr
 
     return { success: true, signedUrl }
   } catch (error) {
+    logActionError({
+      loki_stream: LOKI_STREAMS.review_cases,
+      app_action: 'uploadCaseImage',
+      message: 'review_cases.uploadCaseImage failed',
+    }, error)
     console.error('uploadCaseImage Error:', error)
     return { success: false, error: error.message }
   }
@@ -763,6 +812,11 @@ export const deleteCaseImage = traceAction('deleteCaseImage', async (postId, _pr
           const key = url.pathname.substring(1)
           if (key) await deleteFileFromS3(key)
         } catch (err) {
+          logActionError({
+            loki_stream: LOKI_STREAMS.review_cases,
+            app_action: 'deleteCaseImage',
+            message: 'S3 delete failed (continuing)',
+          }, err)
           console.error('S3 delete failed (continuing):', err)
         }
       }
@@ -787,6 +841,11 @@ export const deleteCaseImage = traceAction('deleteCaseImage', async (postId, _pr
 
     return { success: true }
   } catch (error) {
+    logActionError({
+      loki_stream: LOKI_STREAMS.review_cases,
+      app_action: 'deleteCaseImage',
+      message: 'review_cases.deleteCaseImage failed',
+    }, error)
     console.error('deleteCaseImage Error:', error)
     return { success: false, error: error.message }
   }
@@ -823,6 +882,11 @@ export const updatePostVisibility = traceAction('updatePostVisibility', async (p
 
     return { success: true }
   } catch (error) {
+    logActionError({
+      loki_stream: LOKI_STREAMS.review_cases,
+      app_action: 'updatePostVisibility',
+      message: 'review_cases.updatePostVisibility failed',
+    }, error)
     console.error('updatePostVisibility Error:', error)
     return { success: false, error: error.message }
   }
@@ -859,6 +923,11 @@ export const deleteCase = traceAction('deleteCase', async (postId, _project, _cl
           const key = url.pathname.substring(1)
           if (key) await deleteFileFromS3(key)
         } catch (err) {
+          logActionError({
+            loki_stream: LOKI_STREAMS.review_cases,
+            app_action: 'deleteCase',
+            message: 'S3 delete failed (continuing)',
+          }, err)
           console.error('S3 delete failed (continuing):', err)
         }
       }
@@ -871,6 +940,11 @@ export const deleteCase = traceAction('deleteCase', async (postId, _project, _cl
 
     return { success: true }
   } catch (error) {
+    logActionError({
+      loki_stream: LOKI_STREAMS.review_cases,
+      app_action: 'deleteCase',
+      message: 'review_cases.deleteCase failed',
+    }, error)
     console.error('deleteCase Error:', error)
     return { success: false, error: error.message }
   }
@@ -892,6 +966,11 @@ export const runAIAnalysis = traceAction('runAIAnalysis', async (postId, _projec
 
     return { success: true }
   } catch (error) {
+    logActionError({
+      loki_stream: LOKI_STREAMS.review_cases,
+      app_action: 'runAIAnalysis',
+      message: 'review_cases.runAIAnalysis failed',
+    }, error)
     console.error('runAIAnalysis Error:', error)
     return { success: false, error: error.message }
   }

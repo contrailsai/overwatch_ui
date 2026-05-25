@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/utils/supabase/server'
+import { flushOtelLogs, logActionWarn, LOKI_STREAMS, otelLogger } from '@/utils/otel-logger'
 
 export async function GET(request) {
   const { searchParams, origin } = new URL(request.url)
@@ -13,10 +14,12 @@ export async function GET(request) {
     const supabase = await createClient()
     const { error } = await supabase.auth.exchangeCodeForSession(code)
     if (!error) {
-      console.info('[auth.callback] exchangeCodeForSession success', {
-        hasForwardedHost: !!forwardedHost,
+      otelLogger.info('[auth.callback] exchangeCodeForSession success', {
+        app_span_type: 'auth_callback',
+        has_forwarded_host: !!forwardedHost,
         next,
       })
+      await flushOtelLogs()
       if (isLocalEnv) {
         // we can be sure that there is no load balancer in between, so no need to watch for X-Forwarded-Host
         return NextResponse.redirect(`${origin}${next}`)
@@ -26,12 +29,16 @@ export async function GET(request) {
         return NextResponse.redirect(`${origin}${next}`)
       }
     }
-    console.warn('[auth.callback] exchangeCodeForSession failed', {
+    logActionWarn({
+      loki_stream: LOKI_STREAMS.auth,
+      app_action: 'auth.callback',
+      message: 'exchangeCodeForSession failed',
       code: error?.code ?? null,
       status: error?.status ?? null,
-      message: error?.message ?? 'unknown',
-      hasForwardedHost: !!forwardedHost,
+      oauth_message: error?.message ?? 'unknown',
+      has_forwarded_host: !!forwardedHost,
     })
+    await flushOtelLogs()
   }
 
   // return the user to an error page with instructions

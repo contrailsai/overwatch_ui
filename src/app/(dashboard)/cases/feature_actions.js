@@ -10,6 +10,7 @@ import { ObjectId } from 'mongodb'
 import { traceAction, recordClickMetric } from '@/utils/tracing'
 import { metadata } from '../layout'
 import { requireAuthContext, requireRole } from '@/utils/auth-context'
+import { logActionError, LOKI_STREAMS } from '@/utils/otel-logger'
 
 // ADD NOTE
 export const addReviewNote = traceAction('addReviewNote', async (caseId, noteText) => {
@@ -47,6 +48,7 @@ export const addReviewNote = traceAction('addReviewNote', async (caseId, noteTex
             return { success: false, error: "Case not found" }
         }
     } catch (e) {
+        logActionError({ loki_stream: LOKI_STREAMS.cases, app_action: 'addReviewNote', message: 'addReviewNote failed' }, e)
         console.error("addReviewNote Error:", e)
         return { success: false, error: e.message }
     }
@@ -196,7 +198,11 @@ export const submitCaseReview = traceAction('submitCaseReview', async (_project,
         }
 
         await updateDailyMetrics(project, currentReviewData, previousReviewData).catch(err =>
-            console.error('Background metrics update failed:', err)
+            logActionError({
+                loki_stream: LOKI_STREAMS.cases,
+                app_action: 'submitCaseReview',
+                message: 'Background metrics update failed',
+            }, err)
         )
 
         //
@@ -213,13 +219,14 @@ export const submitCaseReview = traceAction('submitCaseReview', async (_project,
             }
         }
     } catch (error) {
+        logActionError({ loki_stream: LOKI_STREAMS.cases, app_action: 'submitCaseReview', message: 'MongoDB update failed' }, error)
         console.error('MongoDB Update Error:', error)
         return { success: false, error: error.message }
     }
 })
 
 // fetch other clients emails in the same project
-export const fetch_clients_in_project = traceAction('fetch_clients_in_project', async (projectName) => {
+export const fetch_clients_in_project = traceAction('cases.fetch_clients_in_project', async (projectName) => {
     const resolvedProjectName = projectName || (await requireAuthContext())?.clientDetails?.project_name
     if (!resolvedProjectName) {
         return []
@@ -234,6 +241,12 @@ export const fetch_clients_in_project = traceAction('fetch_clients_in_project', 
         .neq('permission', 'reviewer'); // anyone except reviewers
 
     if (dbError) {
+        logActionError({
+            loki_stream: LOKI_STREAMS.cases,
+            app_action: 'fetch_clients_in_project',
+            message: 'fetch_clients_in_project database error',
+            supabase_message: dbError.message,
+        })
         console.error(`[fetch_clients_in_project] Database Error:`, dbError.message);
         return { data: null, error: 'Failed to fetch project clients' };
     }
@@ -295,6 +308,7 @@ export const assignCaseTo = traceAction('assignCaseTo', async (_project, _client
             }
         }
     } catch (error) {
+        logActionError({ loki_stream: LOKI_STREAMS.cases, app_action: 'assignCaseTo', message: 'assignCaseTo failed' }, error)
         console.error('MongoDB Update Error:', error)
         return { success: false, error: error.message }
     }
@@ -350,6 +364,7 @@ export const bulkAssignCasesTo = traceAction('bulkAssignCasesTo', async (_projec
             count: result.modifiedCount
         }
     } catch (error) {
+        logActionError({ loki_stream: LOKI_STREAMS.cases, app_action: 'bulkUpdateCases', message: 'MongoDB bulk update failed' }, error)
         console.error('MongoDB Bulk Update Error:', error)
         return { success: false, error: error.message }
     }

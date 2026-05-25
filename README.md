@@ -36,7 +36,7 @@ Built with a **"Calm Focus"** design philosophy, Overwatch minimizes cognitive l
   - **Supabase (PostgreSQL):** Relational metadata, RBAC, and case status tracking.
   - **MongoDB:** Scalable storage for raw social media posts and AI analysis results.
 - **Storage:** [AWS S3](https://aws.amazon.com/s3/) (Presigned URL architecture)
-- **Observability:** [OpenTelemetry](https://opentelemetry.io/) (via Vercel OTEL), [PostHog](https://posthog.com/), and [Vercel Analytics](https://vercel.com/analytics)
+- **Observability:** [OpenTelemetry](https://opentelemetry.io/) → Grafana (Loki / Tempo / Mimir) — see [docs/observability.md](docs/observability.md); [PostHog](https://posthog.com/) for product analytics
 - **Integrations:** [Slack Webhooks](https://api.slack.com/messaging/webhooks), [Nodemailer](https://nodemailer.com/)
 
 ---
@@ -190,7 +190,8 @@ To understand the exact data structures used in the system, refer to the `sample
 - `src/app/`: Next.js App Router (Dashboard, Auth, Actions).
 - `src/components/`: Reusable UI components (PDF/Docx logic, Charts, Tables).
 - `src/utils/`: Core logic for Supabase, MongoDB, AWS, and Tracing.
-- `src/instrumentation.js`: OpenTelemetry registration for server-side monitoring.
+- `src/instrumentation.js`: OpenTelemetry registration (traces, metrics, OTLP logs).
+- `docs/observability.md`: Logs, traces, and metrics — current implementation and usage.
 - `scripts/`: Maintenance utilities (migrations, index management, debug tools).
 
 ---

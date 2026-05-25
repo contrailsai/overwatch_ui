@@ -10,6 +10,7 @@ import clientPromise from '@/utils/mongodb/client'
 import { ObjectId } from 'mongodb'
 import { resolveExistingReportJob } from '@/features/reports/lib/resolve-job'
 import { REPORT_FORMATS } from '@/features/reports/constants'
+import { logActionError, LOKI_STREAMS } from '@/utils/otel-logger'
 
 const OBJECT_ID_HEX = /^[a-fA-F0-9]{24}$/
 
@@ -32,6 +33,11 @@ export const getReportDownloadUrl = traceAction('getReportDownloadUrl', async (s
     const key = url.pathname.substring(1)
     return await getSignedDownloadUrl(key, originalName)
   } catch (error) {
+    logActionError({
+      loki_stream: LOKI_STREAMS.reports,
+      app_action: 'getReportDownloadUrl',
+      message: 'Failed to generate signed download URL',
+    }, error)
     console.error('Error generating signed download URL for report:', error)
     return null
   }
@@ -123,6 +129,13 @@ export const getOrCreateReportJob = traceAction('getOrCreateReportJob', async ({
     .single()
 
   if (insertError) {
+    logActionError({
+      loki_stream: LOKI_STREAMS.reports,
+      app_action: 'getOrCreateReportJob',
+      message: 'Failed to create report job record',
+      report_type: reportType,
+      report_format: reportFormat,
+    }, insertError)
     console.error('Failed to create report job record:', insertError)
     throw new Error('Failed to create report job record: ' + insertError.message)
   }
@@ -141,6 +154,14 @@ export const getOrCreateReportJob = traceAction('getOrCreateReportJob', async ({
   try {
     await sendReportSqsMessage(sqsPayload)
   } catch (dispatchError) {
+    logActionError({
+      loki_stream: LOKI_STREAMS.reports,
+      app_action: 'getOrCreateReportJob',
+      message: 'Failed to dispatch report job via SQS',
+      job_id: String(newJob.id),
+      report_type: reportType,
+      report_format: reportFormat,
+    }, dispatchError)
     console.error('Failed to dispatch report job:', dispatchError)
     await supabase
       .from('reports_generation')
@@ -164,6 +185,12 @@ export const getReportJobStatus = traceAction('getReportJobStatus', async (jobId
     .maybeSingle()
 
   if (error) {
+    logActionError({
+      loki_stream: LOKI_STREAMS.reports,
+      app_action: 'getReportJobStatus',
+      message: 'Failed to fetch report job status',
+      job_id: String(jobId),
+    }, error)
     console.error('getReportJobStatus:', error)
     return null
   }

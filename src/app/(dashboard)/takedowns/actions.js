@@ -8,10 +8,15 @@ import { traceAction, recordClickMetric, runInSpan } from '@/utils/tracing'
 import { getAuthContext } from '@/utils/auth-context'
 import { omitSafeThreatTypes } from '@/lib/utils'
 import crypto from 'crypto'
+import { logActionError, LOKI_STREAMS } from '@/utils/otel-logger'
 
-export const trackClientClick = traceAction('trackClientClick', async (buttonName, attributes = {}) => {
-  recordClickMetric(buttonName, attributes);
-})
+export const trackClientClick = traceAction(
+  'trackClientClick',
+  async (buttonName, attributes = {}) => {
+    recordClickMetric(buttonName, attributes)
+  },
+  { loki_stream: LOKI_STREAMS.takedowns },
+)
 
 /** List payload: never surface `safe` as a displayed threat type. */
 function getListThreatTypes(reviewDetails) {
@@ -291,6 +296,7 @@ export const getTakedowns = traceAction('getTakedowns_list', async (filters = {}
       totalCount
     }
   } catch (mongoError) {
+    logActionError({ loki_stream: LOKI_STREAMS.takedowns, app_action: 'getTakedowns', message: 'getTakedowns failed' }, mongoError)
     console.error('Error fetching takedowns from MongoDB:', mongoError)
     return { takedowns: [], totalCount: 0 }
   }
@@ -345,6 +351,7 @@ export const getTakedownMetrics = traceAction('getTakedownMetrics_page', async (
     }, { inProgress: 0, successful: 0, reAppeal: 0, failed: 0 });
     
   } catch (error) {
+    logActionError({ loki_stream: LOKI_STREAMS.takedowns, app_action: 'getTakedownMetrics', message: 'getTakedownMetrics failed' }, error)
     console.error('Error fetching takedown metrics:', error)
     return { inProgress: 0, successful: 0, reAppeal: 0, failed: 0 }
   }
@@ -413,6 +420,7 @@ export const uploadTakedownDocument = traceAction('uploadTakedownDocument', asyn
     revalidatePath(`/takedowns/case/${takedownId}`)
     return { success: true }
   } catch (error) {
+    logActionError({ loki_stream: LOKI_STREAMS.takedowns, app_action: 'uploadTakedownDocument', message: 'uploadTakedownDocument failed' }, error)
     console.error('Upload error:', error)
     return { success: false, error: error.message }
   }
@@ -457,6 +465,7 @@ export const getTakedownDocuments = traceAction('getTakedownDocuments', async (t
     
     return docsWithUrls
   } catch (error) {
+    logActionError({ loki_stream: LOKI_STREAMS.takedowns, app_action: 'getTakedownDocuments', message: 'getTakedownDocuments failed' }, error)
     console.error('Error fetching documents:', error)
     return []
   }
@@ -484,6 +493,7 @@ export const getDocumentDownloadUrl = traceAction('getDocumentDownloadUrl', asyn
 
     return await getSignedDownloadUrl(doc.s3_key, doc.file_name)
   } catch (error) {
+    logActionError({ loki_stream: LOKI_STREAMS.takedowns, app_action: 'getDocumentDownloadUrl', message: 'getDocumentDownloadUrl failed' }, error)
     console.error('Error generating document download url:', error)
     return null
   }
@@ -581,6 +591,7 @@ export const getTakedownDetails = traceAction('getTakedownDetails', async (id) =
       post
     }
   } catch (e) {
+    logActionError({ loki_stream: LOKI_STREAMS.takedowns, app_action: 'getTakedownDetails', message: 'getTakedownDetails failed' }, e)
     console.error('MongoDB fetch error:', e)
     return null
   }
@@ -632,6 +643,7 @@ export const updateTakedown = traceAction('updateTakedown', async (id, updates, 
     revalidatePath(`/takedowns/case/${id}`)
     return { success: true }
   } catch (error) {
+    logActionError({ loki_stream: LOKI_STREAMS.takedowns, app_action: 'updateTakedown', message: 'updateTakedown failed' }, error)
     console.error('Update takedown error:', error)
     return { success: false, error: error.message }
   }
@@ -678,6 +690,7 @@ export const addTakedownNote = traceAction('addTakedownNote', async (id, noteCon
     revalidatePath(`/takedowns/case/${id}`)
     return { success: true }
   } catch (error) {
+    logActionError({ loki_stream: LOKI_STREAMS.takedowns, app_action: 'addTakedownNote', message: 'addTakedownNote failed' }, error)
     console.error('Add takedown note error:', error)
     return { success: false, error: error.message }
   }
@@ -713,6 +726,7 @@ export const getAllTakedownIds = traceAction('getAllTakedownIds', async (filters
     )
     return result.map(doc => doc._id.toString())
   } catch (error) {
+    logActionError({ loki_stream: LOKI_STREAMS.takedowns, app_action: 'getAllTakedownIds', message: 'getAllTakedownIds failed' }, error)
     console.error('Error fetching all takedown IDs:', error)
     return []
   }

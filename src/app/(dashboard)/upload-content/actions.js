@@ -7,6 +7,7 @@ import {
   insertClientRequestedLinks,
   getClientRequestedLinksForUser,
 } from '@/utils/clientRequestedLinks/server'
+import { logActionWarn, LOKI_STREAMS } from '@/utils/otel-logger'
 
 export const bulkRequestLinks = traceAction('bulkRequestLinks_upload', async (links) => {
   const ctx = await getAuthContext()
@@ -56,6 +57,12 @@ export const bulkRequestLinks = traceAction('bulkRequestLinks_upload', async (li
 
   const sqsFailures = sqsResults.filter((r) => r.status === 'rejected')
   if (sqsFailures.length > 0) {
+    logActionWarn({
+      loki_stream: LOKI_STREAMS.upload,
+      app_action: 'bulkRequestLinks',
+      message: 'SQS messages failed to send',
+      sqs_failure_count: sqsFailures.length,
+    })
     console.error(`${sqsFailures.length} SQS messages failed to send`)
   }
 
@@ -79,6 +86,7 @@ export const bulkRequestLinks = traceAction('bulkRequestLinks_upload', async (li
         { 'app.span_type': 'http_outbound' }
       )
     } catch (slackError) {
+      logActionWarn({ loki_stream: LOKI_STREAMS.upload, app_action: 'bulkRequestLinks', message: 'Slack notification failed' })
       console.error('Slack notification failed:', slackError)
     }
   }

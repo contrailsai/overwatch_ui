@@ -4,6 +4,7 @@ import clientPromise from '@/utils/mongodb/client'
 import { ObjectId } from 'mongodb'
 import { requireRole } from '@/utils/auth-context'
 import { traceAction, runInSpan } from '@/utils/tracing'
+import { logActionError, LOKI_STREAMS } from '@/utils/otel-logger'
 
 export const get_research_projects = traceAction('configurations.get_research_projects', async (_project_db) => {
   const { dbName } = await requireRole(['client', 'client-admin', 'reviewer'])
@@ -136,7 +137,13 @@ export const add_profile_to_project = traceAction('configurations.add_profile_to
     if (!trimmedUrl.startsWith('http://') && !trimmedUrl.startsWith('https://')) {
       return { error: 'Please provide a valid URL starting with http:// or https://' }
     }
-  } catch (_) {
+  } catch (err) {
+    logActionError({
+      loki_stream: LOKI_STREAMS.configurations,
+      app_action: 'add_profile_to_project',
+      message: 'Invalid profile URL',
+    }, err)
+    console.error('Invalid profile URL:', err)
     return { error: 'Please provide a valid URL starting with http:// or https://' }
   }
 

@@ -8,6 +8,7 @@ import { ObjectId } from 'mongodb'
 // import { getClientandProjectDetails } from '@/app/(dashboard)/actions'
 import { traceAction } from '@/utils/tracing'
 import { requireAuthContext } from '@/utils/auth-context'
+import { logActionError, LOKI_STREAMS } from '@/utils/otel-logger'
 // import { metadata } from '../layout'
 
 //--------- TAKEDOWNS RELATED SETUP
@@ -103,16 +104,28 @@ export const initiateTakedown = traceAction('initiateTakedown', async (caseIds, 
                 { project_name: clientDetails.project_name },
                 currentReviewData,
                 previousReviewData
-            ).catch(err => console.error('Failed to update client metrics:', err))
+            ).catch(err => logActionError({
+                loki_stream: LOKI_STREAMS.cases,
+                app_action: 'initiateTakedown',
+                message: 'Failed to update client metrics',
+            }, err))
 
             await updateClientMetaStats(
                 clientDetails.project_name,
                 clientDetails.email,
                 "reviewed_case"
-            ).catch(err => console.error('Failed to update meta stats:', err))
+            ).catch(err => logActionError({
+                loki_stream: LOKI_STREAMS.cases,
+                app_action: 'initiateTakedown',
+                message: 'Failed to update meta stats',
+            }, err))
         }))
 
-        await sendSlackNotification().catch(e => console.error("Slack alert failed", e))
+        await sendSlackNotification().catch(e => logActionError({
+            loki_stream: LOKI_STREAMS.cases,
+            app_action: 'initiateTakedown',
+            message: 'Slack alert failed',
+        }, e))
 
         return {
             success: true,
@@ -121,6 +134,7 @@ export const initiateTakedown = traceAction('initiateTakedown', async (caseIds, 
             skipped: ids.length - posts.length
         }
     } catch (e) {
+        logActionError({ loki_stream: LOKI_STREAMS.cases, app_action: 'initiateTakedown', message: 'initiateTakedown failed' }, e)
         console.error("Initiate Takedown Error:", e)
         return { success: false, error: e.message }
     }
@@ -183,6 +197,7 @@ export const getPriorityTakedowns = traceAction('getPriorityTakedowns', async ()
 
         return processedPosts;
     } catch (e) {
+        logActionError({ loki_stream: LOKI_STREAMS.cases, app_action: 'getPriorityTakedowns', message: 'getPriorityTakedowns failed' }, e)
         console.error('getPriorityTakedowns Error:', e)
         return []
     }
@@ -196,6 +211,7 @@ export const getRaisedCount = traceAction('getRaisedCount', async () => {
         const collection = db.collection('Posts')
         return await collection.countDocuments({ 'takedown_info.takedown_status': 'raised' })
     } catch (e) {
+        logActionError({ loki_stream: LOKI_STREAMS.cases, app_action: 'getRaisedCount', message: 'getRaisedCount failed' }, e)
         console.error('getRaisedCount Error:', e)
         return 0
     }

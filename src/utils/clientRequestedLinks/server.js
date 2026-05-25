@@ -2,6 +2,7 @@
 
 import { createClient } from '@/utils/supabase/server'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
+import { logActionError, logActionWarn, LOKI_STREAMS } from '@/utils/otel-logger'
 import { partitionUrls } from './urls'
 
 function getPostLinkCandidates(post) {
@@ -55,6 +56,12 @@ export async function insertClientRequestedLinks({ userId, projectName, rawLinks
     .select()
 
   if (error) {
+    logActionError({
+      loki_stream: LOKI_STREAMS.shared,
+      app_caller: 'clientRequestedLinks/server',
+      app_action: 'insertClientRequestedLinks',
+      message: 'insertClientRequestedLinks failed',
+    }, error)
     console.error('insertClientRequestedLinks:', error)
     return {
       error: 'Failed to submit bulk request',
@@ -80,6 +87,12 @@ export async function getClientRequestedLinksForUser({ userId, projectName }) {
     .order('created_at', { ascending: false })
 
   if (error) {
+    logActionError({
+      loki_stream: LOKI_STREAMS.shared,
+      app_caller: 'clientRequestedLinks/server',
+      app_action: 'getClientRequestedLinksForUser',
+      message: 'getClientRequestedLinksForUser failed',
+    }, error)
     console.error('getClientRequestedLinksForUser:', error)
     return { error: 'Failed to fetch requested links', data: null }
   }
@@ -98,6 +111,12 @@ export async function markClientRequestedLinksEnlisted({ post, projectName }) {
 
   const supabase = getServiceRoleClient()
   if (!supabase) {
+    logActionWarn({
+      loki_stream: LOKI_STREAMS.shared,
+      app_caller: 'clientRequestedLinks/server',
+      app_action: 'markClientRequestedLinksEnlisted',
+      message: 'markClientRequestedLinksEnlisted: SUPABASE_SERVICE_ROLE_KEY missing, skipping update',
+    })
     console.warn(
       'markClientRequestedLinksEnlisted: SUPABASE_SERVICE_ROLE_KEY missing, skipping update'
     )

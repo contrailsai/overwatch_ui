@@ -7,6 +7,7 @@ import { getSignedImageUrl } from '@/utils/aws/s3'
 import { traceAction } from '@/utils/tracing'
 import { posthogServer } from '@/utils/posthog'
 import { getAuthContext } from '@/utils/auth-context'
+import { logActionError, LOKI_STREAMS } from '@/utils/otel-logger'
 
 export const getDashboardData = traceAction('getDashboardData', async (project, queryParams) => {
   const supabase = await createClient()
@@ -87,9 +88,19 @@ export const getDashboardData = traceAction('getDashboardData', async (project, 
   ])
 
   if (casesError) {
+    logActionError({
+      loki_stream: LOKI_STREAMS.dashboard,
+      app_action: 'getDashboardData',
+      message: 'Error fetching daily_case_metrics',
+    }, casesError)
     console.error('Error fetching daily_case_metrics:', casesError)
   }
   if (reviewedError) {
+    logActionError({
+      loki_stream: LOKI_STREAMS.dashboard,
+      app_action: 'getDashboardData',
+      message: 'Error fetching daily_reviewed_metrics',
+    }, reviewedError)
     console.error('Error fetching daily_reviewed_metrics:', reviewedError)
   }
 
@@ -379,6 +390,11 @@ export const getUser = traceAction('getUser', cache(async () => {
     .single();
 
   if (error) {
+    logActionError({
+      loki_stream: LOKI_STREAMS.dashboard,
+      app_action: 'getUser',
+      message: 'Error fetching client details',
+    }, error)
     console.error('Error fetching client details:', error)
     return { user, clientDetails: null }
   }
@@ -412,6 +428,11 @@ export const getCases = traceAction('getCases', async (projectName) => {
   const { data: cases, error } = await query
 
   if (error) {
+    logActionError({
+      loki_stream: LOKI_STREAMS.dashboard,
+      app_action: 'getCases',
+      message: 'Error fetching cases',
+    }, error)
     console.error('Error fetching cases:', error)
     return []
   }

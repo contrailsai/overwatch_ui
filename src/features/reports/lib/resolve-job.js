@@ -1,4 +1,5 @@
 import { isReportInFlight, isReportSuccess } from '@/features/reports/lib/status'
+import { logActionError, LOKI_STREAMS } from '@/utils/otel-logger'
 
 /**
  * Latest row for this client + hash; decide reuse vs new insert.
@@ -14,6 +15,11 @@ export async function resolveExistingReportJob(supabase, reportHash, clientId) {
     .maybeSingle()
 
   if (error) {
+    logActionError({
+      loki_stream: LOKI_STREAMS.reports,
+      app_action: 'resolveExistingReportJob',
+      message: 'Failed to resolve existing report job',
+    }, error)
     console.error('resolveExistingReportJob:', error)
     return { action: 'create' }
   }

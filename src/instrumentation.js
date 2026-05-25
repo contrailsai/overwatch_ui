@@ -1,7 +1,35 @@
 import { registerOTel } from '@vercel/otel';
 import { diag, DiagConsoleLogger, DiagLogLevel } from '@opentelemetry/api';
+import { logs } from '@opentelemetry/api-logs';
+import { OTLPLogExporter } from '@opentelemetry/exporter-logs-otlp-http';
+import { BatchLogRecordProcessor, LoggerProvider } from '@opentelemetry/sdk-logs';
 import { MongoDBInstrumentation } from '@opentelemetry/instrumentation-mongodb';
 import { AwsInstrumentation } from '@opentelemetry/instrumentation-aws-sdk';
+import {
+    bindOtelLoggerProvider,
+    buildOtelLogResource,
+    getOtelServiceName,
+    isOtelLogsEnabled,
+} from '@/utils/otel-logger';
+
+function registerOtelLogs() {
+    if (process.env.NEXT_RUNTIME === 'edge') return;
+    if (!isOtelLogsEnabled()) return;
+
+    const exporter = new OTLPLogExporter();
+    const provider = new LoggerProvider({
+        resource: buildOtelLogResource(),
+        processors: [
+            new BatchLogRecordProcessor(exporter, {
+                // Keep batch small; logActionError also forceFlush() on each error.
+                scheduledDelayMillis: Number(process.env.OTEL_BLRP_SCHEDULE_DELAY) || 100,
+            }),
+        ],
+    });
+
+    logs.setGlobalLoggerProvider(provider);
+    bindOtelLoggerProvider(provider);
+}
 
 export function register() {
     // ONLY FOR DEV/DEBUGGING
@@ -9,16 +37,15 @@ export function register() {
         diag.setLogger(new DiagConsoleLogger(), DiagLogLevel.DEBUG);
     }
 
-    // Node server + server actions: traces/metrics export via Vercel OTEL → Grafana (Tempo/Mimir).
-    // Browser-only flows (e.g. report export wait) emit via server action flushReportWaitTelemetry
-    // (see src/app/(dashboard)/cases/report_wait_telemetry_action.js).
+    registerOtelLogs();
+
+    // Node server + server actions: traces/metrics/logs → OTLP collector (Tempo/Mimir/Loki).
     registerOTel({
-        serviceName: 'overwatch-client-app',
+        serviceName: getOtelServiceName(),
         instrumentations: [
             new MongoDBInstrumentation(),
-            // Instruments AWS SDK (v2 and v3) including S3, DynamoDB, etc.
             new AwsInstrumentation({
-                suppressInternalInstrumentation: true, // Recommended: hides the underlying HTTP fetch spans to keep traces clean
+                suppressInternalInstrumentation: true,
             }),
         ],
     });
