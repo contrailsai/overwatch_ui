@@ -37,7 +37,7 @@ export const get_watchlist = traceAction('configurations.get_watchlist', async (
 })
 
 export const add_to_watchlist = traceAction('configurations.add_to_watchlist', async (_project_name, link) => {
-  const { clientDetails } = await requireRole(['client-admin', 'reviewer'])
+  const { clientDetails } = await requireRole(['client', 'client-admin', 'reviewer'])
   if (!link || !link.trim()) {
     return { error: 'Link cannot be empty' }
   }
@@ -90,7 +90,7 @@ export const add_to_watchlist = traceAction('configurations.add_to_watchlist', a
 
 export const delete_from_watchlist = traceAction('configurations.delete_from_watchlist', async (id) => {
   if (!id) return { error: 'Invalid item ID' }
-  const { clientDetails } = await requireRole(['client-admin', 'reviewer'])
+  const { clientDetails } = await requireRole(['client', 'client-admin', 'reviewer'])
 
   const supabase = await createClient()
   const { data: existing, error: existingError } = await runInSpan(

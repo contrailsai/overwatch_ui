@@ -5,7 +5,7 @@ import { requireRole } from '@/utils/auth-context'
 import { traceAction, runInSpan } from '@/utils/tracing'
 
 export const get_keywords = traceAction('configurations.get_keywords', async (_project_db, text = '', limit = 50) => {
-  const { dbName } = await requireRole(['client-admin', 'reviewer'])
+  const { dbName } = await requireRole(['client', 'client-admin', 'reviewer'])
   const client = await clientPromise
   const db = client.db(dbName)
   const collection = db.collection('Keywords')
@@ -52,7 +52,7 @@ export const get_keywords = traceAction('configurations.get_keywords', async (_p
 })
 
 export const add_keyword = traceAction('configurations.add_keyword', async (_project_db, keyword, highImportance = false) => {
-  const { dbName } = await requireRole(['client-admin', 'reviewer'])
+  const { dbName } = await requireRole(['client', 'client-admin', 'reviewer'])
   if (!keyword || !keyword.trim()) {
     return { error: 'Keyword cannot be empty' }
   }
@@ -90,7 +90,7 @@ export const add_keyword = traceAction('configurations.add_keyword', async (_pro
 })
 
 export const delete_keyword = traceAction('configurations.delete_keyword', async (_project_db, keywordId) => {
-  const { dbName } = await requireRole(['client-admin', 'reviewer'])
+  const { dbName } = await requireRole(['client', 'client-admin', 'reviewer'])
   const { ObjectId } = await import('mongodb')
   const client = await clientPromise
   const db = client.db(dbName)

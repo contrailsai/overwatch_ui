@@ -6,7 +6,7 @@ import { requireRole } from '@/utils/auth-context'
 import { traceAction, runInSpan } from '@/utils/tracing'
 
 export const get_research_projects = traceAction('configurations.get_research_projects', async (_project_db) => {
-  const { dbName } = await requireRole(['client-admin', 'reviewer'])
+  const { dbName } = await requireRole(['client', 'client-admin', 'reviewer'])
   const client = await clientPromise
   const db = client.db(dbName)
   const collection = db.collection('ResearchWatchlist')
@@ -26,7 +26,7 @@ export const get_research_projects = traceAction('configurations.get_research_pr
 })
 
 export const create_research_project = traceAction('configurations.create_research_project', async (_project_db, title, description) => {
-  const { dbName } = await requireRole(['client-admin', 'reviewer'])
+  const { dbName } = await requireRole(['client', 'client-admin', 'reviewer'])
   if (!title?.trim()) return { error: 'Project db and title are required' }
 
   const client = await clientPromise
@@ -50,7 +50,7 @@ export const create_research_project = traceAction('configurations.create_resear
 })
 
 export const delete_research_project = traceAction('configurations.delete_research_project', async (_project_db, projectId) => {
-  const { dbName } = await requireRole(['client-admin', 'reviewer'])
+  const { dbName } = await requireRole(['client', 'client-admin', 'reviewer'])
   if (!projectId) return { error: 'Invalid project or ID' }
 
   const client = await clientPromise
@@ -66,7 +66,7 @@ export const delete_research_project = traceAction('configurations.delete_resear
 })
 
 export const add_keyword_to_project = traceAction('configurations.add_keyword_to_project', async (_project_db, projectId, keyword, priority = 'low') => {
-  const { dbName } = await requireRole(['client-admin', 'reviewer'])
+  const { dbName } = await requireRole(['client', 'client-admin', 'reviewer'])
   if (!projectId || !keyword?.trim()) return { error: 'Invalid inputs' }
 
   const client = await clientPromise
@@ -106,7 +106,7 @@ export const add_keyword_to_project = traceAction('configurations.add_keyword_to
 })
 
 export const remove_keyword_from_project = traceAction('configurations.remove_keyword_from_project', async (_project_db, projectId, keyword) => {
-  const { dbName } = await requireRole(['client-admin', 'reviewer'])
+  const { dbName } = await requireRole(['client', 'client-admin', 'reviewer'])
   if (!projectId || !keyword) return { error: 'Invalid inputs' }
 
   const client = await clientPromise
@@ -127,7 +127,7 @@ export const remove_keyword_from_project = traceAction('configurations.remove_ke
 })
 
 export const add_profile_to_project = traceAction('configurations.add_profile_to_project', async (_project_db, projectId, url) => {
-  const { dbName } = await requireRole(['client-admin', 'reviewer'])
+  const { dbName } = await requireRole(['client', 'client-admin', 'reviewer'])
   if (!projectId || !url?.trim()) return { error: 'Invalid inputs' }
 
   const trimmedUrl = url.trim()
@@ -174,7 +174,7 @@ export const add_profile_to_project = traceAction('configurations.add_profile_to
 })
 
 export const remove_profile_from_project = traceAction('configurations.remove_profile_from_project', async (_project_db, projectId, url) => {
-  const { dbName } = await requireRole(['client-admin', 'reviewer'])
+  const { dbName } = await requireRole(['client', 'client-admin', 'reviewer'])
   if (!projectId || !url) return { error: 'Invalid inputs' }
 
   const client = await clientPromise
