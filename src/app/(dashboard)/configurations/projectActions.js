@@ -3,8 +3,240 @@
 import { createClient } from '@/utils/supabase/server'
 import clientPromise from '@/utils/mongodb/client'
 import { revalidatePath } from 'next/cache'
-import { getAuthContext } from '@/utils/auth-context'
-import { runInSpan } from '@/utils/tracing'
+import { getAuthContext, requireRole } from '@/utils/auth-context'
+import { runInSpan, traceAction } from '@/utils/tracing'
+
+const TIME_PATTERN = /^\d{2}:\d{2}$/
+const CRON_WRITE_ROLES = ['client-admin', 'reviewer']
+
+async function cronApiFetch(path, { method = 'GET', body } = {}) {
+  const base = process.env.WHATSAPP_CRON_API_URL?.trim().replace(/\/$/, '')
+  const key = process.env.WHATSAPP_CRON_API_KEY?.trim()
+  if (!base || !key) {
+    return { configured: false, error: 'Automatic WhatsApp reports are not configured' }
+  }
+
+  try {
+    const res = await fetch(`${base}${path}`, {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        'X-API-Key': key,
+      },
+      body: body ? JSON.stringify(body) : undefined,
+      cache: 'no-store',
+    })
+
+    const text = await res.text()
+    let data = null
+    if (text) {
+      try {
+        data = JSON.parse(text)
+      } catch {
+        data = { message: text }
+      }
+    }
+
+    if (res.ok) {
+      return { configured: true, data, status: res.status }
+    }
+
+    if (res.status === 503) {
+      return { configured: true, error: 'Report scheduling is not available on the server. Contact your administrator.' }
+    }
+    if (res.status === 401) {
+      return {
+        configured: true,
+        error: 'Could not connect to the report scheduling service. Contact your administrator.',
+      }
+    }
+    if (res.status === 404) {
+      return { configured: true, error: data?.error || data?.message || 'Scheduled report not found' }
+    }
+
+    const details = Array.isArray(data?.details)
+      ? data.details.join('; ')
+      : null
+    const message = data?.error || data?.message || `Could not update the report schedule (${res.status})`
+    return {
+      configured: true,
+      error: details ? `${message}: ${details}` : message,
+      details: data?.details,
+    }
+  } catch (err) {
+    console.error('WhatsApp cron API fetch error:', err)
+    return { configured: true, error: 'Could not reach the report scheduling service' }
+  }
+}
+
+function assertCronWriteAccess(ctx) {
+  if (!ctx?.clientDetails?.project_name) {
+    return { error: 'Not authenticated' }
+  }
+  if (!CRON_WRITE_ROLES.includes(ctx.clientDetails.permission)) {
+    return { error: 'Insufficient permissions to manage scheduled reports' }
+  }
+  if (ctx.project?.editable !== true) {
+    return { error: 'Project details are locked for this project' }
+  }
+  return null
+}
+
+function validateCronCommand(command) {
+  const trimmed = command?.trim()
+  if (!trimmed) return 'Please choose a report type'
+  if (!trimmed.startsWith('@bot') && !trimmed.startsWith('!')) {
+    return 'Use “PDF summary” for a standard report, or ask support for a custom instruction'
+  }
+  return null
+}
+
+function validateCronTime(time) {
+  if (!time || !TIME_PATTERN.test(time)) {
+    return 'Please choose a valid send time'
+  }
+  return null
+}
+
+function buildSchedulePayload(fields) {
+  const payload = {
+    time: fields.time,
+    timezone: fields.timezone || 'Asia/Kolkata',
+    repeat: fields.repeat || 'daily',
+    enabled: fields.enabled !== false,
+  }
+  if (payload.repeat === 'weekly' && fields.dayOfWeek != null) {
+    payload.dayOfWeek = Number(fields.dayOfWeek)
+  }
+  if (payload.repeat === 'monthly' && fields.dayOfMonth != null) {
+    payload.dayOfMonth = Number(fields.dayOfMonth)
+  }
+  return payload
+}
+
+export const get_cron_jobs = traceAction('configurations.get_cron_jobs', async () => {
+  const ctx = await requireRole(['client', 'client-admin', 'reviewer'])
+  const projectName = ctx.clientDetails.project_name
+
+  const result = await cronApiFetch(
+    `/api/cron-jobs?project_name=${encodeURIComponent(projectName)}`
+  )
+
+  if (!result.configured) {
+    return { configured: false, error: result.error }
+  }
+  if (result.error) {
+    return { configured: true, error: result.error }
+  }
+
+  const jobs = Array.isArray(result.data)
+    ? result.data
+    : (result.data?.jobs ?? [])
+
+  return { configured: true, jobs }
+})
+
+export const create_cron_job = traceAction('configurations.create_cron_job', async (fields) => {
+  const ctx = await getAuthContext()
+  const authError = assertCronWriteAccess(ctx)
+  if (authError) return authError
+
+  const timeError = validateCronTime(fields?.time)
+  if (timeError) return { error: timeError }
+
+  const commandError = validateCronCommand(fields?.command)
+  if (commandError) return { error: commandError }
+
+  const schedule = buildSchedulePayload(fields)
+  const payload = {
+    project_name: ctx.clientDetails.project_name,
+    command: fields.command.trim(),
+    ...schedule,
+  }
+
+  const result = await cronApiFetch('/api/cron-jobs', {
+    method: 'POST',
+    body: payload,
+  })
+
+  if (!result.configured) {
+    return { error: result.error }
+  }
+  if (result.error) {
+    return { error: result.error, details: result.details }
+  }
+
+  const jobId = result.data?.jobId
+  if (!jobId) {
+    return { error: 'Could not create the report schedule. Please try again.' }
+  }
+  return { jobId }
+})
+
+export const update_cron_job = traceAction('configurations.update_cron_job', async (jobId, fields) => {
+  const ctx = await getAuthContext()
+  const authError = assertCronWriteAccess(ctx)
+  if (authError) return authError
+
+  if (!jobId) return { error: 'Report schedule ID is required' }
+
+  const body = {}
+  if (fields?.enabled !== undefined) body.enabled = fields.enabled
+  if (fields?.command !== undefined) {
+    const commandError = validateCronCommand(fields.command)
+    if (commandError) return { error: commandError }
+    body.command = fields.command.trim()
+  }
+  if (fields?.time !== undefined) {
+    const timeError = validateCronTime(fields.time)
+    if (timeError) return { error: timeError }
+    body.time = fields.time
+  }
+  if (fields?.timezone !== undefined) body.timezone = fields.timezone
+  if (fields?.repeat !== undefined) body.repeat = fields.repeat
+  if (fields?.dayOfWeek !== undefined) body.dayOfWeek = Number(fields.dayOfWeek)
+  if (fields?.dayOfMonth !== undefined) body.dayOfMonth = Number(fields.dayOfMonth)
+
+  if (Object.keys(body).length === 0) {
+    return { error: 'Nothing to update' }
+  }
+
+  const result = await cronApiFetch(`/api/cron-jobs/${encodeURIComponent(jobId)}`, {
+    method: 'PATCH',
+    body,
+  })
+
+  if (!result.configured) {
+    return { error: result.error }
+  }
+  if (result.error) {
+    return { error: result.error, details: result.details }
+  }
+
+  const job = result.data?.jobId ? result.data : (result.data?.job ?? result.data)
+  return { job }
+})
+
+export const delete_cron_job = traceAction('configurations.delete_cron_job', async (jobId) => {
+  const ctx = await getAuthContext()
+  const authError = assertCronWriteAccess(ctx)
+  if (authError) return authError
+
+  if (!jobId) return { error: 'Report schedule ID is required' }
+
+  const result = await cronApiFetch(`/api/cron-jobs/${encodeURIComponent(jobId)}`, {
+    method: 'DELETE',
+  })
+
+  if (!result.configured) {
+    return { error: result.error }
+  }
+  if (result.error) {
+    return { error: result.error }
+  }
+
+  return { success: true }
+})
 
 export async function updateLabels(prevState, formData) {
   const ctx = await getAuthContext()
