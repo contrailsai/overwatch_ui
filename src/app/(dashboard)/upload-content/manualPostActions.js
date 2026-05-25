@@ -8,6 +8,7 @@ import { traceAction, runInSpan } from '@/utils/tracing'
 import { requireRole } from '@/utils/auth-context'
 import { buildStrictPostDocument } from '@/utils/manual-post/buildStrictPostDocument'
 import { triggerContrailsPostProcess } from '@/utils/embeddings/triggerContrailsPostProcess'
+import { logActionError, LOKI_STREAMS } from '@/utils/otel-logger'
 
 const MAX_MEDIA_ITEMS = 10
 const MAX_DOWNLOAD_BYTES = 10 * 1024 * 1024
@@ -215,6 +216,7 @@ async function processMediaToS3(postId, platform, mediaRows) {
       s3Stored = true
       out.push({ type: resolvedType, original_url: originalUrl, s3_url: s3Url })
     } catch (e) {
+      logActionError({ loki_stream: LOKI_STREAMS.upload, app_action: 'processRemoteMediaToS3', message: 'media download/upload failed', original_url: originalUrl }, e)
       console.error('[submitManualReviewerPost] media download/upload failed', originalUrl, e)
       out.push({ type: mediaType === 'video' ? 'video' : 'image', original_url: originalUrl, s3_url: null })
     }
@@ -257,6 +259,7 @@ async function processUploadedMediaToS3(postId, platform, files) {
       s3Stored = true
       out.push({ type: 'image', original_url: s3Url, s3_url: s3Url })
     } catch (e) {
+      logActionError({ loki_stream: LOKI_STREAMS.upload, app_action: 'processUploadedMediaToS3', message: 'uploaded media S3 failed', file_name: file?.name }, e)
       console.error('[submitManualReviewerPost] uploaded media S3 failed', file?.name, e)
       out.push({ type: 'image', original_url: null, s3_url: null })
     }

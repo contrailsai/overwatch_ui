@@ -2,6 +2,7 @@
 
 import { metrics } from '@opentelemetry/api'
 import { runInSpan } from '@/utils/tracing'
+import { flushOtelLogs, LOKI_STREAMS, otelLogger } from '@/utils/otel-logger'
 import { requireAuthContext } from '@/utils/auth-context'
 
 const meter = metrics.getMeter('overwatch-client-meter')
@@ -50,15 +51,15 @@ export async function flushReportWaitTelemetry(summary) {
       // meter may be no-op in some runtimes
     }
 
-    console.info(
-      JSON.stringify({
-        loki_stream: 'report_wait_telemetry',
-        level: 'info',
-        ...safe,
-        user_id: ctx.user.id,
-        project_name: ctx.clientDetails?.project_name ?? null,
-      })
-    )
+    otelLogger.info('report_wait_telemetry', {
+      loki_stream: LOKI_STREAMS.reports,
+      telemetry_kind: 'report_wait_telemetry',
+      app_span_type: 'report_wait_telemetry',
+      user_id: ctx.user.id,
+      project_name: ctx.clientDetails?.project_name ?? null,
+      ...safe,
+    })
+    await flushOtelLogs()
 
     return { ok: true }
   })

@@ -5,6 +5,7 @@
  * Handles both new reviews and updates to existing reviews.
  */
 import { createClient } from '@/utils/supabase/server'
+import { logActionError, logActionWarn, LOKI_STREAMS } from '@/utils/otel-logger'
 
 export async function updateDailyMetrics(project, reviewData, previousReviewData = null) {
   const supabase = await createClient()
@@ -13,6 +14,12 @@ export async function updateDailyMetrics(project, reviewData, previousReviewData
   const project_name = project?.project_name
 
   if (!project_name) {
+    logActionError({
+      loki_stream: LOKI_STREAMS.shared,
+      app_caller: 'supabase/metrics',
+      app_action: 'updateDailyMetrics',
+      message: 'Project name is missing in updateDailyMetrics',
+    })
     console.error('Project name is missing in updateDailyMetrics')
     return
   }
@@ -133,6 +140,12 @@ export async function updateDailyMetrics(project, reviewData, previousReviewData
       if (insertError) throw insertError
     }
   } catch (err) {
+    logActionError({
+      loki_stream: LOKI_STREAMS.shared,
+      app_caller: 'supabase/metrics',
+      app_action: 'updateDailyMetrics',
+      message: 'Failed to update daily_case_metrics',
+    }, err)
     console.error('Failed to update daily_case_metrics:', err)
   }
 }
@@ -151,6 +164,12 @@ export async function updateClientReviewedMetrics(project, reviewData, previousR
   const project_name = project?.project_name
 
   if (!project_name) {
+    logActionError({
+      loki_stream: LOKI_STREAMS.shared,
+      app_caller: 'supabase/metrics',
+      app_action: 'updateClientReviewedMetrics',
+      message: 'Project name is missing in updateClientReviewedMetrics',
+    })
     console.error('Project name is missing in updateClientReviewedMetrics')
     return
   }
@@ -251,6 +270,12 @@ export async function updateClientReviewedMetrics(project, reviewData, previousR
       if (insertError) throw insertError
     }
   } catch (err) {
+    logActionError({
+      loki_stream: LOKI_STREAMS.shared,
+      app_caller: 'supabase/metrics',
+      app_action: 'updateClientReviewedMetrics',
+      message: 'Failed to update daily_reviewed_metrics',
+    }, err)
     console.error('Failed to update daily_reviewed_metrics:', err)
   }
 }
@@ -259,6 +284,12 @@ export async function updateClientMetaStats(project_name, client_email, action) 
   const supabase = await createClient()
 
   if (!project_name || !client_email) {
+    logActionError({
+      loki_stream: LOKI_STREAMS.shared,
+      app_caller: 'supabase/metrics',
+      app_action: 'updateClientMetaStats',
+      message: 'Project name or client email is missing in updateClientMetaStats',
+    })
     console.error('Project name or client email is missing in updateClientMetaStats')
     return
   }
@@ -274,6 +305,12 @@ export async function updateClientMetaStats(project_name, client_email, action) 
 
     if (fetchError) throw fetchError
     if (!clientData) {
+      logActionWarn({
+        loki_stream: LOKI_STREAMS.shared,
+        app_caller: 'supabase/metrics',
+        app_action: 'updateClientMetaStats',
+        message: `No client found with project: ${project_name} and email: ${client_email}`,
+      })
       console.warn(`No client found with project: ${project_name} and email: ${client_email}`)
       return
     }
@@ -284,11 +321,21 @@ export async function updateClientMetaStats(project_name, client_email, action) 
     // 3. Handle action increment
     if (action === 'reviewed_case') {
       metaStats.reviewed_cases = (metaStats.reviewed_cases || 0) + 1
-      trackClientActivity(clientData.id, project_name, 'reviewed_case').catch(console.error)
+      trackClientActivity(clientData.id, project_name, 'reviewed_case').catch(err => logActionError({
+        loki_stream: LOKI_STREAMS.shared,
+        app_caller: 'supabase/metrics',
+        app_action: 'trackClientActivity',
+        message: 'Failed to track reviewed_case activity',
+      }, err))
     }
     else if (action === 'reviewed_profile') {
       metaStats.reviewed_profiles = (metaStats.reviewed_profiles || 0) + 1
-      trackClientActivity(clientData.id, project_name, 'reviewed_profile').catch(console.error)
+      trackClientActivity(clientData.id, project_name, 'reviewed_profile').catch(err => logActionError({
+        loki_stream: LOKI_STREAMS.shared,
+        app_caller: 'supabase/metrics',
+        app_action: 'trackClientActivity',
+        message: 'Failed to track reviewed_profile activity',
+      }, err))
     }
 
     // 4. Update the client row
@@ -299,6 +346,12 @@ export async function updateClientMetaStats(project_name, client_email, action) 
 
     if (updateError) throw updateError
   } catch (err) {
+    logActionError({
+      loki_stream: LOKI_STREAMS.shared,
+      app_caller: 'supabase/metrics',
+      app_action: 'updateClientMetaStats',
+      message: 'Failed to update client meta stats',
+    }, err)
     console.error('Failed to update client meta stats:', err)
   }
 }
@@ -311,6 +364,12 @@ export async function trackClientActivity(client_id, project_name, actionType = 
   const supabase = await createClient()
 
   if (!client_id || !project_name) {
+    logActionError({
+      loki_stream: LOKI_STREAMS.shared,
+      app_caller: 'supabase/metrics',
+      app_action: 'trackClientActivity',
+      message: 'Missing client_id or project_name in trackClientActivity',
+    })
     console.error('Missing client_id or project_name in trackClientActivity')
     return
   }
@@ -405,6 +464,12 @@ export async function trackClientActivity(client_id, project_name, actionType = 
       await updateExisting(existing)
     }
   } catch (err) {
+    logActionError({
+      loki_stream: LOKI_STREAMS.shared,
+      app_caller: 'supabase/metrics',
+      app_action: 'trackClientActivity',
+      message: 'Failed to track daily activity in client_logs',
+    }, err)
     console.error('Failed to track daily activity in client_logs:', err)
   }
 
@@ -424,9 +489,23 @@ export async function trackClientActivity(client_id, project_name, actionType = 
             "report-type": details,
             project: project_name
           })
-        }).catch(err => console.error('Slack webhook error:', err))
+        }).catch(err => {
+          logActionError({
+            loki_stream: LOKI_STREAMS.shared,
+            app_caller: 'supabase/metrics',
+            app_action: 'trackClientActivity',
+            message: 'Slack webhook error',
+          }, err)
+          console.error('Slack webhook error:', err)
+        })
       }
     } catch (slackError) {
+      logActionError({
+        loki_stream: LOKI_STREAMS.shared,
+        app_caller: 'supabase/metrics',
+        app_action: 'trackClientActivity',
+        message: 'Slack notification setup failed',
+      }, slackError)
       console.error('Slack notification setup failed:', slackError)
     }
   }

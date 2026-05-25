@@ -5,6 +5,7 @@ import { traceAction } from '@/utils/tracing'
 import { posthogServer } from '@/utils/posthog'
 import { getSignedDownloadUrl, resolveS3ObjectKeyFromStoredPath } from '@/utils/aws/s3'
 import { requireAuthContext } from '@/utils/auth-context'
+import { logActionError, LOKI_STREAMS } from '@/utils/otel-logger'
 
 export const getReports = traceAction('getReports', async (filters = {}) => {
   const { user, clientDetails } = await requireAuthContext()
@@ -47,6 +48,12 @@ export const getReports = traceAction('getReports', async (filters = {}) => {
   const { data, error } = await query
 
   if (error) {
+    logActionError({
+      loki_stream: LOKI_STREAMS.reports,
+      app_action: 'getReports',
+      message: 'Failed to fetch reports history',
+      error_code: error.code,
+    }, error)
     console.error('Error fetching reports:', {
       message: error.message,
       details: error.details,
@@ -76,6 +83,12 @@ export const getReportDownloadUrlAction = traceAction(
         .maybeSingle()
 
       if (error) {
+        logActionError({
+          loki_stream: LOKI_STREAMS.reports,
+          app_action: 'getReportDownloadUrlAction',
+          message: 'Report ownership lookup failed',
+          report_id: String(reportId),
+        }, error)
         console.error('getReportDownloadUrlAction: ownership lookup failed', error)
         return null
       }
@@ -89,6 +102,12 @@ export const getReportDownloadUrlAction = traceAction(
 
       return await getSignedDownloadUrl(key, fileName)
     } catch (error) {
+      logActionError({
+        loki_stream: LOKI_STREAMS.reports,
+        app_action: 'getReportDownloadUrlAction',
+        message: 'Failed to generate signed download URL',
+        report_id: String(reportId),
+      }, error)
       console.error('Error generating signed download URL for report:', error)
       return null
     }

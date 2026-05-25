@@ -1,5 +1,6 @@
 import { S3Client, GetObjectCommand, PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3"
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner"
+import { logActionError, LOKI_STREAMS } from '@/utils/otel-logger'
 
 const s3Client = new S3Client({
   region: process.env.AWS_REGION,
@@ -19,6 +20,12 @@ export async function deleteFileFromS3(key) {
     await s3Client.send(command)
     return key
   } catch (error) {
+    logActionError({
+      loki_stream: LOKI_STREAMS.shared,
+      app_caller: 'aws/s3',
+      app_action: 'deleteFileFromS3',
+      message: 'Error deleting from S3',
+    }, error)
     console.error("Error deleting from S3:", error)
     throw error
   }
@@ -36,6 +43,12 @@ export async function uploadFileToS3(buffer, key, contentType) {
     await s3Client.send(command)
     return key
   } catch (error) {
+    logActionError({
+      loki_stream: LOKI_STREAMS.shared,
+      app_caller: 'aws/s3',
+      app_action: 'uploadFileToS3',
+      message: 'Error uploading to S3',
+    }, error)
     console.error("Error uploading to S3:", error)
     throw error
   }
@@ -77,6 +90,12 @@ export async function getSignedDownloadUrl(key, originalName) {
     const signedUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 })
     return signedUrl
   } catch (error) {
+    logActionError({
+      loki_stream: LOKI_STREAMS.shared,
+      app_caller: 'aws/s3',
+      app_action: 'getSignedDownloadUrl',
+      message: 'Error generating signed download URL',
+    }, error)
     console.error("Error generating signed download URL:", error)
     return null
   }
@@ -93,6 +112,12 @@ export async function getSignedViewUrl(key) {
     const signedUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 })
     return signedUrl
   } catch (error) {
+    logActionError({
+      loki_stream: LOKI_STREAMS.shared,
+      app_caller: 'aws/s3',
+      app_action: 'getSignedViewUrl',
+      message: 'Error generating signed view URL',
+    }, error)
     console.error("Error generating signed view URL:", error)
     return null
   }
@@ -123,6 +148,12 @@ export async function getSignedImageUrl(s3Url) {
     const signedUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 }) // 1 hour
     return signedUrl
   } catch (error) {
+    logActionError({
+      loki_stream: LOKI_STREAMS.shared,
+      app_caller: 'aws/s3',
+      app_action: 'getSignedImageUrl',
+      message: 'Error generating signed URL',
+    }, error)
     console.error("Error generating signed URL:", error)
     return null // Return original or null on failure
   }

@@ -1,5 +1,6 @@
 import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs";
 import { traceAction } from '@/utils/tracing';
+import { logActionError, LOKI_STREAMS } from '@/utils/otel-logger';
 
 const sqsClient = new SQSClient({
   region: process.env.AWS_REGION || 'ap-south-1',
@@ -28,6 +29,12 @@ export const sendSqsMessage = traceAction('sendSqsMessage', async (messageBody) 
     const response = await sqsClient.send(command);
     return response;
   } catch (error) {
+    logActionError({
+      loki_stream: LOKI_STREAMS.shared,
+      app_caller: 'aws/sqs',
+      app_action: 'sendSqsMessage',
+      message: 'Error sending message to SQS',
+    }, error)
     console.error("Error sending message to SQS:", error);
     throw error;
   }
@@ -48,6 +55,12 @@ export const sendReportSqsMessage = traceAction('sendReportSqsMessage', async (m
     const response = await sqsClient.send(command);
     return response;
   } catch (error) {
+    logActionError({
+      loki_stream: LOKI_STREAMS.shared,
+      app_caller: 'aws/sqs',
+      app_action: 'sendReportSqsMessage',
+      message: 'Error sending report message to SQS',
+    }, error)
     console.error("Error sending report message to SQS:", error);
     throw error;
   }
@@ -79,6 +92,12 @@ export const sendContentModerationSqsMessage = traceAction('sendContentModeratio
     const response = await sqsClient.send(command);
     return response;
   } catch (error) {
+    logActionError({
+      loki_stream: LOKI_STREAMS.shared,
+      app_caller: 'aws/sqs',
+      app_action: 'sendContentModerationSqsMessage',
+      message: 'Error sending message to content moderation queue',
+    }, error)
     console.error("Error sending message to content moderation queue:", error);
     throw error;
   }

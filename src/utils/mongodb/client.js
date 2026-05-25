@@ -1,4 +1,5 @@
 import { MongoClient } from 'mongodb'
+import { logActionError, LOKI_STREAMS } from '@/utils/otel-logger'
 
 if (!process.env.MONGO_URI) {
   throw new Error('Invalid/Missing environment variable: "MONGO_URI"')
@@ -20,6 +21,12 @@ function getClientPromise() {
     if (!global._mongoClientPromise) {
       const client = new MongoClient(uri, options)
       global._mongoClientPromise = client.connect().catch(err => {
+        logActionError({
+          loki_stream: LOKI_STREAMS.shared,
+          app_caller: 'mongodb/client',
+          app_action: 'connect',
+          message: 'MongoDB connection failed in development',
+        }, err)
         console.error('MongoDB connection failed in development:', err.message)
         global._mongoClientPromise = null // Clear so next attempt retries
         throw err
@@ -31,6 +38,12 @@ function getClientPromise() {
     if (!cachedClientPromise) {
       const client = new MongoClient(uri, options)
       cachedClientPromise = client.connect().catch(err => {
+        logActionError({
+          loki_stream: LOKI_STREAMS.shared,
+          app_caller: 'mongodb/client',
+          app_action: 'connect',
+          message: 'MongoDB connection failed in production',
+        }, err)
         console.error('MongoDB connection failed in production:', err.message)
         cachedClientPromise = null // Clear so next attempt retries
         throw err

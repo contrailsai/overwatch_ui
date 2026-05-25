@@ -3,6 +3,7 @@
 import { createClient } from '@/utils/supabase/server'
 import { requireRole, getAuthContext } from '@/utils/auth-context'
 import { traceAction, runInSpan } from '@/utils/tracing'
+import { logActionError, LOKI_STREAMS } from '@/utils/otel-logger'
 
 /** `_project_name` is ignored for tenant scope; project comes from auth context (guardrail). */
 export const get_watchlist = traceAction('configurations.get_watchlist', async (_project_name, search = '') => {
@@ -30,6 +31,11 @@ export const get_watchlist = traceAction('configurations.get_watchlist', async (
   )
 
   if (error) {
+    logActionError({
+      loki_stream: LOKI_STREAMS.configurations,
+      app_action: 'get_watchlist',
+      message: 'Error fetching watchlist',
+    }, error)
     console.error('Error fetching watchlist:', error)
     return { error: 'Failed to fetch watchlist' }
   }
@@ -81,6 +87,11 @@ export const add_to_watchlist = traceAction('configurations.add_to_watchlist', a
   )
 
   if (error) {
+    logActionError({
+      loki_stream: LOKI_STREAMS.configurations,
+      app_action: 'add_to_watchlist',
+      message: 'Error adding to watchlist',
+    }, error)
     console.error('Error adding to watchlist:', error)
     return { error: 'Failed to add to watchlist' }
   }
@@ -122,6 +133,11 @@ export const delete_from_watchlist = traceAction('configurations.delete_from_wat
   )
 
   if (error) {
+    logActionError({
+      loki_stream: LOKI_STREAMS.configurations,
+      app_action: 'delete_from_watchlist',
+      message: 'Error deleting from watchlist',
+    }, error)
     console.error('Error deleting from watchlist:', error)
     return { error: 'Failed to delete item' }
   }

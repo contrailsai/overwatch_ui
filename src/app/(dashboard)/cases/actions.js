@@ -8,10 +8,17 @@ import { ObjectId } from 'mongodb'
 // import { getClientandProjectDetails } from '@/app/(dashboard)/actions'
 import { traceAction, recordClickMetric, runInSpan } from '@/utils/tracing'
 import { requireAuthContext } from '@/utils/auth-context'
+import { flushOtelLogs, isOtelLogsVerbose, logActionError, LOKI_STREAMS, otelLogger } from '@/utils/otel-logger'
 
-export const trackClientClick = traceAction('trackClientClick', async (buttonName, attributes = {}) => {
-  recordClickMetric(buttonName, attributes);
-})
+const CASES_TRACE_OPTS = { loki_stream: LOKI_STREAMS.cases }
+
+export const trackClientClick = traceAction(
+  'trackClientClick',
+  async (buttonName, attributes = {}) => {
+    recordClickMetric(buttonName, attributes)
+  },
+  CASES_TRACE_OPTS,
+)
 
 const normalizeS3Post = async (post) => {
   // Find S3 URL to sign
@@ -343,6 +350,17 @@ export const getPosts = traceAction('getPosts', async (_project, page = 1, limit
   try {
     const handlerStart = Date.now()
     const { dbName } = await requireAuthContext()
+
+    if (isOtelLogsVerbose()) {
+      otelLogger.info('cases.getPosts started', {
+        loki_stream: LOKI_STREAMS.cases,
+        app_span_type: 'cases',
+        app_action: 'getPosts',
+        db_name: dbName,
+        page,
+        limit,
+      })
+    }
     const client = await clientPromise
     const db = client.db(dbName)
     const collection = db.collection('Posts')
@@ -471,7 +489,11 @@ export const getPosts = traceAction('getPosts', async (_project, page = 1, limit
     const s3SigningMs = Date.now() - signingStart
     const totalHandlerMs = Date.now() - handlerStart
 
-    console.debug('[cases.getPosts] timing', {
+    const timingAttrs = {
+      loki_stream: LOKI_STREAMS.cases,
+      app_span_type: 'cases',
+      app_action: 'getPosts',
+      log_kind: 'timing',
       db_name: dbName,
       page,
       limit,
@@ -484,7 +506,14 @@ export const getPosts = traceAction('getPosts', async (_project, page = 1, limit
       mongo_count_query_ms: mongoCountQueryMs,
       s3_signing_ms: s3SigningMs,
       total_handler_ms: totalHandlerMs,
-    })
+    }
+    if (process.env.NODE_ENV === 'development') {
+      console.info('[cases.getPosts] timing', timingAttrs)
+    }
+    if (isOtelLogsVerbose()) {
+      otelLogger.info('cases.getPosts timing', timingAttrs)
+      await flushOtelLogs()
+    }
 
     return {
       posts: processedPosts,
@@ -493,10 +522,15 @@ export const getPosts = traceAction('getPosts', async (_project, page = 1, limit
       totalPages: Math.ceil(totalCount / limit)
     }
   } catch (e) {
+    logActionError({
+      loki_stream: LOKI_STREAMS.cases,
+      app_action: 'getPosts',
+      message: 'cases.getPosts failed',
+    }, e)
     console.error('MongoDB Error:', e)
     return { posts: [], totalCount: 0, page: 1, totalPages: 0 }
   }
-})
+}, CASES_TRACE_OPTS)
 
 // For opening using specific case links
 export const getPostById = traceAction('getPostById', async (_project, id) => {
@@ -518,10 +552,11 @@ export const getPostById = traceAction('getPostById', async (_project, id) => {
     return await normalizeS3Post(post);
 
   } catch (e) {
+    logActionError({ loki_stream: LOKI_STREAMS.cases, app_action: 'getPostById', message: 'getPostById failed' }, e)
     console.error('getPostById Error:', e);
     return null;
   }
-})
+}, CASES_TRACE_OPTS)
 
 // USEFUL FOR PDFs
 export const getAllPostIds = traceAction('getAllPostIds', async (_project, filters = {}) => {
@@ -582,10 +617,11 @@ export const getAllPostIds = traceAction('getAllPostIds', async (_project, filte
     const docs = await collection.aggregate(pipeline).toArray()
     return docs.map(d => d._id.toString())
   } catch (e) {
+    logActionError({ loki_stream: LOKI_STREAMS.cases, app_action: 'getAllPostIds', message: 'getAllPostIds failed' }, e)
     console.error('getAllPostIds Error:', e)
     return []
   }
-})
+}, CASES_TRACE_OPTS)
 
 // USEFUL FOR PDFs
 export const getIdenticalPosts = traceAction('getIdenticalPosts', async (_project, clusterId, currentPostId) => {
@@ -606,10 +642,11 @@ export const getIdenticalPosts = traceAction('getIdenticalPosts', async (_projec
     
     return await Promise.all(posts.map(normalizeS3Post));
   } catch (e) {
+    logActionError({ loki_stream: LOKI_STREAMS.cases, app_action: 'getIdenticalPosts', message: 'getIdenticalPosts failed' }, e)
     console.error('getIdenticalPosts Error:', e);
     return [];
   }
-});
+}, CASES_TRACE_OPTS);
 
 export const getPostsByIds = traceAction('getPostsByIds', async (_project, ids) => {
   try {
@@ -642,10 +679,11 @@ export const getPostsByIds = traceAction('getPostsByIds', async (_project, ids) 
       totalPages: Math.ceil(totalCount / limit)
     }
   } catch (e) {
+    logActionError({ loki_stream: LOKI_STREAMS.cases, app_action: 'getPostsByIds', message: 'getPostsByIds failed' }, e)
     console.error('getPostsByIds Error:', e)
     return []
   }
-})
+}, CASES_TRACE_OPTS)
 
 export const getSimilarPosts = traceAction('getSimilarPosts', async (_project, sourcePostId, type = 'text', limit = 10, filters = {}, sort = { field: 'threat_score', direction: 'desc' }) => {
   try {
@@ -769,10 +807,11 @@ export const getSimilarPosts = traceAction('getSimilarPosts', async (_project, s
       }
     }
   } catch (e) {
+    logActionError({ loki_stream: LOKI_STREAMS.cases, app_action: 'getSimilarPosts', message: 'getSimilarPosts failed' }, e)
     console.error('getSimilarPosts Error:', e)
     return { posts: [], totalCount: 0, page: 1, totalPages: 0 }
   }
-})
+}, CASES_TRACE_OPTS)
 
 export const getSemanticSearchPosts = traceAction('getSemanticSearchPosts', async (_project, searchText, limit = 10, filters = {}, sort = {}) => {
   try {
@@ -797,9 +836,20 @@ export const getSemanticSearchPosts = traceAction('getSemanticSearchPosts', asyn
         else if (data.embedding && Array.isArray(data.embedding)) queryVector = data.embedding;
         else if (data.data && Array.isArray(data.data)) queryVector = data.data;
       } else {
+        logActionError({
+          loki_stream: LOKI_STREAMS.cases,
+          app_action: 'getSemanticSearchPosts',
+          message: 'Embedding API error',
+          http_status: res.status,
+        })
         console.error(`Embedding API error: ${res.status} ${res.statusText}`);
       }
     } catch (apiError) {
+      logActionError({
+        loki_stream: LOKI_STREAMS.cases,
+        app_action: 'getSemanticSearchPosts',
+        message: 'Failed to fetch embeddings',
+      }, apiError)
       console.error('Failed to fetch embeddings:', apiError);
     }
 
@@ -865,6 +915,11 @@ export const getSemanticSearchPosts = traceAction('getSemanticSearchPosts', asyn
       try {
         semanticPosts = await collection.aggregate(semanticPipeline).toArray();
       } catch (e) {
+        logActionError({
+          loki_stream: LOKI_STREAMS.cases,
+          app_action: 'getSemanticSearchPosts',
+          message: 'Semantic search aggregation failed',
+        }, e)
         console.error("Semantic search aggregation failed:", e);
       }
     }
@@ -928,6 +983,11 @@ export const getSemanticSearchPosts = traceAction('getSemanticSearchPosts', asyn
     try {
       textPosts = await collection.aggregate(textPipeline).toArray();
     } catch (e) {
+      logActionError({
+        loki_stream: LOKI_STREAMS.cases,
+        app_action: 'getSemanticSearchPosts',
+        message: 'Atlas Text Search aggregation failed',
+      }, e)
       console.error("Atlas Text Search aggregation failed:", e);
     }
 
@@ -966,10 +1026,15 @@ export const getSemanticSearchPosts = traceAction('getSemanticSearchPosts', asyn
       }
     }
   } catch (e) {
+    logActionError({
+      loki_stream: LOKI_STREAMS.cases,
+      app_action: 'getSemanticSearchPosts',
+      message: 'getSemanticSearchPosts failed',
+    }, e)
     console.error('getSemanticSearchPosts Error:', e)
     return { posts: [], totalCount: 0, page: 1, totalPages: 0 }
   }
-})
+}, CASES_TRACE_OPTS)
 
 // UPDATE CLIENT STATUS FLAG FOR TAKEDOWN / NO ACTION
 // Accepts a single caseId (string) OR an array of caseIds for bulk operation.
@@ -1044,13 +1109,21 @@ export const updateClientStatus = traceAction('updateClientStatus', async (caseI
         { project_name: authContext.clientDetails.project_name },
         currentReviewData,
         previousReviewData
-      ).catch(err => console.error('Failed to update client metrics:', err))
+      ).catch(err => logActionError({
+        loki_stream: LOKI_STREAMS.cases,
+        app_action: 'updateClientStatus',
+        message: 'Failed to update client metrics',
+      }, err))
 
       await updateClientMetaStats(
         authContext.clientDetails.project_name,
         authContext.clientDetails.email,
         "reviewed_case"
-      ).catch(err => console.error('Failed to update meta stats:', err))
+      ).catch(err => logActionError({
+        loki_stream: LOKI_STREAMS.cases,
+        app_action: 'updateClientStatus',
+        message: 'Failed to update meta stats',
+      }, err))
     }))
 
     return {
@@ -1060,7 +1133,12 @@ export const updateClientStatus = traceAction('updateClientStatus', async (caseI
       skipped: ids.length - posts.length
     }
   } catch (e) {
+    logActionError({
+      loki_stream: LOKI_STREAMS.cases,
+      app_action: 'updateClientStatus',
+      message: 'updateClientStatus failed',
+    }, e)
     console.error("updateClientStatus Error:", e)
     return { success: false, error: e.message }
   }
-})
+}, CASES_TRACE_OPTS)

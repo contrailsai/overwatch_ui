@@ -4,6 +4,7 @@ import { createClient } from '@/utils/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { getAuthContext } from '@/utils/auth-context'
 import { traceAction } from '@/utils/tracing'
+import { logActionError, LOKI_STREAMS } from '@/utils/otel-logger'
 
 export const getConfiguration = traceAction('configurations.getConfiguration', async () => {
   const ctx = await getAuthContext()
@@ -19,6 +20,11 @@ export const getConfiguration = traceAction('configurations.getConfiguration', a
     .single()
 
   if (error) {
+    logActionError({
+      loki_stream: LOKI_STREAMS.configurations,
+      app_action: 'getConfiguration',
+      message: 'Error fetching configuration',
+    }, error)
     console.error('Error fetching configuration:', error)
     return { error: 'Failed to fetch configuration' }
   }
@@ -79,6 +85,11 @@ export const updateConfiguration = traceAction('configurations.updateConfigurati
         }
       }
     } catch (e) {
+      logActionError({
+        loki_stream: LOKI_STREAMS.configurations,
+        app_action: 'updateConfiguration',
+        message: 'Error parsing notification_config',
+      }, e)
       console.error('Error parsing notification_config:', e)
       return { error: 'Invalid configuration data' }
     }
@@ -125,6 +136,11 @@ export const updateConfiguration = traceAction('configurations.updateConfigurati
     .eq('id', ctx.user.id)
 
   if (error) {
+    logActionError({
+      loki_stream: LOKI_STREAMS.configurations,
+      app_action: 'updateConfiguration',
+      message: 'Error updating configuration',
+    }, error)
     console.error('Error updating configuration:', error)
     return { error: 'Failed to update configuration' }
   }

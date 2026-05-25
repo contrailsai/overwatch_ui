@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { cache } from 'react'
+import { logActionWarn, LOKI_STREAMS } from '@/utils/otel-logger'
 
 export async function createClient() {
   const cookieStore = await cookies()
@@ -38,6 +39,15 @@ export const getAuthenticatedUser = cache(async () => {
   // Note: keep getUser() here to force server-side validation after middleware refresh.
   const { data: { user }, error } = await supabase.auth.getUser()
   if (error) {
+    logActionWarn({
+      loki_stream: LOKI_STREAMS.shared,
+      app_caller: 'supabase/server',
+      app_action: 'getAuthenticatedUser',
+      message: '[auth.server] getAuthenticatedUser failed',
+      code: error.code ?? null,
+      status: error.status ?? null,
+      error_message: error.message ?? 'unknown',
+    })
     console.warn('[auth.server] getAuthenticatedUser failed', {
       code: error.code ?? null,
       status: error.status ?? null,

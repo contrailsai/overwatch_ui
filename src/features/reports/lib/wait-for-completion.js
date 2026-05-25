@@ -1,6 +1,7 @@
 import { isReportFailure, isReportSuccess } from '@/features/reports/lib/status'
 import { flushReportWaitTelemetry } from '@/features/reports/server/telemetry'
 import { getReportJobStatus } from '@/features/reports/server/actions'
+import { logActionError, logActionWarn, LOKI_STREAMS } from '@/utils/otel-logger'
 
 const BASE_POLL_MS = 3000
 const STALE_MS = 8000
@@ -78,6 +79,12 @@ export function waitForReportCompletion(supabase, opts) {
 
     const scheduleFlush = (payload) => {
       void flushReportWaitTelemetry(payload).catch((err) => {
+        logActionWarn({
+          loki_stream: LOKI_STREAMS.reports,
+          app_action: 'waitForReportCompletion',
+          message: 'Report wait telemetry flush failed',
+          job_id: stats.job_id,
+        })
         console.warn('[report_wait] telemetry flush failed', err)
       })
     }
@@ -110,6 +117,15 @@ export function waitForReportCompletion(supabase, opts) {
       if (isResolved) return false
       if (isReportFailure(status)) {
         cleanup()
+        logActionError({
+          loki_stream: LOKI_STREAMS.reports,
+          app_action: 'waitForReportCompletion',
+          message: 'Report generation failed',
+          job_id: stats.job_id,
+          report_format: stats.report_format,
+          report_type: stats.report_type,
+          status_preview: String(status ?? '').slice(0, 240),
+        })
         scheduleFlush(
           buildBasePayload({
             outcome: 'row_error',
@@ -166,6 +182,12 @@ export function waitForReportCompletion(supabase, opts) {
           const data = await getReportJobStatus(jobId)
           if (data) return { data, updateSource: 'http_server' }
         } catch (serverErr) {
+          logActionWarn({
+            loki_stream: LOKI_STREAMS.reports,
+            app_action: 'waitForReportCompletion',
+            message: 'Report job server status fallback failed',
+            job_id: String(jobId),
+          })
           console.warn('Report job server status fallback failed:', serverErr)
         }
         throw clientErr
@@ -194,6 +216,15 @@ export function waitForReportCompletion(supabase, opts) {
             return
           }
           cleanup()
+          logActionError({
+            loki_stream: LOKI_STREAMS.reports,
+            app_action: 'waitForReportCompletion',
+            message: 'Report job status polling exhausted retries',
+            job_id: stats.job_id,
+            report_format: stats.report_format,
+            report_type: stats.report_type,
+            consecutive_errors: consecutiveErrors,
+          }, err)
           scheduleFlush(
             buildBasePayload({
               outcome: 'network_error',
@@ -241,12 +272,25 @@ export function waitForReportCompletion(supabase, opts) {
         )
         .subscribe((status) => {
           if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            logActionWarn({
+              loki_stream: LOKI_STREAMS.reports,
+              app_action: 'waitForReportCompletion',
+              message: `Report job realtime subscription ${status}`,
+              job_id: stats.job_id,
+              retry_count: retryCount,
+            })
             console.error(`Report job realtime subscription: ${status}, retrying...`)
             if (channel) supabase.removeChannel(channel)
             if (retryCount < 3 && !isResolved) {
               retryCount += 1
               setTimeout(subscribeToChannel, 1000 * retryCount)
             } else if (!isResolved) {
+              logActionWarn({
+                loki_stream: LOKI_STREAMS.reports,
+                app_action: 'waitForReportCompletion',
+                message: 'Report job realtime unavailable; relying on HTTP polling',
+                job_id: stats.job_id,
+              })
               console.warn('Report job realtime unavailable; relying on HTTP polling and watchdog')
             }
           }
@@ -271,6 +315,15 @@ export function waitForReportCompletion(supabase, opts) {
           return
         }
         cleanup()
+        logActionError({
+          loki_stream: LOKI_STREAMS.reports,
+          app_action: 'waitForReportCompletion',
+          message: 'Report generation deadline exceeded',
+          job_id: stats.job_id,
+          report_format: stats.report_format,
+          report_type: stats.report_type,
+          duration_ms: Date.now() - startedAt,
+        })
         scheduleFlush(
           buildBasePayload({
             outcome: 'deadline_error',

@@ -4,12 +4,13 @@ import { revalidatePath } from 'next/cache'
 import { traceAction } from '@/utils/tracing'
 import { createClient } from '@/utils/supabase/server'
 import { requireRole } from '@/utils/auth-context'
+import { logActionError, LOKI_STREAMS } from '@/utils/otel-logger'
 
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 
 const TEAM_MANAGER_ROLES = ['client-admin', 'reviewer']
 
-export const fetch_clients_in_project = traceAction('fetch_clients_in_project', async () => {
+export const fetch_clients_in_project = traceAction('admin.fetch_clients_in_project', async () => {
     const { clientDetails } = await requireRole(['client-admin', 'reviewer'])
     const supabase = await createClient()
 
@@ -20,6 +21,11 @@ export const fetch_clients_in_project = traceAction('fetch_clients_in_project', 
         .neq('permission', 'reviewer')
 
     if (error) {
+        logActionError({
+            loki_stream: LOKI_STREAMS.admin,
+            app_action: 'fetch_clients_in_project',
+            message: 'ERROR fetching client details',
+        }, error)
         console.error("ERROR fetching client details: ", error)
         return null
     }
@@ -53,6 +59,11 @@ export const fetch_clients_in_project = traceAction('fetch_clients_in_project', 
         .eq('project_name', clientDetails.project_name)
 
     if (logsError) {
+        logActionError({
+            loki_stream: LOKI_STREAMS.admin,
+            app_action: 'fetch_clients_in_project',
+            message: 'ERROR fetching client logs',
+        }, logsError)
         console.error("ERROR fetching client logs: ", logsError)
         return client_details // Return basic details if logs fail
     }
@@ -186,9 +197,30 @@ export const fetch_capacity_metrics = traceAction('fetch_capacity_metrics', asyn
             .gte('date', startStr)
     ])
 
-    if (casesRes.error) console.error('ERROR fetching daily_case_metrics:', casesRes.error)
-    if (reviewedRes.error) console.error('ERROR fetching daily_reviewed_metrics:', reviewedRes.error)
-    if (teamLogsRes.error) console.error('ERROR fetching team client_logs:', teamLogsRes.error)
+    if (casesRes.error) {
+        logActionError({
+            loki_stream: LOKI_STREAMS.admin,
+            app_action: 'fetch_capacity_metrics',
+            message: 'ERROR fetching daily_case_metrics',
+        }, casesRes.error)
+        console.error('ERROR fetching daily_case_metrics:', casesRes.error)
+    }
+    if (reviewedRes.error) {
+        logActionError({
+            loki_stream: LOKI_STREAMS.admin,
+            app_action: 'fetch_capacity_metrics',
+            message: 'ERROR fetching daily_reviewed_metrics',
+        }, reviewedRes.error)
+        console.error('ERROR fetching daily_reviewed_metrics:', reviewedRes.error)
+    }
+    if (teamLogsRes.error) {
+        logActionError({
+            loki_stream: LOKI_STREAMS.admin,
+            app_action: 'fetch_capacity_metrics',
+            message: 'ERROR fetching team client_logs',
+        }, teamLogsRes.error)
+        console.error('ERROR fetching team client_logs:', teamLogsRes.error)
+    }
 
     // Aggregate project-level (across platforms) by date
     const casesByDate = {}
@@ -288,6 +320,11 @@ export const fetch_client_activity_history = traceAction('fetch_client_activity_
         .order('date', { ascending: true })
 
     if (error) {
+        logActionError({
+            loki_stream: LOKI_STREAMS.admin,
+            app_action: 'fetch_client_activity_history',
+            message: 'ERROR fetching client_logs',
+        }, error)
         console.error('ERROR fetching client_logs:', error)
         return { error: error.message }
     }
@@ -365,6 +402,11 @@ export const create_new_client = traceAction('create_new_client', async (email, 
     })
 
     if (authError) {
+        logActionError({
+            loki_stream: LOKI_STREAMS.admin,
+            app_action: 'create_new_client',
+            message: 'Auth Error',
+        }, authError)
         console.error("Auth Error:", authError)
         return { error: authError.message }
     }
@@ -382,6 +424,11 @@ export const create_new_client = traceAction('create_new_client', async (email, 
         })
 
     if (dbError) {
+        logActionError({
+            loki_stream: LOKI_STREAMS.admin,
+            app_action: 'create_new_client',
+            message: 'DB Error',
+        }, dbError)
         console.error("DB Error:", dbError)
         // Cleanup: If the DB insert fails, delete the Auth user so you don't have ghost accounts.
         await supabaseAdmin.auth.admin.deleteUser(authData.user.id)
@@ -421,6 +468,11 @@ export const delete_client = traceAction('delete_client', async (userId) => {
         .select('id')
 
     if (dbError) {
+        logActionError({
+            loki_stream: LOKI_STREAMS.admin,
+            app_action: 'delete_client',
+            message: 'DB Delete Error',
+        }, dbError)
         console.error('DB Delete Error:', dbError)
         return { error: dbError.message }
     }
@@ -430,6 +482,11 @@ export const delete_client = traceAction('delete_client', async (userId) => {
 
     const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(userId)
     if (authError) {
+        logActionError({
+            loki_stream: LOKI_STREAMS.admin,
+            app_action: 'delete_client',
+            message: 'Auth Delete Error',
+        }, authError)
         console.error('Auth Delete Error:', authError)
         return { error: authError.message }
     }
@@ -464,6 +521,11 @@ export const update_client_alias = traceAction('update_client_alias', async (use
         .select('id')
 
     if (dbError) {
+        logActionError({
+            loki_stream: LOKI_STREAMS.admin,
+            app_action: 'update_client_alias',
+            message: 'DB Update Alias Error',
+        }, dbError)
         console.error('DB Update Alias Error:', dbError)
         return { error: dbError.message }
     }
@@ -509,6 +571,11 @@ export const update_client_permission = traceAction('update_client_permission', 
         .select('id')
 
     if (dbError) {
+        logActionError({
+            loki_stream: LOKI_STREAMS.admin,
+            app_action: 'update_client_permission',
+            message: 'DB Update Permission Error',
+        }, dbError)
         console.error('DB Update Permission Error:', dbError)
         return { error: dbError.message }
     }
@@ -546,6 +613,11 @@ export const update_client_organization = traceAction('update_client_organizatio
         .select('id')
 
     if (dbError) {
+        logActionError({
+            loki_stream: LOKI_STREAMS.admin,
+            app_action: 'update_client_organization',
+            message: 'DB Update Organization Error',
+        }, dbError)
         console.error('DB Update Organization Error:', dbError)
         return { error: dbError.message }
     }
