@@ -726,21 +726,9 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                 </div>
               </div>
               {mergedPosts.length > 0 && totalCount > 0 && (
-                <div className="mt-1.5 pt-1.5 border-t border-slate-100">
-                  <ListSelectionBar
-                    showPageCheckbox={false}
-                    selectedCount={selectedCount}
-                    totalCount={totalCount}
-                    isAllFilterSelected={isAllFilterSelected}
-                    isSelectingAll={isSelectingAll}
-                    isAllCurrentPageSelected={isAllCurrentPageSelected}
-                    isSomeCurrentPageSelected={isSomeCurrentPageSelected}
-                    onToggleAllOnPage={handleToggleAllOnPage}
-                    onSelectAllFiltered={handleSelectAllFiltered}
-                    onClearSelection={handleClearAllSelected}
-                  />
-                  {(selectedCount > 0 || hasActiveFilters) && (
-                    <div className="flex items-center gap-2 mt-1.5 overflow-x-auto">
+                <div className="mt-1.5 pt-1.5 border-t border-slate-100 flex flex-col gap-1.5">
+                  <div className="flex items-center justify-between gap-2 min-h-8 min-w-0">
+                    <div className="flex items-center gap-2 min-w-0 shrink">
                       {hasActiveFilters && (
                         <Button
                           variant="ghost"
@@ -751,31 +739,46 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                           <X className="w-3 h-3 mr-0.5" /> Clear filters
                         </Button>
                       )}
-                      {selectedCount > 0 && (
-                        <Popover open={mobileActionMenuOpen} onOpenChange={setMobileActionMenuOpen}>
-                          <PopoverTrigger asChild>
-                            <Button
-                              size="sm"
-                              disabled={isBulkTakedownProcessing || isBulkNoActionProcessing || isBulkFlagProcessing}
-                              className="h-7 px-2.5 text-[10px] font-bold text-white bg-red-500 hover:bg-red-600 shrink-0"
-                            >
-                              Action ({isAllFilterSelected ? totalCount : selectedCount})
-                              <ChevronDown className={cn("w-3 h-3 ml-0.5", mobileActionMenuOpen && "rotate-180")} />
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent align="end" className="min-w-[140px] p-1 z-50">
-                            <BulkActionMenu
-                              allowDoTakedown={allowDoTakedown}
-                              isBulkTakedownProcessing={isBulkTakedownProcessing}
-                              isBulkNoActionProcessing={isBulkNoActionProcessing}
-                              isBulkFlagProcessing={isBulkFlagProcessing}
-                              onDoTakedown={() => { setMobileActionMenuOpen(false); setShowBulkTakedownConfirm(true) }}
-                              onNoAction={() => { setMobileActionMenuOpen(false); setShowBulkNoActionConfirm(true) }}
-                              onFlagForTakedown={() => { setMobileActionMenuOpen(false); setShowBulkFlagConfirm(true) }}
-                            />
-                          </PopoverContent>
-                        </Popover>
-                      )}
+                    </div>
+                    <ListSelectionBar
+                      showPageCheckbox={false}
+                      selectedCount={selectedCount}
+                      totalCount={totalCount}
+                      isAllFilterSelected={isAllFilterSelected}
+                      isSelectingAll={isSelectingAll}
+                      isAllCurrentPageSelected={isAllCurrentPageSelected}
+                      isSomeCurrentPageSelected={isSomeCurrentPageSelected}
+                      onToggleAllOnPage={handleToggleAllOnPage}
+                      onSelectAllFiltered={handleSelectAllFiltered}
+                      onClearSelection={handleClearAllSelected}
+                      className="w-auto shrink-0 flex-nowrap min-w-0"
+                    />
+                  </div>
+                  {selectedCount > 0 && (
+                    <div className="flex items-center">
+                      <Popover open={mobileActionMenuOpen} onOpenChange={setMobileActionMenuOpen}>
+                        <PopoverTrigger asChild>
+                          <Button
+                            size="sm"
+                            disabled={isBulkTakedownProcessing || isBulkNoActionProcessing || isBulkFlagProcessing}
+                            className="h-7 px-2.5 text-[10px] font-bold text-white bg-red-500 hover:bg-red-600 shrink-0"
+                          >
+                            Action ({isAllFilterSelected ? totalCount : selectedCount})
+                            <ChevronDown className={cn("w-3 h-3 ml-0.5", mobileActionMenuOpen && "rotate-180")} />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent align="start" className="min-w-[140px] p-1 z-50">
+                          <BulkActionMenu
+                            allowDoTakedown={allowDoTakedown}
+                            isBulkTakedownProcessing={isBulkTakedownProcessing}
+                            isBulkNoActionProcessing={isBulkNoActionProcessing}
+                            isBulkFlagProcessing={isBulkFlagProcessing}
+                            onDoTakedown={() => { setMobileActionMenuOpen(false); setShowBulkTakedownConfirm(true) }}
+                            onNoAction={() => { setMobileActionMenuOpen(false); setShowBulkNoActionConfirm(true) }}
+                            onFlagForTakedown={() => { setMobileActionMenuOpen(false); setShowBulkFlagConfirm(true) }}
+                          />
+                        </PopoverContent>
+                      </Popover>
                     </div>
                   )}
                 </div>
