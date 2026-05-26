@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Loader2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -21,7 +21,25 @@ export function MobileCasesFilterDrawer({
   onClearFilters,
   filterPanelProps,
 }) {
-  const [snap, setSnap] = useState(0.5)
+  const MAX_SNAP = 0.92
+
+  // Always open at max snap. If user drags below max snap, we close immediately.
+  const [snap, setSnap] = useState(MAX_SNAP)
+
+  useEffect(() => {
+    if (!open) return
+    setSnap(MAX_SNAP)
+  }, [open])
+
+  const handleSetActiveSnapPoint = (nextSnapPoint) => {
+    // Close when leaving the max snap point (e.g. snapping down to 0.5).
+    if (typeof nextSnapPoint === 'number' && nextSnapPoint < MAX_SNAP - 0.001) {
+      setSnap(MAX_SNAP)
+      onOpenChange(false)
+      return
+    }
+    setSnap(nextSnapPoint)
+  }
 
   return (
     <Drawer
@@ -29,7 +47,7 @@ export function MobileCasesFilterDrawer({
       onOpenChange={onOpenChange}
       snapPoints={[0.5, 0.92]}
       activeSnapPoint={snap}
-      setActiveSnapPoint={setSnap}
+      setActiveSnapPoint={handleSetActiveSnapPoint}
       fadeFromIndex={0}
     >
       <DrawerContent className="lg:hidden max-h-[96dvh] p-0 gap-0 flex flex-col">
@@ -62,13 +80,13 @@ export function MobileCasesFilterDrawer({
           </div>
         </DrawerHeader>
 
-        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 py-3 custom-scrollbar">
+        <div className="flex flex-1 min-h-0 flex-col overflow-hidden px-4">
           <CasesFilterPanel
             layout="stacked"
             showSections
             debouncedSearch
             contextualPlacement="top"
-            stickyContextual
+            mobileDrawerLayout
             scrollPaddingBottom
             {...filterPanelProps}
           />

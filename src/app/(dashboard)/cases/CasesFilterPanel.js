@@ -41,7 +41,8 @@ function FilterSection({ title, showSections, children, className, compact }) {
 
 function FilterField({ layout, children, className, compactInline }) {
   if (compactInline) {
-    return <div className={cn('w-full', className)}>{children}</div>
+    // Add horizontal padding on mobile (stacked) to make inputs feel less edge-to-edge.
+    return <div className={cn('w-full px-1.5 sm:px-3', className)}>{children}</div>
   }
   const fieldClass =
     layout === 'row'
@@ -80,6 +81,7 @@ export function CasesFilterPanel({
   compactInline: compactInlineProp,
   contextualPlacement = 'bottom',
   stickyContextual = false,
+  mobileDrawerLayout = false,
   scrollPaddingBottom = false,
   initialFilters,
   project,
@@ -382,8 +384,16 @@ export function CasesFilterPanel({
           </>
         )}
       </FilterField>
-      <FilterField layout={layout} compactInline={compactInline} className={!isStacked ? 'w-full sm:max-w-xs shrink-0' : undefined}>
-        <Label className="text-[10px] uppercase font-bold text-slate-400">Search</Label>
+      <FilterField
+        layout={layout}
+        compactInline={compactInline}
+        className={
+          !isStacked
+            ? 'w-full lg:w-auto lg:max-w-sm shrink-0'
+            : undefined
+        }
+      >
+        <Label className="text-[10px] uppercase font-bold text-slate-400 mb-2">Search</Label>
         <div className="flex items-center gap-2">
           <div className="relative flex-1">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -608,13 +618,49 @@ export function CasesFilterPanel({
       showSections
       compact={compactInline}
       className={cn(
+        mobileDrawerLayout && 'py-2 mb-1 border-0',
         stickyContextual &&
-          'sticky top-0 z-10 -mx-4 px-4 pt-2 pb-3 mb-2 bg-white/95 backdrop-blur-sm border-b border-slate-100 shadow-[0_1px_0_rgba(0,0,0,0.04)]'
+          !mobileDrawerLayout &&
+          'sticky top-0 z-10 -mx-4 px-4 pt-0 pb-2 mb-2 bg-white backdrop-blur-sm border-b border-slate-100 shadow-[0_1px_0_rgba(0,0,0,0.04)]'
       )}
     >
       {contextualContent}
     </FilterSection>
   )
+
+  const sectionedFilters = (
+    <>
+      {!mobileDrawerLayout && contextualPlacement === 'top' && contextualSection}
+      <FilterSection title="Case attributes" showSections compact={compactInline}>
+        {caseAttributes}
+      </FilterSection>
+      <FilterSection title="Dates" showSections compact={compactInline}>
+        {dateFilters}
+      </FilterSection>
+      <FilterSection title="Content & search" showSections compact={compactInline}>
+        {contentFilters}
+      </FilterSection>
+      {!mobileDrawerLayout && contextualPlacement === 'bottom' && contextualSection}
+    </>
+  )
+
+  if (mobileDrawerLayout) {
+    return (
+      <div className="flex flex-col flex-1 min-h-0 w-full overflow-hidden">
+        {contextualPlacement === 'top' && contextualSection && (
+          <div className="shrink-0 bg-white border-b border-slate-100">{contextualSection}</div>
+        )}
+        <div
+          className={cn(
+            'flex-1 min-h-0 overflow-y-auto overscroll-contain custom-scrollbar',
+            scrollPaddingBottom && 'pb-24 pt-2'
+          )}
+        >
+          <div className={filtersWrapClass}>{sectionedFilters}</div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div
@@ -628,19 +674,7 @@ export function CasesFilterPanel({
         <div className="flex flex-col gap-3 w-full">
           <div className={filtersWrapClass}>
             {showSections ? (
-              <>
-                {contextualPlacement === 'top' && contextualSection}
-                <FilterSection title="Case attributes" showSections compact={compactInline}>
-                  {caseAttributes}
-                </FilterSection>
-                <FilterSection title="Dates" showSections compact={compactInline}>
-                  {dateFilters}
-                </FilterSection>
-                <FilterSection title="Content & search" showSections compact={compactInline}>
-                  {contentFilters}
-                </FilterSection>
-                {contextualPlacement === 'bottom' && contextualSection}
-              </>
+              sectionedFilters
             ) : (
               <>
                 {caseAttributes}

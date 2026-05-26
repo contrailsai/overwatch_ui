@@ -687,8 +687,8 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
           <>
             {/* Mobile compact toolbar */}
             <div className="lg:hidden shrink-0 px-2 py-1.5 border-b border-slate-100 bg-white">
-              <div className="flex items-center gap-2">
-                <div className="flex items-baseline gap-1 min-w-0 shrink">
+              <div className="gap-x-2 gap-y-1.5 max-[385px]:grid max-[385px]:grid-cols-[1fr_auto] min-[386px]:flex min-[386px]:items-center min-[386px]:flex-wrap">
+                <div className="flex items-baseline gap-1 min-w-0 shrink-0 max-[385px]:col-start-1 max-[385px]:row-start-1">
                   <span className="text-base font-black text-slate-800 tabular-nums leading-none">
                     {totalCount.toLocaleString()}
                   </span>
@@ -699,7 +699,7 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                   variant="ghost"
                   size="sm"
                   onClick={() => setIsMobileFiltersOpen(true)}
-                  className="h-8 px-2.5 bg-slate-50 border border-slate-200 rounded-lg text-[11px] font-semibold text-slate-700 gap-1.5 shrink-0"
+                  className="h-8 px-2.5 bg-slate-50 border border-slate-200 rounded-lg text-[11px] font-semibold text-slate-700 gap-1.5 shrink-0 max-[385px]:col-start-1 max-[385px]:row-start-2 max-[385px]:w-fit min-[386px]:order-none"
                 >
                   <Filter className="w-3.5 h-3.5" />
                   Filters
@@ -707,7 +707,7 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                     <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
                   )}
                 </Button>
-                <div className="ml-auto shrink-0">
+                <div className="shrink-0 max-[385px]:col-start-2 max-[385px]:row-start-1 max-[385px]:justify-self-end min-[386px]:ml-auto">
                   <ReportGenerate
                     selectedPostsArray={selectedPostsArray}
                     selectedCount={selectedCount}
@@ -1056,22 +1056,6 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                       )
                     })}
                   </div>
-                </div>
-
-                {/* Tablet: table without desktop sidebar — selection bar */}
-                <div className="hidden md:flex lg:hidden shrink-0 px-2 py-1.5 bg-slate-50/95 border-b border-slate-100">
-                  <ListSelectionBar
-                    className="w-full"
-                    selectedCount={selectedCount}
-                    totalCount={totalCount}
-                    isAllFilterSelected={isAllFilterSelected}
-                    isSelectingAll={isSelectingAll}
-                    isAllCurrentPageSelected={isAllCurrentPageSelected}
-                    isSomeCurrentPageSelected={isSomeCurrentPageSelected}
-                    onToggleAllOnPage={handleToggleAllOnPage}
-                    onSelectAllFiltered={handleSelectAllFiltered}
-                    onClearSelection={selectedCount > 0 ? handleClearAllSelected : undefined}
-                  />
                 </div>
 
                 {/* Desktop table */}

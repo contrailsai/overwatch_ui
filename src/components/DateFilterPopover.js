@@ -31,6 +31,7 @@ const get24HourString = (date) => {
 }
 
 function CustomTimePicker({ date, onChange, disabled, useNativeSelect }) {
+  const [open, setOpen] = useState(false)
   const time24 = get24HourString(date)
 
   const updateDate = (newTime24) => {
@@ -39,6 +40,7 @@ function CustomTimePicker({ date, onChange, disabled, useNativeSelect }) {
     const updated = new Date(date)
     updated.setHours(h, m, 0, 0)
     onChange(updated)
+    setOpen(false)
   }
 
   if (useNativeSelect) {
@@ -64,7 +66,7 @@ function CustomTimePicker({ date, onChange, disabled, useNativeSelect }) {
   }
 
   return (
-    <Popover modal>
+    <Popover modal open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
           variant="outline"
@@ -90,7 +92,9 @@ function CustomTimePicker({ date, onChange, disabled, useNativeSelect }) {
               variant="ghost"
               className={cn(
                 'justify-center font-normal px-2 py-1 h-8 shrink-0',
-                time24 === t && 'bg-blue-600 text-white hover:bg-blue-700 hover:text-white'
+                time24 === t
+                  ? 'bg-blue-600 text-white hover:!bg-blue-700 hover:!text-white'
+                  : 'hover:bg-slate-100 hover:text-slate-900'
               )}
               onClick={() => updateDate(t)}
             >
@@ -103,6 +107,16 @@ function CustomTimePicker({ date, onChange, disabled, useNativeSelect }) {
   )
 }
 
+const MOBILE_CALENDAR_CLASS =
+  'rounded-md border-none p-1 w-fit mx-auto shrink-0 [--cell-size:2rem] [&_[data-slot=calendar]]:mx-auto'
+
+const MOBILE_CALENDAR_CLASSNAMES = {
+  month: 'flex w-full flex-col gap-2',
+  week: 'mt-1 flex w-full',
+  weekdays: 'flex',
+  weekday: 'flex-1 text-[0.7rem] font-normal text-muted-foreground select-none',
+}
+
 function DateFilterPickerBody({
   title,
   dateRange,
@@ -112,6 +126,7 @@ function DateFilterPickerBody({
   onApply,
   useNativeSelect,
   stacked,
+  mobileDialog = false,
 }) {
   const summaryBlock = (
     <div className="flex flex-col gap-0.5 text-[10px] min-w-0">
@@ -174,6 +189,45 @@ function DateFilterPickerBody({
     </div>
   )
 
+  const calendar = (
+    <Calendar
+      mode="range"
+      defaultMonth={dateRange?.from}
+      numberOfMonths={1}
+      selected={dateRange}
+      onSelect={onDateSelect}
+      disabled={{ after: new Date() }}
+      className={
+        stacked
+          ? MOBILE_CALENDAR_CLASS
+          : 'rounded-md border-none p-0 shrink-0 [--cell-size:2rem]'
+      }
+      classNames={stacked ? MOBILE_CALENDAR_CLASSNAMES : undefined}
+    />
+  )
+
+  if (mobileDialog) {
+    return (
+      <Card className="flex flex-col h-full min-h-0 w-full max-w-full shadow-none border-0 gap-0 py-0">
+        <CardHeader className="border-b bg-slate-50/50 shrink-0 m-0 gap-2 px-3 py-2 !pb-2 pr-12 flex flex-col">
+          <div className="min-w-0 shrink-0">
+            <span className="text-[10px] text-slate-500 leading-none">Filter by</span>
+            <p className="font-semibold text-sm text-slate-900 leading-tight mt-0.5">{title}</p>
+          </div>
+          <div className="min-w-0 w-full">{summaryBlock}</div>
+        </CardHeader>
+
+        <div className="shrink-0 flex justify-center items-center px-3 py-3 min-h-[17.5rem] bg-white">
+          {calendar}
+        </div>
+
+        <CardContent className="shrink-0 m-0 px-3 pt-3 pb-4 border-t border-slate-100">
+          {timeAndActions}
+        </CardContent>
+      </Card>
+    )
+  }
+
   return (
     <Card className="w-full max-w-full shadow-none border-0 gap-0 py-0">
       <CardHeader
@@ -192,28 +246,12 @@ function DateFilterPickerBody({
       <CardContent className="m-0 p-2 px-2">
         {stacked ? (
           <div className="flex flex-col gap-3">
-            <Calendar
-              mode="range"
-              defaultMonth={dateRange?.from}
-              numberOfMonths={1}
-              selected={dateRange}
-              onSelect={onDateSelect}
-              disabled={{ after: new Date() }}
-              className="rounded-md border-none p-0 w-full [--cell-size:2rem]"
-            />
+            <div className="flex justify-center w-full py-1">{calendar}</div>
             <div className="border-t border-slate-100 pt-3">{timeAndActions}</div>
           </div>
         ) : (
           <div className="flex flex-row gap-2 items-start">
-            <Calendar
-              mode="range"
-              defaultMonth={dateRange?.from}
-              numberOfMonths={1}
-              selected={dateRange}
-              onSelect={onDateSelect}
-              disabled={{ after: new Date() }}
-              className="rounded-md border-none p-0 shrink-0 [--cell-size:1.75rem]"
-            />
+            {calendar}
             <div className="border-l border-slate-100 pl-2 shrink-0">{timeAndActions}</div>
           </div>
         )}
@@ -390,17 +428,19 @@ export function DateFilterPopover({
             showCloseButton
             overlayClassName="z-[100]"
             className={cn(
-              'z-[100] w-[calc(100vw-1rem)] max-w-md p-0 gap-0 overflow-hidden',
-              'max-h-[min(92dvh,720px)] flex flex-col',
-              '[&>button]:z-10'
+              'z-[100] w-[calc(100vw-1rem)] max-w-sm p-0 gap-0',
+              'max-h-[min(92dvh,680px)] flex flex-col overflow-y-auto overscroll-contain',
+              '[&>button]:absolute [&>button]:top-3 [&>button]:right-3 [&>button]:z-20',
+              '[&>button]:size-9 [&>button]:rounded-full [&>button]:opacity-100',
+              '[&>button]:bg-white [&>button]:border [&>button]:border-slate-200',
+              '[&>button]:shadow-sm [&>button]:flex [&>button]:items-center [&>button]:justify-center',
+              '[&>button]:hover:bg-slate-50 [&>button]:focus:ring-2 [&>button]:focus:ring-blue-500/30'
             )}
           >
             <DialogHeader className="sr-only">
               <DialogTitle>{title}</DialogTitle>
             </DialogHeader>
-            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain custom-scrollbar">
-              <DateFilterPickerBody {...pickerProps} />
-            </div>
+            <DateFilterPickerBody {...pickerProps} mobileDialog />
           </DialogContent>
         </Dialog>
       </>
