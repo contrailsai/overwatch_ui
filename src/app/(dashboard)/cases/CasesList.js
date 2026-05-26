@@ -807,7 +807,7 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                               Filter
                             </span>
                             {isPending && (
-                              <Loader2 className=" size-20 animate-spin text-blue-600" />
+                              <Loader2 className=" size-10 animate-spin text-blue-600" />
                             )}
                           </div>
                           <div className="flex items-baseline gap-1.5 mb-3">
