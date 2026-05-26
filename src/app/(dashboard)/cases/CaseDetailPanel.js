@@ -27,6 +27,12 @@ import { useRouter } from 'next/navigation'
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Textarea } from "@/components/ui/textarea"
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog"
 import { CaseExportButton } from '@/components/pdf/CaseExportButton'
 import { CaseExportDocxButton } from '@/components/docx/CaseExportDocxButton'
 import SafeDate from '@/components/SafeDate'
@@ -38,7 +44,7 @@ const getRiskLabel = (score) => {
     return { label: 'Safe', color: 'text-slate-500 bg-slate-50 border-slate-200' };
 }
 
-export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose, onNavigate, hasPrev, hasNext, onUpdateStatus, onUpdatePost, onShowToast, projectEmails }) {
+export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose, onNavigate, hasPrev, hasNext, onUpdateStatus, onUpdatePost, onShowToast, projectEmails, isMobileLayout = false }) {
     const [isProcessing, setIsProcessing] = useState(false)
     const [imgError, setImgError] = useState(false)
     const router = useRouter()
@@ -334,7 +340,29 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
     }
 
     return (
-        <div className="flex-1 min-w-0 h-full bg-white z-50 font-sans flex flex-col border-l border-slate-200 animate-in slide-in-from-right duration-300 overflow-hidden">
+        <>
+        {isEditing && isMobileLayout && (
+            <Dialog open={isEditing} onOpenChange={setIsEditing}>
+                <DialogContent className="w-[calc(100vw-1.5rem)] max-w-lg max-h-[min(92dvh,900px)] overflow-y-auto p-4 sm:p-6">
+                    <DialogHeader className="sr-only">
+                        <DialogTitle>Edit case</DialogTitle>
+                    </DialogHeader>
+                    <EditForm
+                        post={post}
+                        project={project}
+                        clientDetails={clientDetails}
+                        setIsEditing={setIsEditing}
+                        onUpdatePost={onUpdatePost}
+                    />
+                </DialogContent>
+            </Dialog>
+        )}
+        <div className={cn(
+            "flex-1 min-w-0 h-full bg-white font-sans flex flex-col border-l border-slate-200 overflow-hidden",
+            isMobileLayout
+                ? "fixed inset-0 z-50 animate-in slide-in-from-right duration-300"
+                : "animate-in slide-in-from-right duration-300"
+        )}>
             {/* Main Content Area */}
             <div className="flex-1 overflow-y-auto lg:overflow-hidden flex flex-col lg:flex-row lg:divide-x divide-slate-100">
 
@@ -398,18 +426,28 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
                         </div>
                     </div>
 
-                    {/* Mobile/Tablet Export Buttons (kept at top below lg breakpoint) */}
-                    <div onClick={() => trackClientClick('download_case_report', { page: 'CaseDetailPanel' })} className="lg:hidden flex gap-2 px-4 sm:px-6 py-3 border-b border-slate-100 bg-white">
-                        <CaseExportButton
-                            post={post}
-                            project={project}
-                            className="flex-1 cursor-pointer rounded-md border border-slate-200 text-slate-600 hover:border-blue-500 hover:text-blue-600 flex items-center justify-center gap-1.5 text-xs font-bold transition-all bg-white px-3 py-1.5 h-auto"
-                        />
-                        <CaseExportDocxButton
-                            post={post}
-                            project={project}
-                            className="flex-1 cursor-pointer rounded-md border border-slate-200 text-slate-600 hover:border-blue-500 hover:text-blue-600 flex items-center justify-center gap-1.5 text-xs font-bold transition-all bg-white px-3 py-1.5 h-auto"
-                        />
+                    {/* Mobile export & edit actions */}
+                    <div className="lg:hidden flex gap-2 px-4 sm:px-6 py-3 border-b border-slate-100 bg-white">
+                        <div onClick={() => trackClientClick('download_case_report', { page: 'CaseDetailPanel' })} className="flex flex-1 gap-2 min-w-0">
+                            <CaseExportButton
+                                post={post}
+                                project={project}
+                                className="flex-1 min-h-10 cursor-pointer rounded-md border border-slate-200 text-slate-600 hover:border-blue-500 hover:text-blue-600 flex items-center justify-center gap-1.5 text-xs font-bold transition-all bg-white px-3 py-2 h-auto"
+                            />
+                            <CaseExportDocxButton
+                                post={post}
+                                project={project}
+                                className="flex-1 min-h-10 cursor-pointer rounded-md border border-slate-200 text-slate-600 hover:border-blue-500 hover:text-blue-600 flex items-center justify-center gap-1.5 text-xs font-bold transition-all bg-white px-3 py-2 h-auto"
+                            />
+                        </div>
+                        <Button
+                            onClick={() => setIsEditing(true)}
+                            variant="ghost"
+                            className="shrink-0 min-h-10 min-w-10 cursor-pointer rounded-md border border-slate-200 text-slate-600 hover:border-blue-500 hover:text-blue-600 flex items-center justify-center gap-1.5 text-xs font-bold bg-white px-3"
+                        >
+                            <Pencil className="w-4 h-4" />
+                            <span className="sr-only sm:not-sr-only">Edit</span>
+                        </Button>
                     </div>
 
                     <div className=" flex flex-col gap-6 sm:gap-8 px-4 sm:px-8 pb-8 pt-4 sm:pt-0 ">
@@ -640,8 +678,8 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
 
                 {/* RIGHT PANEL */}
                 {
-                    isEditing ? (
-                        <div className="hidden sm:flex flex-row w-full lg:w-[500px] shrink-0">
+                    isEditing && !isMobileLayout ? (
+                        <div className="flex flex-row w-full lg:w-[500px] shrink-0">
                             <EditForm
                                 post={post}
                                 project={project}
@@ -774,7 +812,7 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
                                 {/* ASSIGN THE CASE TO A USER */}
                                 {
                                     clientDetails.role === "client-admin" && (
-                                        <div className="space-y-4 py-3 first:pt-0 border-b border-slate-100 hidden sm:block">
+                                        <div className="space-y-4 py-3 first:pt-0 border-b border-slate-100">
                                             <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Assignment</h4>
                                             <div className="w-full bg-slate-50 p-4 rounded-xl border border-slate-100 flex items-center gap-3">
                                                 {!isAssignEditMode ? (
@@ -910,7 +948,7 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
                                 )}
 
                                 {/* Client Notes Section */}
-                                <div className="space-y-4 pt-6 first:pt-0 hidden sm:block">
+                                <div className="space-y-4 pt-6 first:pt-0">
                                     <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Comments</h4>
 
                                     {localNotes && localNotes.length > 0 ? (
@@ -958,7 +996,7 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
                             </div>
 
                             {/* Footer Action Area */}
-                            <div className=" border-t border-slate-100 bg-white sticky bottom-0 z-10">
+                            <div className="border-t border-slate-100 bg-white sticky bottom-0 z-10 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
 
 
 
@@ -1008,12 +1046,12 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
 
                                         </div>
                                     ) : (
-                                        <div className="w-full flex flex-col sm:flex-row gap-3 sm:gap-4 py-2" >
+                                        <div className="w-full flex flex-col gap-2.5 sm:flex-row sm:gap-4 py-2 px-0 sm:px-0">
                                             <Button
                                                 onClick={() => { if (clientStatus !== 'No Action' && clientStatus !== 'Pass') handleUpdateStatus('No Action') }}
                                                 disabled={isProcessing === 'No Action'}
                                                 className={cn(
-                                                    "flex-1 h-12 font-bold text-white transition-all duration-200 shadow-emerald-900/20 bg-emerald-500",
+                                                    "flex-1 min-h-12 font-bold text-white transition-all duration-200 shadow-emerald-900/20 bg-emerald-500",
                                                     (clientStatus === 'No Action' || clientStatus === 'Pass') ? "opacity-100 cursor-default ring-2 ring-emerald-600 ring-offset-2" : "opacity-50 hover:opacity-100 cursor-pointer hover:bg-emerald-600"
                                                 )}
                                             >
@@ -1024,7 +1062,7 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
                                                 onClick={() => { if (clientStatus !== 'Flag for Takedown') handleUpdateStatus('Flag for Takedown') }}
                                                 disabled={isProcessing === 'Flag for Takedown'}
                                                 className={cn(
-                                                    "flex-1 h-12 font-bold text-white transition-all duration-200",
+                                                    "flex-1 min-h-12 font-bold text-white transition-all duration-200",
                                                     allowDoTakedown ? "shadow-amber-900/20 bg-amber-500" : "shadow-rose-900/20 bg-rose-600",
                                                     clientStatus === 'Flag for Takedown'
                                                         ? cn("opacity-100 cursor-default ring-2 ring-offset-2", allowDoTakedown ? "ring-amber-600" : "ring-rose-700")
@@ -1039,7 +1077,7 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
                                                     onClick={handleTakedown}
                                                     disabled={isProcessing === 'takedown'}
                                                     className={cn(
-                                                        "flex-1 h-12 font-bold text-white transition-all duration-200 shadow-rose-900/20 bg-rose-600",
+                                                        "flex-1 min-h-12 font-bold text-white transition-all duration-200 shadow-rose-900/20 bg-rose-600",
                                                         cn("opacity-50 hover:opacity-100 cursor-pointer hover:bg-rose-700", clientStatus === 'To Be Reviewed' ? "opacity-100" : "")
                                                     )}
                                                 >
@@ -1057,6 +1095,7 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
                 }
             </div>
         </div>
+        </>
     )
 }
 

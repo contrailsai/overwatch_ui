@@ -28,7 +28,6 @@ import { ReportButton } from '@/components/pdf/ReportButton'
 import { DetailedReportButton } from '@/components/pdf/DetailedReportButton'
 import { DetailedReportDocxButton } from '@/components/docx/DetailedReportDocxButton'
 import { Button } from "@/components/ui/button"
-import { Switch } from "@/components/ui/switch"
 import {
   HoverCard,
   HoverCardContent,
@@ -44,16 +43,108 @@ import {
 } from "@/components/ui/dialog"
 // import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
-import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
-import { DateFilterPopover } from '@/components/DateFilterPopover'
-import { ViolationsFilter } from './ViolationsFilter'
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { RiskFilter } from './RiskFilter'
-import { StatusFilter } from './StatusFilter'
-import { PlatformFilter } from './PlatformFilter'
 import ReportGenerate from '@/components/ReportGenerate'
+import { useIsMobile, useIsSmallScreen } from '@/hooks/use-media-query'
+import { CasesFilterPanel } from './CasesFilterPanel'
+import { MobileCasesFilterDrawer } from './MobileCasesFilterDrawer'
 // import SafeDate from '@/components/SafeDate'
+
+function ListSelectionBar({
+  className,
+  showPageCheckbox = true,
+  selectedCount,
+  totalCount,
+  isAllFilterSelected,
+  isSelectingAll,
+  isAllCurrentPageSelected,
+  isSomeCurrentPageSelected,
+  onToggleAllOnPage,
+  onSelectAllFiltered,
+  onClearSelection,
+}) {
+  return (
+    <div
+      className={cn(
+        'flex items-center justify-between gap-2 flex-wrap',
+        className
+      )}
+    >
+      {showPageCheckbox && (
+        <label className="flex items-center gap-2 min-w-0 cursor-pointer shrink-0">
+          <input
+            type="checkbox"
+            checked={isAllCurrentPageSelected}
+            ref={(input) => {
+              if (input) {
+                input.indeterminate =
+                  isSomeCurrentPageSelected && !isAllCurrentPageSelected
+              }
+            }}
+            onChange={onToggleAllOnPage}
+            className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 shrink-0"
+            aria-label="Select all on this page"
+          />
+          <span className="text-[10px] font-bold text-slate-500">This page</span>
+        </label>
+      )}
+
+      <div className="flex items-center gap-2 ml-auto min-w-0 flex-wrap justify-end">
+        {selectedCount === 0 ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onSelectAllFiltered}
+            disabled={isSelectingAll || totalCount === 0}
+            className="h-8 px-2.5 text-[10px] font-bold text-slate-700 border-slate-200 shrink-0"
+          >
+            {isSelectingAll ? (
+              <Loader2 className="w-3 h-3 animate-spin mr-1 text-blue-600" />
+            ) : (
+              <CheckCircle className="w-3 h-3 mr-1 text-slate-400" />
+            )}
+            Select all {totalCount.toLocaleString()} cases
+          </Button>
+        ) : (
+          <>
+            <span className="inline-flex items-center text-[10px] font-bold bg-blue-100 text-blue-700 px-2 py-1 rounded shrink-0">
+              {isAllFilterSelected
+                ? `All ${totalCount.toLocaleString()}`
+                : selectedCount.toLocaleString()}{' '}
+              selected
+            </span>
+            {!isAllFilterSelected && totalCount > selectedCount && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={onSelectAllFiltered}
+                disabled={isSelectingAll}
+                className="h-8 px-2 text-[10px] font-bold text-blue-600 hover:bg-blue-50 shrink-0"
+              >
+                {isSelectingAll ? (
+                  <Loader2 className="w-3 h-3 animate-spin mr-1" />
+                ) : null}
+                Select all {totalCount.toLocaleString()}
+              </Button>
+            )}
+            {onClearSelection && (
+              <button
+                type="button"
+                onClick={onClearSelection}
+                className="text-[10px] font-bold text-slate-500 underline shrink-0"
+              >
+                Clear
+              </button>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
 
 function BulkActionMenu({
   allowDoTakedown,
@@ -66,7 +157,7 @@ function BulkActionMenu({
 }) {
   const anyProcessing = isBulkTakedownProcessing || isBulkNoActionProcessing || isBulkFlagProcessing
 
-  const itemBase = "w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs font-bold text-left transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+  const itemBase = "w-full flex items-center gap-2.5 px-2.5 py-3 min-h-11 rounded-lg text-xs font-bold text-left transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
 
   return (
     <div className="flex flex-col gap-1">
@@ -126,6 +217,8 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
   const [isPending, startTransition] = useTransition()
 
   const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false)
+  const isMobile = useIsMobile()
+  const isSmallScreen = useIsSmallScreen()
 
   const [selectedPost, setSelectedPost] = useState(initialCase || null)
   const [updatedCases, setUpdatedCases] = useState({})
@@ -526,15 +619,178 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
     allowDoTakedown = true;
   }
 
+  const hasActiveFilters =
+    initialFilters.unique_clusters === 'true' ||
+    initialFilters.unique_clusters === true ||
+    initialFilters.platform !== 'all' ||
+    initialFilters.risk_priority !== 'all' ||
+    initialFilters.client_status !== 'all' ||
+    (initialFilters.visibility_status && initialFilters.visibility_status !== 'all') ||
+    (initialFilters.violations && initialFilters.violations !== 'all') ||
+    initialFilters.original_date_from ||
+    initialFilters.original_date_to ||
+    initialFilters.processed_from ||
+    initialFilters.processed_to ||
+    searchParams.get('similar_to') ||
+    searchParams.get('semantic_search')
+
+  const filterPanelProps = {
+    initialFilters,
+    project,
+    allowDoTakedown,
+    handleFilterChange,
+    updateQueryParams,
+    searchTerm,
+    setSearchTerm,
+    handleSearchApply,
+    searchParams,
+    selectedCount,
+    selectedCases,
+    clientDetails,
+    projectEmails,
+    bulkAssignedEmail,
+    setBulkAssignedEmail,
+    handleBulkAssign,
+    isBulkAssigning,
+    isAllFilterSelected,
+    totalCount,
+    isBulkTakedownProcessing,
+    isBulkNoActionProcessing,
+    isBulkFlagProcessing,
+    actionMenuOpen,
+    setActionMenuOpen,
+    onBulkTakedown: () => {
+      setActionMenuOpen(false)
+      setShowBulkTakedownConfirm(true)
+    },
+    onBulkNoAction: () => {
+      setActionMenuOpen(false)
+      setShowBulkNoActionConfirm(true)
+    },
+    onBulkFlag: () => {
+      setActionMenuOpen(false)
+      setShowBulkFlagConfirm(true)
+    },
+    BulkActionMenu,
+    clearFilters,
+  }
+
   return (
-    <div className='flex flex-row h-full overflow-hidden p-0 m-0'>
+    <div className='flex flex-row h-full min-h-0 overflow-hidden p-0 m-0'>
 
       <div className={cn(" flex flex-col h-full bg-slate-50 transition-all duration-300 overflow-hidden", selectedPost ? "hidden md:flex w-[280px] lg:w-[320px] shrink-0 border-r border-slate-200" : "flex-1 w-full")}>
 
         {!selectedPost ? (
           <>
-            {/* Filters & Controls */}
-            <div className="px-3 shrink-0">
+            {/* Mobile compact toolbar */}
+            <div className="lg:hidden shrink-0 px-2 py-1.5 border-b border-slate-100 bg-white">
+              <div className="flex items-center gap-2">
+                <div className="flex items-baseline gap-1 min-w-0 shrink">
+                  <span className="text-base font-black text-slate-800 tabular-nums leading-none">
+                    {totalCount.toLocaleString()}
+                  </span>
+                  <span className="text-[10px] font-semibold text-slate-500">cases</span>
+                  {isPending && <Loader2 className="h-3 w-3 animate-spin text-blue-600 shrink-0" />}
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setIsMobileFiltersOpen(true)}
+                  className="h-8 px-2.5 bg-slate-50 border border-slate-200 rounded-lg text-[11px] font-semibold text-slate-700 gap-1.5 shrink-0"
+                >
+                  <Filter className="w-3.5 h-3.5" />
+                  Filters
+                  {hasActiveFilters && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                  )}
+                </Button>
+                <div className="ml-auto shrink-0">
+                  <ReportGenerate
+                    selectedPostsArray={selectedPostsArray}
+                    selectedCount={selectedCount}
+                    summaryState={summaryState}
+                    detailedPdfState={detailedPdfState}
+                    detailedDocxState={detailedDocxState}
+                    setSummaryState={setSummaryState}
+                    setDetailedPdfState={setDetailedPdfState}
+                    setDetailedDocxState={setDetailedDocxState}
+                    showToast={showToast}
+                    trackClientClick={trackClientClick}
+                    project={project}
+                    showLabel={false}
+                    compact
+                  />
+                </div>
+              </div>
+              {mergedPosts.length > 0 && totalCount > 0 && (
+                <div className="mt-1.5 pt-1.5 border-t border-slate-100">
+                  <ListSelectionBar
+                    showPageCheckbox={false}
+                    selectedCount={selectedCount}
+                    totalCount={totalCount}
+                    isAllFilterSelected={isAllFilterSelected}
+                    isSelectingAll={isSelectingAll}
+                    isAllCurrentPageSelected={isAllCurrentPageSelected}
+                    isSomeCurrentPageSelected={isSomeCurrentPageSelected}
+                    onToggleAllOnPage={handleToggleAllOnPage}
+                    onSelectAllFiltered={handleSelectAllFiltered}
+                    onClearSelection={handleClearAllSelected}
+                  />
+                  {(selectedCount > 0 || hasActiveFilters) && (
+                    <div className="flex items-center gap-2 mt-1.5 overflow-x-auto">
+                      {hasActiveFilters && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={clearFilters}
+                          className="h-7 px-2 text-rose-600 hover:bg-rose-50 text-[10px] font-bold uppercase shrink-0"
+                        >
+                          <X className="w-3 h-3 mr-0.5" /> Clear filters
+                        </Button>
+                      )}
+                      {selectedCount > 0 && (
+                        <Popover open={mobileActionMenuOpen} onOpenChange={setMobileActionMenuOpen}>
+                          <PopoverTrigger asChild>
+                            <Button
+                              size="sm"
+                              disabled={isBulkTakedownProcessing || isBulkNoActionProcessing || isBulkFlagProcessing}
+                              className="h-7 px-2.5 text-[10px] font-bold text-white bg-red-500 hover:bg-red-600 shrink-0"
+                            >
+                              Action ({isAllFilterSelected ? totalCount : selectedCount})
+                              <ChevronDown className={cn("w-3 h-3 ml-0.5", mobileActionMenuOpen && "rotate-180")} />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent align="end" className="min-w-[140px] p-1 z-50">
+                            <BulkActionMenu
+                              allowDoTakedown={allowDoTakedown}
+                              isBulkTakedownProcessing={isBulkTakedownProcessing}
+                              isBulkNoActionProcessing={isBulkNoActionProcessing}
+                              isBulkFlagProcessing={isBulkFlagProcessing}
+                              onDoTakedown={() => { setMobileActionMenuOpen(false); setShowBulkTakedownConfirm(true) }}
+                              onNoAction={() => { setMobileActionMenuOpen(false); setShowBulkNoActionConfirm(true) }}
+                              onFlagForTakedown={() => { setMobileActionMenuOpen(false); setShowBulkFlagConfirm(true) }}
+                            />
+                          </PopoverContent>
+                        </Popover>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <MobileCasesFilterDrawer
+              open={isMobileFiltersOpen}
+              onOpenChange={setIsMobileFiltersOpen}
+              totalCount={totalCount}
+              isPending={isPending}
+              hasActiveFilters={hasActiveFilters}
+              onClearFilters={clearFilters}
+              filterPanelProps={filterPanelProps}
+            />
+
+            {/* Filters & Controls (desktop) */}
+            <div className="hidden lg:block px-3 shrink-0">
               <div className="px-3 py-3">
                 <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
 
@@ -545,18 +801,15 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                     <div className="flex flex-col w-full lg:w-[160px] xl:w-[180px] shrink-0 rounded-xl p-3 relative ">
                       <div className="flex items-start justify-between pb-1">
                         <div className="flex flex-col items-start gap-2">
-                          {/* FILTER TEXT */}
                           <div className="flex items-center gap-1.5">
                             <Filter className="w-3.5 h-3.5 text-blue-600" />
                             <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
                               Filter
                             </span>
-                            {/* LOADING OF DATA  */}
                             {isPending && (
-                              <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-600" />
+                              <Loader2 className=" size-20 animate-spin text-blue-600" />
                             )}
                           </div>
-                          {/* COUNT OF CASES */}
                           <div className="flex items-baseline gap-1.5 mb-3">
                             <span className="text-2xl font-black text-slate-800 tracking-tight leading-none">
                               {totalCount}
@@ -565,71 +818,6 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                               cases found
                             </span>
                           </div>
-                          {/* MOBILE VIEW BUTTONS SETUP */}
-                          <div className="lg:hidden flex flex-col gap-2 items-start">
-                          <Button
-                            variant="ghost"
-                            onClick={() => setIsMobileFiltersOpen(!isMobileFiltersOpen)}
-                            className="bg-white border border-slate-200 rounded-md px-3 h-9 text-xs font-semibold text-slate-700 flex items-center gap-2 shadow-sm hover:border-blue-500 transition-all"
-                          >
-                            <Filter className="w-3.5 h-3.5 text-slate-500" />
-                            {isMobileFiltersOpen ? 'Hide' : 'Filters'}
-                          </Button>
-                          {selectedCount > 0 && (
-                            <Popover open={mobileActionMenuOpen} onOpenChange={setMobileActionMenuOpen}>
-                              <PopoverTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  disabled={isBulkTakedownProcessing || isBulkNoActionProcessing || isBulkFlagProcessing}
-                                  className={cn(
-                                    "h-9 w-full px-3 text-xs font-bold text-white shadow-sm rounded-md transition-all flex items-center justify-between gap-2",
-                                    "bg-red-400 hover:bg-red-500 cursor-pointer"
-                                  )}
-                                  title="Select an action for the selected cases"
-                                >
-                                  <span className="flex items-center gap-1.5">
-                                    Select Action ({isAllFilterSelected ? totalCount : selectedCount})
-                                  </span>
-                                  <ChevronDown className={cn("w-3.5 h-3.5 transition-transform", mobileActionMenuOpen && "rotate-180")} />
-                                </Button>
-                              </PopoverTrigger>
-                              <PopoverContent
-                                align="start"
-                                sideOffset={6}
-                                style={{ width: 'var(--radix-popover-trigger-width)' }}
-                                className="min-w-[140px] p-1 rounded-md border border-slate-200 shadow-lg"
-                              >
-                                <BulkActionMenu
-                                  allowDoTakedown={allowDoTakedown}
-                                  isBulkTakedownProcessing={isBulkTakedownProcessing}
-                                  isBulkNoActionProcessing={isBulkNoActionProcessing}
-                                  isBulkFlagProcessing={isBulkFlagProcessing}
-                                  onDoTakedown={() => { setMobileActionMenuOpen(false); setShowBulkTakedownConfirm(true) }}
-                                  onNoAction={() => { setMobileActionMenuOpen(false); setShowBulkNoActionConfirm(true) }}
-                                  onFlagForTakedown={() => { setMobileActionMenuOpen(false); setShowBulkFlagConfirm(true) }}
-                                />
-                              </PopoverContent>
-                            </Popover>
-                          )}
-                          </div>
-                        </div>
-
-                        {/* MOBILE VIEW BUTTONS SETUP */}
-                        <div className="lg:hidden flex flex-col gap-2">
-                          <ReportGenerate
-                            selectedPostsArray={selectedPostsArray}
-                            selectedCount={selectedCount}
-                            summaryState={summaryState}
-                            detailedPdfState={detailedPdfState}
-                            detailedDocxState={detailedDocxState}
-                            setSummaryState={setSummaryState}
-                            setDetailedPdfState={setDetailedPdfState}
-                            setDetailedDocxState={setDetailedDocxState}
-                            showToast={showToast}
-                            trackClientClick={trackClientClick}
-                            project={project}
-                            showLabel={false}
-                          />
                         </div>
                       </div>
 
@@ -704,309 +892,13 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                       </div>
                     </div>
 
-                    {(() => {
-                      const filterAndActionsContent = (
-                        <div className="flex flex-col lg:flex-row gap-6 lg:gap-4 w-full">
-                          {/* FILTERS & BULK ACTIONS */}
-                          <div className="flex flex-col gap-4 w-full lg:flex-1 ">
-                            <div className="flex flex-col gap-3 w-full">
-
-                              {/* Dropdowns and Dates and text search ..*/}
-                              <div className="flex flex-wrap items-center gap-2.5 sm:gap-3 w-full h-full ">
-
-                                <div className="space-y-1 w-full lg:w-auto lg:flex-1 lg:max-w-[160px]">
-                                  <RiskFilter
-                                    initialRisk={initialFilters.risk_priority || 'all'}
-                                    onChange={(val) => handleFilterChange('risk_priority', val)}
-                                  />
-                                </div>
-
-                                {/* PLATFORM */}
-                                <div className="space-y-1 w-full lg:w-auto lg:flex-1 lg:max-w-[160px]">
-                                  <PlatformFilter
-                                    initialPlatform={initialFilters.platform}
-                                    onChange={(val) => handleFilterChange('platform', val)}
-                                  />
-                                </div>
-
-                                {/* STATUS */}
-                                <div className="space-y-1 w-full lg:w-auto lg:flex-1 lg:max-w-[160px]">
-                                  <StatusFilter
-                                    initialStatus={initialFilters.client_status}
-                                    onChange={(val) => handleFilterChange('client_status', val)}
-                                    options={[
-                                      { value: 'To Be Reviewed', label: 'To Be Reviewed' },
-                                      allowDoTakedown && { value: 'Takedown', label: 'Takedown' },
-                                      { value: 'No Action', label: 'No Action' },
-                                      { value: 'Flag for Takedown', label: 'Flag for Takedown' },
-                                    ].filter(Boolean)}
-                                  />
-                                </div>
-
-                                {/* violations */}
-                                <div className="space-y-1 w-full lg:w-auto lg:min-w-[140px] lg:max-w-[180px]">
-                                  <ViolationsFilter
-                                    projectLabels={project?.project_details?.labels || []}
-                                    initialViolations={initialFilters.violations}
-                                    onChange={(val) => handleFilterChange('violations', val)}
-                                  />
-                                </div>
-
-                                {/* UNIQUE CLUSTERS TOGGLE */}
-                                <div className="space-y-1 w-full lg:w-auto lg:max-w-[120px] flex flex-col justify-end">
-                                  <Label className="text-[10px] uppercase font-bold text-slate-400 mb-1.5">Unique Content</Label>
-                                  <div className="flex items-center gap-2 h-9 border border-slate-200 rounded-md px-2 bg-gray-50 shadow-sm">
-                                    <Switch
-                                      checked={initialFilters.unique_clusters === 'true' || initialFilters.unique_clusters === true}
-                                      onCheckedChange={(checked) => handleFilterChange('unique_clusters', checked ? 'true' : 'false')}
-                                    />
-                                    <span className="text-xs font-semibold text-slate-700"> Unique</span>
-                                  </div>
-                                </div>
-
-                                {/* VISIBILITY STATUS */}
-                                <div className="space-y-1 w-full lg:w-auto lg:flex-1 lg:max-w-[160px]">
-                                  <StatusFilter
-                                    label="Visibility"
-                                    placeholder="All Visibility"
-                                    initialStatus={initialFilters.visibility_status || 'all'}
-                                    onChange={(val) => handleFilterChange('visibility_status', val)}
-                                    options={[
-                                      { value: 'active', label: 'Online' },
-                                      { value: 'down', label: 'Taken Down' },
-                                    ]}
-                                  />
-                                </div>
-
-                                {/* Alert date  */}
-                                <div className="space-y-1 w-full lg:w-auto lg:min-w-[140px] lg:max-w-[160px]">
-                                  <Label className="text-[10px] uppercase font-bold text-slate-400">Alert Date</Label>
-                                  <DateFilterPopover
-                                    title="Alert Date"
-                                    initialFrom={initialFilters.processed_from}
-                                    initialTo={initialFilters.processed_to}
-                                    onApply={(range) => updateQueryParams({
-                                      processed_from: range?.from ? format(range.from, "yyyy-MM-dd'T'HH:mm:ssXXX") : null,
-                                      processed_to: range?.to ? format(range.to, "yyyy-MM-dd'T'HH:mm:ssXXX") : null
-                                    })}
-                                  />
-                                </div>
-
-                                {/* Publishing date  */}
-                                <div className="space-y-1 w-full lg:w-auto lg:min-w-[140px] lg:max-w-[160px]">
-                                  <Label className="text-[10px] uppercase font-bold text-slate-400">Publish Date</Label>
-                                  <DateFilterPopover
-                                    title="Publish Date"
-                                    initialFrom={initialFilters.original_date_from}
-                                    initialTo={initialFilters.original_date_to}
-                                    onApply={(range) => updateQueryParams({
-                                      original_date_from: range?.from ? format(range.from, "yyyy-MM-dd'T'HH:mm:ssXXX") : null,
-                                      original_date_to: range?.to ? format(range.to, "yyyy-MM-dd'T'HH:mm:ssXXX") : null
-                                    })}
-                                  />
-                                </div>
-
-                                {/* Search */}
-                                <div className="space-y-1 w-full sm:max-w-xs shrink-0">
-                                  <Label className="text-[10px] uppercase font-bold text-slate-400">Search</Label>
-                                  <div className="flex items-center gap-2">
-                                    <div className="relative flex-1">
-                                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                        <Search className="h-4 w-4 text-slate-400" />
-                                      </div>
-                                      <input
-                                        type="text"
-                                        value={searchTerm}
-                                        onChange={(e) => setSearchTerm(e.target.value)}
-                                        placeholder="Search by text..."
-                                        className="w-full bg-white border border-slate-200 rounded-md pl-9 pr-3 h-9 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder:text-slate-400 placeholder:font-normal shadow-sm transition-all"
-                                        onKeyDown={(e) => {
-                                          if (e.key === 'Enter') {
-                                            e.preventDefault();
-                                            handleSearchApply();
-                                          }
-                                        }}
-                                      />
-                                    </div>
-                                    <Button
-                                      onClick={handleSearchApply}
-                                      className="h-9 w-9 p-0 shrink-0 bg-blue-600 hover:bg-blue-700 text-white shadow-sm cursor-pointer transition-colors"
-                                      title="Search"
-                                    >
-                                      <Search className="w-4 h-4" />
-                                    </Button>
-                                  </div>
-                                </div>
-
-                                {selectedCount > 0 && (
-                                  <div className="hidden lg:block space-y-1 w-full sm:max-w-xs shrink-0">
-                                    <Label className="text-[10px] uppercase font-bold text-slate-400">Bulk Action</Label>
-                                    <Popover open={actionMenuOpen} onOpenChange={setActionMenuOpen}>
-                                      <PopoverTrigger asChild>
-                                        <Button
-                                          disabled={isBulkTakedownProcessing || isBulkNoActionProcessing || isBulkFlagProcessing}
-                                          className={cn(
-                                            "h-9 font-bold text-white shadow-sm transition-all flex items-center justify-between gap-2",
-                                            "bg-red-400 hover:bg-red-500 cursor-pointer"
-                                          )}
-                                          title="Select an action for the selected cases"
-                                        >
-                                          <span className="flex items-center gap-2">
-                                            Select Action ({isAllFilterSelected ? totalCount : selectedCount})
-                                          </span>
-                                          <ChevronDown className={cn("w-4 h-4 transition-transform", actionMenuOpen && "rotate-180")} />
-                                        </Button>
-                                      </PopoverTrigger>
-                                      <PopoverContent
-                                        align="start"
-                                        sideOffset={6}
-                                        style={{ width: 'var(--radix-popover-trigger-width)' }}
-                                        className="min-w-[150px] p-1 rounded-md border border-slate-200 shadow-lg"
-                                      >
-                                        <BulkActionMenu
-                                          allowDoTakedown={allowDoTakedown}
-                                          isBulkTakedownProcessing={isBulkTakedownProcessing}
-                                          isBulkNoActionProcessing={isBulkNoActionProcessing}
-                                          isBulkFlagProcessing={isBulkFlagProcessing}
-                                          onDoTakedown={() => { setActionMenuOpen(false); setShowBulkTakedownConfirm(true) }}
-                                          onNoAction={() => { setActionMenuOpen(false); setShowBulkNoActionConfirm(true) }}
-                                          onFlagForTakedown={() => { setActionMenuOpen(false); setShowBulkFlagConfirm(true) }}
-                                        />
-                                      </PopoverContent>
-                                    </Popover>
-                                  </div>
-                                )}
-
-                                {/* Active Filters Info Bar */}
-                                {(initialFilters.unique_clusters === 'true' || initialFilters.unique_clusters === true || initialFilters.platform !== 'all' || initialFilters.risk_priority !== 'all' || initialFilters.client_status !== 'all' || (initialFilters.visibility_status && initialFilters.visibility_status !== 'all') || (initialFilters.violations && initialFilters.violations !== 'all') || initialFilters.original_date_from || initialFilters.original_date_to || initialFilters.processed_from || initialFilters.processed_to || searchParams.get('similar_to') || searchParams.get('semantic_search')) && (
-                                  <div className="flex flex-wrap items-center gap-2 bg-slate-50/80 border border-slate-100 rounded-md px-3 h-9 shadow-sm shrink-0 w-full xl:w-auto mt-2 xl:mt-5">
-                                    <span className="text-[10px] uppercase font-bold text-slate-400 mr-1">Active:</span>
-                                    {searchParams.get('similar_to') && (
-                                      <div className="flex items-center gap-1.5 px-2 py-0.5 bg-purple-50 text-purple-700 rounded font-bold text-[10px] uppercase tracking-wider border border-purple-100">
-                                        <Info className="w-3 h-3" />
-                                        Similarity: {searchParams.get('search_type')}
-                                      </div>
-                                    )}
-                                    {searchParams.get('semantic_search') && (
-                                      <div className="flex items-center gap-1.5 px-2 py-0.5 bg-purple-50 text-purple-700 rounded font-bold text-[10px] uppercase tracking-wider border border-purple-100">
-                                        <Search className="w-3 h-3" />
-                                        Text Search
-                                      </div>
-                                    )}
-                                    <Button variant="ghost" size="sm" onClick={clearFilters} className="h-6 px-2 text-rose-600 hover:text-rose-700 hover:bg-rose-50 font-bold text-[10px] uppercase tracking-wider cursor-pointer transition-colors ml-auto">
-                                      <X className="w-3.5 h-3.5 mr-1 text-rose-500" /> Clear Filters
-                                    </Button>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-
-                            <div
-                              className="grid transition-all duration-300 ease-in-out "
-                              style={{ gridTemplateRows: (selectedCount === 1 || (selectedCount > 0 && clientDetails?.permission === "client-admin")) ? '1fr' : '0fr' }}
-                            >
-                              <div className="overflow-hidden">
-                                <div className={cn("flex flex-wrap items-center gap-4 transition-all duration-300 ease-in-out", (selectedCount === 1 || (selectedCount > 0 && clientDetails?.permission === "client-admin")) ? "pt-3 border-t border-slate-100 mt-2" : "pt-0 border-transparent mt-0")}>
-                                  {/* SIMILARITY SEARCHS FOR 1 POST */}
-                                  <div
-                                    className={cn(
-                                      "flex items-center overflow-hidden transition-all duration-300 ease-in-out",
-                                      selectedCount === 1 ? "max-w-[400px] opacity-100 pr-4 lg:border-r border-slate-100 mb-2 lg:mb-0" : "max-h-0 max-w-0 opacity-0 pr-0 border-transparent mb-0"
-                                    )}
-                                  >
-                                    <div className="flex items-center gap-2 w-full lg:w-auto shrink-0">
-                                      <Button
-                                        variant={searchParams.get('similar_to') === Object.keys(selectedCases)[0] && searchParams.get('search_type') === 'text' ? 'default' : 'outline'}
-                                        size="sm"
-                                        onClick={() => {
-                                          const id = Object.keys(selectedCases)[0]
-                                          if (id) updateQueryParams({ similar_to: id, search_type: 'text', semantic_search: null })
-                                        }}
-                                        className={cn(
-                                          "h-8 px-3 text-[10px] font-bold uppercase tracking-wider flex-1 lg:flex-none shadow-sm",
-                                          searchParams.get('similar_to') === Object.keys(selectedCases)[0] && searchParams.get('search_type') === 'text'
-                                            ? "bg-blue-600 text-white hover:bg-blue-700"
-                                            : "bg-white border-blue-200 text-blue-700 hover:bg-blue-50"
-                                        )}
-                                      >
-                                        <Search className="w-3 h-3 mr-1.5" />
-                                        Find Similar (Text)
-                                      </Button>
-                                      <Button
-                                        variant={searchParams.get('similar_to') === Object.keys(selectedCases)[0] && searchParams.get('search_type') === 'image' ? 'default' : 'outline'}
-                                        size="sm"
-                                        onClick={() => {
-                                          const id = Object.keys(selectedCases)[0]
-                                          if (id) updateQueryParams({ similar_to: id, search_type: 'image', semantic_search: null })
-                                        }}
-                                        className={cn(
-                                          "h-8 px-3 text-[10px] font-bold uppercase tracking-wider flex-1 lg:flex-none shadow-sm",
-                                          searchParams.get('similar_to') === Object.keys(selectedCases)[0] && searchParams.get('search_type') === 'image'
-                                            ? "bg-emerald-600 text-white hover:bg-emerald-700"
-                                            : "bg-white border-emerald-200 text-emerald-700 hover:bg-emerald-50"
-                                        )}
-                                      >
-                                        <Search className="w-3 h-3 mr-1.5" />
-                                        Find Similar (Image)
-                                      </Button>
-                                    </div>
-                                  </div>
-
-                                  {/* BULK ASSIGN FUNCTIONALITY */}
-                                  {clientDetails?.permission === "client-admin" && (
-                                    <div className="flex flex-col lg:flex-row items-start lg:items-center gap-3 w-full lg:max-w-lg">
-                                      <div className="flex items-center gap-2 px-2.5 py-1.5 bg-blue-50 text-blue-700 rounded-md border border-blue-100 whitespace-nowrap">
-                                        <UserPlus className="w-3.5 h-3.5" />
-                                        <span className="text-[10px] font-bold uppercase tracking-wider">Bulk Assignment</span>
-                                      </div>
-                                      <select
-                                        value={bulkAssignedEmail}
-                                        onChange={(e) => setBulkAssignedEmail(e.target.value)}
-                                        className="w-full bg-white border border-slate-200 rounded-md px-3 h-9 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
-                                      >
-                                        <option value="">Select team member to assign these cases</option>
-                                        {projectEmails?.map((userObj) => (
-                                          <option key={userObj.email} value={userObj.email}>
-                                            {userObj.alias || userObj.email}
-                                          </option>
-                                        ))}
-                                      </select>
-                                      <Button
-                                        onClick={handleBulkAssign}
-                                        disabled={!bulkAssignedEmail || isBulkAssigning}
-                                        className="w-full lg:w-auto h-9 px-6 cursor-pointer bg-blue-600 hover:bg-blue-700 text-white font-bold transition-all shadow-sm shrink-0"
-                                      >
-                                        {isBulkAssigning ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Check className="w-4 h-4 mr-2" />}
-                                        Assign {selectedCount} {selectedCount === 1 ? 'Case' : 'Cases'}
-                                      </Button>
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      );
-
-                      return (
-                        <>
-                          {/* Desktop View */}
-                          <div className="hidden lg:flex w-full">
-                            {filterAndActionsContent}
-                          </div>
-
-                          {/* Mobile View (Dialog) */}
-                          <Dialog open={isMobileFiltersOpen} onOpenChange={setIsMobileFiltersOpen}>
-                            <DialogContent className="lg:hidden w-[95vw] max-w-md rounded-2xl p-5 max-h-[90vh] overflow-y-auto">
-                              <DialogHeader className="mb-2 text-left">
-                                <DialogTitle className="text-xl font-black text-slate-800">Filters & Options</DialogTitle>
-                              </DialogHeader>
-                              {filterAndActionsContent}
-                            </DialogContent>
-                          </Dialog>
-                        </>
-                      );
-                    })()}
+                    <div className="hidden lg:flex w-full">
+                      <CasesFilterPanel
+                        layout="row"
+                        showBulkActionPopover
+                        {...filterPanelProps}
+                      />
+                    </div>
 
                     {/* Right: Actions & Counts */}
                     {/* Report Download - hidden on mobile dialog as it's now outside */}
@@ -1031,10 +923,147 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
               </div>
             </div>
 
-            {/* Main Table */}
+            {/* Main list */}
             <div className="flex-1 min-h-0 flex flex-col">
-              <div className="flex-1 min-h-0 bg-white shadow-sm border border-slate-200 flex flex-col overflow-hidden">
-                <div className="flex-1 overflow-auto custom-scrollbar relative">
+              <div className="flex-1 min-h-0 bg-white shadow-sm border-x-0 border-t border-b border-slate-200 md:border flex flex-col overflow-hidden md:mx-0 md:rounded-none">
+                {mergedPosts.length === 0 ? (
+                  <div className="flex flex-1 flex-col items-center justify-center py-16 px-6 text-slate-400">
+                    <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mb-6 border border-slate-100">
+                      <Search className="w-8 h-8 opacity-20 text-slate-500" />
+                    </div>
+                    <h3 className="text-lg font-bold text-slate-700 mb-1">No active cases found</h3>
+                    <p className="text-sm text-slate-500 max-w-xs text-center">Try adjusting your filters or search for different criteria.</p>
+                    <Button variant="outline" onClick={clearFilters} className="mt-6 min-h-11 border-slate-200">
+                      Clear all filters
+                    </Button>
+                  </div>
+                ) : (
+                <>
+                {/* Mobile card list */}
+                <div className="md:hidden flex-1 overflow-y-auto custom-scrollbar">
+                  <div className="sticky top-0 z-20 px-2 py-1.5 bg-slate-50/95 backdrop-blur-md border-b border-slate-100">
+                    <ListSelectionBar
+                      selectedCount={selectedCount}
+                      totalCount={totalCount}
+                      isAllFilterSelected={isAllFilterSelected}
+                      isSelectingAll={isSelectingAll}
+                      isAllCurrentPageSelected={isAllCurrentPageSelected}
+                      isSomeCurrentPageSelected={isSomeCurrentPageSelected}
+                      onToggleAllOnPage={handleToggleAllOnPage}
+                      onSelectAllFiltered={handleSelectAllFiltered}
+                      onClearSelection={selectedCount > 0 ? handleClearAllSelected : undefined}
+                    />
+                  </div>
+                  <div className="divide-y divide-slate-100">
+                    {mergedPosts.map((post) => {
+                      const currentPost = { ...post, client_status: updatedCases[post._id] || post.client_status }
+                      const riskScore = currentPost.review_details?.threat_score
+                      const risk = getRiskLabel(riskScore)
+                      const statusConfig = getStatusConfig(currentPost)
+                      const StatusIcon = statusConfig.icon
+                      const isSelectedRow = !!selectedCases[currentPost._id]
+                      const isPanelOpen = selectedPost?._id === currentPost._id
+                      const isSourcePost = searchParams.get('similar_to') === currentPost._id
+
+                      return (
+                        <article
+                          key={currentPost._id}
+                          ref={el => { postRefs.current[currentPost._id] = el }}
+                          className={cn(
+                            "flex items-stretch gap-2 px-2 py-2 transition-colors active:bg-slate-100",
+                            isPanelOpen && "bg-blue-50/60 ring-1 ring-inset ring-blue-200",
+                            isSelectedRow && !isPanelOpen && "bg-slate-50",
+                            isSourcePost && "border-l-[3px] border-l-blue-600"
+                          )}
+                        >
+                          <div className="flex items-center shrink-0" onClick={(e) => e.stopPropagation()}>
+                            <input
+                              type="checkbox"
+                              checked={isSelectedRow}
+                              onChange={(e) => handleToggleCase(currentPost, e)}
+                              className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                              aria-label={`Select case ${currentPost._id}`}
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedPost(currentPost)}
+                            className="flex-1 min-w-0 text-left flex gap-2.5 items-stretch"
+                          >
+                            <div className="shrink-0 w-[4.25rem] self-stretch min-h-[4.25rem]">
+                              {post.signedImageUrl ? (
+                                <div className="h-full w-full rounded-lg overflow-hidden border border-slate-200 bg-slate-200">
+                                  <img src={post.signedImageUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
+                                </div>
+                              ) : (
+                                <div className="h-full w-full min-h-[4.25rem] rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-center">
+                                  <Quote className="h-6 w-6 text-slate-300" />
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0 flex flex-col justify-center gap-0.5 py-0.5">
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <span className={cn("inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-black uppercase border shrink-0", risk.color)}>
+                                  {risk.label}
+                                </span>
+                                <span className={cn("inline-flex items-center justify-center w-6 h-6 rounded-full border shrink-0", statusConfig.color)}>
+                                  <StatusIcon className="w-3 h-3" />
+                                </span>
+                                {isSourcePost && (
+                                  <span className="text-[8px] font-black bg-blue-600 text-white px-1 py-0.5 rounded uppercase shrink-0">Src</span>
+                                )}
+                                <span className="flex items-center gap-1 min-w-0 flex-1">
+                                  {post.platform === 'instagram' ? <Instagram className="size-3.5 text-pink-500 shrink-0" />
+                                    : post.platform === 'facebook' ? <Facebook className="size-3.5 text-blue-600 shrink-0" />
+                                      : post.platform === 'x' ? <Twitter className="size-3.5 text-slate-900 shrink-0" />
+                                        : post.platform === 'youtube' ? <Youtube className="size-3.5 text-red-600 shrink-0" />
+                                          : post.platform === 'reddit' ? <Reddit className="size-3.5 text-red-600 shrink-0" />
+                                            : null}
+                                  <span className="font-bold text-slate-900 text-xs truncate">
+                                    @{post.user?.username || 'unknown'}
+                                  </span>
+                                </span>
+                                <a
+                                  href={post.original_url ? post.original_url : getPostLink(post)}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="shrink-0 p-1 -mr-1 text-blue-600 hover:bg-blue-50 rounded-md"
+                                  aria-label="Open source post"
+                                >
+                                  <ExternalLink className="w-3.5 h-3.5" />
+                                </a>
+                              </div>
+                              <p className="text-[11px] text-slate-600 line-clamp-2 leading-[1.35]">
+                                {post.caption || <span className="italic text-slate-400">No caption</span>}
+                              </p>
+                            </div>
+                            <ChevronRight className={cn("w-4 h-4 shrink-0 self-center", isPanelOpen ? "text-blue-600" : "text-slate-300")} />
+                          </button>
+                        </article>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                {/* Tablet: table without desktop sidebar — selection bar */}
+                <div className="hidden md:flex lg:hidden shrink-0 px-2 py-1.5 bg-slate-50/95 border-b border-slate-100">
+                  <ListSelectionBar
+                    className="w-full"
+                    selectedCount={selectedCount}
+                    totalCount={totalCount}
+                    isAllFilterSelected={isAllFilterSelected}
+                    isSelectingAll={isSelectingAll}
+                    isAllCurrentPageSelected={isAllCurrentPageSelected}
+                    isSomeCurrentPageSelected={isSomeCurrentPageSelected}
+                    onToggleAllOnPage={handleToggleAllOnPage}
+                    onSelectAllFiltered={handleSelectAllFiltered}
+                    onClearSelection={selectedCount > 0 ? handleClearAllSelected : undefined}
+                  />
+                </div>
+
+                {/* Desktop table */}
+                <div className="hidden md:block flex-1 overflow-auto custom-scrollbar relative">
                   <table className="min-w-full table-fixed border-separate border-spacing-0">
                     <thead className="sticky top-0 z-20">
                       <tr className="bg-slate-50/90 backdrop-blur-md">
@@ -1390,36 +1419,25 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                     </tbody>
                   </table>
                 </div>
-
-                {mergedPosts.length === 0 && (
-                  <div className="flex flex-col items-center justify-center py-24 text-slate-400">
-                    <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mb-6 border border-slate-100">
-                      <Search className="w-8 h-8 opacity-20 text-slate-500" />
-                    </div>
-                    <h3 className="text-lg font-bold text-slate-700 mb-1">No active cases found</h3>
-                    <p className="text-sm text-slate-500 max-w-xs text-center">Try adjusting your filters or search for different criteria.</p>
-                    <Button variant="outline" onClick={clearFilters} className="mt-6 border-slate-200">
-                      Clear all filters
-                    </Button>
-                  </div>
+                </>
                 )}
               </div>
             </div>
 
             {/* Pagination Controls */}
             {totalCount > 0 && (
-              <div className="px-3 sm:px-6 pb-2 pt-2">
-                <div className=" px-3 sm:px-4 py-1 flex flex-col lg:flex-row items-center justify-between gap-3 lg:gap-0">
-                  <div className="flex items-center justify-between w-full lg:w-auto gap-4 sm:gap-6">
-                    <div className="flex items-center gap-2 sm:gap-3">
+              <div className="px-2 sm:px-6 pb-[max(0.25rem,env(safe-area-inset-bottom))] pt-1 md:pt-2 shrink-0 border-t border-slate-100 bg-white md:bg-transparent md:border-t-0">
+                <div className="px-1 sm:px-4 py-0.5 md:py-1 flex flex-col lg:flex-row items-center justify-between gap-2 lg:gap-0">
+                  <div className="flex items-center justify-between w-full lg:w-auto gap-2 sm:gap-6">
+                    <div className="flex items-center gap-1.5 sm:gap-3">
                       <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap hidden sm:inline">Show:</span>
-                      <div className="flex bg-slate-50 border border-slate-200 rounded-lg p-0.5">
+                      <div className="flex bg-slate-50 border border-slate-200 rounded-md p-0.5">
                         {[10, 25, 50, 75, 100].map((limit) => (
                           <button
                             key={limit}
                             onClick={() => updateQueryParams({ limit: limit.toString(), page: 1 })}
                             className={cn(
-                              "px-2 sm:px-2.5 py-1 text-[10px] font-bold transition-all rounded-md cursor-pointer",
+                              "px-1.5 sm:px-2.5 py-0.5 sm:py-1 text-[9px] sm:text-[10px] font-bold transition-all rounded cursor-pointer",
                               itemsPerPage === limit
                                 ? "bg-white text-blue-600 shadow-sm ring-1 ring-slate-200"
                                 : "text-slate-500 hover:text-slate-700 hover:bg-slate-100"
@@ -1432,19 +1450,20 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                       <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap hidden sm:inline">per page</span>
                     </div>
 
-                    <div className="text-[10px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">
-                      Page <span className="text-slate-900">{currentPage}</span> / <span className="text-slate-900">{totalPages || 1}</span>
+                    <div className="text-[9px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap tabular-nums">
+                      <span className="md:hidden">{currentPage}/{totalPages || 1}</span>
+                      <span className="hidden md:inline">Page <span className="text-slate-900">{currentPage}</span> / <span className="text-slate-900">{totalPages || 1}</span></span>
                     </div>
                   </div>
 
                   {totalPages > 1 && (
-                    <div className="flex items-center gap-1 sm:gap-2 w-full lg:w-auto justify-between lg:justify-end mt-2 lg:mt-0">
+                    <div className="flex items-center gap-0.5 sm:gap-2 w-full lg:w-auto justify-between lg:justify-end mt-0 lg:mt-0">
                       <Button
                         variant="outline"
                         size="sm"
                         onClick={() => handlePageChange(1)}
                         disabled={currentPage === 1}
-                        className="h-8 sm:h-9 px-2 text-xs font-bold border-slate-200 hover:bg-slate-50 disabled:opacity-50 hidden sm:flex"
+                        className="h-7 sm:h-9 px-2 text-xs font-bold border-slate-200 hover:bg-slate-50 disabled:opacity-50 hidden sm:flex"
                         title="First Page"
                       >
                         &lt;&lt;
@@ -1454,9 +1473,9 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                         size="sm"
                         onClick={() => handlePageChange(currentPage - 1)}
                         disabled={currentPage === 1}
-                        className="h-8 sm:h-9 px-2 sm:px-3 text-xs font-bold border-slate-200 hover:bg-slate-50 disabled:opacity-50 flex-1 sm:flex-none"
+                        className="h-7 w-8 sm:h-9 sm:w-auto p-0 sm:px-3 text-xs font-bold border-slate-200 hover:bg-slate-50 disabled:opacity-50"
                       >
-                        <ChevronLeft className="w-4 h-4 sm:mr-1" /> <span className="hidden sm:inline">Previous</span>
+                        <ChevronLeft className="w-4 h-4" />
                       </Button>
 
                       <div className="flex items-center gap-1 mx-0 sm:mx-1">
@@ -1465,18 +1484,16 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                           let start = Math.max(1, currentPage - 2);
                           let end = Math.min(totalPages, currentPage + 2);
 
-                          // For mobile, show fewer pages
-                          let isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
-                          if (isMobile) {
+                          if (isSmallScreen) {
                             start = Math.max(1, currentPage - 1);
                             end = Math.min(totalPages, currentPage + 1);
                           }
 
-                          if (currentPage <= (isMobile ? 1 : 2)) {
-                            end = Math.min(totalPages, isMobile ? 3 : 5);
+                          if (currentPage <= (isSmallScreen ? 1 : 2)) {
+                            end = Math.min(totalPages, isSmallScreen ? 3 : 5);
                           }
-                          if (currentPage >= totalPages - (isMobile ? 0 : 1)) {
-                            start = Math.max(1, totalPages - (isMobile ? 2 : 4));
+                          if (currentPage >= totalPages - (isSmallScreen ? 0 : 1)) {
+                            start = Math.max(1, totalPages - (isSmallScreen ? 2 : 4));
                           }
 
                           for (let i = start; i <= end; i++) {
@@ -1490,7 +1507,7 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                               size="sm"
                               onClick={() => handlePageChange(pageNum)}
                               className={cn(
-                                "h-8 w-8 sm:h-9 sm:w-9 p-0 text-xs font-bold",
+                                "h-7 w-7 sm:h-9 sm:w-9 p-0 text-[10px] sm:text-xs font-bold",
                                 currentPage === pageNum
                                   ? "bg-slate-800 hover:bg-slate-900 text-white shadow-sm"
                                   : "border-slate-200 text-slate-600 hover:bg-slate-50"
@@ -1507,16 +1524,16 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                         size="sm"
                         onClick={() => handlePageChange(currentPage + 1)}
                         disabled={currentPage === totalPages}
-                        className="h-8 sm:h-9 px-2 sm:px-3 text-xs font-bold border-slate-200 hover:bg-slate-50 disabled:opacity-50 flex-1 sm:flex-none"
+                        className="h-7 w-8 sm:h-9 sm:w-auto p-0 sm:px-3 text-xs font-bold border-slate-200 hover:bg-slate-50 disabled:opacity-50"
                       >
-                        <span className="hidden sm:inline">Next</span> <ChevronRight className="w-4 h-4 sm:ml-1" />
+                        <ChevronRight className="w-4 h-4" />
                       </Button>
                       <Button
                         variant="outline"
                         size="sm"
                         onClick={() => handlePageChange(totalPages)}
                         disabled={currentPage === totalPages}
-                        className="h-8 sm:h-9 px-2 text-xs font-bold border-slate-200 hover:bg-slate-50 disabled:opacity-50 hidden sm:flex"
+                        className="h-7 sm:h-9 px-2 text-xs font-bold border-slate-200 hover:bg-slate-50 disabled:opacity-50 hidden sm:flex"
                         title="Last Page"
                       >
                         &gt;&gt;
@@ -1628,6 +1645,7 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
         project={project}
         clientDetails={clientDetails}
         isOpen={!!selectedPost}
+        isMobileLayout={isMobile}
         onClose={() => {
           setSelectedPost(null)
 

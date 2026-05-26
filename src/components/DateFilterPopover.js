@@ -1,287 +1,428 @@
-import { useState, useEffect } from 'react';
-import { format } from 'date-fns';
-import { CalendarIcon, Clock2Icon, ChevronDown } from 'lucide-react';
+'use client'
 
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
-import { Calendar } from '@/components/ui/calendar';
-import { Button } from '@/components/ui/button';
-import { cn } from "@/lib/utils";
+import { useState, useEffect } from 'react'
+import { format } from 'date-fns'
+import { CalendarIcon, Clock2Icon, ChevronDown } from 'lucide-react'
 
-// Generate ["00:00", "00:30", "01:00" ... "23:30"]
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
+import { Calendar } from '@/components/ui/calendar'
+import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
+import { useIsMobile } from '@/hooks/use-media-query'
+
 const halfHourOptions = Array.from({ length: 48 }).map((_, i) => {
-    const totalMinutes = i * 30;
-    const hours = Math.floor(totalMinutes / 60);
-    const mins = totalMinutes % 60;
-    return `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
-});
+  const totalMinutes = i * 30
+  const hours = Math.floor(totalMinutes / 60)
+  const mins = totalMinutes % 60
+  return `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}`
+})
 
-// Helper to extract 24-hour time (e.g., "13:30")
 const get24HourString = (date) => {
-    if (!date) return "00:00";
-    const d = new Date(date);
-    // Round to nearest 30 mins for the picker display if needed, 
-    // but usually we just want to show the actual time if it's set
-    return format(d, "HH:mm");
-};
-
-function CustomTimePicker({ date, onChange, disabled }) {
-    const time24 = get24HourString(date);
-
-    const updateDate = (newTime24) => {
-        if (!date) return;
-        const [h, m] = newTime24.split(':').map(Number);
-
-        const updated = new Date(date);
-        updated.setHours(h, m, 0, 0);
-        onChange(updated);
-    };
-
-    return (
-        <Popover>
-            <PopoverTrigger asChild>
-                <Button
-                    variant="outline"
-                    role="combobox"
-                    disabled={disabled}
-                    className={cn(
-                        "w-full justify-between bg-transparent border-slate-200 font-normal h-9",
-                        !date && "text-muted-foreground"
-                    )}
-                >
-                    <div className="flex items-center gap-2">
-                        <Clock2Icon className="h-4 w-4 opacity-50" />
-                        {date ? time24 : "Select time"}
-                    </div>
-                    <ChevronDown className="h-4 w-4 opacity-50" />
-                </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0 flex h-[200px]" align="start">
-                <div className="flex flex-col w-32 overflow-y-auto p-1 custom-scrollbar">
-                    {halfHourOptions.map((t) => (
-                        <Button
-                            key={t}
-                            variant="ghost"
-                            className={cn(
-                                "justify-center font-normal px-2 py-1 h-8 shrink-0",
-                                time24 === t && "bg-blue-600 text-white hover:bg-blue-700 hover:text-white"
-                            )}
-                            onClick={() => updateDate(t)}
-                        >
-                            {t}
-                        </Button>
-                    ))}
-                </div>
-            </PopoverContent>
-        </Popover>
-    );
+  if (!date) return '00:00'
+  return format(new Date(date), 'HH:mm')
 }
 
-export function DateFilterPopover({ title, onApply, initialFrom, initialTo }) {
-    const [open, setOpen] = useState(false);
-    const [hoveredDate, setHoveredDate] = useState(null);
-    const [dateRange, setDateRange] = useState({
-        from: initialFrom ? new Date(initialFrom) : undefined,
-        to: initialTo ? new Date(initialTo) : undefined,
-    });
-    const [appliedRange, setAppliedRange] = useState({
-        from: initialFrom ? new Date(initialFrom) : undefined,
-        to: initialTo ? new Date(initialTo) : undefined,
-    });
+function CustomTimePicker({ date, onChange, disabled, useNativeSelect }) {
+  const time24 = get24HourString(date)
 
-    useEffect(() => {
-        setDateRange({
-            from: initialFrom ? new Date(initialFrom) : undefined,
-            to: initialTo ? new Date(initialTo) : undefined,
-        });
-        setAppliedRange({
-            from: initialFrom ? new Date(initialFrom) : undefined,
-            to: initialTo ? new Date(initialTo) : undefined,
-        });
-    }, [initialFrom, initialTo]);
+  const updateDate = (newTime24) => {
+    if (!date) return
+    const [h, m] = newTime24.split(':').map(Number)
+    const updated = new Date(date)
+    updated.setHours(h, m, 0, 0)
+    onChange(updated)
+  }
 
-    const handleOpenChange = (newOpen) => {
-        if (!newOpen) {
-            setDateRange({ ...appliedRange });
-        }
-        setOpen(newOpen);
-    };
-
-    const handleApply = () => {
-        if (!dateRange.from || !dateRange.to) {
-            setDateRange({ from: undefined, to: undefined });
-            setAppliedRange({ from: undefined, to: undefined });
-            onApply({ from: null, to: null });
-        } else {
-            setAppliedRange({ ...dateRange });
-            onApply(dateRange);
-        }
-        setOpen(false);
-    };
-
-    const handleClear = () => {
-        setDateRange({ from: undefined, to: undefined });
-        setAppliedRange({ from: undefined, to: undefined });
-        onApply({ from: null, to: null });
-        setOpen(false);
-    };
-
-    const handleDateSelect = (newRange, selectedDay) => {
-        if (!selectedDay) return;
-
-        if (!dateRange?.from || (dateRange?.from && dateRange?.to)) {
-            const newFrom = new Date(selectedDay);
-            if (dateRange?.from) {
-                newFrom.setHours(dateRange.from.getHours(), dateRange.from.getMinutes(), 0, 0);
-            } else {
-                newFrom.setHours(0, 0, 0, 0);
-            }
-            setDateRange({ from: newFrom, to: undefined });
-            return;
-        }
-
-        let rawFrom = dateRange.from;
-        let rawTo = selectedDay;
-
-        const dayFrom = new Date(rawFrom).setHours(0, 0, 0, 0);
-        const dayTo = new Date(rawTo).setHours(0, 0, 0, 0);
-
-        if (dayTo < dayFrom) {
-            rawTo = dateRange.from;
-            rawFrom = selectedDay;
-        }
-
-        const updatedRange = {
-            from: new Date(rawFrom),
-            to: new Date(rawTo),
-        };
-
-        if (updatedRange.from) {
-            if (dateRange?.from && rawFrom === dateRange.from) {
-                updatedRange.from.setHours(dateRange.from.getHours(), dateRange.from.getMinutes(), 0, 0);
-            } else {
-                updatedRange.from.setHours(0, 0, 0, 0);
-            }
-        }
-
-        if (updatedRange.to) {
-            if (dateRange?.to && rawTo === dateRange.to) {
-                updatedRange.to.setHours(dateRange.to.getHours(), dateRange.to.getMinutes(), 0, 0);
-            } else {
-                updatedRange.to.setHours(23, 30, 0, 0);
-            }
-        }
-
-        setDateRange(updatedRange);
-    };
-
+  if (useNativeSelect) {
     return (
-        <Popover open={open} onOpenChange={handleOpenChange} modal={false}>
-            <PopoverTrigger asChild>
-                <Button variant="outline" className="w-full justify-start text-left font-normal bg-white border-slate-200 h-9 text-xs shadow-none hover:bg-slate-50">
-                    <CalendarIcon className="h-3.5 w-3.5 mr-2 shrink-0 text-slate-400" />
-                    {appliedRange?.from ? (
-                        appliedRange.to ? (
-                            <span className="truncate text-slate-900">
-                                {format(appliedRange.from, "LLL dd")} - {format(appliedRange.to, "LLL dd")}
-                            </span>
-                        ) : (
-                            <span className="truncate text-slate-900">{format(appliedRange.from, "LLL dd, y")}</span>
-                        )
-                    ) : (
-                        <span className="text-slate-500 truncate">{title}</span>
-                    )}
-                </Button>
-            </PopoverTrigger>
+      <select
+        value={date ? time24 : ''}
+        disabled={disabled}
+        onChange={(e) => updateDate(e.target.value)}
+        className={cn(
+          'w-full h-9 rounded-md border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-900',
+          'focus:outline-none focus:ring-1 focus:ring-blue-500',
+          disabled && 'opacity-50 cursor-not-allowed'
+        )}
+      >
+        {!date && <option value="">Select time</option>}
+        {halfHourOptions.map((t) => (
+          <option key={t} value={t}>
+            {t}
+          </option>
+        ))}
+      </select>
+    )
+  }
 
-            <PopoverContent 
-                className="w-auto p-1 py-2 overflow-y-auto overflow-x-hidden custom-scrollbar" 
-                align="start"
-                collisionPadding={20}
+  return (
+    <Popover modal>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          role="combobox"
+          disabled={disabled}
+          className={cn(
+            'w-full justify-between bg-transparent border-slate-200 font-normal h-9',
+            !date && 'text-muted-foreground'
+          )}
+        >
+          <div className="flex items-center gap-2">
+            <Clock2Icon className="h-4 w-4 opacity-50" />
+            {date ? time24 : 'Select time'}
+          </div>
+          <ChevronDown className="h-4 w-4 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-0 flex h-[200px] z-[110]" align="start">
+        <div className="flex flex-col w-32 overflow-y-auto p-1 custom-scrollbar overscroll-contain">
+          {halfHourOptions.map((t) => (
+            <Button
+              key={t}
+              variant="ghost"
+              className={cn(
+                'justify-center font-normal px-2 py-1 h-8 shrink-0',
+                time24 === t && 'bg-blue-600 text-white hover:bg-blue-700 hover:text-white'
+              )}
+              onClick={() => updateDate(t)}
             >
-                <Card className="w-full sm:w-fit shadow-none border-0 pt-0">
-                    <CardHeader className="border-b pt-3 px-3 pb-3 m-0 flex flex-col sm:flex-row gap-4 sm:gap-8 bg-slate-50/50">
-                        <div className="w-full text-xs">
-                            <span className="text-slate-500">Filter by</span>
-                            <br />
-                            <span className='font-semibold text-lg text-slate-900'>
-                                {title}
-                            </span>
-                        </div>
-                        <div className="flex w-full justify-start sm:justify-end items-center">
-                            <div className="flex flex-col gap-1 text-[11px]">
-                                <div className="flex justify-between items-center gap-4">
-                                    <span className="font-medium text-slate-400 uppercase tracking-wider">From:</span>
-                                    <span className="text-slate-900 font-bold">
-                                        {dateRange?.from ? format(dateRange.from, "do MMM yyyy - HH:mm") : "—"}
-                                    </span>
-                                </div>
-                                <div className="flex justify-between items-center gap-4">
-                                    <span className="font-medium text-slate-400 uppercase tracking-wider">To:</span>
-                                    <span className="text-slate-900 font-bold">
-                                        {dateRange?.to ? format(dateRange.to, "do MMM yyyy - HH:mm") : "—"}
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-                    </CardHeader>
+              {t}
+            </Button>
+          ))}
+        </div>
+      </PopoverContent>
+    </Popover>
+  )
+}
 
-                    <CardContent className="flex flex-col sm:flex-row gap-4 py-4 m-0 px-3 sm:px-4">
-                        <div className="flex flex-col gap-3 w-full">
-                            <Calendar
-                                mode="range"
-                                defaultMonth={dateRange?.from}
-                                numberOfMonths={1}
-                                selected={dateRange}
-                                onSelect={handleDateSelect}
-                                onDayMouseEnter={(day) => setHoveredDate(day)}
-                                onDayMouseLeave={() => setHoveredDate(null)}
-                                disabled={{ after: new Date() }}
-                                className="rounded-md border-none p-0 w-full flex-1"
-                            />
-                        </div>
+function DateFilterPickerBody({
+  title,
+  dateRange,
+  setDateRange,
+  onDateSelect,
+  onClear,
+  onApply,
+  useNativeSelect,
+  stacked,
+}) {
+  const summaryBlock = (
+    <div className="flex flex-col gap-0.5 text-[10px] min-w-0">
+      <div className="flex items-center justify-end gap-2">
+        <span className="font-medium text-slate-400 uppercase tracking-wide shrink-0">From</span>
+        <span className="text-slate-900 font-semibold truncate">
+          {dateRange?.from ? format(dateRange.from, stacked ? 'do MMM yyyy - HH:mm' : 'dd MMM, HH:mm') : '—'}
+        </span>
+      </div>
+      <div className="flex items-center justify-end gap-2">
+        <span className="font-medium text-slate-400 uppercase tracking-wide shrink-0">To</span>
+        <span className="text-slate-900 font-semibold truncate">
+          {dateRange?.to ? format(dateRange.to, stacked ? 'do MMM yyyy - HH:mm' : 'dd MMM, HH:mm') : '—'}
+        </span>
+      </div>
+    </div>
+  )
 
-                        <div className="flex flex-col gap-4 sm:border-l sm:pl-4 sm:min-w-[180px] justify-start w-full sm:w-auto mt-2 sm:mt-0 pt-4 sm:pt-0 border-t sm:border-t-0 px-1 sm:px-0">
-                            <FieldGroup className="gap-4">
-                                <Field>
-                                    <FieldLabel className="text-[10px] uppercase font-bold text-slate-400 mb-1 block">From Time</FieldLabel>
-                                    <CustomTimePicker
-                                        date={dateRange.from}
-                                        disabled={!dateRange.from}
-                                        onChange={(d) => setDateRange(prev => ({ ...prev, from: d }))}
-                                    />
-                                </Field>
+  const timeAndActions = (
+    <div className={cn('flex flex-col gap-2', !stacked && 'min-w-[148px]')}>
+      <FieldGroup className="gap-2">
+        <Field className="gap-1">
+          <FieldLabel className="text-[10px] uppercase font-bold text-slate-400">
+            From Time
+          </FieldLabel>
+          <CustomTimePicker
+            date={dateRange.from}
+            disabled={!dateRange.from}
+            useNativeSelect={useNativeSelect}
+            onChange={(d) => setDateRange((prev) => ({ ...prev, from: d }))}
+          />
+        </Field>
+        <Field className="gap-1">
+          <FieldLabel className="text-[10px] uppercase font-bold text-slate-400">
+            To Time
+          </FieldLabel>
+          <CustomTimePicker
+            date={dateRange.to}
+            disabled={!dateRange.to}
+            useNativeSelect={useNativeSelect}
+            onChange={(d) => setDateRange((prev) => ({ ...prev, to: d }))}
+          />
+        </Field>
+      </FieldGroup>
+      <div className="flex flex-col gap-1.5 pt-0.5">
+        <Button
+          variant="ghost"
+          className="w-full text-xs h-8 text-slate-500 hover:text-slate-900"
+          onClick={onClear}
+        >
+          Clear
+        </Button>
+        <Button
+          className="w-full text-xs h-9 bg-blue-600 hover:bg-blue-700 text-white"
+          onClick={onApply}
+        >
+          Apply Filter
+        </Button>
+      </div>
+    </div>
+  )
 
-                                <Field>
-                                    <FieldLabel className="text-[10px] uppercase font-bold text-slate-400 mb-1 block">To Time</FieldLabel>
-                                    <CustomTimePicker
-                                        date={dateRange.to}
-                                        disabled={!dateRange.to}
-                                        onChange={(d) => setDateRange(prev => ({ ...prev, to: d }))}
-                                    />
-                                </Field>
-                            </FieldGroup>
+  return (
+    <Card className="w-full max-w-full shadow-none border-0 gap-0 py-0">
+      <CardHeader
+        className={cn(
+          'border-b bg-slate-50/50 shrink-0 m-0 gap-2 px-3 py-2 !pb-2 grid-rows-1 auto-rows-auto',
+          stacked ? 'flex flex-col' : 'flex flex-row items-center justify-between'
+        )}
+      >
+        <div className="min-w-0 shrink-0">
+          <span className="text-[10px] text-slate-500 leading-none">Filter by</span>
+          <p className="font-semibold text-sm text-slate-900 leading-tight mt-0.5">{title}</p>
+        </div>
+        <div className={cn('min-w-0', stacked && 'w-full')}>{summaryBlock}</div>
+      </CardHeader>
 
-                            <div className="flex flex-col items-center gap-2 mt-auto pt-4">
-                                <Button
-                                    variant="ghost"
-                                    className="w-full text-xs h-8 text-slate-500 hover:text-slate-900"
-                                    onClick={handleClear}
-                                >
-                                    Clear
-                                </Button>
-                                <Button
-                                    className="w-full text-sm h-9 bg-blue-600 hover:bg-blue-700 text-white"
-                                    onClick={handleApply}
-                                >
-                                    Apply Filter
-                                </Button>
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
-            </PopoverContent>
-        </Popover>
-    );
+      <CardContent className="m-0 p-2 px-2">
+        {stacked ? (
+          <div className="flex flex-col gap-3">
+            <Calendar
+              mode="range"
+              defaultMonth={dateRange?.from}
+              numberOfMonths={1}
+              selected={dateRange}
+              onSelect={onDateSelect}
+              disabled={{ after: new Date() }}
+              className="rounded-md border-none p-0 w-full [--cell-size:2rem]"
+            />
+            <div className="border-t border-slate-100 pt-3">{timeAndActions}</div>
+          </div>
+        ) : (
+          <div className="flex flex-row gap-2 items-start">
+            <Calendar
+              mode="range"
+              defaultMonth={dateRange?.from}
+              numberOfMonths={1}
+              selected={dateRange}
+              onSelect={onDateSelect}
+              disabled={{ after: new Date() }}
+              className="rounded-md border-none p-0 shrink-0 [--cell-size:1.75rem]"
+            />
+            <div className="border-l border-slate-100 pl-2 shrink-0">{timeAndActions}</div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+export function DateFilterPopover({
+  title,
+  onApply,
+  initialFrom,
+  initialTo,
+  applyWhenRangeComplete = false,
+}) {
+  const isMobile = useIsMobile()
+  const [open, setOpen] = useState(false)
+  const [dateRange, setDateRange] = useState({
+    from: initialFrom ? new Date(initialFrom) : undefined,
+    to: initialTo ? new Date(initialTo) : undefined,
+  })
+  const [appliedRange, setAppliedRange] = useState({
+    from: initialFrom ? new Date(initialFrom) : undefined,
+    to: initialTo ? new Date(initialTo) : undefined,
+  })
+
+  useEffect(() => {
+    setDateRange({
+      from: initialFrom ? new Date(initialFrom) : undefined,
+      to: initialTo ? new Date(initialTo) : undefined,
+    })
+    setAppliedRange({
+      from: initialFrom ? new Date(initialFrom) : undefined,
+      to: initialTo ? new Date(initialTo) : undefined,
+    })
+  }, [initialFrom, initialTo])
+
+  const handleOpenChange = (newOpen) => {
+    if (!newOpen) {
+      setDateRange({ ...appliedRange })
+    }
+    setOpen(newOpen)
+  }
+
+  const handleApply = () => {
+    if (!dateRange.from || !dateRange.to) {
+      setDateRange({ from: undefined, to: undefined })
+      setAppliedRange({ from: undefined, to: undefined })
+      onApply({ from: null, to: null })
+    } else {
+      setAppliedRange({ ...dateRange })
+      onApply(dateRange)
+    }
+    setOpen(false)
+  }
+
+  const handleClear = () => {
+    setDateRange({ from: undefined, to: undefined })
+    setAppliedRange({ from: undefined, to: undefined })
+    onApply({ from: null, to: null })
+    setOpen(false)
+  }
+
+  const handleDateSelect = (newRange, selectedDay) => {
+    if (!selectedDay) return
+
+    if (!dateRange?.from || (dateRange?.from && dateRange?.to)) {
+      const newFrom = new Date(selectedDay)
+      if (dateRange?.from) {
+        newFrom.setHours(dateRange.from.getHours(), dateRange.from.getMinutes(), 0, 0)
+      } else {
+        newFrom.setHours(0, 0, 0, 0)
+      }
+      setDateRange({ from: newFrom, to: undefined })
+      return
+    }
+
+    let rawFrom = dateRange.from
+    let rawTo = selectedDay
+
+    const dayFrom = new Date(rawFrom).setHours(0, 0, 0, 0)
+    const dayTo = new Date(rawTo).setHours(0, 0, 0, 0)
+
+    if (dayTo < dayFrom) {
+      rawTo = dateRange.from
+      rawFrom = selectedDay
+    }
+
+    const updatedRange = {
+      from: new Date(rawFrom),
+      to: new Date(rawTo),
+    }
+
+    if (updatedRange.from) {
+      if (dateRange?.from && rawFrom === dateRange.from) {
+        updatedRange.from.setHours(dateRange.from.getHours(), dateRange.from.getMinutes(), 0, 0)
+      } else {
+        updatedRange.from.setHours(0, 0, 0, 0)
+      }
+    }
+
+    if (updatedRange.to) {
+      if (dateRange?.to && rawTo === dateRange.to) {
+        updatedRange.to.setHours(dateRange.to.getHours(), dateRange.to.getMinutes(), 0, 0)
+      } else {
+        updatedRange.to.setHours(23, 30, 0, 0)
+      }
+    }
+
+    setDateRange(updatedRange)
+
+    if (applyWhenRangeComplete && updatedRange.from && updatedRange.to) {
+      setAppliedRange({ ...updatedRange })
+      onApply(updatedRange)
+      setOpen(false)
+    }
+  }
+
+  const triggerButton = (
+    <Button
+      variant="outline"
+      className="w-full justify-start text-left font-normal bg-white border-slate-200 h-9 text-xs shadow-none hover:bg-slate-50"
+    >
+      <CalendarIcon className="h-3.5 w-3.5 mr-2 shrink-0 text-slate-400" />
+      {appliedRange?.from ? (
+        appliedRange.to ? (
+          <span className="truncate text-slate-900">
+            {format(appliedRange.from, 'LLL dd')} - {format(appliedRange.to, 'LLL dd')}
+          </span>
+        ) : (
+          <span className="truncate text-slate-900">{format(appliedRange.from, 'LLL dd, y')}</span>
+        )
+      ) : (
+        <span className="text-slate-500 truncate">{title}</span>
+      )}
+    </Button>
+  )
+
+  const pickerProps = {
+    title,
+    dateRange,
+    setDateRange,
+    onDateSelect: handleDateSelect,
+    onClear: handleClear,
+    onApply: handleApply,
+    useNativeSelect: isMobile,
+    stacked: isMobile,
+  }
+
+  if (isMobile) {
+    return (
+      <>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => setOpen(true)}
+          className="w-full justify-start text-left font-normal bg-white border-slate-200 h-9 text-xs shadow-none hover:bg-slate-50"
+        >
+          <CalendarIcon className="h-3.5 w-3.5 mr-2 shrink-0 text-slate-400" />
+          {appliedRange?.from ? (
+            appliedRange.to ? (
+              <span className="truncate text-slate-900">
+                {format(appliedRange.from, 'LLL dd')} - {format(appliedRange.to, 'LLL dd')}
+              </span>
+            ) : (
+              <span className="truncate text-slate-900">{format(appliedRange.from, 'LLL dd, y')}</span>
+            )
+          ) : (
+            <span className="text-slate-500 truncate">{title}</span>
+          )}
+        </Button>
+        <Dialog open={open} onOpenChange={handleOpenChange}>
+          <DialogContent
+            showCloseButton
+            overlayClassName="z-[100]"
+            className={cn(
+              'z-[100] w-[calc(100vw-1rem)] max-w-md p-0 gap-0 overflow-hidden',
+              'max-h-[min(92dvh,720px)] flex flex-col',
+              '[&>button]:z-10'
+            )}
+          >
+            <DialogHeader className="sr-only">
+              <DialogTitle>{title}</DialogTitle>
+            </DialogHeader>
+            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain custom-scrollbar">
+              <DateFilterPickerBody {...pickerProps} />
+            </div>
+          </DialogContent>
+        </Dialog>
+      </>
+    )
+  }
+
+  return (
+    <Popover open={open} onOpenChange={handleOpenChange} modal>
+      <PopoverTrigger asChild>{triggerButton}</PopoverTrigger>
+      <PopoverContent
+        className={cn(
+          'z-[60] w-auto max-w-[min(calc(100vw-1.5rem),520px)] p-0',
+          'max-h-[min(85vh,var(--radix-popover-content-available-height,85vh))]',
+          'overflow-y-auto overscroll-contain custom-scrollbar'
+        )}
+        align="start"
+        side="bottom"
+        collisionPadding={12}
+        avoidCollisions
+      >
+        <DateFilterPickerBody {...pickerProps} />
+      </PopoverContent>
+    </Popover>
+  )
 }

@@ -26,7 +26,7 @@ const PLATFORMS = [
   { id: 'website', label: 'Websites', icon: null },
 ]
 
-export function PlatformFilter({ initialPlatform = 'all', onChange, availablePlatforms = [] }) {
+export function PlatformFilter({ initialPlatform = 'all', onChange, availablePlatforms = [], inline = false }) {
   const id = useId()
   const [open, setOpen] = useState(false)
 
@@ -38,8 +38,17 @@ export function PlatformFilter({ initialPlatform = 'all', onChange, availablePla
     : PLATFORMS
 
   return (
-    <div className='w-full space-y-1.5'>
-      <Label htmlFor={id} className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Platform</Label>
+    <div className={cn('w-full', inline ? 'flex items-center gap-2' : 'space-y-1.5')}>
+      <Label
+        htmlFor={id}
+        className={cn(
+          'text-[10px] uppercase font-bold text-slate-400 tracking-wider',
+          inline && 'shrink-0 w-[4.75rem] leading-tight'
+        )}
+      >
+        Platform
+      </Label>
+      <div className={cn(inline && 'flex-1 min-w-0')}>
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <Button
@@ -97,6 +106,7 @@ export function PlatformFilter({ initialPlatform = 'all', onChange, availablePla
           </Command>
         </PopoverContent>
       </Popover>
+      </div>
     </div>
   )
 }
