@@ -84,7 +84,7 @@ export default async function CasesPage({ searchParams }) {
   ])
 
   return (
-    <main className="flex-1 flex flex-col h-full overflow-hidden bg-slate-50">
+    <main className="flex-1 flex flex-col h-full min-h-0 overflow-hidden bg-slate-50">
       <PageHeader title="Content Review" />
 
       <div className="flex-1 overflow-hidden relative">

@@ -41,7 +41,7 @@ export function CaseExportButton({ post, project, className }) {
     >
       {loading ? <Loader2 className="w-4 h-4 animate-spin shrink-0" /> : <FileDown className="w-4 h-4 shrink-0" />}
       <span className="whitespace-pre-line text-left leading-snug">
-        {loading ? statusText || 'Preparing...' : 'Download Content Report'}
+        {loading ? statusText || 'Preparing...' : 'Download Case PDF'}
       </span>
     </Button>
   )

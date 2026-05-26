@@ -24,15 +24,24 @@ const RISK_LEVELS = [
   { id: 'safe', label: 'Safe', icon: Smile, color: 'text-slate-500 bg-slate-50 border-slate-200' },
 ]
 
-export function RiskFilter({ initialRisk = 'all', onChange }) {
+export function RiskFilter({ initialRisk = 'all', onChange, inline = false }) {
   const id = useId()
   const [open, setOpen] = useState(false)
 
   const selectedLevel = RISK_LEVELS.find(level => level.id === initialRisk)
 
   return (
-    <div className='w-full space-y-1.5'>
-      <Label htmlFor={id} className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Risk Severity</Label>
+    <div className={cn('w-full', inline ? 'flex items-center gap-2' : 'space-y-1.5')}>
+      <Label
+        htmlFor={id}
+        className={cn(
+          'text-[10px] uppercase font-bold text-slate-400 tracking-wider',
+          inline && 'shrink-0 w-[4.75rem] leading-tight'
+        )}
+      >
+        Risk
+      </Label>
+      <div className={cn(inline && 'flex-1 min-w-0')}>
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <Button
@@ -92,6 +101,7 @@ export function RiskFilter({ initialRisk = 'all', onChange }) {
           </Command>
         </PopoverContent>
       </Popover>
+      </div>
     </div>
   )
 }

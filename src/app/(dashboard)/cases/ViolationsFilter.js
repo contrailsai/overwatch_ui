@@ -15,8 +15,9 @@ import {
 } from '@/components/ui/command'
 import { Label } from '@/components/ui/label'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { cn } from '@/lib/utils'
 
-export function ViolationsFilter({ projectLabels = [], initialViolations = '', onChange }) {
+export function ViolationsFilter({ projectLabels = [], initialViolations = '', onChange, inline = false }) {
   const id = useId()
   const [open, setOpen] = useState(false)
   const [expanded, setExpanded] = useState(false)
@@ -54,8 +55,17 @@ export function ViolationsFilter({ projectLabels = [], initialViolations = '', o
   const hiddenCount = selectedValues.length - visibleItems.length
 
   return (
-    <div className='w-full space-y-1.5'>
-      <Label htmlFor={id} className="text-[10px] uppercase font-bold text-slate-400">Violations</Label>
+    <div className={cn('w-full', inline ? 'flex items-center gap-2' : 'space-y-1.5')}>
+      <Label
+        htmlFor={id}
+        className={cn(
+          'text-[10px] uppercase font-bold text-slate-400',
+          inline && 'shrink-0 w-[4.75rem] leading-tight'
+        )}
+      >
+        Violations
+      </Label>
+      <div className={cn(inline && 'flex-1 min-w-0')}>
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <Button
@@ -155,6 +165,7 @@ export function ViolationsFilter({ projectLabels = [], initialViolations = '', o
           </Command>
         </PopoverContent>
       </Popover>
+      </div>
     </div>
   )
 }

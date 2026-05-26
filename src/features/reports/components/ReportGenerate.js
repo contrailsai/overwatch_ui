@@ -8,9 +8,9 @@ import { cn } from '@/lib/utils'
 import { ReportExportButton } from '@/features/reports/components/ReportExportButton'
 
 const FORMAT_OPTIONS = [
-  { id: 'summary-pdf', label: 'PDF', sub: 'Sum', preset: 'summaryPdf', downloadLabel: 'Summary PDF' },
-  { id: 'detailed-pdf', label: 'PDF', sub: 'Det', preset: 'detailedPdf', downloadLabel: 'Detailed PDF' },
-  { id: 'detailed-docx', label: 'DOCX', sub: 'Det', preset: 'detailedDocx', downloadLabel: 'Detailed DOCX' },
+  { id: 'summary-pdf', label: 'PDF', sub: 'Sum', compactLabel: 'Summary', preset: 'summaryPdf', downloadLabel: 'Summary PDF' },
+  { id: 'detailed-pdf', label: 'PDF', sub: 'Det', compactLabel: 'Detail PDF', preset: 'detailedPdf', downloadLabel: 'Detailed PDF' },
+  { id: 'detailed-docx', label: 'DOCX', sub: 'Det', compactLabel: 'Detail DOCX', preset: 'detailedDocx', downloadLabel: 'Detailed DOCX' },
 ]
 
 export default function ReportGenerate({
@@ -26,6 +26,7 @@ export default function ReportGenerate({
   trackClientClick,
   project,
   showLabel = true,
+  compact = false,
 }) {
   const idPrefix = useId()
   const [selectedFormat, setSelectedFormat] = useState('summary-pdf')
@@ -56,6 +57,64 @@ export default function ReportGenerate({
     trackClientClick(`export_${selectedFormat}`, { page: 'CasesList' })
   }
 
+  if (compact) {
+    return (
+      <div className="shrink-0 flex items-center gap-1">
+        <div
+          className={cn(
+            'flex items-center gap-0.5 bg-slate-100 p-0.5 rounded-lg border border-slate-200',
+            isLoading && 'opacity-50 pointer-events-none'
+          )}
+        >
+          {FORMAT_OPTIONS.map((f) => (
+            <button
+              key={f.id}
+              type="button"
+              onClick={() => setSelectedFormat(f.id)}
+              disabled={isLoading}
+              title={f.downloadLabel}
+              aria-label={f.downloadLabel}
+              className={cn(
+                'px-1 py-1 min-w-[2.6rem] rounded-md text-[8px] font-bold leading-tight text-center transition-all cursor-pointer',
+                selectedFormat === f.id
+                  ? 'bg-white text-blue-600 shadow-sm'
+                  : 'text-slate-500'
+              )}
+            >
+              {f.compactLabel}
+            </button>
+          ))}
+        </div>
+        <Button
+          size="icon"
+          variant="ghost"
+          onClick={handleDownload}
+          disabled={isLoading}
+          title="Download report"
+          className="h-8 w-8 shrink-0 bg-blue-600 hover:bg-blue-700 text-white rounded-lg border border-blue-600"
+        >
+          {isLoading && downloadClicked ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <DownloadIcon className="w-4 h-4" />
+          )}
+        </Button>
+        <div className="hidden">
+          {FORMAT_OPTIONS.map((f) => (
+            <div key={f.id} id={`${idPrefix}-btn-${f.id}`}>
+              <ReportExportButton
+                preset={f.preset}
+                posts={selectedPostsArray}
+                project={project}
+                onStateChange={onStateByFormat[f.id]}
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div
       className={cn(
@@ -66,13 +125,15 @@ export default function ReportGenerate({
         showLabel ? 'max-w-[280px]' : 'w-auto'
       )}
     >
-      <div className="flex items-center justify-between px-1">
-        <div className="flex items-center gap-1.5">
-          <Label className="text-[10px] uppercase font-black text-slate-500 tracking-wider">
-            Download {selectedOption.downloadLabel}
-          </Label>
+      {showLabel && (
+        <div className="flex items-center justify-between px-1">
+          <div className="flex items-center gap-1.5">
+            <Label className="text-[10px] uppercase font-black text-slate-500 tracking-wider">
+              Download {selectedOption.downloadLabel}
+            </Label>
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="flex w-full items-stretch gap-2 h-11">
         <div
