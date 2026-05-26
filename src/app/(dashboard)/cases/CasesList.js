@@ -54,6 +54,7 @@ import { MobileCasesFilterDrawer } from './MobileCasesFilterDrawer'
 function ListSelectionBar({
   className,
   showPageCheckbox = true,
+  showSelectAllActions = true,
   selectedCount,
   totalCount,
   isAllFilterSelected,
@@ -90,6 +91,7 @@ function ListSelectionBar({
         </label>
       )}
 
+      {showSelectAllActions && (
       <div className="flex items-center gap-2 ml-auto min-w-0 flex-wrap justify-end">
         {selectedCount === 0 ? (
           <Button
@@ -142,6 +144,7 @@ function ListSelectionBar({
           </>
         )}
       </div>
+      )}
     </div>
   )
 }
@@ -806,9 +809,17 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                             <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
                               Filter
                             </span>
-                            {isPending && (
-                              <Loader2 className=" size-10 animate-spin text-blue-600" />
-                            )}
+                            <span
+                              className="relative inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center overflow-visible"
+                              aria-hidden={!isPending}
+                            >
+                              <Loader2
+                                className={cn(
+                                  "absolute h-5 w-5 animate-spin text-blue-600 stroke-[2.5]",
+                                  isPending ? "opacity-100" : "opacity-0",
+                                )}
+                              />
+                            </span>
                           </div>
                           <div className="flex items-baseline gap-1.5 mb-3">
                             <span className="text-2xl font-black text-slate-800 tracking-tight leading-none">
@@ -943,6 +954,7 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                 <div className="md:hidden flex-1 overflow-y-auto custom-scrollbar">
                   <div className="sticky top-0 z-20 px-2 py-1.5 bg-slate-50/95 backdrop-blur-md border-b border-slate-100">
                     <ListSelectionBar
+                      showSelectAllActions={false}
                       selectedCount={selectedCount}
                       totalCount={totalCount}
                       isAllFilterSelected={isAllFilterSelected}
