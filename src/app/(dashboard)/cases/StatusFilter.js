@@ -23,6 +23,7 @@ export function StatusFilter({
   label = "Status",
   placeholder = "All Statuses",
   inline = false,
+  searchable = false,
 }) {
   const id = useId()
   const [open, setOpen] = useState(false)
@@ -62,7 +63,9 @@ export function StatusFilter({
         </PopoverTrigger>
         <PopoverContent className='w-[200px] p-0' align="start">
           <Command>
-            <CommandInput placeholder={`Search ${label.toLowerCase()}...`} className="text-xs h-9" />
+            {searchable && (
+              <CommandInput placeholder={`Search ${label.toLowerCase()}...`} className="text-xs h-9" />
+            )}
             <CommandList>
               <CommandEmpty className="text-xs p-4 text-center text-slate-500">No results found.</CommandEmpty>
               <CommandGroup>

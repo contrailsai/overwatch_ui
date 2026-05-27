@@ -9,7 +9,6 @@ import {
   Command,
   CommandEmpty,
   CommandGroup,
-  CommandInput,
   CommandItem,
   CommandList
 } from '@/components/ui/command'
@@ -65,7 +64,6 @@ export function RiskFilter({ initialRisk = 'all', onChange, inline = false }) {
         </PopoverTrigger>
         <PopoverContent className='w-[200px] p-0' align="start">
           <Command>
-            <CommandInput placeholder='Search risk levels...' className="text-xs h-9" />
             <CommandList>
               <CommandEmpty className="text-xs p-4 text-center text-slate-500">No results found.</CommandEmpty>
               <CommandGroup>
