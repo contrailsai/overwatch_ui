@@ -650,7 +650,7 @@ export function CasesFilterPanel({
             <Button
               type="button"
               variant="outline"
-              className="min-h-11 cursor-pointer px-12 py-1 font-semibold shadow-sm !bg-white !text-slate-800 !border-slate-200 !hover:bg-slate-50 !hover:text-slate-800 !active:bg-slate-100 dark:!bg-slate-900 dark:!text-slate-100 dark:!border-slate-800 dark:!hover:bg-slate-800 dark:!hover:text-slate-100"
+              className="min-h-11 cursor-pointer px-12 py-1 font-semibold shadow-sm "
               onClick={onMobileDrawerDone}
             >
               Done
