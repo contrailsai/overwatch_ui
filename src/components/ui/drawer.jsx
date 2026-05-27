@@ -33,6 +33,7 @@ function DrawerOverlay({ className, ...props }) {
       data-slot="drawer-overlay"
       className={cn(
         "fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm",
+        "data-[state=open]:opacity-100 data-[state=closed]:opacity-0",
         className
       )}
       {...props}

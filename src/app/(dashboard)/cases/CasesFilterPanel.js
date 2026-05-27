@@ -83,6 +83,7 @@ export function CasesFilterPanel({
   stickyContextual = false,
   mobileDrawerLayout = false,
   scrollPaddingBottom = false,
+  onMobileDrawerDone,
   initialFilters,
   project,
   allowDoTakedown,
@@ -637,8 +638,25 @@ export function CasesFilterPanel({
       <FilterSection title="Dates" showSections compact={compactInline}>
         {dateFilters}
       </FilterSection>
-      <FilterSection title="Content & search" showSections compact={compactInline}>
+      <FilterSection
+        title="Content & search"
+        showSections
+        compact={compactInline}
+        className={mobileDrawerLayout ? 'last:border-0 last:pb-0 last:mb-0' : undefined}
+      >
         {contentFilters}
+        {mobileDrawerLayout && onMobileDrawerDone && (
+          <div className="flex justify-center px-6 pt-6 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+            <Button
+              type="button"
+              variant="outline"
+              className="min-h-11 cursor-pointer bg-blue-600 hover:bg-blue-700 text-white px-12 py-1 font-semibold text-slate-800 border-slate-200 shadow-sm"
+              onClick={onMobileDrawerDone}
+            >
+              Done
+            </Button>
+          </div>
+        )}
       </FilterSection>
       {!mobileDrawerLayout && contextualPlacement === 'bottom' && contextualSection}
     </>
@@ -650,12 +668,7 @@ export function CasesFilterPanel({
         {contextualPlacement === 'top' && contextualSection && (
           <div className="shrink-0 bg-white border-b border-slate-100">{contextualSection}</div>
         )}
-        <div
-          className={cn(
-            'flex-1 min-h-0 overflow-y-auto overscroll-contain custom-scrollbar',
-            scrollPaddingBottom && 'pb-24 pt-2'
-          )}
-        >
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain custom-scrollbar pt-2">
           <div className={filtersWrapClass}>{sectionedFilters}</div>
         </div>
       </div>
