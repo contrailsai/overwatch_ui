@@ -36,13 +36,7 @@ import {
 import { CaseExportButton } from '@/components/pdf/CaseExportButton'
 import { CaseExportDocxButton } from '@/components/docx/CaseExportDocxButton'
 import SafeDate from '@/components/SafeDate'
-
-const getRiskLabel = (score) => {
-    if (score >= 96) return { label: 'High', color: 'text-rose-500 bg-rose-50 border-rose-200' };
-    if (score >= 76) return { label: 'Medium', color: 'text-orange-500 bg-orange-50 border-orange-200' };
-    if (score >= 41) return { label: 'Low', color: 'text-amber-500 bg-amber-50 border-amber-200' };
-    return { label: 'Safe', color: 'text-slate-500 bg-slate-50 border-slate-200' };
-}
+import { getRiskLabel } from './riskBuckets'
 
 export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose, onNavigate, hasPrev, hasNext, onUpdateStatus, onUpdatePost, onShowToast, projectEmails, isMobileLayout = false }) {
     const [isProcessing, setIsProcessing] = useState(false)
@@ -553,24 +547,24 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
                                 <>
                                     {/* Stats & Dates */}
                                     <div className="space-y-4 sm:space-y-6">
-                                        <div className="grid grid-cols-2 sm:flex sm:flex-row gap-3 sm:gap-4">
-                                            <div className="w-full bg-white p-3 sm:p-4 rounded-xl border border-slate-200 shadow-sm flex flex-row justify-between items-center gap-1">
-                                                <span className="text-[10px] sm:text-xs font-bold text-slate-500 uppercase flex items-center gap-1.5 sm:gap-2"><Heart className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-rose-500" /> Likes</span>
-                                                <span className="font-bold text-sm sm:text-lg text-slate-900">{post.stats?.like_count?.toLocaleString() || 0}</span>
+                                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                            <div className="min-w-0 bg-white p-3 sm:p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-1.5">
+                                                <span className="text-[10px] sm:text-xs font-bold text-slate-500 uppercase flex items-center gap-1.5 sm:gap-2"><Heart className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0 text-rose-500" /> Likes</span>
+                                                <span className="font-bold text-base sm:text-lg text-slate-900 tabular-nums leading-tight break-all">{post.stats?.like_count?.toLocaleString() || 0}</span>
                                             </div>
-                                            <div className="w-full bg-white p-3 sm:p-4 rounded-xl border border-slate-200 shadow-sm flex flex-row justify-between items-center gap-1">
-                                                <span className="text-[10px] sm:text-xs font-bold text-slate-500 uppercase flex items-center gap-1.5 sm:gap-2"><MessageCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-blue-500" /> Comments</span>
-                                                <span className="font-bold text-sm sm:text-lg text-slate-900">{post.stats?.comment_count?.toLocaleString() || 0}</span>
+                                            <div className="min-w-0 bg-white p-3 sm:p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-1.5">
+                                                <span className="text-[10px] sm:text-xs font-bold text-slate-500 uppercase flex items-center gap-1.5 sm:gap-2"><MessageCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0 text-blue-500" /> Comments</span>
+                                                <span className="font-bold text-base sm:text-lg text-slate-900 tabular-nums leading-tight break-all">{post.stats?.comment_count?.toLocaleString() || 0}</span>
                                             </div>
-                                            <div className="w-full bg-white p-3 sm:p-4 rounded-xl border border-slate-200 shadow-sm flex flex-row justify-between items-center gap-1">
-                                                <span className="text-[10px] sm:text-xs font-bold text-slate-500 uppercase flex items-center gap-1.5 sm:gap-2"><Share2 className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-green-500" /> Shares</span>
-                                                <span className="font-bold text-sm sm:text-lg text-slate-900">{post.stats?.share_count?.toLocaleString() || 0}</span>
+                                            <div className="min-w-0 bg-white p-3 sm:p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-1.5">
+                                                <span className="text-[10px] sm:text-xs font-bold text-slate-500 uppercase flex items-center gap-1.5 sm:gap-2"><Share2 className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0 text-green-500" /> Shares</span>
+                                                <span className="font-bold text-base sm:text-lg text-slate-900 tabular-nums leading-tight break-all">{post.stats?.share_count?.toLocaleString() || 0}</span>
                                             </div>
                                             {
                                                 post.stats?.view_count > 0 && (
-                                                    <div className="w-full bg-white p-3 sm:p-4 rounded-xl border border-slate-200 shadow-sm flex flex-row justify-between items-center gap-1">
-                                                        <span className="text-[10px] sm:text-xs font-bold text-slate-500 uppercase flex items-center gap-1.5 sm:gap-2"><Eye className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-violet-600" /> Views</span>
-                                                        <span className="font-bold text-sm sm:text-lg text-slate-900">{post.stats?.view_count?.toLocaleString() || 0}</span>
+                                                    <div className="min-w-0 bg-white p-3 sm:p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-1.5">
+                                                        <span className="text-[10px] sm:text-xs font-bold text-slate-500 uppercase flex items-center gap-1.5 sm:gap-2"><Eye className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0 text-violet-600" /> Views</span>
+                                                        <span className="font-bold text-base sm:text-lg text-slate-900 tabular-nums leading-tight break-all">{post.stats?.view_count?.toLocaleString() || 0}</span>
                                                     </div>
                                                 )
                                             }

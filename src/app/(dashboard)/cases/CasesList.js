@@ -2,6 +2,7 @@
 
 import { trackClientClick, getAllPostIds, updateClientStatus } from './actions'
 import { CaseDetailPanel } from './CaseDetailPanel'
+import { getRiskLabel } from './riskBuckets'
 import { bulkAssignCasesTo } from './feature_actions'
 import { initiateTakedown } from './takedown_actions'
 
@@ -559,13 +560,6 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [selectedPost, navigatePost])
-
-  const getRiskLabel = (score) => {
-    if (score >= 96) return { label: 'High', color: 'text-rose-500 bg-rose-50 border-rose-200' };
-    if (score >= 76) return { label: 'Medium', color: 'text-orange-500 bg-orange-50 border-orange-200' };
-    if (score >= 41) return { label: 'Low', color: 'text-amber-500 bg-amber-50 border-amber-200' };
-    return { label: 'Safe', color: 'text-slate-500 bg-slate-50 border-slate-200' };
-  }
 
   const getStatusConfig = (post) => {
     const status = post.client_status || 'To Be Reviewed';
