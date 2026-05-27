@@ -14,7 +14,7 @@ All posts are passed through a normalizer (`normalized_S3_post`) which structure
 The primary function for fetching cases.
 - **Pagination:** Uses `$skip` and `$limit`.
 - **Filtering:** Supports filtering by platform, status, risk severity, visibility, specific violations, publish date (`original_date`), alert date (`processed_date`), and whether the post is a representative of a cluster (`unique_clusters`).
-- **Sorting:** Complex sorting is handled via an `$addFields` stage (`sort_original_date`, `sort_processed_after`) using `$toDate` to normalize timestamps, followed by a `$sort` stage.
+- **Sorting:** Complex sorting is handled via an `$addFields` stage (`sort_original_date`, `sort_processed_after`, `risk_rank`, `sort_engagement`) using `$toDate` to normalize timestamps. Default order: risk buckets (`risk_rank`: High/Medium/Low/Safe) → weighted engagement (`views + 2×likes + 3×comments + 4×shares`) → alert date → publish date. Zero engagement falls through to date tiebreakers.
 
 ### `getAllPostIds`
 Used primarily for bulk actions (like Select All Filtered or Export).

@@ -9,6 +9,7 @@ import { ObjectId } from 'mongodb'
 import { traceAction, recordClickMetric, runInSpan } from '@/utils/tracing'
 import { requireAuthContext } from '@/utils/auth-context'
 import { flushOtelLogs, isOtelLogsVerbose, logActionError, LOKI_STREAMS, otelLogger } from '@/utils/otel-logger'
+import { buildCaseSortAddFields, buildCasesSortPipeline } from './riskBuckets'
 
 const CASES_TRACE_OPTS = { loki_stream: LOKI_STREAMS.cases }
 
@@ -109,7 +110,8 @@ const buildUniqueClustersStage = (filters) => {
           // Pick one "best" post per cluster (or per post when no cluster_id)
           $sort: {
             _unique_group_key: 1,
-            "review_details.threat_score": -1,
+            risk_rank: -1,
+            sort_engagement: -1,
             "review_details.reviewed_at": -1,
             "_id": 1
           }
@@ -214,7 +216,8 @@ const buildUniqueClustersStage = (filters) => {
         $sort: {
           _unique_group_key: 1,
           _is_representative: -1,
-          "review_details.threat_score": -1,
+          risk_rank: -1,
+          sort_engagement: -1,
           "review_details.reviewed_at": -1,
           "_id": 1
         }
@@ -369,38 +372,7 @@ export const getPosts = traceAction('getPosts', async (_project, page = 1, limit
 
     const query = buildCasesMatchQuery(filters);
 
-    // SORT STUFF OUT
-    let sortPipeline = {};
-    if (sort.field === 'threat_score') {
-      sortPipeline = {
-        'review_details.threat_score': sort.direction === 'asc' ? 1 : -1,
-        'sort_processed_after': -1,
-        'sort_original_date': -1,
-        '_id': 1
-      };
-    } else if (sort.field === 'original_date') {
-      sortPipeline = {
-        'sort_original_date': sort.direction === 'asc' ? 1 : -1,
-        'review_details.threat_score': -1,
-        'sort_processed_after': -1,
-        '_id': 1
-      };
-    } else if (sort.field === 'processed_date') {
-      sortPipeline = {
-        'sort_processed_after': sort.direction === 'asc' ? 1 : -1,
-        'review_details.threat_score': -1,
-        'sort_original_date': -1,
-        '_id': 1
-      };
-    } else {
-      // Default sort: Risk Priority (desc) -> Post Date (desc) -> _id (asc)
-      sortPipeline = {
-        'review_details.threat_score': -1,
-        'sort_processed_after': -1,
-        'sort_original_date': -1,
-        '_id': 1
-      };
-    }
+    const sortPipeline = buildCasesSortPipeline(sort);
 
     // "Original Date (posted_date)" filter (requires computed field)
     const matchStage = { ...query };
@@ -444,7 +416,8 @@ export const getPosts = traceAction('getPosts', async (_project, page = 1, limit
             $toDate: {
               $ifNull: ["$review_details.reviewed_at", "$metadata.updated_at"]
             }
-          }
+          },
+          ...buildCaseSortAddFields(),
         }
       },
       ...(hasDateFilters ? [{ $match: dateFilterStage }] : []),
@@ -715,18 +688,7 @@ export const getSimilarPosts = traceAction('getSimilarPosts', async (_project, s
       _id: { $ne: new ObjectId(sourcePostId) } // Exclude self
     };
 
-    // Build Sort Pipeline
-    let sortPipeline = {};
-    if (sort.field === 'threat_score') {
-      sortPipeline = { score: -1, 'review_details.threat_score': sort.direction === 'asc' ? 1 : -1, 'sort_processed_after': -1, '_id': 1 };
-    } else if (sort.field === 'original_date') {
-      sortPipeline = { score: -1, 'sort_original_date': sort.direction === 'asc' ? 1 : -1, 'review_details.threat_score': -1, '_id': 1 };
-    } else if (sort.field === 'processed_date') {
-      sortPipeline = { score: -1, 'sort_processed_after': sort.direction === 'asc' ? 1 : -1, 'review_details.threat_score': -1, '_id': 1 };
-    } else {
-      // For similarity search, prioritize similarity score
-      sortPipeline = { score: -1, 'review_details.threat_score': -1, '_id': 1 }; 
-    }
+    const sortPipeline = { score: -1, ...buildCasesSortPipeline(sort) };
 
     // 2. Perform vector search using Atlas Vector Search stage $vectorSearch
     // We assume an index named 'vector_index' is configured for the 'Posts' collection
@@ -747,6 +709,7 @@ export const getSimilarPosts = traceAction('getSimilarPosts', async (_project, s
       {
         $match: matchQuery
       },
+      { $addFields: buildCaseSortAddFields() },
       ...buildUniqueClustersStage(filters),
       {
         $addFields: {
@@ -860,16 +823,7 @@ export const getSemanticSearchPosts = traceAction('getSemanticSearchPosts', asyn
     // 2. Build common match and date filters
     const matchQuery = buildCasesMatchQuery(filters);
 
-    let sortPipeline = null;
-    if (sort.field === 'threat_score') {
-      sortPipeline = { score: -1, 'review_details.threat_score': sort.direction === 'asc' ? 1 : -1, 'sort_processed_after': -1, '_id': 1 };
-    } else if (sort.field === 'original_date') {
-      sortPipeline = { score: -1, 'sort_original_date': sort.direction === 'asc' ? 1 : -1, 'review_details.threat_score': -1, '_id': 1 };
-    } else if (sort.field === 'processed_date') {
-      sortPipeline = { score: -1, 'sort_processed_after': sort.direction === 'asc' ? 1 : -1, 'review_details.threat_score': -1, '_id': 1 };
-    } else {
-      sortPipeline = { score: -1, 'review_details.threat_score': -1, '_id': 1 };
-    }
+    const sortPipeline = { score: -1, ...buildCasesSortPipeline(sort) };
 
     const dateFilterStage = {};
     if (filters.original_date_from || filters.original_date_to) {
@@ -897,6 +851,7 @@ export const getSemanticSearchPosts = traceAction('getSemanticSearchPosts', asyn
           }
         },
         { $match: matchQuery },
+        { $addFields: buildCaseSortAddFields() },
         ...buildUniqueClustersStage(filters),
         {
           $addFields: {
@@ -966,6 +921,7 @@ export const getSemanticSearchPosts = traceAction('getSemanticSearchPosts', asyn
         }
       },
       { $match: matchQuery },
+      { $addFields: buildCaseSortAddFields() },
       ...buildUniqueClustersStage(filters),
       {
         $addFields: {
