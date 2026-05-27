@@ -9,7 +9,13 @@ import { ObjectId } from 'mongodb'
 import { traceAction, recordClickMetric, runInSpan } from '@/utils/tracing'
 import { requireAuthContext } from '@/utils/auth-context'
 import { flushOtelLogs, isOtelLogsVerbose, logActionError, LOKI_STREAMS, otelLogger } from '@/utils/otel-logger'
-import { buildCaseSortAddFields, buildCasesSortPipeline } from './riskBuckets'
+import {
+  buildCaseSortAddFields,
+  buildCasesListSortPipeline,
+  buildCasesReportSortPipeline,
+  UNIQUE_CLUSTER_LIST_SORT,
+  UNIQUE_CLUSTER_EARLY_SORT,
+} from './riskBuckets'
 
 const CASES_TRACE_OPTS = { loki_stream: LOKI_STREAMS.cases }
 
@@ -94,7 +100,8 @@ const normalizeS3Post = async (post) => {
 }
 
 // GET POSTS WITH PAGINATIONS AND FILTERS
-const buildUniqueClustersStage = (filters) => {
+const buildUniqueClustersStage = (filters, { clusterSort = 'list' } = {}) => {
+  const clusterRankSort = clusterSort === 'early' ? UNIQUE_CLUSTER_EARLY_SORT : UNIQUE_CLUSTER_LIST_SORT
   if (filters.unique_clusters === 'true' || filters.unique_clusters === true) {
     const useStrictUniqueClustering = process.env.USE_STRICT_UNIQUE_CLUSTERING === 'true';
     if (!useStrictUniqueClustering) {
@@ -110,10 +117,7 @@ const buildUniqueClustersStage = (filters) => {
           // Pick one "best" post per cluster (or per post when no cluster_id)
           $sort: {
             _unique_group_key: 1,
-            risk_rank: -1,
-            sort_engagement: -1,
-            "review_details.reviewed_at": -1,
-            "_id": 1
+            ...clusterRankSort,
           }
         },
         {
@@ -216,10 +220,7 @@ const buildUniqueClustersStage = (filters) => {
         $sort: {
           _unique_group_key: 1,
           _is_representative: -1,
-          risk_rank: -1,
-          sort_engagement: -1,
-          "review_details.reviewed_at": -1,
-          "_id": 1
+          ...clusterRankSort,
         }
       },
       {
@@ -349,7 +350,7 @@ const buildCasesMatchQuery = (filters = {}) => {
   return query;
 };
 
-export const getPosts = traceAction('getPosts', async (_project, page = 1, limit = 20, filters = {}, sort = { field: 'created_at', direction: 'desc' }) => {
+export const getPosts = traceAction('getPosts', async (_project, page = 1, limit = 20, filters = {}, sort = { field: 'threat_score', direction: 'desc' }) => {
   try {
     const handlerStart = Date.now()
     const { dbName } = await requireAuthContext()
@@ -372,32 +373,10 @@ export const getPosts = traceAction('getPosts', async (_project, page = 1, limit
 
     const query = buildCasesMatchQuery(filters);
 
-    const sortPipeline = buildCasesSortPipeline(sort);
+    const sortPipeline = buildCasesListSortPipeline(sort);
 
-    // "Original Date (posted_date)" filter (requires computed field)
     const matchStage = { ...query };
-    const dateFilterStage = {};
-
-    if (filters.original_date_from || filters.original_date_to) {
-      dateFilterStage.sort_original_date = {};
-      if (filters.original_date_from) {
-        dateFilterStage.sort_original_date.$gte = new Date(filters.original_date_from);
-      }
-      if (filters.original_date_to) {
-        dateFilterStage.sort_original_date.$lte = new Date(filters.original_date_to);
-      }
-    }
-
-    if (filters.processed_from || filters.processed_to) {
-      dateFilterStage.sort_processed_after = {};
-      if (filters.processed_from) {
-        dateFilterStage.sort_processed_after.$gte = new Date(filters.processed_from);
-      }
-      if (filters.processed_to) {
-        dateFilterStage.sort_processed_after.$lte = new Date(filters.processed_to);
-      }
-    }
-
+    const dateFilterStage = buildCasesDateFilterStage(filters);
     const hasDateFilters = Object.keys(dateFilterStage).length > 0;
 
     const basePipeline = [
@@ -407,16 +386,7 @@ export const getPosts = traceAction('getPosts', async (_project, page = 1, limit
       { $project: { text_embedding: 0, image_embedding: 0 } },
       {
         $addFields: {
-          sort_original_date: {
-            $toDate: {
-              $ifNull: ["$engagement.posted_at", "$metadata.posted_date"]
-            }
-          },
-          sort_processed_after: {
-            $toDate: {
-              $ifNull: ["$review_details.reviewed_at", "$metadata.updated_at"]
-            }
-          },
+          ...buildCasesDateAddFieldsStage(),
           ...buildCaseSortAddFields(),
         }
       },
@@ -531,7 +501,107 @@ export const getPostById = traceAction('getPostById', async (_project, id) => {
   }
 }, CASES_TRACE_OPTS)
 
-// USEFUL FOR PDFs
+const CASES_ALERT_HOUR_TIMEZONE = 'Asia/Kolkata'
+
+const buildCasesDateAddFieldsStage = () => ({
+  sort_original_date: {
+    $toDate: {
+      $ifNull: ['$engagement.posted_at', '$metadata.posted_date'],
+    },
+  },
+  sort_processed_after: {
+    $toDate: {
+      $ifNull: ['$review_details.reviewed_at', '$metadata.updated_at'],
+    },
+  },
+  sort_processed_after_hour: {
+    $cond: [
+      { $ne: [{ $ifNull: ['$review_details.reviewed_at', '$metadata.updated_at'] }, null] },
+      {
+        $dateTrunc: {
+          date: {
+            $toDate: {
+              $ifNull: ['$review_details.reviewed_at', '$metadata.updated_at'],
+            },
+          },
+          unit: 'hour',
+          timezone: CASES_ALERT_HOUR_TIMEZONE,
+        },
+      },
+      null,
+    ],
+  },
+})
+
+const buildCasesDateFilterStage = (filters = {}) => {
+  const dateFilterStage = {}
+
+  if (filters.original_date_from || filters.original_date_to) {
+    dateFilterStage.sort_original_date = {}
+    if (filters.original_date_from) {
+      dateFilterStage.sort_original_date.$gte = new Date(filters.original_date_from)
+    }
+    if (filters.original_date_to) {
+      dateFilterStage.sort_original_date.$lte = new Date(filters.original_date_to)
+    }
+  }
+
+  if (filters.processed_from || filters.processed_to) {
+    dateFilterStage.sort_processed_after = {}
+    if (filters.processed_from) {
+      dateFilterStage.sort_processed_after.$gte = new Date(filters.processed_from)
+    }
+    if (filters.processed_to) {
+      dateFilterStage.sort_processed_after.$lte = new Date(filters.processed_to)
+    }
+  }
+
+  return dateFilterStage
+}
+
+/** Order post IDs for report export (risk -> engagement -> alert -> publish). */
+export const orderPostIdsForReport = traceAction('orderPostIdsForReport', async (postIds = []) => {
+  try {
+    if (!postIds?.length) return []
+
+    const { dbName } = await requireAuthContext()
+    const objectIds = postIds
+      .filter((id) => id != null && String(id) !== '')
+      .map((id) => {
+        try {
+          return new ObjectId(id)
+        } catch {
+          return null
+        }
+      })
+      .filter(Boolean)
+
+    if (objectIds.length === 0) return []
+
+    const client = await clientPromise
+    const collection = client.db(dbName).collection('Posts')
+
+    const docs = await collection.aggregate([
+      { $match: withReviewedThreatScoreFilter({ _id: { $in: objectIds } }) },
+      {
+        $addFields: {
+          ...buildCasesDateAddFieldsStage(),
+          ...buildCaseSortAddFields(),
+        },
+      },
+      { $sort: buildCasesReportSortPipeline() },
+      { $project: { _id: 1 } },
+    ]).toArray()
+
+    return docs.map((d) => d._id.toString())
+  } catch (e) {
+    logActionError({ loki_stream: LOKI_STREAMS.cases, app_action: 'orderPostIdsForReport', message: 'orderPostIdsForReport failed' }, e)
+    console.error('orderPostIdsForReport Error:', e)
+    return []
+  }
+}, CASES_TRACE_OPTS)
+
+// USEFUL FOR PDFs / bulk select — report sort order (matches SQS export)
 export const getAllPostIds = traceAction('getAllPostIds', async (_project, filters = {}) => {
   try {
     const { dbName } = await requireAuthContext()
@@ -540,51 +610,23 @@ export const getAllPostIds = traceAction('getAllPostIds', async (_project, filte
     const db = client.db(dbName)
     const collection = db.collection('Posts')
 
-    // Keep filter parity with getPosts (including visibility + reviewed gate)
-    const query = buildCasesMatchQuery(filters)
-
-    const matchStage = { ...query }
-    const dateFilterStage = {}
-
-    if (filters.original_date_from || filters.original_date_to) {
-      dateFilterStage.sort_posted_at = {};
-      if (filters.original_date_from) {
-        dateFilterStage.sort_posted_at.$gte = new Date(filters.original_date_from);
-      }
-      if (filters.original_date_to) {
-        dateFilterStage.sort_posted_at.$lte = new Date(filters.original_date_to);
-      }
-    }
-
-    if (filters.processed_from || filters.processed_to) {
-      dateFilterStage.sort_processed_after = {};
-      if (filters.processed_from) {
-        dateFilterStage.sort_processed_after.$gte = new Date(filters.processed_from);
-      }
-      if (filters.processed_to) {
-        dateFilterStage.sort_processed_after.$lte = new Date(filters.processed_to);
-      }
-    }
-
-    const hasDateFilters = Object.keys(dateFilterStage).length > 0;
+    const matchStage = buildCasesMatchQuery(filters)
+    const dateFilterStage = buildCasesDateFilterStage(filters)
+    const hasDateFilters = Object.keys(dateFilterStage).length > 0
 
     const pipeline = [
       { $match: matchStage },
-      ...(hasDateFilters ? [
-        {
-          $addFields: {
-            sort_posted_at: {
-              $toDate: { $ifNull: ['$engagement.posted_at', '$metadata.posted_date'] }
-            },
-            sort_processed_after: {
-              $toDate: { $ifNull: ["$review_details.reviewed_at", "$metadata.updated_at"] }
-            }
-          }
+      { $project: { text_embedding: 0, image_embedding: 0 } },
+      {
+        $addFields: {
+          ...buildCasesDateAddFieldsStage(),
+          ...buildCaseSortAddFields(),
         },
-        { $match: dateFilterStage }
-      ] : []),
+      },
+      ...(hasDateFilters ? [{ $match: dateFilterStage }] : []),
       ...buildUniqueClustersStage(filters),
-      { $project: { _id: 1 } }
+      { $sort: buildCasesReportSortPipeline() },
+      { $project: { _id: 1 } },
     ]
 
     const docs = await collection.aggregate(pipeline).toArray()
@@ -688,7 +730,7 @@ export const getSimilarPosts = traceAction('getSimilarPosts', async (_project, s
       _id: { $ne: new ObjectId(sourcePostId) } // Exclude self
     };
 
-    const sortPipeline = { score: -1, ...buildCasesSortPipeline(sort) };
+    const sortPipeline = { score: -1, ...buildCasesListSortPipeline(sort) };
 
     // 2. Perform vector search using Atlas Vector Search stage $vectorSearch
     // We assume an index named 'vector_index' is configured for the 'Posts' collection
@@ -710,16 +752,11 @@ export const getSimilarPosts = traceAction('getSimilarPosts', async (_project, s
         $match: matchQuery
       },
       { $addFields: buildCaseSortAddFields() },
-      ...buildUniqueClustersStage(filters),
+      ...buildUniqueClustersStage(filters, { clusterSort: 'early' }),
       {
         $addFields: {
           score: { $meta: "vectorSearchScore" },
-          sort_original_date: {
-            $toDate: { $ifNull: ["$engagement.posted_at", "$metadata.posted_date"] }
-          },
-          sort_processed_after: {
-            $toDate: { $ifNull: ["$review_details.reviewed_at", "$metadata.updated_at"] }
-          }
+          ...buildCasesDateAddFieldsStage(),
         }
       }
     ];
@@ -823,7 +860,7 @@ export const getSemanticSearchPosts = traceAction('getSemanticSearchPosts', asyn
     // 2. Build common match and date filters
     const matchQuery = buildCasesMatchQuery(filters);
 
-    const sortPipeline = { score: -1, ...buildCasesSortPipeline(sort) };
+    const sortPipeline = { score: -1, ...buildCasesListSortPipeline(sort) };
 
     const dateFilterStage = {};
     if (filters.original_date_from || filters.original_date_to) {
@@ -852,12 +889,11 @@ export const getSemanticSearchPosts = traceAction('getSemanticSearchPosts', asyn
         },
         { $match: matchQuery },
         { $addFields: buildCaseSortAddFields() },
-        ...buildUniqueClustersStage(filters),
+        ...buildUniqueClustersStage(filters, { clusterSort: 'early' }),
         {
           $addFields: {
             score: { $meta: "vectorSearchScore" },
-            sort_original_date: { $toDate: { $ifNull: ["$engagement.posted_at", "$metadata.posted_date"] } },
-            sort_processed_after: { $toDate: { $ifNull: ["$review_details.reviewed_at", "$metadata.updated_at"] } }
+            ...buildCasesDateAddFieldsStage(),
           }
         },
         { $match: { score: { $gt: 0.80} } } // Filter vectors with a score less than 0.75
@@ -922,12 +958,11 @@ export const getSemanticSearchPosts = traceAction('getSemanticSearchPosts', asyn
       },
       { $match: matchQuery },
       { $addFields: buildCaseSortAddFields() },
-      ...buildUniqueClustersStage(filters),
+      ...buildUniqueClustersStage(filters, { clusterSort: 'early' }),
       {
         $addFields: {
           score: { $meta: "searchScore" },
-          sort_original_date: { $toDate: { $ifNull: ["$engagement.posted_at", "$metadata.posted_date"] } },
-          sort_processed_after: { $toDate: { $ifNull: ["$review_details.reviewed_at", "$metadata.updated_at"] } }
+          ...buildCasesDateAddFieldsStage(),
         }
       }
     ];

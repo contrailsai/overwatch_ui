@@ -38,7 +38,7 @@ export default async function CasesPage({ searchParams }) {
 
   const sort = {
     field: resolvedParams.sortField || (isSimilaritySearch ? null : 'threat_score'),
-    direction: resolvedParams.sortDirection || 'desc'
+    direction: resolvedParams.sortDirection === 'asc' ? 'asc' : 'desc',
   }
 
   const casesPromise = runInSpan(

@@ -80,21 +80,36 @@ export function buildCaseSortAddFields() {
   }
 }
 
-/**
- * Default cases list $sort: risk bucket -> engagement -> alert date -> publish date -> _id.
- * Engagement tiebreaker is always descending.
- */
-export function buildCasesSortPipeline(sort = {}) {
-  const engagementDesc = -1
-  const dateDesc = -1
-  const idAsc = 1
+const engagementDesc = -1
+const dateDesc = -1
+const idAsc = 1
 
+/**
+ * Default cases table sort (Risk column, desc): all keys descending except stable _id.
+ * High -> Medium -> Low -> Safe, then newest alert hour (IST), highest engagement, publish, sub-hour alert.
+ */
+export function buildCasesDefaultListSortPipeline() {
+  return {
+    risk_rank: -1,
+    sort_processed_after_hour: -1,
+    sort_engagement: -1,
+    sort_original_date: -1,
+    sort_processed_after: -1,
+    _id: idAsc,
+  }
+}
+
+/**
+ * Cases table / getPosts: default risk sort uses alert hour (IST) -> engagement -> publish -> full alert.
+ * Alert/Publish column clicks use full timestamp for the active column. Tiebreakers stay desc unless noted.
+ */
+export function buildCasesListSortPipeline(sort = {}) {
   if (sort.field === 'original_date') {
     return {
       sort_original_date: sort.direction === 'asc' ? 1 : -1,
       risk_rank: -1,
-      sort_engagement: engagementDesc,
       sort_processed_after: dateDesc,
+      sort_engagement: engagementDesc,
       _id: idAsc,
     }
   }
@@ -103,20 +118,66 @@ export function buildCasesSortPipeline(sort = {}) {
     return {
       sort_processed_after: sort.direction === 'asc' ? 1 : -1,
       risk_rank: -1,
-      sort_engagement: engagementDesc,
       sort_original_date: dateDesc,
+      sort_engagement: engagementDesc,
       _id: idAsc,
     }
   }
 
-  const riskDir = sort.field === 'threat_score' && sort.direction === 'asc' ? 1 : -1
+  // Default + Risk column: desc uses full default stack; asc only inverts risk bucket order.
+  if (!sort.field || sort.field === 'threat_score') {
+    if (sort.direction === 'asc') {
+      return {
+        risk_rank: 1,
+        sort_processed_after_hour: dateDesc,
+        sort_engagement: engagementDesc,
+        sort_original_date: dateDesc,
+        sort_processed_after: dateDesc,
+        _id: idAsc,
+      }
+    }
+    return buildCasesDefaultListSortPipeline()
+  }
+
+  return buildCasesDefaultListSortPipeline()
+}
+
+/**
+ * PDF/DOCX report export (SQS postIds): risk -> engagement -> alert date -> publish date -> _id.
+ * Fixed order; does not follow UI column sort.
+ */
+export function buildCasesReportSortPipeline() {
   return {
-    risk_rank: riskDir,
+    risk_rank: -1,
     sort_engagement: engagementDesc,
     sort_processed_after: dateDesc,
     sort_original_date: dateDesc,
     _id: idAsc,
   }
+}
+
+/** Pick best cluster representative to match list table priority (requires date + engagement fields). */
+export const UNIQUE_CLUSTER_LIST_SORT = {
+  risk_rank: -1,
+  sort_processed_after_hour: dateDesc,
+  sort_engagement: engagementDesc,
+  sort_original_date: dateDesc,
+  sort_processed_after: dateDesc,
+  'review_details.reviewed_at': dateDesc,
+  _id: idAsc,
+}
+
+/** Cluster pick when only risk_rank + sort_engagement exist (e.g. vector search pipelines). */
+export const UNIQUE_CLUSTER_EARLY_SORT = {
+  risk_rank: -1,
+  sort_engagement: engagementDesc,
+  'review_details.reviewed_at': dateDesc,
+  _id: idAsc,
+}
+
+/** @deprecated Use buildCasesListSortPipeline */
+export function buildCasesSortPipeline(sort = {}) {
+  return buildCasesListSortPipeline(sort)
 }
 
 /** Mongo $addFields fragment for risk_rank (bucket sort key). */

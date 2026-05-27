@@ -11,6 +11,7 @@ import { ObjectId } from 'mongodb'
 import { resolveExistingReportJob } from '@/features/reports/lib/resolve-job'
 import { REPORT_FORMATS } from '@/features/reports/constants'
 import { logActionError, LOKI_STREAMS } from '@/utils/otel-logger'
+import { orderPostIdsForReport } from '@/app/(dashboard)/cases/actions'
 
 const OBJECT_ID_HEX = /^[a-fA-F0-9]{24}$/
 
@@ -103,6 +104,11 @@ export const getOrCreateReportJob = traceAction('getOrCreateReportJob', async ({
     throw new Error('Some requested posts do not belong to your project scope')
   }
 
+  const orderedPostIds = await orderPostIdsForReport(objectIds.map((id) => id.toString()))
+  if (orderedPostIds.length !== objectIds.length) {
+    throw new Error('Some requested posts could not be ordered for report generation')
+  }
+
   const resolved = await resolveExistingReportJob(supabase, hash, user.id)
   if (resolved.action === 'reuse_complete' || resolved.action === 'reuse_inflight') {
     const job = resolved.job
@@ -142,7 +148,7 @@ export const getOrCreateReportJob = traceAction('getOrCreateReportJob', async ({
 
   const sqsPayload = {
     projectId: resolvedProject?.project_name || 'unknown',
-    postIds: objectIds.map((id) => id.toString()),
+    postIds: orderedPostIds,
     database_name: dbName,
     reportType,
     reportFormat,
