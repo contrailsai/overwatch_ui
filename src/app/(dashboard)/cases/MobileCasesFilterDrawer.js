@@ -1,12 +1,10 @@
 'use client'
 
-import { useEffect, useState } from 'react'
 import { Loader2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Drawer,
   DrawerContent,
-  DrawerFooter,
   DrawerHeader,
   DrawerTitle,
 } from '@/components/ui/drawer'
@@ -21,35 +19,8 @@ export function MobileCasesFilterDrawer({
   onClearFilters,
   filterPanelProps,
 }) {
-  const MAX_SNAP = 0.92
-
-  // Always open at max snap. If user drags below max snap, we close immediately.
-  const [snap, setSnap] = useState(MAX_SNAP)
-
-  useEffect(() => {
-    if (!open) return
-    setSnap(MAX_SNAP)
-  }, [open])
-
-  const handleSetActiveSnapPoint = (nextSnapPoint) => {
-    // Close when leaving the max snap point (e.g. snapping down to 0.5).
-    if (typeof nextSnapPoint === 'number' && nextSnapPoint < MAX_SNAP - 0.001) {
-      setSnap(MAX_SNAP)
-      onOpenChange(false)
-      return
-    }
-    setSnap(nextSnapPoint)
-  }
-
   return (
-    <Drawer
-      open={open}
-      onOpenChange={onOpenChange}
-      snapPoints={[0.5, 0.92]}
-      activeSnapPoint={snap}
-      setActiveSnapPoint={handleSetActiveSnapPoint}
-      fadeFromIndex={0}
-    >
+    <Drawer open={open} onOpenChange={onOpenChange} shouldScaleBackground={false}>
       <DrawerContent className="lg:hidden max-h-[96dvh] p-0 gap-0 flex flex-col">
         <DrawerHeader className="shrink-0 px-4 pt-2 pb-3 border-b border-slate-100 text-left space-y-0">
           <div className="mx-auto w-10 h-1 rounded-full bg-slate-300 mb-3" aria-hidden />
@@ -87,20 +58,10 @@ export function MobileCasesFilterDrawer({
             debouncedSearch
             contextualPlacement="top"
             mobileDrawerLayout
-            scrollPaddingBottom
+            onMobileDrawerDone={() => onOpenChange(false)}
             {...filterPanelProps}
           />
         </div>
-
-        <DrawerFooter className="shrink-0 border-t border-slate-100 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-          <Button
-            type="button"
-            className="w-full min-h-11 font-bold bg-blue-600 hover:bg-blue-700"
-            onClick={() => onOpenChange(false)}
-          >
-            Done
-          </Button>
-        </DrawerFooter>
       </DrawerContent>
     </Drawer>
   )

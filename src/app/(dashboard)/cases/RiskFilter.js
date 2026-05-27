@@ -52,9 +52,7 @@ export function RiskFilter({ initialRisk = 'all', onChange, inline = false }) {
           >
             <div className='flex items-center gap-2 overflow-hidden'>
               {selectedLevel ? (
-                <div className={cn("flex items-center px-2 py-0.5 text-[10px] font-bold tracking-wider")}>
-                  {selectedLevel.label}
-                </div>
+                <span className='text-xs font-semibold text-slate-700'>{selectedLevel.label}</span>
               ) : (
                 <span className='text-xs font-semibold text-slate-700'>All Risks</span>
               )}
