@@ -13,7 +13,7 @@ import {
 } from 'lucide-react'
 import { Twitter, Reddit } from "@/utils/icons"
 
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
@@ -46,25 +46,42 @@ function getPostDates(post) {
   }
 }
 
-function ExportSelect({ selectedExport, setSelectedExport, exportingType, posts, onExportCSV, onExportJSON, className }) {
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.setAttribute('download', filename)
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(url)
+}
+
+function ExportSelect({ selectKey, onExportDone, exportingType, posts, onExportCSV, onExportJSON, className }) {
   return (
     <Select
-      value={selectedExport}
+      key={selectKey}
       disabled={!!exportingType || posts.length === 0}
       onValueChange={(val) => {
-        setSelectedExport(val)
-        if (val === 'csv') onExportCSV()
-        if (val === 'json') onExportJSON()
+        if (val !== 'csv' && val !== 'json') return
+        void (async () => {
+          try {
+            if (val === 'csv') await onExportCSV()
+            else await onExportJSON()
+          } finally {
+            onExportDone()
+          }
+        })()
       }}
     >
       <SelectTrigger className={cn("h-9 text-xs font-bold text-slate-600 border-slate-200 hover:border-blue-300 transition-all focus:ring-0", className)}>
         <div className="flex items-center gap-2">
           {exportingType ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-600" />
-          ) : !selectedExport ? (
+          ) : (
             <Download className="h-3.5 w-3.5" />
-          ) : null}
-          <SelectValue placeholder="Export Data" />
+          )}
+          <span>Export Data</span>
         </div>
       </SelectTrigger>
       <SelectContent position="popper" className="w-[var(--radix-select-trigger-width)]">
@@ -103,7 +120,7 @@ export function ReviewInterface({
   const [selectedPost, setSelectedPost] = useState(initialCase || null)
   const [posts, setPosts] = useState(initialPosts)
   const [exportingType, setExportingType] = useState(null)
-  const [selectedExport, setSelectedExport] = useState("")
+  const [exportSelectKey, setExportSelectKey] = useState(0)
   const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false)
 
   const [isPending, startTransition] = useTransition()
@@ -188,13 +205,7 @@ export function ReviewInterface({
 
       const csvString = csvRows.join('\n')
       const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' })
-      const url = URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.setAttribute('download', `cases_export_${format(new Date(), 'yyyyMMdd_HHmmss')}.csv`)
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
+      downloadBlob(blob, `cases_export_${format(new Date(), 'yyyyMMdd_HHmmss')}.csv`)
     } catch (error) {
       console.error('Export Error:', error)
       alert('Failed to export CSV. Please try again.')
@@ -215,13 +226,7 @@ export function ReviewInterface({
 
       const jsonString = JSON.stringify(allPosts, null, 2)
       const blob = new Blob([jsonString], { type: 'application/json' })
-      const url = URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.setAttribute('download', `cases_export_${format(new Date(), 'yyyyMMdd_HHmmss')}.json`)
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
+      downloadBlob(blob, `cases_export_${format(new Date(), 'yyyyMMdd_HHmmss')}.json`)
     } catch (error) {
       console.error('Export Error:', error)
       alert('Failed to export JSON. Please try again.')
@@ -264,13 +269,7 @@ export function ReviewInterface({
 
       const jsonString = JSON.stringify(exportData, null, 2)
       const blob = new Blob([jsonString], { type: 'application/json' })
-      const url = URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.setAttribute('download', `case_${post._id}_${format(new Date(), 'yyyyMMdd_HHmmss')}.json`)
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
+      downloadBlob(blob, `case_${post._id}_${format(new Date(), 'yyyyMMdd_HHmmss')}.json`)
     } catch (error) {
       console.error('Download Error:', error)
       alert('Failed to download JSON. Please try again.')
@@ -339,8 +338,8 @@ export function ReviewInterface({
   }
 
   const exportSelectProps = {
-    selectedExport,
-    setSelectedExport,
+    selectKey: exportSelectKey,
+    onExportDone: () => setExportSelectKey((k) => k + 1),
     exportingType,
     posts,
     onExportCSV: handleExportCSV,

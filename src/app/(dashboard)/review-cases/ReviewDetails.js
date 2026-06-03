@@ -407,6 +407,7 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
+            URL.revokeObjectURL(url);
         } catch (error) {
             console.error('Download Error:', error);
             alert('Failed to download JSON. Please try again.');

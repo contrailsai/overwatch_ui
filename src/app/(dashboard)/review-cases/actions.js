@@ -362,11 +362,17 @@ export const getAllPostsForExport = traceAction('getAllPostsForExport', async (_
 
     const posts = await collection.aggregate(pipeline).toArray()
 
+    const toExportDate = (value) => {
+      if (!value) return ''
+      const d = value instanceof Date ? value : new Date(value)
+      return Number.isNaN(d.getTime()) ? '' : d.toISOString()
+    }
+
     const processedPosts = posts.map(post => ({
       _id: { $oid: post._id.toString() },
       code: post.code || post.post_id || '',
       content: post.content || post.post_content?.content || post.caption || '',
-      created_at: { $date: post.created_at || post.metadata?.created_at || '' },
+      created_at: { $date: toExportDate(post.created_at || post.metadata?.created_at) },
       engagement: {
         likes: post.engagement?.likes ?? post.stats?.like_count ?? 0,
         comments: post.engagement?.comments ?? post.stats?.comment_count ?? 0,
@@ -375,7 +381,7 @@ export const getAllPostsForExport = traceAction('getAllPostsForExport', async (_
         quotes: post.engagement?.quotes ?? post.stats?.quote_count ?? 0,
         replies: post.engagement?.replies ?? post.stats?.reply_count ?? 0,
         views: post.engagement?.views ?? post.stats?.view_count ?? 0,
-        posted_at: { $date: post.engagement?.posted_at || post.metadata?.posted_date || '' }
+        posted_at: { $date: toExportDate(post.engagement?.posted_at || post.metadata?.posted_date) }
       },
       media_urls: post.media_urls || post.post_content?.media_urls || [],
       platform: post.platform ? post.platform.toLowerCase() : '',
@@ -386,13 +392,14 @@ export const getAllPostsForExport = traceAction('getAllPostsForExport', async (_
         profile_url: post.profile?.profile_url || post.author?.url || '',
         is_verified: post.profile?.is_verified || false
       },
-      sourcing_date: { $date: post.sourcing_date || post.metadata?.sourcing_date || '' },
+      sourcing_date: { $date: toExportDate(post.sourcing_date || post.metadata?.sourcing_date) },
       url: post.original_url || post.url || post.result_origin?.source_url || '',
       analysis_results: post.analysis_results || {},
       review_details: post.review_details || {}
     }))
 
-    return { posts: processedPosts }
+    // Strip BSON types / non-JSON values so the server action response serializes reliably
+    return JSON.parse(JSON.stringify({ posts: processedPosts }))
   } catch (e) {
     logActionError({
       loki_stream: LOKI_STREAMS.review_cases,
