@@ -122,6 +122,7 @@ export function ReviewInterface({
   const [exportingType, setExportingType] = useState(null)
   const [exportSelectKey, setExportSelectKey] = useState(0)
   const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false)
+  const [searchTerm, setSearchTerm] = useState(() => searchParams.get('semantic_search') || '')
 
   const [isPending, startTransition] = useTransition()
   const postRefs = useRef({})
@@ -129,6 +130,10 @@ export function ReviewInterface({
   useEffect(() => {
     setPosts(initialPosts)
   }, [initialPosts])
+
+  useEffect(() => {
+    setSearchTerm(searchParams.get('semantic_search') || '')
+  }, [searchParams])
 
   const updateQueryParams = useCallback((newParams) => {
     const params = new URLSearchParams(searchParams.toString())
@@ -148,6 +153,15 @@ export function ReviewInterface({
       router.push(`${pathname}?${params.toString()}`, { scroll: false })
     })
   }, [router, pathname, searchParams])
+
+  const handleSearchApply = useCallback(() => {
+    const val = searchTerm.trim()
+    if (val) {
+      updateQueryParams({ semantic_search: val, page: 1 })
+    } else {
+      updateQueryParams({ semantic_search: null, page: 1 })
+    }
+  }, [searchTerm, updateQueryParams])
 
   const handlePageChange = (newPage) => {
     if (newPage < 1 || newPage > totalPages) return
@@ -321,7 +335,7 @@ export function ReviewInterface({
 
   const currentFilters = initialFilters || {}
 
-  const hasActiveFilters =
+  const hasFilterBesidesSearch =
     currentFilters.status !== 'pending' ||
     currentFilters.platform !== 'all' ||
     (currentFilters.aiAnalyzed && currentFilters.aiAnalyzed !== 'all') ||
@@ -333,10 +347,28 @@ export function ReviewInterface({
     currentFilters.postingDateStart ||
     currentFilters.postingDateEnd
 
+  const activeSearch = searchParams.get('semantic_search')?.trim() || ''
+
+  const hasActiveFilters =
+    currentFilters.status !== 'pending' ||
+    currentFilters.platform !== 'all' ||
+    (currentFilters.aiAnalyzed && currentFilters.aiAnalyzed !== 'all') ||
+    (currentFilters.visibility_status && currentFilters.visibility_status !== 'all') ||
+    (currentFilters.aiRisk && currentFilters.aiRisk !== 'all') ||
+    currentFilters.poiDetected ||
+    currentFilters.sourcingDateStart ||
+    currentFilters.sourcingDateEnd ||
+    currentFilters.postingDateStart ||
+    currentFilters.postingDateEnd ||
+    !!activeSearch
+
   const filterPanelProps = {
     currentFilters,
     handleFilterChange,
     updateQueryParams,
+    searchTerm,
+    onSearchTermChange: setSearchTerm,
+    onSearchApply: handleSearchApply,
   }
 
   const exportSelectProps = {
@@ -353,7 +385,14 @@ export function ReviewInterface({
       <div className="mx-auto w-12 h-12 rounded-full bg-slate-50 flex items-center justify-center mb-3">
         <Search className="w-6 h-6 text-slate-300" />
       </div>
-      <p className="text-slate-500 font-medium">No posts found matching your filters.</p>
+      <p className="text-slate-500 font-medium">
+        {activeSearch ? 'No posts found for this search.' : 'No posts found matching your filters.'}
+      </p>
+      {activeSearch && hasFilterBesidesSearch && (
+        <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+          Search runs within your current filters. Try Status → All Items if the post may already be reviewed.
+        </p>
+      )}
       <button onClick={clearFilters} className="text-blue-600 hover:underline text-sm mt-2 font-medium">Clear all filters</button>
     </div>
   )
@@ -571,7 +610,9 @@ export function ReviewInterface({
             </div>
           </div>
           <p className="text-[10px] text-slate-500 mt-1">
-            Showing {posts.length} on this page
+            {activeSearch
+              ? `${posts.length} search result${posts.length === 1 ? '' : 's'}`
+              : `Showing ${posts.length} on this page`}
           </p>
         </div>
 
@@ -597,8 +638,14 @@ export function ReviewInterface({
                   <span className="text-[10px] font-bold uppercase tracking-wider">Updating</span>
                 </div>
               )}
+              {activeSearch && (
+                <Badge variant="outline" className="h-6 px-2 text-[10px] font-semibold bg-purple-50 text-purple-700 border-purple-200 gap-1">
+                  <Search className="w-3 h-3" />
+                  <span className="truncate max-w-[140px]">{activeSearch}</span>
+                </Badge>
+              )}
               <Badge variant="secondary" className="h-6 px-2 text-[10px] font-semibold bg-slate-100 text-slate-600 border-slate-200">
-                {posts.length} of {totalCount.toLocaleString()}
+                {activeSearch ? `${posts.length} results` : `${posts.length} of ${totalCount.toLocaleString()}`}
               </Badge>
             </div>
             <ExportSelect {...exportSelectProps} className="w-[140px] shrink-0" />
