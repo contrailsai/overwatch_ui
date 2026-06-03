@@ -2,7 +2,6 @@
 
 import { format } from 'date-fns'
 import { Sparkles } from 'lucide-react'
-import { Checkbox } from '@/components/ui/checkbox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
 import { DateFilterPopover } from './DateFilterPopover'
@@ -94,20 +93,30 @@ export function ReviewCasesFilterPanel({
         />
       </div>
 
-      <div className="flex items-center justify-between h-fit py-2 space-x-2.5 bg-neutral-100 shadow-xs px-2 rounded-lg border">
-        <Checkbox
-          id={isStacked ? 'aiAnalyzed-mobile' : 'aiAnalyzed'}
-          checked={currentFilters.aiAnalyzed === 'true' || currentFilters.aiAnalyzed === true}
-          onCheckedChange={(checked) => applyAndClose(() => handleFilterChange('aiAnalyzed', checked.toString()))}
-          className="border-slate-300 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
-        />
-        <label
-          htmlFor={isStacked ? 'aiAnalyzed-mobile' : 'aiAnalyzed'}
-          className="text-sm font-medium leading-none cursor-pointer text-slate-700 flex items-center gap-2"
-        >
+      <div className="space-y-2">
+        <Label className="text-xs font-bold text-slate-500 uppercase tracking-wide flex items-center gap-1.5">
           <Sparkles className="w-3.5 h-3.5 text-blue-500" />
-          AI Analyzed Only
-        </label>
+          AI Analysis
+        </Label>
+        <Select
+          value={
+            currentFilters.aiAnalyzed === 'analyzed' || currentFilters.aiAnalyzed === true || currentFilters.aiAnalyzed === 'true'
+              ? 'analyzed'
+              : currentFilters.aiAnalyzed === 'not_analyzed'
+                ? 'not_analyzed'
+                : 'all'
+          }
+          onValueChange={(val) => applyAndClose(() => handleFilterChange('aiAnalyzed', val === 'all' ? null : val))}
+        >
+          <SelectTrigger className="w-full bg-slate-50 border-slate-200 hover:border-slate-300 focus:ring-blue-500/20">
+            <SelectValue placeholder="All Cases" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Cases</SelectItem>
+            <SelectItem value="analyzed">AI Analyzed Only</SelectItem>
+            <SelectItem value="not_analyzed">Not Analyzed by AI</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
     </div>
   )

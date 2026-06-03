@@ -55,7 +55,12 @@ export default async function ReviewCasesPage({ searchParams }) {
   const initialFilters = {
     platform: resolvedParams?.platform || 'all',
     status: resolvedParams?.status || 'pending',
-    aiAnalyzed: resolvedParams?.aiAnalyzed === 'true', // Default false
+    aiAnalyzed: (() => {
+      const v = resolvedParams?.aiAnalyzed
+      if (v === 'analyzed' || v === 'true') return 'analyzed'
+      if (v === 'not_analyzed') return 'not_analyzed'
+      return 'all'
+    })(),
     poiDetected: resolvedParams?.poiDetected === 'true', // Default false
     sourcingDateStart: resolvedParams?.sourcingDateStart || undefined,
     sourcingDateEnd: resolvedParams?.sourcingDateEnd || undefined,

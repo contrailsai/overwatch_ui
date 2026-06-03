@@ -83,6 +83,54 @@ async function normalizeReviewS3Post(post) {
   return JSON.parse(JSON.stringify(normalized));
 }
 
+function analysisResultsKeyCountExpr() {
+  return { $size: { $objectToArray: { $ifNull: ['$analysis_results', {}] } } }
+}
+
+function normalizeAiAnalyzedFilter(value) {
+  if (value === 'analyzed' || value === true || value === 'true') return 'analyzed'
+  if (value === 'not_analyzed') return 'not_analyzed'
+  return 'all'
+}
+
+/** Shared $match query for review-cases list + export (keep filters in sync). */
+function buildReviewPostsMatchQuery(filters = {}) {
+  const query = { _id: { $ne: null } }
+  const andConditions = []
+
+  if (filters.status === 'pending') {
+    andConditions.push({ 'review_details.threat_score': { $exists: false } })
+  } else if (filters.status === 'reviewed') {
+    andConditions.push({ 'review_details.threat_score': { $exists: true } })
+  }
+
+  const aiMode = normalizeAiAnalyzedFilter(filters.aiAnalyzed)
+  if (aiMode === 'analyzed') {
+    andConditions.push({ $expr: { $gt: [analysisResultsKeyCountExpr(), 0] } })
+  } else if (aiMode === 'not_analyzed') {
+    andConditions.push({ $expr: { $eq: [analysisResultsKeyCountExpr(), 0] } })
+  }
+
+  if (filters.poiDetected) {
+    andConditions.push({
+      $or: [
+        { 'analysis_results.poi_check.poi_name_found': true },
+        { 'analysis_results.poi_check.face_present': true },
+      ],
+    })
+  }
+
+  if (filters.platform && filters.platform !== 'all') {
+    query.platform = { $regex: new RegExp(`^${filters.platform}$`, 'i') }
+  }
+
+  if (andConditions.length > 0) {
+    query.$and = andConditions
+  }
+
+  return query
+}
+
 export const getPosts = traceAction('getPosts_review', async (_project_mongo_db_map, page = 1, limit = 20, filters = {}) => {
   try {
     const { dbName } = await requireRole(['reviewer'])
@@ -104,47 +152,9 @@ export const getPosts = traceAction('getPosts_review', async (_project_mongo_db_
 
     const skip = (page - 1) * limit
 
-    // Build query with filters
-    const query = { _id: { $ne: null } }
-    const andConditions = []
-
-    // Filter by Review Status
-    if (filters.status === 'pending') {
-      andConditions.push({
-        "review_details.threat_score": { $exists: false }
-      })
-    } else if (filters.status === 'reviewed') {
-      andConditions.push({
-        "review_details.threat_score": { $exists: true }
-      })
-    }
-
-    // AI Analyzed Filter
-    if (filters.aiAnalyzed) {
-      andConditions.push({
-        "analysis_results.risk_score": { $exists: true }
-      })
-    }
-    // POI Detected Filter
-    if (filters.poiDetected) {
-      andConditions.push({
-        $or: [
-          { "analysis_results.poi_check.poi_name_found": true },
-          { "analysis_results.poi_check.face_present": true }
-        ]
-      })
-    }
-    // Platform filter
-    if (filters.platform && filters.platform !== 'all') {
-      query.platform = { $regex: new RegExp(`^${filters.platform}\$`, 'i') }
-    }
-
-    if (andConditions.length > 0) {
-      query.$and = andConditions
-    }
+    const matchStage = buildReviewPostsMatchQuery(filters)
 
     // SOURCED (INGESTED) AND POSTED (ORIGINAL) DATE FILTERS
-    const matchStage = { ...query };
     const dateFilterStage = {};
 
     // Sourcing Date Filter (Ingested) -> metadata.created_at
@@ -278,37 +288,7 @@ export const getAllPostsForExport = traceAction('getAllPostsForExport', async (_
     const db = client.db(dbName)
     const collection = db.collection('Posts')
 
-    const query = { _id: { $ne: null } }
-    const andConditions = []
-
-    if (filters.status === 'pending') {
-      andConditions.push({ "review_details.threat_score": { $exists: false } })
-    } else if (filters.status === 'reviewed') {
-      andConditions.push({ "review_details.threat_score": { $exists: true } })
-    }
-
-    if (filters.aiAnalyzed) {
-      andConditions.push({ "analysis_results.risk_score": { $exists: true } })
-    }
-
-    if (filters.poiDetected) {
-      andConditions.push({
-        $or: [
-          { "analysis_results.poi_check.poi_name_found": true },
-          { "analysis_results.poi_check.face_present": true }
-        ]
-      })
-    }
-
-    if (filters.platform && filters.platform !== 'all') {
-      query.platform = { $regex: new RegExp(`^${filters.platform}\$`, 'i') }
-    }
-
-    if (andConditions.length > 0) {
-      query.$and = andConditions
-    }
-
-    const matchStage = { ...query }
+    const matchStage = buildReviewPostsMatchQuery(filters)
     const dateFilterStage = {}
 
     // Sourcing Date Filter (Ingested) -> metadata.created_at

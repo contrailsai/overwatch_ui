@@ -324,7 +324,7 @@ export function ReviewInterface({
   const hasActiveFilters =
     currentFilters.status !== 'pending' ||
     currentFilters.platform !== 'all' ||
-    currentFilters.aiAnalyzed ||
+    (currentFilters.aiAnalyzed && currentFilters.aiAnalyzed !== 'all') ||
     currentFilters.poiDetected ||
     currentFilters.sourcingDateStart ||
     currentFilters.sourcingDateEnd ||
