@@ -1,4 +1,4 @@
-import { getPosts, getPostById } from './actions'
+import { getPosts, getPostById, getReviewSemanticSearchPosts } from './actions'
 import { getClientandProjectDetails } from '@/app/(dashboard)/actions'
 import { ReviewInterface } from './ReviewInterface'
 import PageHeader from '@/components/PageHeader'
@@ -70,7 +70,12 @@ export default async function ReviewCasesPage({ searchParams }) {
     postingDateEnd: resolvedParams?.postingDateEnd || undefined,
   }
 
-  const { posts, totalPages, totalCount } = await getPosts(project.mongo_db_map, page, 50, initialFilters)
+  const itemsPerPage = 50
+  const searchText = resolvedParams?.semantic_search?.trim() || ''
+
+  const { posts, totalPages, totalCount } = searchText
+    ? await getReviewSemanticSearchPosts(project.mongo_db_map, searchText, itemsPerPage, initialFilters)
+    : await getPosts(project.mongo_db_map, page, itemsPerPage, initialFilters)
 
   let initialCase = null;
   if (resolvedParams.case_id) {

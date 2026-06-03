@@ -74,7 +74,9 @@ async function normalizeReviewS3Post(post) {
 
     // Platform
     platform: post.platform ? post.platform.toLowerCase() : 'instagram',
-    visibility_status: post.visibility_status || 'active'
+    visibility_status: post.visibility_status || 'active',
+    url: post.original_url || post.url || post.result_origin?.source_url || '',
+    original_url: post.original_url || post.url || post.result_origin?.source_url || '',
   };
 
   // Robust profile pic handling
@@ -299,6 +301,332 @@ export const getPosts = traceAction('getPosts_review', async (_project_mongo_db_
     return { posts: [], totalCount: 0, page: 1, totalPages: 0 }
   }
 })
+
+function escapeRegexLiteral(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+/** Same compound shape as /cases Atlas index, plus review-cases caption + source URL fields. */
+function buildReviewAtlasSearchCompound(searchText) {
+  const fuzzy = {
+    maxEdits: 2,
+    prefixLength: 2,
+    maxExpansions: 50,
+  }
+  return {
+    should: [
+      {
+        text: {
+          query: searchText,
+          path: 'original_url.exact',
+          score: { boost: { value: 10 } },
+        },
+      },
+      {
+        phrase: {
+          query: searchText,
+          path: 'original_url',
+          score: { boost: { value: 5 } },
+        },
+      },
+      {
+        text: {
+          query: searchText,
+          path: [
+            'content',
+            'original_url',
+            'url',
+            'result_origin.source_url',
+            'post_content.caption',
+            'profile.display_name',
+          ],
+          fuzzy,
+        },
+      },
+    ],
+  }
+}
+
+function isLikelyUrlSearch(searchText) {
+  const t = searchText.trim().toLowerCase()
+  if (!t) return false
+  return (
+    /^https?:\/\//i.test(t) ||
+    t.includes('facebook.com') ||
+    t.includes('instagram.com') ||
+    t.includes('youtube.com') ||
+    t.includes('youtu.be') ||
+    t.includes('twitter.com') ||
+    t.includes('x.com') ||
+    t.includes('reddit.com') ||
+    /\.(com|net|org|io)\//.test(t)
+  )
+}
+
+/** Build $or regex variants for pasted URLs (handles query strings, trailing slashes, path-only). */
+function buildReviewUrlRegexMatch(searchText) {
+  const trimmed = searchText.trim()
+  if (!trimmed || trimmed.length < 4) return null
+
+  const variants = new Set([trimmed])
+  try {
+    const parsed = new URL(trimmed)
+    const pathOnly = parsed.pathname
+    const withoutTrailingSlash = `${parsed.origin}${pathOnly}`.replace(/\/$/, '')
+    const withTrailingSlash = `${withoutTrailingSlash}/`
+
+    variants.add(withoutTrailingSlash)
+    variants.add(withTrailingSlash)
+    if (parsed.search) {
+      variants.add(`${parsed.origin}${pathOnly}`)
+    }
+    if (pathOnly.length > 8) {
+      variants.add(pathOnly)
+      variants.add(pathOnly.replace(/\/$/, ''))
+    }
+  } catch {
+    // Not a full URL — still allow substring match below
+  }
+
+  const orConditions = []
+  for (const variant of variants) {
+    const escaped = escapeRegexLiteral(variant)
+    if (escaped.length < 4) continue
+    const re = { $regex: escaped, $options: 'i' }
+    orConditions.push(
+      { original_url: re },
+      { url: re },
+      { 'result_origin.source_url': re },
+      { post_id: re },
+      { code: re },
+      { content: re },
+      { 'post_content.caption': re },
+      { 'post_content.content': re },
+    )
+  }
+
+  return orConditions.length > 0 ? { $or: orConditions } : null
+}
+
+function combineReviewMatchQuery(baseMatch, extraMatch) {
+  if (!extraMatch) return baseMatch
+
+  const clauses = []
+  const { $and, ...rest } = baseMatch
+  if (Object.keys(rest).length > 0) clauses.push(rest)
+  if (Array.isArray($and) && $and.length > 0) clauses.push(...$and)
+  clauses.push(extraMatch)
+
+  if (clauses.length === 1) return clauses[0]
+  return { $and: clauses }
+}
+
+async function runReviewRegexSearch(collection, searchText, limit, filters) {
+  const urlMatch = buildReviewUrlRegexMatch(searchText)
+  if (!urlMatch) return []
+
+  const matchQuery = combineReviewMatchQuery(buildReviewPostsMatchQuery(filters), urlMatch)
+  const { dateFilterStage, hasDateFilters } = buildReviewPostsDateFilterStage(filters)
+  const riskMatch = buildReviewRiskBucketMatch(filters.aiRisk)
+
+  const pipeline = [
+    { $match: matchQuery },
+    { $project: { text_embedding: 0, image_embedding: 0 } },
+    buildReviewPostsAddFieldsStage(),
+    ...(hasDateFilters ? [{ $match: dateFilterStage }] : []),
+    ...(riskMatch ? [riskMatch] : []),
+    { $sort: { sort_sourced_at: -1 } },
+    { $limit: limit },
+  ]
+
+  try {
+    return await collection.aggregate(pipeline).toArray()
+  } catch (e) {
+    logActionError({
+      loki_stream: LOKI_STREAMS.review_cases,
+      app_action: 'getReviewSemanticSearchPosts',
+      message: 'Regex URL search failed',
+    }, e)
+    return []
+  }
+}
+
+/** Hybrid Atlas text + vector search for review-cases (URL-focused, same index as /cases). */
+export const getReviewSemanticSearchPosts = traceAction(
+  'getReviewSemanticSearchPosts',
+  async (_project_mongo_db_map, searchText, limit = 50, filters = {}) => {
+    try {
+      if (!searchText?.trim()) {
+        return { posts: [], totalCount: 0, page: 1, totalPages: 0 }
+      }
+      const query = searchText.trim()
+      const { dbName } = await requireRole(['reviewer'])
+
+      let queryVector = null
+      try {
+        const res = await fetch(`${process.env.EMBEDDING_SERVICE_API}/embed/text`, {
+          method: 'POST',
+          headers: {
+            accept: 'application/json',
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ text: query }),
+        })
+
+        if (res.ok) {
+          const data = await res.json()
+          if (Array.isArray(data)) queryVector = data
+          else if (data.embedding && Array.isArray(data.embedding)) queryVector = data.embedding
+          else if (data.data && Array.isArray(data.data)) queryVector = data.data
+        } else {
+          logActionError({
+            loki_stream: LOKI_STREAMS.review_cases,
+            app_action: 'getReviewSemanticSearchPosts',
+            message: 'Embedding API error',
+            http_status: res.status,
+          })
+        }
+      } catch (apiError) {
+        logActionError({
+          loki_stream: LOKI_STREAMS.review_cases,
+          app_action: 'getReviewSemanticSearchPosts',
+          message: 'Failed to fetch embeddings',
+        }, apiError)
+      }
+
+      const client = await clientPromise
+      const db = client.db(dbName)
+      const collection = db.collection('Posts')
+
+      const matchQuery = buildReviewPostsMatchQuery(filters)
+      const { dateFilterStage, hasDateFilters } = buildReviewPostsDateFilterStage(filters)
+      const riskMatch = buildReviewRiskBucketMatch(filters.aiRisk)
+
+      const postMatchStages = [
+        { $match: matchQuery },
+        { $project: { text_embedding: 0, image_embedding: 0 } },
+        buildReviewPostsAddFieldsStage(),
+        ...(hasDateFilters ? [{ $match: dateFilterStage }] : []),
+        ...(riskMatch ? [riskMatch] : []),
+      ]
+
+      const likelyUrl = isLikelyUrlSearch(query)
+
+      let regexPosts = []
+      if (likelyUrl) {
+        regexPosts = await runReviewRegexSearch(collection, query, limit, filters)
+      }
+
+      let semanticPosts = []
+      if (queryVector?.length > 0 && !likelyUrl) {
+        const semanticPipeline = [
+          {
+            $vectorSearch: {
+              index: 'vector_index',
+              path: 'text_embedding',
+              queryVector,
+              numCandidates: 1000,
+              limit: limit * 5,
+            },
+          },
+          ...postMatchStages,
+          {
+            $addFields: {
+              score: { $meta: 'vectorSearchScore' },
+            },
+          },
+          { $match: { score: { $gt: 0.8 } } },
+          { $sort: { score: -1, sort_sourced_at: -1 } },
+          { $limit: limit },
+        ]
+
+        try {
+          semanticPosts = await collection.aggregate(semanticPipeline).toArray()
+        } catch (e) {
+          logActionError({
+            loki_stream: LOKI_STREAMS.review_cases,
+            app_action: 'getReviewSemanticSearchPosts',
+            message: 'Semantic search aggregation failed',
+          }, e)
+        }
+      }
+
+      let textPosts = []
+      if (!likelyUrl || regexPosts.length === 0) {
+        const textPipeline = [
+          {
+            $search: {
+              index: 'default',
+              compound: buildReviewAtlasSearchCompound(query),
+            },
+          },
+          ...postMatchStages,
+          {
+            $addFields: {
+              score: { $meta: 'searchScore' },
+            },
+          },
+          { $sort: { score: -1, sort_sourced_at: -1 } },
+          { $limit: limit },
+        ]
+
+        try {
+          textPosts = await collection.aggregate(textPipeline).toArray()
+        } catch (e) {
+          logActionError({
+            loki_stream: LOKI_STREAMS.review_cases,
+            app_action: 'getReviewSemanticSearchPosts',
+            message: 'Atlas text search aggregation failed',
+          }, e)
+        }
+      }
+
+      const mergedPosts = []
+      const seenIds = new Set()
+
+      const appendUnique = (list) => {
+        for (const post of list) {
+          const id = post._id.toString()
+          if (!seenIds.has(id)) {
+            mergedPosts.push(post)
+            seenIds.add(id)
+          }
+        }
+      }
+
+      appendUnique(regexPosts)
+      appendUnique(textPosts)
+      appendUnique(semanticPosts)
+
+      if (mergedPosts.length === 0) {
+        const fallbackRegex = await runReviewRegexSearch(collection, query, limit, filters)
+        appendUnique(fallbackRegex)
+      }
+
+      const finalLimitedPosts = mergedPosts.slice(0, limit)
+      const processedPosts = await Promise.all(finalLimitedPosts.map((p) => normalizeReviewS3Post(p)))
+
+      return {
+        posts: processedPosts,
+        totalCount: processedPosts.length,
+        page: 1,
+        totalPages: 1,
+        search_metadata: {
+          semantic_search: query,
+          hybrid_search_used: !likelyUrl,
+          url_regex_used: likelyUrl || regexPosts.length > 0,
+        },
+      }
+    } catch (e) {
+      logActionError({
+        loki_stream: LOKI_STREAMS.review_cases,
+        app_action: 'getReviewSemanticSearchPosts',
+        message: 'getReviewSemanticSearchPosts failed',
+      }, e)
+      return { posts: [], totalCount: 0, page: 1, totalPages: 0 }
+    }
+  }
+)
 
 // SHOWCASE A SINGLE POST link
 export const getPostById = traceAction('getPostById', async (_project, case_id) => {

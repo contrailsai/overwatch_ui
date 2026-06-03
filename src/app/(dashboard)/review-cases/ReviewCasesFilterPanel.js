@@ -1,7 +1,8 @@
 'use client'
 
 import { format } from 'date-fns'
-import { Sparkles } from 'lucide-react'
+import { Sparkles, Search } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
 import { DateFilterPopover } from '@/components/DateFilterPopover'
@@ -30,6 +31,9 @@ export function ReviewCasesFilterPanel({
   updateQueryParams,
   layout = 'row',
   onFilterApplied,
+  searchTerm = '',
+  onSearchTermChange,
+  onSearchApply,
 }) {
   const isStacked = layout === 'stacked'
   const isRow = layout === 'row'
@@ -48,8 +52,48 @@ export function ReviewCasesFilterPanel({
     onFilterApplied?.()
   }
 
+  const searchFieldClass = isStacked
+    ? 'w-full'
+    : 'col-span-full sm:col-span-2 xl:col-span-2 min-w-[12rem]'
+
   return (
     <div className={wrapClass}>
+      {(onSearchTermChange && onSearchApply) && (
+        <div className={cn('space-y-0.5', searchFieldClass)}>
+          <span className={LABEL_CLASS}>Search</span>
+          <div className="flex gap-1.5">
+            <div className="relative flex-1 min-w-0">
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => onSearchTermChange(e.target.value)}
+                placeholder="URL, source link, or text..."
+                className="w-full h-8 rounded-md border border-slate-200 bg-white pl-8 pr-2 text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    onSearchApply()
+                    onFilterApplied?.()
+                  }
+                }}
+              />
+            </div>
+            <Button
+              type="button"
+              onClick={() => {
+                onSearchApply()
+                onFilterApplied?.()
+              }}
+              className="h-8 w-8 p-0 shrink-0 bg-blue-600 hover:bg-blue-700 text-white"
+              title="Search"
+            >
+              <Search className="w-3.5 h-3.5" />
+            </Button>
+          </div>
+        </div>
+      )}
+
       <FilterField label="Status" className={fieldClass}>
         <Select
           value={currentFilters.status || 'pending'}
