@@ -266,6 +266,7 @@ export function DateFilterPopover({
   initialFrom,
   initialTo,
   applyWhenRangeComplete = false,
+  triggerClassName,
 }) {
   const isMobile = useIsMobile()
   const [open, setOpen] = useState(false)
@@ -373,7 +374,10 @@ export function DateFilterPopover({
   const triggerButton = (
     <Button
       variant="outline"
-      className="w-full justify-start text-left font-normal bg-white border-slate-200 h-9 text-xs shadow-none hover:bg-slate-50"
+      className={cn(
+        'w-full justify-start text-left font-normal bg-white border-slate-200 h-9 text-xs shadow-none hover:bg-slate-50',
+        triggerClassName
+      )}
     >
       <CalendarIcon className="h-3.5 w-3.5 mr-2 shrink-0 text-slate-400" />
       {appliedRange?.from ? (
@@ -408,7 +412,10 @@ export function DateFilterPopover({
           type="button"
           variant="outline"
           onClick={() => setOpen(true)}
-          className="w-full justify-start text-left font-normal bg-white border-slate-200 h-9 text-xs shadow-none hover:bg-slate-50"
+          className={cn(
+            'w-full justify-start text-left font-normal bg-white border-slate-200 h-9 text-xs shadow-none hover:bg-slate-50',
+            triggerClassName
+          )}
         >
           <CalendarIcon className="h-3.5 w-3.5 mr-2 shrink-0 text-slate-400" />
           {appliedRange?.from ? (
