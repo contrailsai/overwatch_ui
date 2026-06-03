@@ -17,7 +17,7 @@ export function ReviewCasesFilterPanel({
   const isStacked = layout === 'stacked'
 
   const wrapClass = cn(
-    isStacked ? 'flex flex-col gap-4' : 'grid grid-cols-1 items-end md:grid-cols-5 gap-5'
+    isStacked ? 'flex flex-col gap-4' : 'grid grid-cols-1 items-end md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-5'
   )
 
   const applyAndClose = (fn) => {
@@ -91,6 +91,23 @@ export function ReviewCasesFilterPanel({
             page: 1,
           }))}
         />
+      </div>
+
+      <div className="space-y-2">
+        <Label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Visibility</Label>
+        <Select
+          value={currentFilters.visibility_status || 'all'}
+          onValueChange={(val) => applyAndClose(() => handleFilterChange('visibility_status', val === 'all' ? null : val))}
+        >
+          <SelectTrigger className="w-full bg-slate-50 border-slate-200 hover:border-slate-300 focus:ring-blue-500/20">
+            <SelectValue placeholder="All Visibility" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Visibility</SelectItem>
+            <SelectItem value="active">Online</SelectItem>
+            <SelectItem value="down">Taken Down</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       <div className="space-y-2">

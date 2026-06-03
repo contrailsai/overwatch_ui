@@ -93,6 +93,8 @@ function normalizeAiAnalyzedFilter(value) {
   return 'all'
 }
 
+const ONLINE_VISIBILITY_VALUES = ['active', 'online', 'available']
+
 /** Shared $match query for review-cases list + export (keep filters in sync). */
 function buildReviewPostsMatchQuery(filters = {}) {
   const query = { _id: { $ne: null } }
@@ -122,6 +124,25 @@ function buildReviewPostsMatchQuery(filters = {}) {
 
   if (filters.platform && filters.platform !== 'all') {
     query.platform = { $regex: new RegExp(`^${filters.platform}$`, 'i') }
+  }
+
+  if (filters.visibility_status && filters.visibility_status !== 'all') {
+    const visibilityLower = String(filters.visibility_status).toLowerCase()
+    if (visibilityLower === 'down') {
+      query.visibility_status = 'down'
+    } else if (
+      visibilityLower === 'active' ||
+      visibilityLower === 'online' ||
+      visibilityLower === 'available'
+    ) {
+      andConditions.push({
+        $or: [
+          { visibility_status: { $in: ONLINE_VISIBILITY_VALUES } },
+          { visibility_status: { $exists: false } },
+          { visibility_status: null },
+        ],
+      })
+    }
   }
 
   if (andConditions.length > 0) {

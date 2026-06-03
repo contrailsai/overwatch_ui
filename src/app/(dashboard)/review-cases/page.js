@@ -62,6 +62,7 @@ export default async function ReviewCasesPage({ searchParams }) {
       return 'all'
     })(),
     poiDetected: resolvedParams?.poiDetected === 'true', // Default false
+    visibility_status: resolvedParams?.visibility_status || 'all',
     sourcingDateStart: resolvedParams?.sourcingDateStart || undefined,
     sourcingDateEnd: resolvedParams?.sourcingDateEnd || undefined,
     postingDateStart: resolvedParams?.postingDateStart || undefined,
