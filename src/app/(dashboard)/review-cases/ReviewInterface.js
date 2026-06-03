@@ -576,35 +576,34 @@ export function ReviewInterface({
         </div>
 
         {/* Desktop filters */}
-        <div className="hidden lg:block py-3 px-4 mb-1">
-          <div className="space-y-2">
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-              <div className="flex flex-wrap items-center gap-2.5">
-                <div className="bg-blue-50 p-2 rounded-lg text-blue-600">
-                  <Filter className="h-4 w-4" />
+        <div className="hidden lg:block shrink-0 border-b border-slate-200 bg-white px-3 py-2">
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 mb-1.5">
+            <div className="flex flex-wrap items-center gap-2 min-w-0">
+              <Filter className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Filters</span>
+              {hasActiveFilters && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={clearFilters}
+                  className="h-7 px-2 text-[10px] font-bold text-rose-600 hover:bg-rose-50 hover:text-rose-700"
+                >
+                  <X className="h-3 w-3 mr-1" /> Reset
+                </Button>
+              )}
+              {isPending && (
+                <div className="flex items-center gap-1.5 px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded border border-blue-100">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  <span className="text-[10px] font-bold uppercase tracking-wider">Updating</span>
                 </div>
-                <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">Filters</h3>
-                <div className="flex items-center gap-3">
-                  {hasActiveFilters && (
-                    <Button variant="ghost" size="sm" onClick={clearFilters} className="h-9 text-xs font-bold text-rose-600 hover:bg-rose-50 hover:text-rose-700">
-                      <X className="h-3.5 w-3.5 mr-1.5" /> Reset
-                    </Button>
-                  )}
-                  {isPending && (
-                    <div className="flex items-center gap-2 px-2 py-1 bg-blue-50 text-blue-600 rounded-md border border-blue-100 animate-pulse">
-                      <Loader2 className="h-3 w-3 animate-spin" />
-                      <span className="text-[10px] font-bold uppercase tracking-wider">Updating...</span>
-                    </div>
-                  )}
-                  <Badge variant="secondary" className="px-3 py-1 bg-slate-100 text-slate-600 border-slate-200">
-                    {posts.length} of {totalCount.toLocaleString()} results
-                  </Badge>
-                </div>
-              </div>
-              <ExportSelect {...exportSelectProps} className="w-[150px]" />
+              )}
+              <Badge variant="secondary" className="h-6 px-2 text-[10px] font-semibold bg-slate-100 text-slate-600 border-slate-200">
+                {posts.length} of {totalCount.toLocaleString()}
+              </Badge>
             </div>
-            <ReviewCasesFilterPanel {...filterPanelProps} layout="grid" />
+            <ExportSelect {...exportSelectProps} className="w-[140px] shrink-0" />
           </div>
+          <ReviewCasesFilterPanel {...filterPanelProps} layout="row" />
         </div>
 
         {/* Mobile card list */}

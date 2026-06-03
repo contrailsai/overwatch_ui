@@ -4,21 +4,44 @@ import { format } from 'date-fns'
 import { Sparkles } from 'lucide-react'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
-import { DateFilterPopover } from './DateFilterPopover'
+import { DateFilterPopover } from '@/components/DateFilterPopover'
 import { cn } from '@/lib/utils'
+
+const LABEL_CLASS = 'text-[10px] font-bold text-slate-500 uppercase tracking-wide'
+const TRIGGER_CLASS =
+  'w-full h-8 text-xs bg-slate-50 border-slate-200 hover:border-slate-300 focus:ring-blue-500/20 px-2.5'
+const DATE_TRIGGER_CLASS = 'h-8 bg-slate-50 border-slate-200 hover:bg-slate-50 px-2.5'
+
+function FilterField({ label, children, className, labelIcon }) {
+  return (
+    <div className={cn('space-y-0.5 min-w-0', className)}>
+      <Label className={cn(LABEL_CLASS, labelIcon && 'flex items-center gap-1')}>
+        {labelIcon}
+        {label}
+      </Label>
+      {children}
+    </div>
+  )
+}
 
 export function ReviewCasesFilterPanel({
   currentFilters,
   handleFilterChange,
   updateQueryParams,
-  layout = 'grid',
+  layout = 'row',
   onFilterApplied,
 }) {
   const isStacked = layout === 'stacked'
+  const isRow = layout === 'row'
 
   const wrapClass = cn(
-    isStacked ? 'flex flex-col gap-4' : 'grid grid-cols-1 items-end md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-7 gap-5'
+    isStacked && 'flex flex-col gap-3',
+    isRow &&
+      'grid w-full items-end gap-x-2 gap-y-1.5 grid-cols-[repeat(auto-fill,minmax(7.5rem,1fr))] sm:grid-cols-[repeat(auto-fill,minmax(8.25rem,1fr))] xl:grid-cols-7'
   )
+
+  const fieldClass = isStacked ? 'w-full' : undefined
+  const dateFieldClass = isStacked ? 'w-full' : 'min-w-0'
 
   const applyAndClose = (fn) => {
     fn()
@@ -27,13 +50,12 @@ export function ReviewCasesFilterPanel({
 
   return (
     <div className={wrapClass}>
-      <div className="space-y-2">
-        <Label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Status</Label>
+      <FilterField label="Status" className={fieldClass}>
         <Select
           value={currentFilters.status || 'pending'}
           onValueChange={(val) => applyAndClose(() => handleFilterChange('status', val))}
         >
-          <SelectTrigger className="w-full bg-slate-50 border-slate-200 hover:border-slate-300 focus:ring-blue-500/20">
+          <SelectTrigger size="sm" className={TRIGGER_CLASS}>
             <SelectValue placeholder="Select Status" />
           </SelectTrigger>
           <SelectContent>
@@ -42,15 +64,14 @@ export function ReviewCasesFilterPanel({
             <SelectItem value="all">All Items</SelectItem>
           </SelectContent>
         </Select>
-      </div>
+      </FilterField>
 
-      <div className="space-y-2">
-        <Label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Platform</Label>
+      <FilterField label="Platform" className={fieldClass}>
         <Select
           value={currentFilters.platform || 'all'}
           onValueChange={(val) => applyAndClose(() => handleFilterChange('platform', val))}
         >
-          <SelectTrigger className="w-full bg-slate-50 border-slate-200 hover:border-slate-300 focus:ring-blue-500/20">
+          <SelectTrigger size="sm" className={TRIGGER_CLASS}>
             <SelectValue placeholder="All Platforms" />
           </SelectTrigger>
           <SelectContent>
@@ -63,12 +84,12 @@ export function ReviewCasesFilterPanel({
             <SelectItem value="website">Websites</SelectItem>
           </SelectContent>
         </Select>
-      </div>
+      </FilterField>
 
-      <div className="space-y-1.5 w-full min-w-32">
-        <Label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Sourcing Date</Label>
+      <FilterField label="Sourcing Date" className={dateFieldClass}>
         <DateFilterPopover
           title="Sourcing Date"
+          triggerClassName={DATE_TRIGGER_CLASS}
           initialFrom={currentFilters.sourcingDateStart}
           initialTo={currentFilters.sourcingDateEnd}
           onApply={(range) => applyAndClose(() => updateQueryParams({
@@ -77,12 +98,12 @@ export function ReviewCasesFilterPanel({
             page: 1,
           }))}
         />
-      </div>
+      </FilterField>
 
-      <div className="space-y-1.5 w-full min-w-32">
-        <Label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Publish Date</Label>
+      <FilterField label="Publish Date" className={dateFieldClass}>
         <DateFilterPopover
           title="Publish Date"
+          triggerClassName={DATE_TRIGGER_CLASS}
           initialFrom={currentFilters.postingDateStart}
           initialTo={currentFilters.postingDateEnd}
           onApply={(range) => applyAndClose(() => updateQueryParams({
@@ -91,15 +112,14 @@ export function ReviewCasesFilterPanel({
             page: 1,
           }))}
         />
-      </div>
+      </FilterField>
 
-      <div className="space-y-2">
-        <Label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Visibility</Label>
+      <FilterField label="Visibility" className={fieldClass}>
         <Select
           value={currentFilters.visibility_status || 'all'}
           onValueChange={(val) => applyAndClose(() => handleFilterChange('visibility_status', val === 'all' ? null : val))}
         >
-          <SelectTrigger className="w-full bg-slate-50 border-slate-200 hover:border-slate-300 focus:ring-blue-500/20">
+          <SelectTrigger size="sm" className={TRIGGER_CLASS}>
             <SelectValue placeholder="All Visibility" />
           </SelectTrigger>
           <SelectContent>
@@ -108,15 +128,14 @@ export function ReviewCasesFilterPanel({
             <SelectItem value="down">Taken Down</SelectItem>
           </SelectContent>
         </Select>
-      </div>
+      </FilterField>
 
-      <div className="space-y-2">
-        <Label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Threat Risk</Label>
+      <FilterField label="Threat Risk" className={fieldClass}>
         <Select
           value={currentFilters.aiRisk || 'all'}
           onValueChange={(val) => applyAndClose(() => handleFilterChange('aiRisk', val === 'all' ? null : val))}
         >
-          <SelectTrigger className="w-full bg-slate-50 border-slate-200 hover:border-slate-300 focus:ring-blue-500/20">
+          <SelectTrigger size="sm" className={TRIGGER_CLASS}>
             <SelectValue placeholder="All Risk Levels" />
           </SelectTrigger>
           <SelectContent>
@@ -127,13 +146,13 @@ export function ReviewCasesFilterPanel({
             <SelectItem value="safe">Safe</SelectItem>
           </SelectContent>
         </Select>
-      </div>
+      </FilterField>
 
-      <div className="space-y-2">
-        <Label className="text-xs font-bold text-slate-500 uppercase tracking-wide flex items-center gap-1.5">
-          <Sparkles className="w-3.5 h-3.5 text-blue-500" />
-          AI Analysis
-        </Label>
+      <FilterField
+        label="AI Analysis"
+        className={fieldClass}
+        labelIcon={<Sparkles className="w-3 h-3 text-blue-500 shrink-0" />}
+      >
         <Select
           value={
             currentFilters.aiAnalyzed === 'analyzed' || currentFilters.aiAnalyzed === true || currentFilters.aiAnalyzed === 'true'
@@ -144,7 +163,7 @@ export function ReviewCasesFilterPanel({
           }
           onValueChange={(val) => applyAndClose(() => handleFilterChange('aiAnalyzed', val === 'all' ? null : val))}
         >
-          <SelectTrigger className="w-full bg-slate-50 border-slate-200 hover:border-slate-300 focus:ring-blue-500/20">
+          <SelectTrigger size="sm" className={TRIGGER_CLASS}>
             <SelectValue placeholder="All Cases" />
           </SelectTrigger>
           <SelectContent>
@@ -153,7 +172,7 @@ export function ReviewCasesFilterPanel({
             <SelectItem value="not_analyzed">Not Analyzed by AI</SelectItem>
           </SelectContent>
         </Select>
-      </div>
+      </FilterField>
     </div>
   )
 }
