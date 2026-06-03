@@ -326,6 +326,7 @@ export function ReviewInterface({
     currentFilters.platform !== 'all' ||
     (currentFilters.aiAnalyzed && currentFilters.aiAnalyzed !== 'all') ||
     (currentFilters.visibility_status && currentFilters.visibility_status !== 'all') ||
+    (currentFilters.aiRisk && currentFilters.aiRisk !== 'all') ||
     currentFilters.poiDetected ||
     currentFilters.sourcingDateStart ||
     currentFilters.sourcingDateEnd ||

@@ -95,6 +95,99 @@ function normalizeAiAnalyzedFilter(value) {
 
 const ONLINE_VISIBILITY_VALUES = ['active', 'online', 'available']
 
+function buildReviewPostsDateFilterStage(filters = {}) {
+  const dateFilterStage = {}
+
+  if (filters.sourcingDateStart || filters.sourcingDateEnd) {
+    dateFilterStage.sort_sourced_at = {}
+    if (filters.sourcingDateStart) {
+      dateFilterStage.sort_sourced_at.$gte = new Date(filters.sourcingDateStart)
+    }
+    if (filters.sourcingDateEnd) {
+      dateFilterStage.sort_sourced_at.$lte = new Date(filters.sourcingDateEnd)
+    }
+  }
+
+  if (filters.postingDateStart || filters.postingDateEnd) {
+    dateFilterStage.sort_posted_at = {}
+    if (filters.postingDateStart) {
+      dateFilterStage.sort_posted_at.$gte = new Date(filters.postingDateStart)
+    }
+    if (filters.postingDateEnd) {
+      dateFilterStage.sort_posted_at.$lte = new Date(filters.postingDateEnd)
+    }
+  }
+
+  return {
+    dateFilterStage,
+    hasDateFilters: Object.keys(dateFilterStage).length > 0,
+  }
+}
+
+function buildReviewPostsAddFieldsStage() {
+  return {
+    $addFields: {
+      sort_posted_at: {
+        $convert: {
+          input: { $ifNull: ['$engagement.posted_at', '$metadata.posted_date'] },
+          to: 'date',
+          onError: {
+            $toDate: { $toLong: { $ifNull: ['$engagement.posted_at', '$metadata.posted_date'] } }
+          },
+          onNull: null,
+        },
+      },
+      sort_sourced_at: {
+        $convert: {
+          input: '$metadata.created_at',
+          to: 'date',
+          onError: { $toDate: { $toLong: '$metadata.created_at' } },
+          onNull: null,
+        },
+      },
+      // Human review score wins; otherwise AI threat_score, then legacy risk_score
+      effective_threat_score: {
+        $convert: {
+          input: {
+            $ifNull: [
+              '$review_details.threat_score',
+              '$analysis_results.threat_score',
+              '$analysis_results.risk_score',
+            ],
+          },
+          to: 'double',
+          onError: null,
+          onNull: null,
+        },
+      },
+    },
+  }
+}
+
+/** high > 95, medium > 75 && <= 95, low > 40 && <= 75, safe <= 40 */
+function buildReviewRiskBucketMatch(aiRisk) {
+  const risk = aiRisk && aiRisk !== 'all' ? String(aiRisk).toLowerCase() : null
+  if (!risk) return null
+  if (risk === 'high') return { $match: { effective_threat_score: { $gt: 95 } } }
+  if (risk === 'medium') return { $match: { effective_threat_score: { $gt: 75, $lte: 95 } } }
+  if (risk === 'low') return { $match: { effective_threat_score: { $gt: 40, $lte: 75 } } }
+  if (risk === 'safe') return { $match: { effective_threat_score: { $lte: 40 } } }
+  return null
+}
+
+function buildReviewPostsPipelineStages(filters = {}) {
+  const { dateFilterStage, hasDateFilters } = buildReviewPostsDateFilterStage(filters)
+  const riskMatch = buildReviewRiskBucketMatch(filters.aiRisk)
+
+  return [
+    { $match: buildReviewPostsMatchQuery(filters) },
+    { $project: { text_embedding: 0, image_embedding: 0 } },
+    buildReviewPostsAddFieldsStage(),
+    ...(hasDateFilters ? [{ $match: dateFilterStage }] : []),
+    ...(riskMatch ? [riskMatch] : []),
+  ]
+}
+
 /** Shared $match query for review-cases list + export (keep filters in sync). */
 function buildReviewPostsMatchQuery(filters = {}) {
   const query = { _id: { $ne: null } }
@@ -172,65 +265,7 @@ export const getPosts = traceAction('getPosts_review', async (_project_mongo_db_
     const collection = db.collection('Posts')
 
     const skip = (page - 1) * limit
-
-    const matchStage = buildReviewPostsMatchQuery(filters)
-
-    // SOURCED (INGESTED) AND POSTED (ORIGINAL) DATE FILTERS
-    const dateFilterStage = {};
-
-    // Sourcing Date Filter (Ingested) -> metadata.created_at
-    if (filters.sourcingDateStart || filters.sourcingDateEnd) {
-      dateFilterStage.sort_sourced_at = {};
-      if (filters.sourcingDateStart) {
-        dateFilterStage.sort_sourced_at.$gte = new Date(filters.sourcingDateStart);
-      }
-      if (filters.sourcingDateEnd) {
-        dateFilterStage.sort_sourced_at.$lte = new Date(filters.sourcingDateEnd);
-      }
-    }
-
-    // Posting Date Filter (Original Date) -> engagement.posted_at / metadata.posted_date
-    if (filters.postingDateStart || filters.postingDateEnd) {
-      dateFilterStage.sort_posted_at = {};
-      if (filters.postingDateStart) {
-        dateFilterStage.sort_posted_at.$gte = new Date(filters.postingDateStart);
-      }
-      if (filters.postingDateEnd) {
-        dateFilterStage.sort_posted_at.$lte = new Date(filters.postingDateEnd);
-      }
-    }
-
-    const hasDateFilters = Object.keys(dateFilterStage).length > 0;
-
-    const addFieldsStage = {
-      $addFields: {
-        sort_posted_at: {
-          $convert: {
-            input: { $ifNull: ['$engagement.posted_at', '$metadata.posted_date'] },
-            to: 'date',
-            onError: {
-              $toDate: { $toLong: { $ifNull: ['$engagement.posted_at', '$metadata.posted_date'] } }
-            },
-            onNull: null
-          }
-        },
-        sort_sourced_at: {
-          $convert: {
-            input: '$metadata.created_at',
-            to: 'date',
-            onError: { $toDate: { $toLong: '$metadata.created_at' } },
-            onNull: null
-          }
-        }
-      }
-    }
-
-    const basePipeline = [
-      { $match: matchStage },
-      { $project: { text_embedding: 0, image_embedding: 0 } },
-      addFieldsStage,
-      ...(hasDateFilters ? [{ $match: dateFilterStage }] : [])
-    ]
+    const basePipeline = buildReviewPostsPipelineStages(filters)
 
     const facetResult = await collection
       .aggregate([
@@ -309,56 +344,9 @@ export const getAllPostsForExport = traceAction('getAllPostsForExport', async (_
     const db = client.db(dbName)
     const collection = db.collection('Posts')
 
-    const matchStage = buildReviewPostsMatchQuery(filters)
-    const dateFilterStage = {}
-
-    // Sourcing Date Filter (Ingested) -> metadata.created_at
-    if (filters.sourcingDateStart || filters.sourcingDateEnd) {
-      dateFilterStage.sort_sourced_at = {};
-      if (filters.sourcingDateStart) {
-        dateFilterStage.sort_sourced_at.$gte = new Date(filters.sourcingDateStart);
-      }
-      if (filters.sourcingDateEnd) {
-        dateFilterStage.sort_sourced_at.$lte = new Date(filters.sourcingDateEnd);
-      }
-    }
-
-    // Posting Date Filter (Original Date) -> engagement.posted_at / metadata.posted_date
-    if (filters.postingDateStart || filters.postingDateEnd) {
-      dateFilterStage.sort_posted_at = {};
-      if (filters.postingDateStart) {
-        dateFilterStage.sort_posted_at.$gte = new Date(filters.postingDateStart);
-      }
-      if (filters.postingDateEnd) {
-        dateFilterStage.sort_posted_at.$lte = new Date(filters.postingDateEnd);
-      }
-    }
-
-    const hasDateFilters = Object.keys(dateFilterStage).length > 0;
-
     const pipeline = [
-      { $match: matchStage },
-      { $project: { text_embedding: 0, image_embedding: 0 } },
-      {
-        $addFields: {
-          sort_posted_at: {
-            $convert: {
-              input: { $ifNull: ['$engagement.posted_at', '$metadata.posted_date'] },
-              to: "date",
-              onError: { $toDate: { $toLong: { $ifNull: ['$engagement.posted_at', '$metadata.posted_date'] } } }
-            }
-          },
-          sort_sourced_at: {
-            $convert: {
-              input: "$metadata.created_at",
-              to: "date",
-              onError: { $toDate: { $toLong: "$metadata.created_at" } }
-            }
-          }
-        }
-      },
-      ...(hasDateFilters ? [{ $match: dateFilterStage }] : []),
-      { $sort: { sort_sourced_at: -1 } }
+      ...buildReviewPostsPipelineStages(filters),
+      { $sort: { sort_sourced_at: -1 } },
     ]
 
     const posts = await collection.aggregate(pipeline).toArray()

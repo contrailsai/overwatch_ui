@@ -17,7 +17,7 @@ export function ReviewCasesFilterPanel({
   const isStacked = layout === 'stacked'
 
   const wrapClass = cn(
-    isStacked ? 'flex flex-col gap-4' : 'grid grid-cols-1 items-end md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-5'
+    isStacked ? 'flex flex-col gap-4' : 'grid grid-cols-1 items-end md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-7 gap-5'
   )
 
   const applyAndClose = (fn) => {
@@ -106,6 +106,25 @@ export function ReviewCasesFilterPanel({
             <SelectItem value="all">All Visibility</SelectItem>
             <SelectItem value="active">Online</SelectItem>
             <SelectItem value="down">Taken Down</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-2">
+        <Label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Threat Risk</Label>
+        <Select
+          value={currentFilters.aiRisk || 'all'}
+          onValueChange={(val) => applyAndClose(() => handleFilterChange('aiRisk', val === 'all' ? null : val))}
+        >
+          <SelectTrigger className="w-full bg-slate-50 border-slate-200 hover:border-slate-300 focus:ring-blue-500/20">
+            <SelectValue placeholder="All Risk Levels" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Risk Levels</SelectItem>
+            <SelectItem value="high">High Risk</SelectItem>
+            <SelectItem value="medium">Medium Risk</SelectItem>
+            <SelectItem value="low">Low Risk</SelectItem>
+            <SelectItem value="safe">Safe</SelectItem>
           </SelectContent>
         </Select>
       </div>
