@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import { Twitter, Reddit } from '@/utils/icons'
 import ProfilePic from '@/components/ProfilePic'
+import ResultOriginPanel from './ResultOriginPanel'
 
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -677,36 +678,8 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
                             </div>
                         </div>
 
-                        {/* Result Origin Section */}
                         {localPost.result_origin && (
-                            <div className="flex items-center justify-between bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-                                <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-                                    <LinkIcon className="w-3 h-3" /> Result Origin
-                                </h4>
-                                <div className="flex flex-row items-center gap-10">
-                                    {Object.entries(localPost.result_origin).map(([key, value]) => (
-                                        <div key={key} className="flex flex-row items-baseline gap-1.5">
-                                            <span className="text-[10px] font-bold text-slate-500 uppercase">
-                                                {key.replace(/_/g, ' ')}
-                                            </span>
-                                            <span className="text-lg font-semibold text-slate-900 break-all">
-                                                {typeof value === 'string' && value.startsWith('http') ? (
-                                                    <a
-                                                        href={value}
-                                                        target="_blank"
-                                                        rel="noreferrer"
-                                                        className="text-blue-600 hover:underline flex items-center gap-1"
-                                                    >
-                                                        Source Link <ExternalLink className="w-3 h-3 shrink-0" />
-                                                    </a>
-                                                ) : (
-                                                    String(value || 'N/A')
-                                                )}
-                                            </span>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
+                            <ResultOriginPanel resultOrigin={localPost.result_origin} />
                         )}
 
                         {
