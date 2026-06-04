@@ -16,6 +16,7 @@ import {
   UNIQUE_CLUSTER_LIST_SORT,
   UNIQUE_CLUSTER_EARLY_SORT,
 } from './riskBuckets'
+import { withReviewedThreatScoreFilter } from '@/lib/posts/reviewed-post-filter'
 
 const CASES_TRACE_OPTS = { loki_stream: LOKI_STREAMS.cases }
 
@@ -249,14 +250,8 @@ const buildUniqueClustersStage = (filters, { clusterSort = 'list' } = {}) => {
 };
 
 const ONLINE_VISIBILITY_VALUES = ['active', 'online', 'available'];
-const REVIEWED_THREAT_SCORE_FILTER = { "review_details.threat_score": { $exists: true } };
 
 const escapeRegex = (value = '') => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-const withReviewedThreatScoreFilter = (query = {}) => ({
-  ...query,
-  ...REVIEWED_THREAT_SCORE_FILTER
-});
 
 const buildCasesMatchQuery = (filters = {}) => {
   const query = withReviewedThreatScoreFilter({});
