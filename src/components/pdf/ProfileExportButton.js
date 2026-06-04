@@ -8,7 +8,7 @@ import { trackClientActivity } from '@/utils/supabase/metrics'
 import { useReportExport } from '@/features/reports/client/use-report-export'
 import { REPORT_FORMATS } from '@/features/reports/constants'
 
-export function ProfileExportButton({ profile, project, className }) {
+export function ProfileExportButton({ profile, project, className, posts: postsOverride }) {
   const { exportReport, loading, statusText } = useReportExport(REPORT_FORMATS.PDF)
   const { clientDetails } = useClient()
 
@@ -19,8 +19,13 @@ export function ProfileExportButton({ profile, project, className }) {
       trackClientActivity(clientDetails.id, project.project_name, 'report_download', 'profile_pdf', clientDetails.email)
     }
 
+    const posts =
+      postsOverride != null
+        ? postsOverride
+        : (profile.posts || []).map((id) => ({ _id: typeof id === 'string' ? id : id?._id ?? id }))
+
     exportReport({
-      posts: profile.posts.map((id) => ({ _id: id })),
+      posts,
       project,
       profile,
       reportType: 'Profile',

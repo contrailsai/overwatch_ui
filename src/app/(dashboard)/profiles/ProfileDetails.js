@@ -181,6 +181,7 @@ export default function ProfileDetailPanel({ profile, project, isOpen, onClose, 
     const highCount = cases?.filter(c => (c.review_details?.threat_score ?? 0) >= 96).length || 0
     const medCount = cases?.filter(c => { const s = c.review_details?.threat_score ?? 0; return s >= 76 && s < 96 }).length || 0
     const lowCount = cases?.filter(c => { const s = c.review_details?.threat_score ?? 0; return s >= 41 && s < 76 }).length || 0
+    const reportPosts = cases != null ? cases.map((c) => ({ _id: c._id })) : undefined
 
     const profileRisk = getProfileRiskBadge(riskScore)
     return (
@@ -213,11 +214,13 @@ export default function ProfileDetailPanel({ profile, project, isOpen, onClose, 
                     <ProfileExportButton
                         profile={profile}
                         project={project}
+                        posts={reportPosts}
                         className="flex-1 cursor-pointer rounded-md border border-slate-200 text-slate-600 hover:border-blue-500 hover:text-blue-600 flex items-center justify-center gap-1.5 text-xs font-bold transition-all bg-white px-3 py-1.5"
                     />
                     <ProfileExportDocxButton
                         profile={profile}
                         project={project}
+                        posts={reportPosts}
                         className="flex-1 cursor-pointer rounded-md border border-slate-200 text-slate-600 hover:border-blue-500 hover:text-blue-600 flex items-center justify-center gap-1.5 text-xs font-bold transition-all bg-white px-3 py-1.5 h-auto"
                     />
                 </div>
@@ -526,11 +529,13 @@ export default function ProfileDetailPanel({ profile, project, isOpen, onClose, 
                                 <ProfileExportButton
                                     profile={profile}
                                     project={project}
+                                    posts={reportPosts}
                                     className="cursor-pointer rounded-md border border-slate-200 text-slate-600 hover:border-blue-500 hover:text-blue-600 flex items-center justify-center gap-1.5 text-xs font-bold transition-all bg-white px-3 py-1.5"
                                 />
                                 <ProfileExportDocxButton
                                     profile={profile}
                                     project={project}
+                                    posts={reportPosts}
                                     className="cursor-pointer rounded-md border border-slate-200 text-slate-600 hover:border-blue-500 hover:text-blue-600 flex items-center justify-center gap-1.5 text-xs font-bold transition-all bg-white px-3 py-1.5 h-auto"
                                 />
                             </div>

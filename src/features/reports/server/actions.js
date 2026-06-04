@@ -74,43 +74,52 @@ export const getOrCreateReportJob = traceAction('getOrCreateReportJob', async ({
 
   const client = await clientPromise
   const db = client.db(dbName)
-  const objectIds = postIds
-    .filter(Boolean)
-    .map((id) => {
-      try {
-        return new ObjectId(id)
-      } catch {
-        return null
-      }
-    })
-    .filter(Boolean)
+  const objectIds = [
+    ...new Map(
+      postIds
+        .filter(Boolean)
+        .map((id) => {
+          try {
+            return [String(id), new ObjectId(id)]
+          } catch {
+            return null
+          }
+        })
+        .filter(Boolean)
+    ).values(),
+  ]
 
   if (objectIds.length === 0) {
     throw new Error('No valid post IDs for report generation')
   }
 
-  const validatedPosts = await db
-    .collection('Posts')
-    .find({ _id: { $in: objectIds } }, { projection: { _id: 1 } })
-    .toArray()
-
-  if (validatedPosts.length !== objectIds.length) {
-    throw new Error('Some requested posts do not belong to your project scope')
-  }
-
-  const reviewedPosts = await db
-    .collection('Posts')
-    .find({ _id: { $in: objectIds }, ...REVIEWED_THREAT_SCORE_FILTER }, { projection: { _id: 1 } })
-    .toArray()
-
+  const postsCollection = db.collection('Posts')
   let reportObjectIds = objectIds
-  if (reviewedPosts.length !== objectIds.length) {
-    if (reportType === 'Profile') {
-      if (reviewedPosts.length === 0) {
-        throw new Error('No reviewed posts available for profile report generation')
-      }
-      reportObjectIds = reviewedPosts.map((p) => p._id)
-    } else {
+
+  if (reportType === 'Profile') {
+    // Profile.posts may reference stale, pending, or duplicate IDs — only export reviewed posts that exist.
+    const reviewedPosts = await postsCollection
+      .find({ _id: { $in: objectIds }, ...REVIEWED_THREAT_SCORE_FILTER }, { projection: { _id: 1 } })
+      .toArray()
+
+    if (reviewedPosts.length === 0) {
+      throw new Error('No reviewed posts available for profile report generation')
+    }
+    reportObjectIds = reviewedPosts.map((p) => p._id)
+  } else {
+    const validatedPosts = await postsCollection
+      .find({ _id: { $in: objectIds } }, { projection: { _id: 1 } })
+      .toArray()
+
+    if (validatedPosts.length !== objectIds.length) {
+      throw new Error('Some requested posts do not belong to your project scope')
+    }
+
+    const reviewedPosts = await postsCollection
+      .find({ _id: { $in: objectIds }, ...REVIEWED_THREAT_SCORE_FILTER }, { projection: { _id: 1 } })
+      .toArray()
+
+    if (reviewedPosts.length !== objectIds.length) {
       const unreviewedCount = objectIds.length - reviewedPosts.length
       throw new Error(
         `${unreviewedCount} post(s) are not reviewed and cannot be included in report generation`
