@@ -12,6 +12,7 @@ import { resolveExistingReportJob } from '@/features/reports/lib/resolve-job'
 import { REPORT_FORMATS } from '@/features/reports/constants'
 import { logActionError, LOKI_STREAMS } from '@/utils/otel-logger'
 import { orderPostIdsForReport } from '@/app/(dashboard)/cases/actions'
+import { REVIEWED_THREAT_SCORE_FILTER } from '@/lib/posts/reviewed-post-filter'
 
 const OBJECT_ID_HEX = /^[a-fA-F0-9]{24}$/
 
@@ -64,13 +65,6 @@ export const getOrCreateReportJob = traceAction('getOrCreateReportJob', async ({
 
   const postIds = posts.map((p) => p._id)
   const profileId = String(profile?._id ?? profile?.id ?? '')
-  const hash = generateReportHash(
-    resolvedProject?.project_name || 'unknown',
-    postIds,
-    reportType,
-    profileId,
-    reportFormat
-  )
 
   for (const id of postIds) {
     if (id != null && String(id) !== '' && !OBJECT_ID_HEX.test(String(id))) {
@@ -104,10 +98,39 @@ export const getOrCreateReportJob = traceAction('getOrCreateReportJob', async ({
     throw new Error('Some requested posts do not belong to your project scope')
   }
 
-  const orderedPostIds = await orderPostIdsForReport(objectIds.map((id) => id.toString()))
-  if (orderedPostIds.length !== objectIds.length) {
+  const reviewedPosts = await db
+    .collection('Posts')
+    .find({ _id: { $in: objectIds }, ...REVIEWED_THREAT_SCORE_FILTER }, { projection: { _id: 1 } })
+    .toArray()
+
+  let reportObjectIds = objectIds
+  if (reviewedPosts.length !== objectIds.length) {
+    if (reportType === 'Profile') {
+      if (reviewedPosts.length === 0) {
+        throw new Error('No reviewed posts available for profile report generation')
+      }
+      reportObjectIds = reviewedPosts.map((p) => p._id)
+    } else {
+      const unreviewedCount = objectIds.length - reviewedPosts.length
+      throw new Error(
+        `${unreviewedCount} post(s) are not reviewed and cannot be included in report generation`
+      )
+    }
+  }
+
+  const reportPostIds = reportObjectIds.map((id) => id.toString())
+  const orderedPostIds = await orderPostIdsForReport(reportPostIds)
+  if (orderedPostIds.length !== reportPostIds.length) {
     throw new Error('Some requested posts could not be ordered for report generation')
   }
+
+  const hash = generateReportHash(
+    resolvedProject?.project_name || 'unknown',
+    reportPostIds,
+    reportType,
+    profileId,
+    reportFormat
+  )
 
   const resolved = await resolveExistingReportJob(supabase, hash, user.id)
   if (resolved.action === 'reuse_complete' || resolved.action === 'reuse_inflight') {

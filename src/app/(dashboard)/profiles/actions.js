@@ -7,6 +7,7 @@ import { traceAction } from '@/utils/tracing'
 import { getSignedImageUrl } from '@/utils/aws/s3'
 import { requireAuthContext } from '@/utils/auth-context'
 import { logActionError, LOKI_STREAMS } from '@/utils/otel-logger'
+import { withReviewedThreatScoreFilter } from '@/lib/posts/reviewed-post-filter'
 
 /** Exported for review-profiles; not a traced server action (avoids per-row trace overhead). */
 export async function normalized_S3_post(post) {
@@ -290,7 +291,10 @@ export const getProfileCases = traceAction('getProfileCases', async (postIds = [
         if (objectIds.length === 0) return []
 
         const posts = await collection
-            .find({ _id: { $in: objectIds } }, { projection: { text_embedding: 0, image_embedding: 0 } })
+            .find(
+                withReviewedThreatScoreFilter({ _id: { $in: objectIds } }),
+                { projection: { text_embedding: 0, image_embedding: 0 } }
+            )
             .toArray()
 
         return Promise.all(posts.map((p) => normalized_S3_post(p)))
