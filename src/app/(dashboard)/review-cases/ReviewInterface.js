@@ -31,7 +31,7 @@ function PostPlatformBadge({ platform, size = 'md' }) {
   if (p === 'instagram') return <div className={cn('bg-white rounded-full shadow-sm', wrapClass)}><Instagram className={cn(iconClass, 'text-pink-500 fill-pink-50')} /></div>
   if (p === 'facebook') return <div className={cn('bg-white rounded-full shadow-sm', wrapClass)}><Facebook className={cn(iconClass, 'text-blue-600 fill-blue-50')} /></div>
   if (p === 'x') return <div className={cn('bg-white rounded-full shadow-sm', size === 'sm' ? 'p-0.5' : 'p-1')}><span className={cn('block text-black', size === 'sm' ? 'size-3.5' : 'size-4')}><Twitter /></span></div>
-  if (p === 'reddit') return <div className={cn('bg-white rounded-full shadow-sm', wrapClass)}><span className={cn('block text-black', size === 'sm' ? 'size-4' : 'size-6')}><Reddit /></span></div>
+  if (p === 'reddit') return <div className={cn('bg-white rounded-full shadow-sm', wrapClass)}><span className={cn('block', size === 'sm' ? 'size-4' : 'size-6')}><Reddit className="size-full" /></span></div>
   if (p === 'youtube') return <div className={cn('bg-white rounded-full shadow-sm', wrapClass)}><Youtube className={cn(iconClass, 'text-red-600 fill-red-50')} /></div>
   if (p === 'website') return <div className={cn('bg-white rounded-full shadow-sm', wrapClass)}><Globe className={cn(iconClass, 'text-slate-500')} /></div>
   return null

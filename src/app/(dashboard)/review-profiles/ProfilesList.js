@@ -35,7 +35,7 @@ const PlatformIcon = ({ platform, className }) => {
     )
     if (p === 'reddit') return (
         <span className='w-3.5 h-3.5'>
-            <Reddit className={cn('max-w-3.5 max-h-3.5 text-slate-900', className)} />
+            <Reddit className={cn('max-w-3.5 max-h-3.5', className)} />
         </span>
     )
     if (p === 'youtube') return <Youtube className={cn('w-3.5 h-3.5 text-red-500', className)} />

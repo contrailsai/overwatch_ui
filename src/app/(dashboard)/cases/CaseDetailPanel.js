@@ -493,7 +493,7 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
                                                         </span>
                                                     ) : post.platform === "reddit" ? (
                                                         <span className="inline-block size-4 text-black">
-                                                            <Reddit className="w-3.5 h-3.5 text-slate-900" />
+                                                            <Reddit className="w-3.5 h-3.5" />
                                                         </span>
                                                     ) : post.platform?.toLowerCase() === "instagram" ? (
                                                         <Instagram className="w-6 h-6 text-pink-500" />

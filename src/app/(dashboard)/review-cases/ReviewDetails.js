@@ -418,7 +418,7 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
     const PlatformIcon = () => {
         const platform = localPost.platform?.toLowerCase()
         if (["twitter", "x"].includes(platform)) return <span className="inline-block size-4 text-black"><Twitter /></span>
-        if (platform === "reddit") return <Reddit className="w-6 h-6 text-pink-500" />
+        if (platform === "reddit") return <Reddit className="w-6 h-6" />
         if (platform === "instagram") return <Instagram className="w-6 h-6 text-pink-500" />
         if (platform === "facebook") return <Facebook className="w-6 h-6 text-blue-500" />
         if (platform === "youtube") return <Youtube className="w-6 h-6 text-red-500 fill-red-500 stroke-white stroke-[1px]" />

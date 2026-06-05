@@ -1026,7 +1026,7 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                                     : post.platform === 'facebook' ? <Facebook className="size-3.5 text-blue-600 shrink-0" />
                                       : post.platform === 'x' ? <Twitter className="size-3.5 text-slate-900 shrink-0" />
                                         : post.platform === 'youtube' ? <Youtube className="size-3.5 text-red-600 shrink-0" />
-                                          : post.platform === 'reddit' ? <Reddit className="size-3.5 text-red-600 shrink-0" />
+                                          : post.platform === 'reddit' ? <Reddit className="size-3.5 shrink-0" />
                                             : null}
                                   <span className="font-bold text-slate-900 text-xs truncate">
                                     @{post.user?.username || 'unknown'}
@@ -1303,7 +1303,7 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                                             : post.platform === 'facebook' ? <Facebook className="size-4 sm:size-5 shrink-0 text-blue-600" />
                                               : post.platform === 'x' ? <Twitter className="size-4 sm:size-5 text-slate-900" />
                                                 : post.platform === 'youtube' ? <Youtube className="size-4 sm:size-5 text-red-600" />
-                                                  : post.platform === 'reddit' ? <Reddit className="size-4 sm:size-5 text-red-600" />
+                                                  : post.platform === 'reddit' ? <Reddit className="size-4 sm:size-5" />
                                                     : post.platform
                                           }
                                         </div>
