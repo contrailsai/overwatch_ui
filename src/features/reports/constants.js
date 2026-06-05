@@ -5,6 +5,14 @@ export const REPORT_FORMATS = /** @type {const} */ ({
   DOCX: 'docx',
 })
 
+export const REPORT_TYPES = /** @type {const} */ ({
+  SUMMARY: 'Summary',
+  DETAILED: 'Detailed',
+  SINGLE: 'Single',
+  PROFILE: 'Profile',
+  SIMPLE_PROFILE: 'SimpleProfile',
+})
+
 /** Max age before a completed report with the same hash is regenerated. */
 export const REPORT_REUSE_MAX_AGE_MS = 2 * 60 * 1000
 

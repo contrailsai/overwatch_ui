@@ -9,7 +9,7 @@ import { requireAuthContext } from '@/utils/auth-context'
 import clientPromise from '@/utils/mongodb/client'
 import { ObjectId } from 'mongodb'
 import { resolveExistingReportJob } from '@/features/reports/lib/resolve-job'
-import { REPORT_FORMATS } from '@/features/reports/constants'
+import { REPORT_FORMATS, REPORT_TYPES } from '@/features/reports/constants'
 import { logActionError, LOKI_STREAMS } from '@/utils/otel-logger'
 import { orderPostIdsForReport } from '@/app/(dashboard)/cases/actions'
 import { REVIEWED_THREAT_SCORE_FILTER } from '@/lib/posts/reviewed-post-filter'
@@ -67,8 +67,12 @@ export const getOrCreateReportJob = traceAction('getOrCreateReportJob', async ({
   reportType,
   reportFormat = REPORT_FORMATS.PDF,
 }) => {
-  if (reportFormat === REPORT_FORMATS.DOCX && reportType === 'Summary') {
+  if (reportFormat === REPORT_FORMATS.DOCX && reportType === REPORT_TYPES.SUMMARY) {
     throw new Error('DOCX reports do not support Summary report type')
+  }
+
+  if (reportType === REPORT_TYPES.SIMPLE_PROFILE && reportFormat !== REPORT_FORMATS.DOCX) {
+    throw new Error('SimpleProfile is only supported with reportFormat docx')
   }
 
   const supabase = await createClient()
@@ -76,6 +80,10 @@ export const getOrCreateReportJob = traceAction('getOrCreateReportJob', async ({
 
   const postIds = posts.map((p) => p._id)
   const profileId = String(profile?._id ?? profile?.id ?? '')
+
+  if (reportType === REPORT_TYPES.SIMPLE_PROFILE && !profileId) {
+    throw new Error('Profile is required for SimpleProfile report generation')
+  }
 
   for (const id of postIds) {
     if (id != null && String(id) !== '' && !OBJECT_ID_HEX.test(String(id))) {
@@ -107,7 +115,10 @@ export const getOrCreateReportJob = traceAction('getOrCreateReportJob', async ({
   const postsCollection = db.collection('Posts')
   let reportObjectIds = objectIds
 
-  if (reportType === 'Profile') {
+  const isProfileFamily =
+    reportType === REPORT_TYPES.PROFILE || reportType === REPORT_TYPES.SIMPLE_PROFILE
+
+  if (isProfileFamily) {
     // Profile.posts may reference stale, pending, or duplicate IDs — only export reviewed posts that exist.
     const reviewedPosts = await postsCollection
       .find({ _id: { $in: objectIds }, ...REVIEWED_THREAT_SCORE_FILTER }, { projection: { _id: 1 } })
@@ -139,9 +150,19 @@ export const getOrCreateReportJob = traceAction('getOrCreateReportJob', async ({
   }
 
   const reportPostIds = reportObjectIds.map((id) => id.toString())
-  const orderedPostIds = await orderPostIdsForReport(reportPostIds)
-  if (orderedPostIds.length !== reportPostIds.length) {
-    throw new Error('Some requested posts could not be ordered for report generation')
+
+  let orderedPostIds
+  if (reportType === REPORT_TYPES.SIMPLE_PROFILE) {
+    const reviewedSet = new Set(reportPostIds)
+    orderedPostIds = postIds.map(String).filter((id) => reviewedSet.has(id))
+    if (orderedPostIds.length === 0) {
+      throw new Error('No reviewed posts available for profile report generation')
+    }
+  } else {
+    orderedPostIds = await orderPostIdsForReport(reportPostIds)
+    if (orderedPostIds.length !== reportPostIds.length) {
+      throw new Error('Some requested posts could not be ordered for report generation')
+    }
   }
 
   const hash = generateReportHash(

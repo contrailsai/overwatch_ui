@@ -1,3 +1,6 @@
+'use client'
+
+import { useId } from 'react'
 
 export const Twitter = ({ className, ...props }) => {
     return (
@@ -17,28 +20,42 @@ export const Twitter = ({ className, ...props }) => {
 }
 
 export const Reddit = ({ className, ...props }) => {
+    const uid = useId().replace(/:/g, '')
+    const clipId = `reddit-clip-${uid}`
+    const paint0 = `reddit-paint0-${uid}`
+    const paint1 = `reddit-paint1-${uid}`
+    const paint2 = `reddit-paint2-${uid}`
+    const paint3 = `reddit-paint3-${uid}`
+    const paint4 = `reddit-paint4-${uid}`
+    const paint5 = `reddit-paint5-${uid}`
+    const paint6 = `reddit-paint6-${uid}`
+    const paint7 = `reddit-paint7-${uid}`
+
     return (
         <svg
             className={className}
+            width="100%"
+            height="100%"
             {...props}
             xmlns="http://www.w3.org/2000/svg"
             viewBox="0 0 256 256"
-            xmlSpace="preserve" // Fixed: xml:space to xmlSpace
-            xmlnsXlink="http://www.w3.org/1999/xlink" // Fixed: xmlns:xlink to xmlnsXlink
+            xmlSpace="preserve"
+            xmlnsXlink="http://www.w3.org/1999/xlink"
+            aria-hidden="true"
         >
-            <g clipPath="url(#clip0_2033_71574)"> {/* Fixed: clip-path to clipPath */}
+            <g clipPath={`url(#${clipId})`}>
                 <circle cx="128" cy="128" r="128" fill="#FF4500" />
                 <path
                     d="M55.44 153.54C71.9478 153.54 85.33 140.158 85.33 123.65C85.33 107.142 71.9478 93.76 55.44 93.76C38.9322 93.76 25.55 107.142 25.55 123.65C25.55 140.158 38.9322 153.54 55.44 153.54Z"
-                    fill="url(#paint0_radial_2033_71574)"
+                    fill={`url(#${paint0})`}
                 />
                 <path
                     d="M200.56 153.54C217.068 153.54 230.45 140.158 230.45 123.65C230.45 107.142 217.068 93.76 200.56 93.76C184.052 93.76 170.67 107.142 170.67 123.65C170.67 140.158 184.052 153.54 200.56 153.54Z"
-                    fill="url(#paint1_radial_2033_71574)"
+                    fill={`url(#${paint1})`}
                 />
                 <path
                     d="M128.07 213.33C175.196 213.33 213.4 184.676 213.4 149.33C213.4 113.984 175.196 85.33 128.07 85.33C80.9435 85.33 42.74 113.984 42.74 149.33C42.74 184.676 80.9435 213.33 128.07 213.33Z"
-                    fill="url(#paint2_radial_2033_71574)"
+                    fill={`url(#${paint2})`}
                 />
                 <path
                     d="M102.84 143.11C102.34 153.95 95.14 157.89 86.77 157.89C78.4 157.89 72 152.34 72.5 141.5C73 130.66 80.2 123.48 88.57 123.48C96.94 123.48 103.34 132.27 102.84 143.11Z"
@@ -50,11 +67,11 @@ export const Reddit = ({ className, ...props }) => {
                 />
                 <path
                     d="M102.85 144.05C102.38 154.2 95.65 157.88 87.81 157.88C79.97 157.88 73.99 152.37 74.46 142.22C74.93 132.07 81.66 125.43 89.5 125.43C97.34 125.43 103.32 133.9 102.85 144.05Z"
-                    fill="url(#paint3_radial_2033_71574)"
+                    fill={`url(#${paint3})`}
                 />
                 <path
                     d="M166.65 125.44C174.49 125.44 181.22 132.08 181.69 142.23C182.16 152.38 176.18 157.89 168.34 157.89C160.5 157.89 153.77 154.21 153.3 144.06C152.83 133.91 158.81 125.44 166.65 125.44Z"
-                    fill="url(#paint4_radial_2033_71574)"
+                    fill={`url(#${paint4})`}
                 />
                 <path
                     d="M128.07 165.12C117.49 165.12 107.35 165.63 97.97 166.56C96.37 166.72 95.35 168.35 95.97 169.81C101.22 182.12 113.61 190.77 128.07 190.77C142.53 190.77 154.91 182.12 160.17 169.81C160.79 168.35 159.78 166.72 158.17 166.56C148.79 165.63 138.65 165.12 128.07 165.12Z"
@@ -66,15 +83,15 @@ export const Reddit = ({ className, ...props }) => {
                 />
                 <path
                     d="M128.07 166.25C117.69 166.25 107.74 166.76 98.53 167.69C96.96 167.85 95.96 169.48 96.57 170.94C101.72 183.25 113.88 191.9 128.07 191.9C142.26 191.9 154.41 183.25 159.57 170.94C160.18 169.48 159.18 167.85 157.61 167.69C148.41 166.76 138.46 166.25 128.07 166.25Z"
-                    fill="url(#paint5_radial_2033_71574)"
+                    fill={`url(#${paint5})`}
                 />
                 <path
                     d="M174.81 76.63C186.507 76.63 195.99 67.1474 195.99 55.45C195.99 43.7526 186.507 34.27 174.81 34.27C163.113 34.27 153.63 43.7526 153.63 55.45C153.63 67.1474 163.113 76.63 174.81 76.63Z"
-                    fill="url(#paint6_radial_2033_71574)"
+                    fill={`url(#${paint6})`}
                 />
                 <path
                     d="M127.77 88.03C125.23 88.03 123.18 86.97 123.18 85.33C123.18 66.35 138.62 50.92 157.59 50.92C160.13 50.92 162.18 52.98 162.18 55.51C162.18 58.04 160.12 60.1 157.59 60.1C143.68 60.1 132.36 71.42 132.36 85.33C132.36 86.97 130.3 88.03 127.77 88.03Z"
-                    fill="url(#paint7_radial_2033_71574)"
+                    fill={`url(#${paint7})`}
                 />
                 <path
                     d="M97.27 149.07C97.27 153 93.09 154.76 87.94 154.76C82.79 154.76 78.61 153 78.61 149.07C78.61 145.14 82.79 141.96 87.94 141.96C93.09 141.96 97.27 145.14 97.27 149.07Z"
@@ -95,14 +112,14 @@ export const Reddit = ({ className, ...props }) => {
             </g>
             <defs>
                 <radialGradient
-                    id="paint0_radial_2033_71574"
+                    id={paint0}
                     cx="0"
                     cy="0"
                     r="1"
                     gradientUnits="userSpaceOnUse"
                     gradientTransform="translate(57.1401 107.558) scale(59.9015 52.2545)"
                 >
-                    <stop stopColor="#FEFFFF" /> {/* Fixed: stop-color to stopColor */}
+                    <stop stopColor="#FEFFFF" />
                     <stop offset="0.4" stopColor="#FEFFFF" />
                     <stop offset="0.51" stopColor="#F9FCFC" />
                     <stop offset="0.62" stopColor="#EDF3F5" />
@@ -116,7 +133,7 @@ export const Reddit = ({ className, ...props }) => {
                     <stop offset="0.9" stopColor="#FFEBEF" />
                 </radialGradient>
                 <radialGradient
-                    id="paint1_radial_2033_71574"
+                    id={paint1}
                     cx="0"
                     cy="0"
                     r="1"
@@ -137,7 +154,7 @@ export const Reddit = ({ className, ...props }) => {
                     <stop offset="0.9" stopColor="#FFEBEF" />
                 </radialGradient>
                 <radialGradient
-                    id="paint2_radial_2033_71574"
+                    id={paint2}
                     cx="0"
                     cy="0"
                     r="1"
@@ -158,7 +175,7 @@ export const Reddit = ({ className, ...props }) => {
                     <stop offset="0.9" stopColor="#FFEBEF" />
                 </radialGradient>
                 <radialGradient
-                    id="paint3_radial_2033_71574"
+                    id={paint3}
                     cx="0"
                     cy="0"
                     r="1"
@@ -173,7 +190,7 @@ export const Reddit = ({ className, ...props }) => {
                     <stop offset="1" stopColor="#D4301F" />
                 </radialGradient>
                 <radialGradient
-                    id="paint4_radial_2033_71574"
+                    id={paint4}
                     cx="0"
                     cy="0"
                     r="1"
@@ -188,7 +205,7 @@ export const Reddit = ({ className, ...props }) => {
                     <stop offset="1" stopColor="#D4301F" />
                 </radialGradient>
                 <radialGradient
-                    id="paint5_radial_2033_71574"
+                    id={paint5}
                     cx="0"
                     cy="0"
                     r="1"
@@ -201,7 +218,7 @@ export const Reddit = ({ className, ...props }) => {
                     <stop offset="1" />
                 </radialGradient>
                 <radialGradient
-                    id="paint6_radial_2033_71574"
+                    id={paint6}
                     cx="0"
                     cy="0"
                     r="1"
@@ -222,7 +239,7 @@ export const Reddit = ({ className, ...props }) => {
                     <stop offset="0.9" stopColor="#FFEBEF" />
                 </radialGradient>
                 <radialGradient
-                    id="paint7_radial_2033_71574"
+                    id={paint7}
                     cx="0"
                     cy="0"
                     r="1"
@@ -234,10 +251,10 @@ export const Reddit = ({ className, ...props }) => {
                     <stop offset="0.75" />
                     <stop offset="0.82" stopColor="#172E35" />
                 </radialGradient>
-                <clipPath id="clip0_2033_71574">
+                <clipPath id={clipId}>
                     <rect width="256" height="256" fill="white" />
                 </clipPath>
             </defs>
         </svg>
-    );
-};
+    )
+}

@@ -253,6 +253,7 @@ export function ReportsList({ reports, initialFilters }) {
                   <SelectItem value="Summary">Summary</SelectItem>
                   <SelectItem value="Detailed">Detailed</SelectItem>
                   <SelectItem value="Profile">Profile</SelectItem>
+                  <SelectItem value="SimpleProfile">Simple Profile</SelectItem>
                   <SelectItem value="Single">Single</SelectItem>
                 </SelectContent>
               </Select>

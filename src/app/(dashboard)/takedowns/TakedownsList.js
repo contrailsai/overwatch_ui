@@ -649,7 +649,7 @@ export default function TakedownsList({ initialTakedowns, initialFilters, isRevi
                                     : item.platform?.toLowerCase() === 'facebook' ? <Facebook className="size-4 sm:size-5 shrink-0 text-blue-600" />
                                       : item.platform?.toLowerCase() === 'x' ? <Twitter className="size-4 sm:size-5 text-slate-900" />
                                         : item.platform?.toLowerCase() === 'youtube' ? <Youtube className="size-4 sm:size-5 text-red-600" />
-                                          : item.platform?.toLowerCase() === 'reddit' ? <Reddit className="size-4 sm:size-5 text-orange-600" />
+                                          : item.platform?.toLowerCase() === 'reddit' ? <Reddit className="size-4 sm:size-5" />
                                             : <span className="text-[10px] font-bold text-slate-400">{item.platform?.slice(0, 1).toUpperCase()}</span>
                                   }
                                 </div>
