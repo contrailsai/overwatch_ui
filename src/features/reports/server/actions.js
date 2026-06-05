@@ -151,18 +151,9 @@ export const getOrCreateReportJob = traceAction('getOrCreateReportJob', async ({
 
   const reportPostIds = reportObjectIds.map((id) => id.toString())
 
-  let orderedPostIds
-  if (reportType === REPORT_TYPES.SIMPLE_PROFILE) {
-    const reviewedSet = new Set(reportPostIds)
-    orderedPostIds = postIds.map(String).filter((id) => reviewedSet.has(id))
-    if (orderedPostIds.length === 0) {
-      throw new Error('No reviewed posts available for profile report generation')
-    }
-  } else {
-    orderedPostIds = await orderPostIdsForReport(reportPostIds)
-    if (orderedPostIds.length !== reportPostIds.length) {
-      throw new Error('Some requested posts could not be ordered for report generation')
-    }
+  const orderedPostIds = await orderPostIdsForReport(reportPostIds)
+  if (orderedPostIds.length !== reportPostIds.length) {
+    throw new Error('Some requested posts could not be ordered for report generation')
   }
 
   const hash = generateReportHash(

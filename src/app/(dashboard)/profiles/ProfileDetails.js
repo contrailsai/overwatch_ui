@@ -181,13 +181,7 @@ export default function ProfileDetailPanel({ profile, project, isOpen, onClose, 
     const highCount = cases?.filter(c => (c.review_details?.threat_score ?? 0) >= 96).length || 0
     const medCount = cases?.filter(c => { const s = c.review_details?.threat_score ?? 0; return s >= 76 && s < 96 }).length || 0
     const lowCount = cases?.filter(c => { const s = c.review_details?.threat_score ?? 0; return s >= 41 && s < 76 }).length || 0
-    const postOrder = new Map((profile.posts || []).map((id, i) => [String(id), i]))
-    const reportPosts = cases != null
-        ? cases
-            .slice()
-            .sort((a, b) => (postOrder.get(String(a._id)) ?? 999) - (postOrder.get(String(b._id)) ?? 999))
-            .map((c) => ({ _id: c._id }))
-        : undefined
+    const reportPosts = cases != null ? cases.map((c) => ({ _id: c._id })) : undefined
 
     const profileRisk = getProfileRiskBadge(riskScore)
     return (
