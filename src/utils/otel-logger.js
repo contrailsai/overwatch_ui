@@ -208,14 +208,34 @@ export function otelLog(severityNumber, severityText, body, attributes = {}) {
   }
 }
 
-export function otelLogError(body, attributes = {}, error) {
-  const attrs = { ...attributes }
+function applyErrorAttributes(attrs, error) {
   if (error instanceof Error) {
     attrs.error_message = error.message
     attrs.error_name = error.name
-  } else if (error != null) {
+    return
+  }
+  if (error != null && typeof error === 'object') {
+    if (error.message != null) attrs.error_message = String(error.message)
+    if (error.code != null) attrs.error_code = String(error.code)
+    if (error.details != null) attrs.error_details = String(error.details)
+    if (error.hint != null) attrs.error_hint = String(error.hint)
+    if (attrs.error_message == null) {
+      try {
+        attrs.error_message = JSON.stringify(error)
+      } catch {
+        attrs.error_message = String(error)
+      }
+    }
+    return
+  }
+  if (error != null) {
     attrs.error_message = String(error)
   }
+}
+
+export function otelLogError(body, attributes = {}, error) {
+  const attrs = { ...attributes }
+  applyErrorAttributes(attrs, error)
   otelLog(SeverityNumber.ERROR, 'ERROR', body, attrs)
 }
 

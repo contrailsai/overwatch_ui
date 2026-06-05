@@ -73,6 +73,7 @@ create table public.daily_case_metrics (
   categories json null,
   total_cases integer null,
   constraint daily_case_metrics_pkey primary key (id),
+  constraint daily_case_metrics_day_platform_project_unique unique (date, platform, project_name),
   constraint daily_case_metrics_project_name_fkey foreign KEY (project_name) references project (project_name)
 ) TABLESPACE pg_default;
 
@@ -86,6 +87,7 @@ create table public.daily_reviewed_metrics (
   risk json null,
   total_reviewed integer null,
   constraint daily_reviewed_metrics_pkey primary key (id),
+  constraint daily_reviewed_metrics_day_platform_project_unique unique (date, platform, project_name),
   constraint daily_reviewed_metrics_project_name_fkey foreign KEY (project_name) references project (project_name)
 ) TABLESPACE pg_default;
 
