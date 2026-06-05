@@ -3,7 +3,7 @@
 import clientPromise from '@/utils/mongodb/client'
 import { getSignedImageUrl } from '@/utils/aws/s3'
 import { sendSlackNotification } from '@/utils/slack'
-import { updateClientReviewedMetrics, updateDailyMetrics, updateClientMetaStats } from '@/utils/supabase/metrics'
+import { updateClientReviewedMetricsBatch, updateDailyMetrics, updateClientMetaStats } from '@/utils/supabase/metrics'
 import { ObjectId } from 'mongodb'
 // import { getClientandProjectDetails } from '@/app/(dashboard)/actions'
 import { traceAction, recordClickMetric, runInSpan } from '@/utils/tracing'
@@ -1078,29 +1078,17 @@ export const updateClientStatus = traceAction('updateClientStatus', async (caseI
     const result = await collection.bulkWrite(bulkOps)
 
     // Track metrics for each post (parallel, errors swallowed)
+    await updateClientReviewedMetricsBatch(
+      { project_name: authContext.clientDetails.project_name },
+      posts,
+      status
+    ).catch(err => logActionError({
+      loki_stream: LOKI_STREAMS.cases,
+      app_action: 'updateClientStatus',
+      message: 'Failed to update client metrics',
+    }, err))
+
     await Promise.all(posts.map(async post => {
-      const platform = post?.platform?.toLowerCase()
-      const currentReviewData = {
-        risk_score: post.review_details?.threat_score || 0,
-        client_status: status,
-        platform
-      }
-      const previousReviewData = post.client_status && post.client_status !== 'To Be Reviewed' ? {
-        risk_score: post.review_details?.threat_score || 0,
-        client_status: post.client_status,
-        platform
-      } : null
-
-      await updateClientReviewedMetrics(
-        { project_name: authContext.clientDetails.project_name },
-        currentReviewData,
-        previousReviewData
-      ).catch(err => logActionError({
-        loki_stream: LOKI_STREAMS.cases,
-        app_action: 'updateClientStatus',
-        message: 'Failed to update client metrics',
-      }, err))
-
       await updateClientMetaStats(
         authContext.clientDetails.project_name,
         authContext.clientDetails.email,

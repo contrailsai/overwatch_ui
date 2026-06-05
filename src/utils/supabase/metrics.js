@@ -7,6 +7,74 @@
 import { createClient } from '@/utils/supabase/server'
 import { logActionError, logActionWarn, LOKI_STREAMS } from '@/utils/otel-logger'
 
+const DUPLICATE_KEY_CODE = '23505'
+
+function isDuplicateKeyError(error) {
+  return error?.code === DUPLICATE_KEY_CODE
+    || (typeof error?.message === 'string' && error.message.includes('duplicate'))
+}
+
+function mergeJsonCounters(existing = {}, deltas = {}) {
+  const merged = { ...existing }
+  Object.keys(deltas).forEach(key => {
+    merged[key] = Math.max(0, (merged[key] || 0) + deltas[key])
+  })
+  return merged
+}
+
+async function fetchDailyMetricRow(supabase, table, { date, platform, project_name }) {
+  const { data, error } = await supabase
+    .from(table)
+    .select('*')
+    .eq('date', date)
+    .eq('platform', platform)
+    .eq('project_name', project_name)
+    .order('id', { ascending: true })
+    .limit(1)
+
+  if (error) throw error
+  return data?.[0] ?? null
+}
+
+async function upsertDailyMetricRow({
+  supabase,
+  table,
+  key,
+  buildInitialRow,
+  buildUpdatePayload,
+}) {
+  const applyUpdate = async (existing) => {
+    const { error: updateError } = await supabase
+      .from(table)
+      .update(buildUpdatePayload(existing))
+      .eq('id', existing.id)
+
+    if (updateError) throw updateError
+  }
+
+  const existing = await fetchDailyMetricRow(supabase, table, key)
+
+  if (existing) {
+    await applyUpdate(existing)
+    return
+  }
+
+  const { error: insertError } = await supabase
+    .from(table)
+    .insert(buildInitialRow())
+
+  if (insertError) {
+    if (isDuplicateKeyError(insertError)) {
+      const retryExisting = await fetchDailyMetricRow(supabase, table, key)
+      if (retryExisting) {
+        await applyUpdate(retryExisting)
+        return
+      }
+    }
+    throw insertError
+  }
+}
+
 export async function updateDailyMetrics(project, reviewData, previousReviewData = null) {
   const supabase = await createClient()
   const date = new Date().toISOString().split('T')[0] // YYYY-MM-DD
@@ -77,68 +145,39 @@ export async function updateDailyMetrics(project, reviewData, previousReviewData
     }
   }
 
+  const key = { date, platform, project_name }
+
   try {
-    // 1. Try to fetch existing row
-    const { data: existing, error: fetchError } = await supabase
-      .from('daily_case_metrics')
-      .select('*')
-      .eq('date', date)
-      .eq('platform', platform)
-      .eq('project_name', project_name)
-      .maybeSingle()
-
-    if (fetchError) throw fetchError
-
-    if (existing) {
-      // Merge risk JSON
-      const updatedRisk = { ...(existing.risk || { safe: 0, low: 0, medium: 0, high: 0 }) }
-      Object.keys(riskDeltas).forEach(key => {
-        updatedRisk[key] = Math.max(0, (updatedRisk[key] || 0) + riskDeltas[key])
-      })
-
-      // Merge categories JSON
-      const updatedCategories = { ...(existing.categories || {}) }
-      Object.keys(categoryDeltas).forEach(key => {
-        updatedCategories[key] = Math.max(0, (updatedCategories[key] || 0) + categoryDeltas[key])
-      })
-
-      const { error: updateError } = await supabase
-        .from('daily_case_metrics')
-        .update({
-          total_cases: Math.max(0, (existing.total_cases || 0) + totalDelta),
-          risk: updatedRisk,
-          categories: updatedCategories,
-          // created_at is automatic, but maybe we want an updated_at? (not in schema provided)
+    await upsertDailyMetricRow({
+      supabase,
+      table: 'daily_case_metrics',
+      key,
+      buildInitialRow: () => {
+        const initialRisk = {}
+        Object.keys(riskDeltas).forEach(riskKey => {
+          initialRisk[riskKey] = Math.max(0, riskDeltas[riskKey])
         })
-        .eq('id', existing.id)
 
-      if (updateError) throw updateError
-    } else {
-      // Insert new row
-      // Initialize risk and categories with deltas, ensuring no negatives (though unlikely on insert)
-      const initialRisk = {}
-      Object.keys(riskDeltas).forEach(key => {
-        initialRisk[key] = Math.max(0, riskDeltas[key])
-      })
+        const initialCategories = {}
+        Object.keys(categoryDeltas).forEach(categoryKey => {
+          initialCategories[categoryKey] = Math.max(0, categoryDeltas[categoryKey])
+        })
 
-      const initialCategories = {}
-      Object.keys(categoryDeltas).forEach(key => {
-        initialCategories[key] = Math.max(0, categoryDeltas[key])
-      })
-
-      const { error: insertError } = await supabase
-        .from('daily_case_metrics')
-        .insert({
+        return {
           date,
           platform,
           project_name,
           total_cases: Math.max(0, totalDelta),
           risk: initialRisk,
-          categories: initialCategories
-        })
-
-      if (insertError) throw insertError
-    }
+          categories: initialCategories,
+        }
+      },
+      buildUpdatePayload: (existing) => ({
+        total_cases: Math.max(0, (existing.total_cases || 0) + totalDelta),
+        risk: mergeJsonCounters(existing.risk || { safe: 0, low: 0, medium: 0, high: 0 }, riskDeltas),
+        categories: mergeJsonCounters(existing.categories || {}, categoryDeltas),
+      }),
+    })
   } catch (err) {
     logActionError({
       loki_stream: LOKI_STREAMS.shared,
@@ -150,9 +189,6 @@ export async function updateDailyMetrics(project, reviewData, previousReviewData
   }
 }
 
-/**
- * Manages takedown cases in Supabase
- */
 /**
  * Updates the client reviewed metrics in Supabase.
  * Tracks client decisions: 'no-action', 'Flag for Takedown', 'Takedown'
@@ -174,6 +210,55 @@ export async function updateClientReviewedMetrics(project, reviewData, previousR
     return
   }
 
+  const { riskDeltas, actionDeltas, totalDelta } = computeClientReviewedDeltas(reviewData, previousReviewData)
+  const key = { date, platform, project_name }
+
+  try {
+    await upsertDailyMetricRow({
+      supabase,
+      table: 'daily_reviewed_metrics',
+      key,
+      buildInitialRow: () => {
+        const initialRisk = {}
+        Object.keys(riskDeltas).forEach(riskKey => {
+          initialRisk[riskKey] = Math.max(0, riskDeltas[riskKey])
+        })
+
+        const initialAction = {}
+        Object.keys(actionDeltas).forEach(actionKey => {
+          initialAction[actionKey] = Math.max(0, actionDeltas[actionKey])
+        })
+
+        return {
+          date,
+          platform,
+          project_name,
+          total_reviewed: Math.max(0, totalDelta),
+          risk: initialRisk,
+          reviewed: initialAction,
+        }
+      },
+      buildUpdatePayload: (existing) => ({
+        total_reviewed: Math.max(0, (existing.total_reviewed || 0) + totalDelta),
+        risk: mergeJsonCounters(existing.risk || { safe: 0, low: 0, medium: 0, high: 0 }, riskDeltas),
+        reviewed: mergeJsonCounters(
+          existing.reviewed || { 'no-action': 0, 'Flag for Takedown': 0, 'Takedown': 0 },
+          actionDeltas
+        ),
+      }),
+    })
+  } catch (err) {
+    logActionError({
+      loki_stream: LOKI_STREAMS.shared,
+      app_caller: 'supabase/metrics',
+      app_action: 'updateClientReviewedMetrics',
+      message: 'Failed to update daily_reviewed_metrics',
+    }, err)
+    console.error('Failed to update daily_reviewed_metrics:', err)
+  }
+}
+
+function computeClientReviewedDeltas(reviewData, previousReviewData = null) {
   const getRiskBucket = (score) => {
     if (score === undefined || score === null) return null
     if (score > 95) return 'high'
@@ -182,7 +267,6 @@ export async function updateClientReviewedMetrics(project, reviewData, previousR
     return 'safe'
   }
 
-  // Map status to the exact keys provided in the requirement
   const getActionKey = (status) => {
     if (!status) return null
     if (status.toLowerCase().includes('no action') || status.toLowerCase().includes('no-action')) return 'no-action'
@@ -194,7 +278,6 @@ export async function updateClientReviewedMetrics(project, reviewData, previousR
   const riskDeltas = { safe: 0, low: 0, medium: 0, high: 0 }
   const actionDeltas = { 'no-action': 0, 'Flag for Takedown': 0, 'Takedown': 0 }
 
-  // 1. Add current state
   const currentRiskBucket = getRiskBucket(reviewData.risk_score)
   if (currentRiskBucket) riskDeltas[currentRiskBucket]++
 
@@ -203,7 +286,6 @@ export async function updateClientReviewedMetrics(project, reviewData, previousR
 
   let totalDelta = 1
 
-  // 2. Subtract previous state if update
   if (previousReviewData) {
     totalDelta = 0
     const prevRiskBucket = getRiskBucket(previousReviewData.risk_score)
@@ -213,71 +295,117 @@ export async function updateClientReviewedMetrics(project, reviewData, previousR
     if (prevActionKey) actionDeltas[prevActionKey]--
   }
 
-  try {
-    const { data: existing, error: fetchError } = await supabase
-      .from('daily_reviewed_metrics')
-      .select('*')
-      .eq('date', date)
-      .eq('platform', platform)
-      .eq('project_name', project_name)
-      .maybeSingle()
+  return { riskDeltas, actionDeltas, totalDelta }
+}
 
-    if (fetchError) throw fetchError
+function accumulateClientReviewedDeltas(target, reviewData, previousReviewData = null) {
+  const { riskDeltas, actionDeltas, totalDelta } = computeClientReviewedDeltas(reviewData, previousReviewData)
 
-    if (existing) {
-      const updatedRisk = { ...(existing.risk || { safe: 0, low: 0, medium: 0, high: 0 }) }
-      Object.keys(riskDeltas).forEach(key => {
-        updatedRisk[key] = Math.max(0, (updatedRisk[key] || 0) + riskDeltas[key])
-      })
+  Object.keys(riskDeltas).forEach(key => {
+    target.riskDeltas[key] = (target.riskDeltas[key] || 0) + riskDeltas[key]
+  })
+  Object.keys(actionDeltas).forEach(key => {
+    target.actionDeltas[key] = (target.actionDeltas[key] || 0) + actionDeltas[key]
+  })
+  target.totalDelta += totalDelta
+}
 
-      const updatedAction = { ...(existing.reviewed || { 'no-action': 0, 'Flag for Takedown': 0, 'Takedown': 0 }) }
-      Object.keys(actionDeltas).forEach(key => {
-        updatedAction[key] = Math.max(0, (updatedAction[key] || 0) + actionDeltas[key])
-      })
+/**
+ * Batch update client reviewed metrics grouped by platform.
+ */
+export async function updateClientReviewedMetricsBatch(project, posts, targetStatus) {
+  if (!posts?.length) return
 
-      const { error: updateError } = await supabase
-        .from('daily_reviewed_metrics')
-        .update({
-          total_reviewed: Math.max(0, (existing.total_reviewed || 0) + totalDelta),
-          risk: updatedRisk,
-          reviewed: updatedAction
-        })
-        .eq('id', existing.id)
+  const platformBuckets = new Map()
 
-      if (updateError) throw updateError
-    } else {
-      const initialRisk = {}
-      Object.keys(riskDeltas).forEach(key => {
-        initialRisk[key] = Math.max(0, riskDeltas[key])
-      })
-
-      const initialAction = {}
-      Object.keys(actionDeltas).forEach(key => {
-        initialAction[key] = Math.max(0, actionDeltas[key])
-      })
-
-      const { error: insertError } = await supabase
-        .from('daily_reviewed_metrics')
-        .insert({
-          date,
-          platform,
-          project_name,
-          total_reviewed: Math.max(0, totalDelta),
-          risk: initialRisk,
-          reviewed: initialAction
-        })
-
-      if (insertError) throw insertError
+  for (const post of posts) {
+    const platform = post?.platform?.toLowerCase() || 'unknown'
+    const currentReviewData = {
+      risk_score: post.review_details?.threat_score || 0,
+      client_status: targetStatus,
+      platform,
     }
-  } catch (err) {
+    const previousReviewData = post.client_status && post.client_status !== 'To Be Reviewed'
+      ? {
+          risk_score: post.review_details?.threat_score || 0,
+          client_status: post.client_status,
+          platform,
+        }
+      : null
+
+    if (!platformBuckets.has(platform)) {
+      platformBuckets.set(platform, {
+        riskDeltas: { safe: 0, low: 0, medium: 0, high: 0 },
+        actionDeltas: { 'no-action': 0, 'Flag for Takedown': 0, 'Takedown': 0 },
+        totalDelta: 0,
+      })
+    }
+
+    accumulateClientReviewedDeltas(platformBuckets.get(platform), currentReviewData, previousReviewData)
+  }
+
+  const supabase = await createClient()
+  const date = new Date().toISOString().split('T')[0]
+  const project_name = project?.project_name
+
+  if (!project_name) {
     logActionError({
       loki_stream: LOKI_STREAMS.shared,
       app_caller: 'supabase/metrics',
-      app_action: 'updateClientReviewedMetrics',
-      message: 'Failed to update daily_reviewed_metrics',
-    }, err)
-    console.error('Failed to update daily_reviewed_metrics:', err)
+      app_action: 'updateClientReviewedMetricsBatch',
+      message: 'Project name is missing in updateClientReviewedMetricsBatch',
+    })
+    console.error('Project name is missing in updateClientReviewedMetricsBatch')
+    return
   }
+
+  await Promise.all([...platformBuckets.entries()].map(async ([platform, deltas]) => {
+    const key = { date, platform, project_name }
+
+    try {
+      await upsertDailyMetricRow({
+        supabase,
+        table: 'daily_reviewed_metrics',
+        key,
+        buildInitialRow: () => {
+          const initialRisk = {}
+          Object.keys(deltas.riskDeltas).forEach(riskKey => {
+            initialRisk[riskKey] = Math.max(0, deltas.riskDeltas[riskKey])
+          })
+
+          const initialAction = {}
+          Object.keys(deltas.actionDeltas).forEach(actionKey => {
+            initialAction[actionKey] = Math.max(0, deltas.actionDeltas[actionKey])
+          })
+
+          return {
+            date,
+            platform,
+            project_name,
+            total_reviewed: Math.max(0, deltas.totalDelta),
+            risk: initialRisk,
+            reviewed: initialAction,
+          }
+        },
+        buildUpdatePayload: (existing) => ({
+          total_reviewed: Math.max(0, (existing.total_reviewed || 0) + deltas.totalDelta),
+          risk: mergeJsonCounters(existing.risk || { safe: 0, low: 0, medium: 0, high: 0 }, deltas.riskDeltas),
+          reviewed: mergeJsonCounters(
+            existing.reviewed || { 'no-action': 0, 'Flag for Takedown': 0, 'Takedown': 0 },
+            deltas.actionDeltas
+          ),
+        }),
+      })
+    } catch (err) {
+      logActionError({
+        loki_stream: LOKI_STREAMS.shared,
+        app_caller: 'supabase/metrics',
+        app_action: 'updateClientReviewedMetricsBatch',
+        message: 'Failed to update daily_reviewed_metrics',
+      }, err)
+      console.error('Failed to update daily_reviewed_metrics:', err)
+    }
+  }))
 }
 
 export async function updateClientMetaStats(project_name, client_email, action) {
@@ -438,7 +566,7 @@ export async function trackClientActivity(client_id, project_name, actionType = 
       if (insertError) {
         // Handle race condition: another concurrent request successfully inserted the record.
         // This requires the 'client_logs_unique_day' constraint to be active in the DB!
-        if (insertError.code === '23505' || (insertError.message && insertError.message.includes('duplicate'))) {
+        if (isDuplicateKeyError(insertError)) {
           // Fetch the newly created record and update it instead
           const { data: retryArray, error: retryFetchError } = await supabase
             .from('client_logs')
@@ -510,5 +638,4 @@ export async function trackClientActivity(client_id, project_name, actionType = 
     }
   }
 }
-
 
