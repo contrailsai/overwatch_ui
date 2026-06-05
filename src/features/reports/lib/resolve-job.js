@@ -1,5 +1,12 @@
+import { REPORT_REUSE_MAX_AGE_MS } from '@/features/reports/constants'
 import { isReportInFlight, isReportSuccess } from '@/features/reports/lib/status'
 import { logActionError, LOKI_STREAMS } from '@/utils/otel-logger'
+
+function isCompletedReportStale(row) {
+  const timestamp = row.finish_time ?? row.last_update
+  if (!timestamp) return true
+  return Date.now() - new Date(timestamp).getTime() > REPORT_REUSE_MAX_AGE_MS
+}
 
 /**
  * Latest row for this client + hash; decide reuse vs new insert.
@@ -25,6 +32,9 @@ export async function resolveExistingReportJob(supabase, reportHash, clientId) {
   }
   if (!row) return { action: 'create' }
   if (isReportSuccess(row.s3_path, row.status)) {
+    if (isCompletedReportStale(row)) {
+      return { action: 'create' }
+    }
     return { action: 'reuse_complete', job: row }
   }
   if (isReportInFlight(row)) {

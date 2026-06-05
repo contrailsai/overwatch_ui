@@ -1,6 +1,6 @@
 'use server'
 
-import { getSignedDownloadUrl } from '@/utils/aws/s3'
+import { getSignedDownloadUrl, resolveS3ObjectKeyFromStoredPath } from '@/utils/aws/s3'
 import { traceAction } from '@/utils/tracing'
 import { createClient } from '@/utils/supabase/server'
 import { generateReportHash } from '@/features/reports/hash'
@@ -16,23 +16,34 @@ import { REVIEWED_THREAT_SCORE_FILTER } from '@/lib/posts/reviewed-post-filter'
 
 const OBJECT_ID_HEX = /^[a-fA-F0-9]{24}$/
 
-export const getReportDownloadUrl = traceAction('getReportDownloadUrl', async (s3Url, originalName) => {
-  if (!s3Url) return null
+export const getReportDownloadUrl = traceAction('getReportDownloadUrl', async (jobId, originalName) => {
+  if (jobId == null || jobId === '') return null
 
   try {
     const { user } = await requireAuthContext()
     const supabase = await createClient()
-    const { data: ownedReport } = await supabase
+    const { data: ownedReport, error: lookupError } = await supabase
       .from('reports_generation')
-      .select('id')
+      .select('s3_path')
+      .eq('id', jobId)
       .eq('client_id', user.id)
-      .eq('s3_path', s3Url)
       .maybeSingle()
 
-    if (!ownedReport) return null
+    if (lookupError) {
+      logActionError({
+        loki_stream: LOKI_STREAMS.reports,
+        app_action: 'getReportDownloadUrl',
+        message: 'Report ownership lookup failed',
+        job_id: String(jobId),
+      }, lookupError)
+      console.error('getReportDownloadUrl: ownership lookup failed', lookupError)
+      return null
+    }
+    if (!ownedReport?.s3_path) return null
 
-    const url = new URL(s3Url)
-    const key = url.pathname.substring(1)
+    const key = resolveS3ObjectKeyFromStoredPath(ownedReport.s3_path)
+    if (!key) return null
+
     return await getSignedDownloadUrl(key, originalName)
   } catch (error) {
     logActionError({

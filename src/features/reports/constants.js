@@ -5,6 +5,9 @@ export const REPORT_FORMATS = /** @type {const} */ ({
   DOCX: 'docx',
 })
 
+/** Max age before a completed report with the same hash is regenerated. */
+export const REPORT_REUSE_MAX_AGE_MS = 2 * 60 * 1000
+
 /** Realtime channel name prefix per format (must stay unique per job). */
 export function getRealtimeChannelPrefix(reportFormat) {
   return reportFormat === REPORT_FORMATS.DOCX ? 'docx-report' : 'report'
