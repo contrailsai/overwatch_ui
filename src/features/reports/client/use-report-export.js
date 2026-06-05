@@ -78,7 +78,7 @@ export function useReportExport(reportFormat = REPORT_FORMATS.PDF) {
 
         setStatusText('Preparing download...')
         const fileName = `${fileNamePrefix}_${new Date().toISOString().split('T')[0]}.${fileExt}`
-        const signedUrl = await getReportDownloadUrl(s3Url, fileName)
+        const signedUrl = await getReportDownloadUrl(jobData.jobId, fileName)
         if (!signedUrl) throw new Error('Failed to sign download URL')
 
         triggerFileDownload(signedUrl, fileName)
