@@ -144,6 +144,7 @@ export const getCaseData = (post, project) => {
     const reasoning = review.reasoning
         || analysis.categorization_reason
         || "Analyzed content for policy adherence. No detailed reasoning provided.";
+    const simpleReportDescription = review.simple_report_description || analysis.simple_report_description || null;
 
     // Project labels / violations
     let projectDetails = project?.project_details;
@@ -193,7 +194,7 @@ export const getCaseData = (post, project) => {
     }
 
     return {
-        review, analysis, riskScore, reasoning, activeViolations,
+        review, analysis, riskScore, reasoning, simpleReportDescription, activeViolations,
         posted_date, sourced_date, reviewedDate, stats, legalCodes, parsedComments
     };
 };
@@ -201,7 +202,7 @@ export const getCaseData = (post, project) => {
 export const generateCaseSections = async (post, project, compressedImage, caseNumber = null) => {
     const {
         posted_date, sourced_date, reviewedDate, stats, legalCodes,
-        activeViolations, reasoning, parsedComments
+        activeViolations, reasoning, simpleReportDescription, parsedComments
     } = getCaseData(post, project);
 
     const docChildren = [];
@@ -360,7 +361,19 @@ export const generateCaseSections = async (post, project, compressedImage, caseN
         docChildren.push(sectionDivider(200));
     }
 
-    // ── 7. ANALYSIS & COMPLETE REASONING ─────────────────────────────────────
+    // ── 7. REPORT SUMMARY (optional) ─────────────────────────────────────────
+    if (simpleReportDescription) {
+        docChildren.push(sectionHeading("Simple Reasoning"));
+        docChildren.push(
+            new Paragraph({
+                children: [new TextRun({ text: simpleReportDescription, color: "374151", size: 20 })],
+                spacing: { after: 80 },
+            })
+        );
+        docChildren.push(sectionDivider(200));
+    }
+
+    // ── 8. ANALYSIS & COMPLETE REASONING ─────────────────────────────────────
     docChildren.push(sectionHeading("Analysis & Complete Reasoning"));
 
     const reasoningParagraphs = reasoning.split(/\n+/).filter(p => p.trim().length > 0);

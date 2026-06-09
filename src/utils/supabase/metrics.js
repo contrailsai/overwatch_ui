@@ -8,10 +8,48 @@ import { createClient } from '@/utils/supabase/server'
 import { logActionError, logActionWarn, LOKI_STREAMS } from '@/utils/otel-logger'
 
 const DUPLICATE_KEY_CODE = '23505'
+const MISSING_RPC_CODE = 'PGRST202'
+const ROW_FETCH_RETRIES = 3
+const ROW_FETCH_RETRY_MS = 50
+const UPSERT_MAX_ATTEMPTS = 3
 
 function isDuplicateKeyError(error) {
   return error?.code === DUPLICATE_KEY_CODE
     || (typeof error?.message === 'string' && error.message.includes('duplicate'))
+}
+
+function isMissingRpcError(error) {
+  return error?.code === MISSING_RPC_CODE
+    || (typeof error?.message === 'string' && error.message.includes('Could not find the function'))
+}
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+async function runWithUpsertRetries(operation, maxAttempts = UPSERT_MAX_ATTEMPTS) {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      await operation()
+      return
+    } catch (error) {
+      if (!isDuplicateKeyError(error) || attempt === maxAttempts - 1) throw error
+      await sleep(ROW_FETCH_RETRY_MS * (attempt + 1))
+    }
+  }
+}
+
+async function fetchRowWithRetry(queryFn) {
+  for (let attempt = 0; attempt <= ROW_FETCH_RETRIES; attempt++) {
+    const { data, error } = await queryFn()
+    if (error) throw error
+    const row = data?.[0] ?? null
+    if (row) return row
+    if (attempt < ROW_FETCH_RETRIES) {
+      await sleep(ROW_FETCH_RETRY_MS * (attempt + 1))
+    }
+  }
+  return null
 }
 
 function mergeJsonCounters(existing = {}, deltas = {}) {
@@ -23,20 +61,132 @@ function mergeJsonCounters(existing = {}, deltas = {}) {
 }
 
 async function fetchDailyMetricRow(supabase, table, { date, platform, project_name }) {
-  const { data, error } = await supabase
+  return fetchRowWithRetry(() => supabase
     .from(table)
     .select('*')
     .eq('date', date)
     .eq('platform', platform)
     .eq('project_name', project_name)
     .order('id', { ascending: true })
-    .limit(1)
-
-  if (error) throw error
-  return data?.[0] ?? null
+    .limit(1))
 }
 
-async function upsertDailyMetricRow({
+async function fetchClientLogRow(supabase, { client_id, project_name, date }) {
+  return fetchRowWithRetry(() => supabase
+    .from('client_logs')
+    .select('*')
+    .eq('client_id', client_id)
+    .eq('project_name', project_name)
+    .eq('date', date)
+    .order('id', { ascending: true })
+    .limit(1))
+}
+
+async function upsertClientLogRow({
+  supabase,
+  key,
+  buildInitialRow,
+  buildUpdatePayload,
+}) {
+  const applyUpdate = async (existing) => {
+    const { error: updateError } = await supabase
+      .from('client_logs')
+      .update(buildUpdatePayload(existing))
+      .eq('id', existing.id)
+
+    if (updateError) throw updateError
+  }
+
+  const existing = await fetchClientLogRow(supabase, key)
+
+  if (existing) {
+    await applyUpdate(existing)
+    return
+  }
+
+  const { error: insertError } = await supabase
+    .from('client_logs')
+    .insert(buildInitialRow())
+
+  if (insertError) {
+    if (isDuplicateKeyError(insertError)) {
+      const retryExisting = await fetchClientLogRow(supabase, key)
+      if (retryExisting) {
+        await applyUpdate(retryExisting)
+        return
+      }
+    }
+    throw insertError
+  }
+}
+
+function buildClientLogRpcParams(actionType, details, increment, time) {
+  const delta = Math.max(0, Number(increment) || 0)
+  const params = {
+    p_reviewed_cases_delta: 0,
+    p_reviewed_profiles_delta: 0,
+    p_report_download_key: null,
+    p_report_download_delta: 0,
+    p_login_time: null,
+  }
+
+  if (actionType === 'login') {
+    params.p_login_time = time
+  } else if (actionType === 'reviewed_case') {
+    params.p_reviewed_cases_delta = delta
+  } else if (actionType === 'reviewed_profile') {
+    params.p_reviewed_profiles_delta = delta
+  } else if (actionType === 'report_download' && details) {
+    params.p_report_download_key = details
+    params.p_report_download_delta = delta || 1
+  }
+
+  return params
+}
+
+async function incrementClientLogActivityRpc(supabase, {
+  client_id,
+  project_name,
+  date,
+  time,
+  actionType,
+  details,
+  increment,
+}) {
+  const rpcParams = buildClientLogRpcParams(actionType, details, increment, time)
+  const { error } = await supabase.rpc('increment_client_log_activity', {
+    p_client_id: client_id,
+    p_project_name: project_name,
+    p_date: date,
+    p_last_activity: time,
+    ...rpcParams,
+  })
+
+  if (error) {
+    if (isMissingRpcError(error)) return false
+    throw error
+  }
+
+  return true
+}
+
+async function incrementClientMetaStatsRpc(supabase, client_id, project_name, casesDelta, profilesDelta) {
+  const { error } = await supabase.rpc('increment_client_meta_stats', {
+    p_client_id: client_id,
+    p_project_name: project_name,
+    p_reviewed_cases_delta: casesDelta,
+    p_reviewed_profiles_delta: profilesDelta,
+  })
+
+  if (error) {
+    if (isMissingRpcError(error)) return false
+    throw error
+  }
+
+  return true
+}
+
+async function upsertDailyMetricRowOnce({
   supabase,
   table,
   key,
@@ -73,6 +223,10 @@ async function upsertDailyMetricRow({
     }
     throw insertError
   }
+}
+
+async function upsertDailyMetricRow(params) {
+  return runWithUpsertRetries(() => upsertDailyMetricRowOnce(params))
 }
 
 export async function updateDailyMetrics(project, reviewData, previousReviewData = null) {
@@ -408,7 +562,7 @@ export async function updateClientReviewedMetricsBatch(project, posts, targetSta
   }))
 }
 
-export async function updateClientMetaStats(project_name, client_email, action) {
+export async function updateClientMetaStats(project_name, client_email, action, count = 1) {
   const supabase = await createClient()
 
   if (!project_name || !client_email) {
@@ -443,30 +597,33 @@ export async function updateClientMetaStats(project_name, client_email, action) 
       return
     }
 
-    // 2. Initialize or update meta_stats
+    const safeCount = Math.max(0, Number(count) || 0)
+    if (safeCount === 0) return
+
+    const casesDelta = action === 'reviewed_case' ? safeCount : 0
+    const profilesDelta = action === 'reviewed_profile' ? safeCount : 0
+    const activityType = action === 'reviewed_profile' ? 'reviewed_profile' : 'reviewed_case'
+
+    await trackClientActivity(clientData.id, project_name, activityType, null, null, safeCount)
+
+    const usedRpc = await incrementClientMetaStatsRpc(
+      supabase,
+      clientData.id,
+      project_name,
+      casesDelta,
+      profilesDelta
+    )
+
+    if (usedRpc) return
+
     const metaStats = clientData.meta_stats || { reviewed_cases: 0, reviewed_profiles: 0 }
-
-    // 3. Handle action increment
-    if (action === 'reviewed_case') {
-      metaStats.reviewed_cases = (metaStats.reviewed_cases || 0) + 1
-      trackClientActivity(clientData.id, project_name, 'reviewed_case').catch(err => logActionError({
-        loki_stream: LOKI_STREAMS.shared,
-        app_caller: 'supabase/metrics',
-        app_action: 'trackClientActivity',
-        message: 'Failed to track reviewed_case activity',
-      }, err))
+    if (casesDelta > 0) {
+      metaStats.reviewed_cases = (metaStats.reviewed_cases || 0) + casesDelta
     }
-    else if (action === 'reviewed_profile') {
-      metaStats.reviewed_profiles = (metaStats.reviewed_profiles || 0) + 1
-      trackClientActivity(clientData.id, project_name, 'reviewed_profile').catch(err => logActionError({
-        loki_stream: LOKI_STREAMS.shared,
-        app_caller: 'supabase/metrics',
-        app_action: 'trackClientActivity',
-        message: 'Failed to track reviewed_profile activity',
-      }, err))
+    if (profilesDelta > 0) {
+      metaStats.reviewed_profiles = (metaStats.reviewed_profiles || 0) + profilesDelta
     }
 
-    // 4. Update the client row
     const { error: updateError } = await supabase
       .from('client_details')
       .update({ meta_stats: metaStats })
@@ -488,7 +645,7 @@ export async function updateClientMetaStats(project_name, client_email, action) 
  * Tracks the daily login/activity of a client in a project.
  * If the entry for today doesn't exist, it inserts one.
  */
-export async function trackClientActivity(client_id, project_name, actionType = 'login', details = null, clientEmail = null) {
+export async function trackClientActivity(client_id, project_name, actionType = 'login', details = null, clientEmail = null, increment = 1) {
   const supabase = await createClient()
 
   if (!client_id || !project_name) {
@@ -502,94 +659,60 @@ export async function trackClientActivity(client_id, project_name, actionType = 
     return
   }
 
+  const safeIncrement = Math.max(0, Number(increment) || 0)
+  if (actionType !== 'login' && safeIncrement === 0) return
+
   try {
     const now = new Date()
     const date = now.toISOString().split('T')[0] // YYYY-MM-DD
     const time = now.toISOString().split('T')[1].split('.')[0] + 'Z' // HH:MM:SSZ
+    const key = { client_id, project_name, date }
 
-    // Helper to perform the update on an existing record safely
-    const updateExisting = async (existingRecord) => {
-      const updates = { last_activity: time }
+    const usedRpc = await incrementClientLogActivityRpc(supabase, {
+      client_id,
+      project_name,
+      date,
+      time,
+      actionType,
+      details,
+      increment: actionType === 'login' ? 1 : safeIncrement,
+    })
 
-      if (actionType === 'login' && !existingRecord.login_time) {
-        updates.login_time = time
-      } else if (actionType === 'reviewed_case') {
-        updates.reviewed_cases = (existingRecord.reviewed_cases || 0) + 1
-      } else if (actionType === 'reviewed_profile') {
-        updates.reviewed_profiles = (existingRecord.reviewed_profiles || 0) + 1
-      } else if (actionType === 'report_download' && details) {
-        const currentReports = existingRecord.reports_download || {}
-        updates.reports_download = {
-          ...currentReports,
-          [details]: (currentReports[details] || 0) + 1
-        }
-      }
+    if (!usedRpc) {
+      const incrementValue = actionType === 'login' ? 1 : safeIncrement
+      await runWithUpsertRetries(() => upsertClientLogRow({
+        supabase,
+        key,
+        buildInitialRow: () => ({
+          client_id,
+          project_name,
+          date,
+          login_time: actionType === 'login' ? time : null,
+          last_activity: time,
+          reviewed_cases: actionType === 'reviewed_case' ? incrementValue : 0,
+          reviewed_profiles: actionType === 'reviewed_profile' ? incrementValue : 0,
+          reports_download: actionType === 'report_download' && details ? { [details]: incrementValue } : {},
+        }),
+        buildUpdatePayload: (existing) => {
+          const updates = { last_activity: time }
 
-      const { error: updateError } = await supabase
-        .from('client_logs')
-        .update(updates)
-        .eq('id', existingRecord.id)
-
-      if (updateError) throw updateError
-    }
-
-    // We use a single query approach to avoid race conditions.
-    // First, check if the record for today already exists
-    const { data: existingArray, error: fetchError } = await supabase
-      .from('client_logs')
-      .select('*')
-      .eq('client_id', client_id)
-      .eq('project_name', project_name)
-      .eq('date', date)
-      .limit(1)
-
-    if (fetchError) throw fetchError
-    const existing = existingArray && existingArray.length > 0 ? existingArray[0] : null
-
-    if (!existing) {
-      // First activity of the day, attempt insert
-      const newData = {
-        client_id,
-        project_name,
-        date,
-        login_time: actionType === 'login' ? time : null,
-        last_activity: time,
-        reviewed_cases: actionType === 'reviewed_case' ? 1 : 0,
-        reviewed_profiles: actionType === 'reviewed_profile' ? 1 : 0,
-        reports_download: actionType === 'report_download' && details ? { [details]: 1 } : {}
-      }
-
-      const { error: insertError } = await supabase
-        .from('client_logs')
-        .insert(newData)
-
-      if (insertError) {
-        // Handle race condition: another concurrent request successfully inserted the record.
-        // This requires the 'client_logs_unique_day' constraint to be active in the DB!
-        if (isDuplicateKeyError(insertError)) {
-          // Fetch the newly created record and update it instead
-          const { data: retryArray, error: retryFetchError } = await supabase
-            .from('client_logs')
-            .select('*')
-            .eq('client_id', client_id)
-            .eq('project_name', project_name)
-            .eq('date', date)
-            .limit(1)
-
-          if (retryFetchError) throw retryFetchError
-          const retryExisting = retryArray && retryArray.length > 0 ? retryArray[0] : null
-          
-          if (retryExisting) {
-            await updateExisting(retryExisting)
-            return
+          if (actionType === 'login' && !existing.login_time) {
+            updates.login_time = time
+          } else if (actionType === 'reviewed_case') {
+            updates.reviewed_cases = (existing.reviewed_cases || 0) + incrementValue
+          } else if (actionType === 'reviewed_profile') {
+            updates.reviewed_profiles = (existing.reviewed_profiles || 0) + incrementValue
+          } else if (actionType === 'report_download' && details) {
+            const currentReports = existing.reports_download || {}
+            updates.reports_download = {
+              ...currentReports,
+              [details]: (currentReports[details] || 0) + incrementValue,
+            }
           }
-        }
-        // If it's a different error (or constraint is missing), throw it
-        throw insertError
-      }
-    } else {
-      // Already active today, update metrics
-      await updateExisting(existing)
+
+          return updates
+        },
+      }))
     }
   } catch (err) {
     logActionError({

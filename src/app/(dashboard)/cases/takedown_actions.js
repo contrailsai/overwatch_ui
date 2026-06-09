@@ -3,6 +3,7 @@
 import clientPromise from '@/utils/mongodb/client'
 import { getSignedImageUrl } from '@/utils/aws/s3'
 import { sendSlackNotification } from '@/utils/slack'
+import { countReviewedCaseActivityDelta } from '@/utils/supabase/reviewed-activity-count'
 import { updateClientReviewedMetricsBatch, updateClientMetaStats } from '@/utils/supabase/metrics'
 import { ObjectId } from 'mongodb'
 // import { getClientandProjectDetails } from '@/app/(dashboard)/actions'
@@ -97,17 +98,19 @@ export const initiateTakedown = traceAction('initiateTakedown', async (caseIds, 
             message: 'Failed to update client metrics',
         }, err))
 
-        await Promise.all(posts.map(async post => {
+        const reviewedActivityCount = countReviewedCaseActivityDelta(posts, status)
+        if (reviewedActivityCount > 0) {
             await updateClientMetaStats(
                 clientDetails.project_name,
                 clientDetails.email,
-                "reviewed_case"
+                'reviewed_case',
+                reviewedActivityCount
             ).catch(err => logActionError({
                 loki_stream: LOKI_STREAMS.cases,
                 app_action: 'initiateTakedown',
                 message: 'Failed to update meta stats',
             }, err))
-        }))
+        }
 
         await sendSlackNotification().catch(e => logActionError({
             loki_stream: LOKI_STREAMS.cases,

@@ -545,6 +545,7 @@ export default function TakedownDetails({ takedownId, initialData, initialDocume
           (c) => c != null && c !== '' && String(c).toLowerCase() !== 'safe'
         ) || 'Unknown'
   const reasoning = review.reasoning || analysis.categorization_reason || 'No detailed reasoning provided.';
+  const simpleReportDescription = review.simple_report_description || analysis.simple_report_description || null;
   const reviewerNote = review.reviewer_comments || null;
   const poiNames = review.poi_names || analysis.poi_check?.poi_names || [];
   const legalCodes = review.legal_codes || [];
@@ -810,6 +811,17 @@ export default function TakedownDetails({ takedownId, initialData, initialDocume
                       </div>
                     </div>
                   </div>
+
+                  {simpleReportDescription && (
+                    <div className="space-y-3">
+                      <h5 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                        <FileText className="w-3 h-3" /> Simple Reasoning
+                      </h5>
+                      <div className="bg-emerald-50/50 p-5 rounded-xl border border-emerald-100 text-slate-600 leading-relaxed text-sm font-medium whitespace-pre-wrap">
+                        {simpleReportDescription}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Reasoning */}
                   <div className="space-y-3">

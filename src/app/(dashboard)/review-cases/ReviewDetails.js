@@ -181,6 +181,7 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
     const [visibilityStatus, setVisibilityStatus] = useState(localPost.visibility_status === 'down' ? 'down' : 'online')
 
     const reasoningRef = useRef(null)
+    const simpleReportDescRef = useRef(null)
     const reviewerCommentsRef = useRef(null)
 
     const poiPresent = facePresent || namePresent
@@ -192,6 +193,7 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
     const sourced_date = rawSourcedDate ? format(new Date(rawSourcedDate), "dd/MM/yyyy") : "N/A"
 
     const default_reviewer_analysis = hasReview ? (review.reasoning || '') : (analysis.reasoning || '')
+    const default_simple_report_description = hasReview ? (review.simple_report_description || '') : (analysis.simple_report_description || '')
     const [showAIInsights, setShowAIInsights] = useState(!hasReview)
 
     // --- Handlers ---
@@ -387,6 +389,7 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
         setIsAIGC(false)
         setVisibilityStatus(localPost.visibility_status === 'down' ? 'down' : 'online')
         if (reasoningRef.current) reasoningRef.current.value = ''
+        if (simpleReportDescRef.current) simpleReportDescRef.current.value = ''
         if (reviewerCommentsRef.current) reviewerCommentsRef.current.value = ''
     }
 
@@ -871,6 +874,17 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
                                             </div>
                                         )}
 
+                                        {analysis.simple_report_description && (
+                                            <div className="space-y-1.5">
+                                                <h5 className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest flex items-center gap-1.5">
+                                                    <FileText className="w-3 h-3" /> Simple Reasoning
+                                                </h5>
+                                                <div className="p-3 rounded-lg border border-emerald-100 bg-emerald-50/50 text-xs text-slate-700 leading-relaxed shadow-sm">
+                                                    {analysis.simple_report_description}
+                                                </div>
+                                            </div>
+                                        )}
+
                                         {analysis.profile_summary && (
                                             <div className="space-y-1.5">
                                                 <h5 className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest flex items-center gap-1.5">
@@ -1130,15 +1144,24 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
                             <section className="space-y-4 pt-2">
                                 <div className="grid grid-cols-1 gap-8">
                                     <div className="space-y-2">
-                                        <Label className="text-xs font-bold text-slate-500 uppercase flex justify-between">
-                                            <span>Reviewer Final Analysis</span>
-                                        </Label>
+                                        <Label className="text-xs font-bold text-slate-500 uppercase">Reasoning</Label>
                                         <Textarea
                                             ref={reasoningRef}
                                             name="reasoning"
                                             defaultValue={default_reviewer_analysis}
-                                            placeholder="Enter your final analysis reasoning here..."
+                                            placeholder="Enter your analysis reasoning here..."
                                             className="min-h-[100px] bg-slate-50 border-slate-200 text-sm focus:bg-white transition-colors resize-y"
+                                        />
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <Label className="text-xs font-bold text-slate-500 uppercase">Simple Reasoning</Label>
+                                        <Textarea
+                                            ref={simpleReportDescRef}
+                                            name="simple_report_description"
+                                            defaultValue={default_simple_report_description}
+                                            placeholder="Concise summary for reports..."
+                                            className="min-h-[80px] bg-slate-50 border-slate-200 text-sm focus:bg-white transition-colors resize-y"
                                         />
                                     </div>
 

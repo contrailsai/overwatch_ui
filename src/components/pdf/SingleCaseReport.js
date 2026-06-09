@@ -373,6 +373,7 @@ export const SingleCasePage = ({ post, project, compressedImage }) => {
     const riskInfo = getRiskLabel(riskScore);
 
     const reasoning = review.reasoning || analysis.categorization_reason || "Analyzed content for policy adherence. No detailed reasoning provided.";
+    const simpleReportDescription = review.simple_report_description || analysis.simple_report_description || null;
 
     // Safely parse project details if it's a string
     let projectDetails = project?.project_details;
@@ -608,6 +609,15 @@ export const SingleCasePage = ({ post, project, compressedImage }) => {
                                         );
                                     })}
                                 </View>
+                            </View>
+                        </View>
+                    )}
+
+                    {simpleReportDescription && (
+                        <View>
+                            <Text style={styles.sectionLabel}>Simple Reasoning</Text>
+                            <View style={[styles.analysisBox, { minHeight: 60 }]}>
+                                <Text style={styles.reasoningText}>{simpleReportDescription}</Text>
                             </View>
                         </View>
                     )}
