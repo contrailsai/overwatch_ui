@@ -2,7 +2,13 @@
 
 import path from 'path'
 import clientPromise from '@/utils/mongodb/client'
-import { uploadFileToS3 } from '@/utils/aws/s3'
+import { uploadFileToS3, getSignedUploadUrl, headS3Object, buildS3PublicUrl } from '@/utils/aws/s3'
+import {
+  MANUAL_POST_MEDIA_MAX_BYTES,
+  MANUAL_POST_MEDIA_MAX_ITEMS,
+  validateManualPostMediaMeta,
+  validateS3HeadSize,
+} from '@/utils/aws/upload-validation'
 import { sendContentModerationSqsMessage } from '@/utils/aws/sqs'
 import { traceAction, runInSpan } from '@/utils/tracing'
 import { requireRole } from '@/utils/auth-context'
@@ -10,14 +16,14 @@ import { buildStrictPostDocument } from '@/utils/manual-post/buildStrictPostDocu
 import { triggerContrailsPostProcess } from '@/utils/embeddings/triggerContrailsPostProcess'
 import { logActionError, LOKI_STREAMS } from '@/utils/otel-logger'
 
-const MAX_MEDIA_ITEMS = 10
-const MAX_DOWNLOAD_BYTES = 10 * 1024 * 1024
+const MAX_MEDIA_ITEMS = MANUAL_POST_MEDIA_MAX_ITEMS
+const MAX_DOWNLOAD_BYTES = MANUAL_POST_MEDIA_MAX_BYTES
 const FETCH_TIMEOUT_MS = 30_000
 const MEDIA_STAGGER_MS = 500
 
 /**
  * @param {unknown} raw
- * @returns {{ error: string } | { body: Record<string, unknown>, mediaFiles: File[] }}
+ * @returns {{ error: string } | { body: Record<string, unknown> }}
  */
 function parseSubmitPayload(raw) {
   if (typeof FormData !== 'undefined' && raw instanceof FormData) {
@@ -31,19 +37,12 @@ function parseSubmitPayload(raw) {
     } catch {
       return { error: 'Invalid form payload' }
     }
-    const mediaFiles = []
-    for (let i = 0; i < MAX_MEDIA_ITEMS; i++) {
-      const f = raw.get(`media_${i}`)
-      if (f instanceof File && f.size > 0) {
-        mediaFiles.push(f)
-      }
-    }
-    return { body, mediaFiles }
+    return { body }
   }
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
     return { error: 'Invalid payload' }
   }
-  return { body: /** @type {Record<string, unknown>} */ (raw), mediaFiles: [] }
+  return { body: /** @type {Record<string, unknown>} */ (raw) }
 }
 
 function isValidAbsoluteUrl(s) {
@@ -76,11 +75,26 @@ function platformFolderPrefix(platformRaw) {
   return `${s.charAt(0).toUpperCase()}${s.slice(1).toLowerCase()}_data`
 }
 
+function manualPostMediaKey(platform, postId, index, fileName, contentType) {
+  const folder = platformFolderPrefix(platform)
+  let ext = extensionFromContentType(contentType)
+  const fromName = path.extname(fileName || '').toLowerCase()
+  if (fromName && fromName.length <= 8) {
+    ext = fromName
+  }
+  if (ext === '.jpe') ext = '.jpg'
+  if (ext === '.bin' && fromName) ext = fromName
+  return `${folder}/${postId}/${index}${ext}`
+}
+
+function manualPostMediaPrefix(platform, postId) {
+  return `${platformFolderPrefix(platform)}/${postId}/`
+}
+
 /**
  * @param {Record<string, unknown>} body
- * @param {File[]} mediaFiles
  */
-function validatePayload(body, mediaFiles = []) {
+function validatePayload(body) {
   const platform = String(body.platform ?? '').trim()
   const id = String(body.id ?? '').trim()
   const content = String(body.content ?? '').trim()
@@ -101,20 +115,25 @@ function validatePayload(body, mediaFiles = []) {
     }
   }
 
-  const hasUploads = mediaFiles.length > 0
+  const uploadedMedia = Array.isArray(body.uploadedMedia) ? body.uploadedMedia : []
+  const hasUploads = uploadedMedia.length > 0
   const mediaUrls = Array.isArray(body.mediaUrls) ? body.mediaUrls : []
 
+  if (hasUploads && mediaUrls.length > 0) {
+    return { error: 'Use either file uploads or media URLs, not both' }
+  }
+
   if (hasUploads) {
-    if (mediaFiles.length > MAX_MEDIA_ITEMS) {
+    if (uploadedMedia.length > MAX_MEDIA_ITEMS) {
       return { error: `At most ${MAX_MEDIA_ITEMS} media items allowed` }
     }
-    for (let i = 0; i < mediaFiles.length; i++) {
-      const f = mediaFiles[i]
-      if (!f.type.startsWith('image/')) {
-        return { error: `Image ${i + 1}: only image files are allowed` }
-      }
-      if (f.size > MAX_DOWNLOAD_BYTES) {
-        return { error: `Image ${i + 1}: file exceeds 10MB limit` }
+    for (let i = 0; i < uploadedMedia.length; i++) {
+      const row = uploadedMedia[i]
+      if (!row || typeof row !== 'object') return { error: `Invalid uploaded media row ${i + 1}` }
+      const s3Key = String(/** @type {{ s3Key?: string }} */ (row).s3Key ?? '').trim()
+      const s3Url = String(/** @type {{ s3Url?: string }} */ (row).s3Url ?? '').trim()
+      if (!s3Key || !s3Url) {
+        return { error: `Uploaded media ${i + 1}: missing S3 reference` }
       }
     }
   } else {
@@ -153,10 +172,127 @@ function validatePayload(body, mediaFiles = []) {
           })),
       taken_at: body.takenAt === '' || body.takenAt == null ? undefined : body.takenAt,
       queueAiAnalysis: Boolean(body.queueAiAnalysis),
-      _mediaFiles: hasUploads ? mediaFiles : [],
+      _uploadedMedia: hasUploads ? uploadedMedia : [],
     },
   }
 }
+
+async function assertManualPostIdAvailable(dbName, postId) {
+  const client = await clientPromise
+  const collection = client.db(dbName).collection('Posts')
+  const dup = await collection.findOne({
+    $or: [{ post_id: postId }, { code: postId }, { id: postId }],
+  })
+  if (dup) {
+    return `A post with id "${postId}" already exists in this project.`
+  }
+  return null
+}
+
+export const initManualPostMediaUploads = traceAction(
+  'initManualPostMediaUploads',
+  async (platform, postId, filesMeta) => {
+    try {
+      const { dbName } = await requireRole(['reviewer'])
+
+      const platformStr = String(platform ?? '').trim()
+      const postIdStr = String(postId ?? '').trim()
+      if (!platformStr) return { success: false, error: 'Platform is required' }
+      if (!postIdStr) return { success: false, error: 'Post id is required' }
+
+      const dupError = await assertManualPostIdAvailable(dbName, postIdStr)
+      if (dupError) return { success: false, error: dupError }
+
+      const files = Array.isArray(filesMeta) ? filesMeta : []
+      if (files.length === 0) return { success: false, error: 'No files provided' }
+      if (files.length > MAX_MEDIA_ITEMS) {
+        return { success: false, error: `At most ${MAX_MEDIA_ITEMS} media items allowed` }
+      }
+
+      const uploads = []
+      for (let i = 0; i < files.length; i++) {
+        const meta = files[i] || {}
+        const index = Number(meta.index ?? i)
+        const fileName = String(meta.name ?? `image-${index}`)
+        const contentType = String(meta.type ?? '')
+        const fileSize = Number(meta.size ?? 0)
+
+        const validationError = validateManualPostMediaMeta({ contentType, fileSize })
+        if (validationError) {
+          return { success: false, error: `Image ${i + 1}: ${validationError}` }
+        }
+
+        const s3Key = manualPostMediaKey(platformStr, postIdStr, index, fileName, contentType)
+        const s3Url = buildS3PublicUrl(s3Key)
+        const uploadUrl = await getSignedUploadUrl(s3Key, contentType)
+        uploads.push({ index, uploadUrl, s3Key, s3Url, contentType })
+      }
+
+      return { success: true, uploads }
+    } catch (error) {
+      logActionError({
+        loki_stream: LOKI_STREAMS.upload,
+        app_action: 'initManualPostMediaUploads',
+        message: 'initManualPostMediaUploads failed',
+      }, error)
+      console.error('initManualPostMediaUploads error:', error)
+      return { success: false, error: error instanceof Error ? error.message : 'Init failed' }
+    }
+  }
+)
+
+export const confirmManualPostMediaUploads = traceAction(
+  'confirmManualPostMediaUploads',
+  async (platform, postId, uploaded) => {
+    try {
+      await requireRole(['reviewer'])
+
+      const platformStr = String(platform ?? '').trim()
+      const postIdStr = String(postId ?? '').trim()
+      if (!platformStr || !postIdStr) {
+        return { success: false, error: 'Platform and post id are required' }
+      }
+
+      const rows = Array.isArray(uploaded) ? uploaded : []
+      if (rows.length === 0) return { success: false, error: 'No uploads to confirm' }
+
+      const expectedPrefix = manualPostMediaPrefix(platformStr, postIdStr)
+      const media = []
+
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i] || {}
+        const s3Key = String(row.s3Key ?? '').trim()
+        const s3Url = String(row.s3Url ?? '').trim()
+        if (!s3Key.startsWith(expectedPrefix)) {
+          return { success: false, error: `Invalid upload key for media ${i + 1}` }
+        }
+
+        const head = await headS3Object(s3Key)
+        if (!head) {
+          return { success: false, error: `Upload not found in S3 for media ${i + 1}` }
+        }
+
+        const sizeError = validateS3HeadSize(head, MANUAL_POST_MEDIA_MAX_BYTES)
+        if (sizeError) {
+          return { success: false, error: `Image ${i + 1}: ${sizeError}` }
+        }
+
+        const resolvedS3Url = buildS3PublicUrl(s3Key)
+        media.push({ type: 'image', original_url: resolvedS3Url, s3_url: resolvedS3Url })
+      }
+
+      return { success: true, media }
+    } catch (error) {
+      logActionError({
+        loki_stream: LOKI_STREAMS.upload,
+        app_action: 'confirmManualPostMediaUploads',
+        message: 'confirmManualPostMediaUploads failed',
+      }, error)
+      console.error('confirmManualPostMediaUploads error:', error)
+      return { success: false, error: error instanceof Error ? error.message : 'Confirm failed' }
+    }
+  }
+)
 
 async function downloadRemoteMedia(url) {
   const res = await fetch(url, {
@@ -212,7 +348,7 @@ async function processMediaToS3(postId, platform, mediaRows) {
 
       const key = `${folder}/${postId}/${idx}${ext}`
       await uploadFileToS3(buffer, key, contentType)
-      const s3Url = `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`
+      const s3Url = buildS3PublicUrl(key)
       s3Stored = true
       out.push({ type: resolvedType, original_url: originalUrl, s3_url: s3Url })
     } catch (e) {
@@ -225,47 +361,30 @@ async function processMediaToS3(postId, platform, mediaRows) {
   return { media: out, s3Stored }
 }
 
-/**
- * @param {string} postId
- * @param {string} platform
- * @param {File[]} files
- */
-async function processUploadedMediaToS3(postId, platform, files) {
-  let s3Stored = false
-  const out = []
-  const folder = platformFolderPrefix(platform)
+async function resolveUploadedMediaForSubmit(platform, postId, uploadedMedia) {
+  const expectedPrefix = manualPostMediaPrefix(platform, postId)
+  const media = []
 
-  for (let idx = 0; idx < files.length; idx++) {
-    if (idx > 0 && MEDIA_STAGGER_MS > 0) {
-      await new Promise((r) => setTimeout(r, MEDIA_STAGGER_MS))
+  for (let i = 0; i < uploadedMedia.length; i++) {
+    const row = uploadedMedia[i] || {}
+    const s3Key = String(row.s3Key ?? '').trim()
+    const s3Url = String(row.s3Url ?? '').trim()
+    if (!s3Key.startsWith(expectedPrefix)) {
+      throw new Error(`Invalid upload key for media ${i + 1}`)
     }
-    const file = files[idx]
-    try {
-      const buffer = Buffer.from(await file.arrayBuffer())
-      if (buffer.length > MAX_DOWNLOAD_BYTES) {
-        throw new Error('File too large')
-      }
-      let ext = extensionFromContentType(file.type)
-      const fromName = path.extname(file.name || '').toLowerCase()
-      if (fromName && fromName.length <= 8) {
-        ext = fromName
-      }
-      if (ext === '.jpe') ext = '.jpg'
-      if (ext === '.bin' && fromName) ext = fromName
-
-      const key = `${folder}/${postId}/${idx}${ext}`
-      await uploadFileToS3(buffer, key, file.type || 'image/jpeg')
-      const s3Url = `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`
-      s3Stored = true
-      out.push({ type: 'image', original_url: s3Url, s3_url: s3Url })
-    } catch (e) {
-      logActionError({ loki_stream: LOKI_STREAMS.upload, app_action: 'processUploadedMediaToS3', message: 'uploaded media S3 failed', file_name: file?.name }, e)
-      console.error('[submitManualReviewerPost] uploaded media S3 failed', file?.name, e)
-      out.push({ type: 'image', original_url: null, s3_url: null })
+    const head = await headS3Object(s3Key)
+    if (!head) {
+      throw new Error(`Upload not found in S3 for media ${i + 1}`)
     }
+    const sizeError = validateS3HeadSize(head, MANUAL_POST_MEDIA_MAX_BYTES)
+    if (sizeError) {
+      throw new Error(`Image ${i + 1}: ${sizeError}`)
+    }
+    const resolvedS3Url = buildS3PublicUrl(s3Key)
+    media.push({ type: 'image', original_url: resolvedS3Url, s3_url: resolvedS3Url })
   }
 
-  return { media: out, s3Stored }
+  return { media, s3Stored: media.length > 0 }
 }
 
 export const submitManualReviewerPost = traceAction('submitManualReviewerPost', async (rawPayload) => {
@@ -289,15 +408,15 @@ export const submitManualReviewerPost = traceAction('submitManualReviewerPost', 
     return { error: parsed.error }
   }
 
-  const { body, mediaFiles } = parsed
-  const validated = validatePayload(body, mediaFiles)
+  const { body } = parsed
+  const validated = validatePayload(body)
   if (validated.error) {
     return { error: validated.error }
   }
 
   const { data: form } = validated
-  const uploadedFiles = Array.isArray(form._mediaFiles) ? form._mediaFiles : []
-  delete form._mediaFiles
+  const uploadedMedia = Array.isArray(form._uploadedMedia) ? form._uploadedMedia : []
+  delete form._uploadedMedia
   const postId = form.id
   const updatedBy = clientDetails.email || clientDetails.id || 'reviewer'
 
@@ -318,11 +437,11 @@ export const submitManualReviewerPost = traceAction('submitManualReviewerPost', 
   }
 
   const { media, s3Stored } =
-    uploadedFiles.length > 0
+    uploadedMedia.length > 0
       ? await runInSpan(
-          'upload_content.manual_post.media_s3_upload',
-          async () => processUploadedMediaToS3(postId, form.platform, uploadedFiles),
-          { 'app.span_type': 's3_upload' }
+          'upload_content.manual_post.media_s3_verify',
+          async () => resolveUploadedMediaForSubmit(form.platform, postId, uploadedMedia),
+          { 'app.span_type': 's3_verify' }
         )
       : form.media_urls.length > 0
         ? await runInSpan(

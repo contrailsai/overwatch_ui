@@ -4,7 +4,13 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { format } from 'date-fns'
-import { submitManualReviewerPost } from './manualPostActions'
+import {
+  submitManualReviewerPost,
+  initManualPostMediaUploads,
+  confirmManualPostMediaUploads,
+} from './manualPostActions'
+import { uploadFileViaPresignedUrl } from '@/utils/aws/upload-via-presigned-url'
+import { MANUAL_POST_MEDIA_MAX_BYTES, formatUploadSizeLimit } from '@/utils/aws/upload-validation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -138,9 +144,57 @@ export default function ManualPostForm({ moderationQueueConfigured = false }) {
       const files = mediaSlots.map((s) => s.file).filter(Boolean)
       const takenAtIso = buildTakenAtIso(takenAtDate, takenAtTime)
 
+      const platformTrimmed = platform.trim()
+      const idTrimmed = id.trim()
+
+      let uploadedMedia = []
+      if (files.length > 0) {
+        const initResult = await initManualPostMediaUploads(
+          platformTrimmed,
+          idTrimmed,
+          files.map((f, index) => ({
+            index,
+            name: f.name,
+            type: f.type,
+            size: f.size,
+          }))
+        )
+        if (!initResult.success) {
+          setResult({ error: initResult.error })
+          return
+        }
+
+        for (let i = 0; i < initResult.uploads.length; i++) {
+          const slot = initResult.uploads[i]
+          const file = files[i]
+          if (!file) continue
+          await uploadFileViaPresignedUrl(file, slot.uploadUrl)
+        }
+
+        const confirmResult = await confirmManualPostMediaUploads(
+          platformTrimmed,
+          idTrimmed,
+          initResult.uploads.map((slot) => ({
+            s3Key: slot.s3Key,
+            s3Url: slot.s3Url,
+            index: slot.index,
+          }))
+        )
+        if (!confirmResult.success) {
+          setResult({ error: confirmResult.error })
+          return
+        }
+
+        uploadedMedia = initResult.uploads.map((slot) => ({
+          s3Key: slot.s3Key,
+          s3Url: slot.s3Url,
+          index: slot.index,
+        }))
+      }
+
       const payloadObj = {
-        platform: platform.trim(),
-        id: id.trim(),
+        platform: platformTrimmed,
+        id: idTrimmed,
         content: content.trim(),
         url: url.trim(),
         authorName: authorName.trim(),
@@ -151,14 +205,12 @@ export default function ManualPostForm({ moderationQueueConfigured = false }) {
         shares,
         takenAt: takenAtIso,
         mediaUrls: [],
+        uploadedMedia,
         queueAiAnalysis: moderationQueueConfigured ? queueAiAnalysis : false,
       }
 
       const fd = new FormData()
       fd.append('payload', JSON.stringify(payloadObj))
-      files.forEach((f, i) => {
-        fd.append(`media_${i}`, f)
-      })
 
       const res = await submitManualReviewerPost(fd)
       setResult(res)
@@ -180,8 +232,8 @@ export default function ManualPostForm({ moderationQueueConfigured = false }) {
             <div>
               <CardTitle className="text-xl font-bold text-slate-900 tracking-tight">Manual post</CardTitle>
               <CardDescription className="text-slate-500 text-sm font-medium">
-                Add a single post directly to the project database (reviewer only). Images upload to S3 on save;
-                embeddings and clustering run via the embedding service after save.
+                Add a single post directly to the project database (reviewer only). Images upload directly to S3
+                before save; embeddings and clustering run via the embedding service after save.
               </CardDescription>
             </div>
           </div>
@@ -426,7 +478,7 @@ export default function ManualPostForm({ moderationQueueConfigured = false }) {
                       >
                         <Upload className="w-8 h-8 text-blue-600/70" />
                         <span className="text-sm font-medium text-slate-600">Drop an image or click to choose</span>
-                        <span className="text-xs text-slate-400">JPEG, PNG, WebP, GIF — max 10MB</span>
+                        <span className="text-xs text-slate-400">JPEG, PNG, WebP, GIF — max {formatUploadSizeLimit(MANUAL_POST_MEDIA_MAX_BYTES)}</span>
                         <input
                           type="file"
                           accept="image/*"
@@ -491,7 +543,7 @@ export default function ManualPostForm({ moderationQueueConfigured = false }) {
                 ))}
               </div>
               <p className="text-xs text-slate-500">
-                Up to {MAX_MEDIA} images. {fileCount > 0 ? `${fileCount} selected — uploaded to S3 when you create the post.` : 'Optional.'}
+                Up to {MAX_MEDIA} images. {fileCount > 0 ? `${fileCount} selected — uploaded directly to S3 before save.` : 'Optional.'}
               </p>
             </div>
 

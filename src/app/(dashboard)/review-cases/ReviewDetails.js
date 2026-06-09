@@ -3,7 +3,9 @@
 import * as React from "react"
 import { useState, useEffect, useActionState, useRef, useTransition } from 'react'
 import { format } from "date-fns"
-import { submitCaseReview, uploadCaseImage, deleteCaseImage, updatePostVisibility, runAIAnalysis, deleteCase } from './actions'
+import { submitCaseReview, initCaseImageUpload, confirmCaseImageUpload, deleteCaseImage, updatePostVisibility, runAIAnalysis, deleteCase } from './actions'
+import { uploadFileViaPresignedUrl } from '@/utils/aws/upload-via-presigned-url'
+import { REVIEW_IMAGE_MAX_BYTES, formatUploadSizeLimit } from '@/utils/aws/upload-validation'
 import {
     Loader2, X, CheckCircle, ExternalLink,
     ChevronLeft, ChevronRight, Calendar, Plus,
@@ -277,16 +279,30 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
             showToast('Please select an image file.');
             return;
         }
-        if (file.size > 10 * 1024 * 1024) {
-            showToast('File size must be under 10MB.');
+        if (file.size > REVIEW_IMAGE_MAX_BYTES) {
+            showToast(`File size must be under ${formatUploadSizeLimit(REVIEW_IMAGE_MAX_BYTES)}.`);
             return;
         }
 
         setIsUploadingImage(true);
         try {
-            const formData = new FormData();
-            formData.append('file', file);
-            const result = await uploadCaseImage(localPost._id, project, clientDetails, formData);
+            const initResult = await initCaseImageUpload(localPost._id, {
+                fileName: file.name,
+                contentType: file.type,
+                fileSize: file.size,
+            });
+            if (!initResult.success) {
+                showToast('Upload failed: ' + initResult.error);
+                return;
+            }
+
+            await uploadFileViaPresignedUrl(file, initResult.uploadUrl);
+
+            const result = await confirmCaseImageUpload(localPost._id, {
+                s3Key: initResult.s3Key,
+                s3Url: initResult.s3Url,
+                contentType: file.type,
+            });
             if (result.success) {
                 setUploadedImageUrl(result.signedUrl);
                 setMediaError(false);
@@ -599,7 +615,7 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
                                             <>
                                                 <Upload className="w-16 h-16 text-slate-600 group-hover/upload:text-blue-400 mx-auto mb-4 transition-colors duration-200" />
                                                 <p className="text-slate-400 group-hover/upload:text-slate-300 font-medium text-lg transition-colors duration-200">Click to upload image</p>
-                                                <p className="text-slate-600 text-sm mt-2">PNG, JPG, WEBP up to 10MB</p>
+                                                <p className="text-slate-600 text-sm mt-2">PNG, JPG, WEBP up to {formatUploadSizeLimit(REVIEW_IMAGE_MAX_BYTES)}</p>
                                             </>
                                         )}
                                     </div>

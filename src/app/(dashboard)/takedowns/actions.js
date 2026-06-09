@@ -2,7 +2,8 @@
 
 import clientPromise from '@/utils/mongodb/client'
 import { ObjectId } from 'mongodb'
-import { getSignedImageUrl, uploadFileToS3, getSignedDownloadUrl, getSignedViewUrl } from '@/utils/aws/s3'
+import { getSignedImageUrl, getSignedDownloadUrl, getSignedViewUrl, getSignedUploadUrl, headS3Object, buildS3PublicUrl } from '@/utils/aws/s3'
+import { validateTakedownDocumentMeta, sanitizeUploadFileName, validateS3HeadSize, TAKEDOWN_DOC_MAX_BYTES } from '@/utils/aws/upload-validation'
 import { revalidatePath } from 'next/cache'
 import { traceAction, recordClickMetric, runInSpan } from '@/utils/tracing'
 import { getAuthContext } from '@/utils/auth-context'
@@ -357,41 +358,95 @@ export const getTakedownMetrics = traceAction('getTakedownMetrics_page', async (
   }
 })
 
-/**
- * Upload a document for a takedown case
- */
-export const uploadTakedownDocument = traceAction('uploadTakedownDocument', async (takedownId, formData) => {
+async function requireTakedownReviewer() {
   const ctx = await getAuthContext()
-  if (!ctx?.clientDetails?.project_name || !ctx.dbName) return { success: false, error: 'Unauthorized' }
+  if (!ctx?.clientDetails?.project_name || !ctx.dbName) {
+    return { error: 'Unauthorized' }
+  }
   if (ctx.clientDetails.permission !== 'reviewer') {
-    return { success: false, error: 'Unauthorized: Reviewer access required' }
+    return { error: 'Unauthorized: Reviewer access required' }
+  }
+  if (!ctx.user) {
+    return { error: 'Unauthorized' }
+  }
+  return { ctx }
+}
+
+/**
+ * Request a presigned PUT URL for a takedown document upload.
+ */
+export const initTakedownDocumentUpload = traceAction('initTakedownDocumentUpload', async (takedownId, fileMeta) => {
+  const auth = await requireTakedownReviewer()
+  if (auth.error) return { success: false, error: auth.error }
+
+  if (!takedownId) return { success: false, error: 'Missing takedown ID' }
+
+  const { fileName, contentType, fileSize } = fileMeta || {}
+  const validationError = validateTakedownDocumentMeta({ contentType, fileSize })
+  if (validationError) {
+    return { success: false, error: validationError }
   }
 
-  const file = formData.get('file')
-  if (!file) return { success: false, error: 'No file provided' }
+  try {
+    const sanitizedFileName = sanitizeUploadFileName(fileName)
+    const s3Key = `takedown-cases/${takedownId}/${Date.now()}-${sanitizedFileName}`
+    const s3Url = buildS3PublicUrl(s3Key)
+    const uploadUrl = await getSignedUploadUrl(s3Key, contentType)
 
+    return { success: true, uploadUrl, s3Key, s3Url }
+  } catch (error) {
+    logActionError({ loki_stream: LOKI_STREAMS.takedowns, app_action: 'initTakedownDocumentUpload', message: 'initTakedownDocumentUpload failed' }, error)
+    console.error('initTakedownDocumentUpload error:', error)
+    return { success: false, error: error.message }
+  }
+})
+
+/**
+ * Confirm a direct S3 upload and persist the document record.
+ */
+export const confirmTakedownDocumentUpload = traceAction('confirmTakedownDocumentUpload', async (takedownId, uploadMeta) => {
+  const auth = await requireTakedownReviewer()
+  if (auth.error) return { success: false, error: auth.error }
+
+  const { ctx } = auth
   const user = ctx.user
-  if (!user) return { success: false, error: 'Unauthorized' }
+
+  if (!takedownId) return { success: false, error: 'Missing takedown ID' }
+
+  const { s3Key, fileName, fileType, fileSize } = uploadMeta || {}
+  if (!s3Key || !fileName || !fileType) {
+    return { success: false, error: 'Missing upload metadata' }
+  }
+
+  const expectedPrefix = `takedown-cases/${takedownId}/`
+  if (!s3Key.startsWith(expectedPrefix)) {
+    return { success: false, error: 'Invalid upload key' }
+  }
+
+  const validationError = validateTakedownDocumentMeta({ contentType: fileType, fileSize })
+  if (validationError) {
+    return { success: false, error: validationError }
+  }
 
   try {
-    const buffer = Buffer.from(await file.arrayBuffer())
-    const fileName = file.name
-    const fileType = file.type
-    const fileSize = file.size
-    const s3Key = `takedown-cases/${takedownId}/${Date.now()}-${fileName}`
+    const head = await headS3Object(s3Key)
+    if (!head) {
+      return { success: false, error: 'Upload not found in S3' }
+    }
 
-    // 1. Upload to S3
-    await uploadFileToS3(buffer, s3Key, fileType)
+    const sizeError = validateS3HeadSize(head, TAKEDOWN_DOC_MAX_BYTES)
+    if (sizeError) {
+      return { success: false, error: sizeError }
+    }
 
-    // 2. Update MongoDB
     const client = await clientPromise
     const db = client.db(ctx.dbName)
-    
+
     const documentRecord = {
       id: crypto.randomUUID(),
       file_name: fileName,
       file_type: fileType,
-      file_size: fileSize,
+      file_size: head.contentLength,
       s3_key: s3Key,
       uploaded_by: user.id,
       created_at: new Date().toISOString()
@@ -409,19 +464,19 @@ export const uploadTakedownDocument = traceAction('uploadTakedownDocument', asyn
 
     await db.collection('Posts').updateOne(
       { _id: new ObjectId(takedownId) },
-      { 
-        $push: { 
+      {
+        $push: {
           'takedown_info.documents': documentRecord,
           'takedown_info.events': eventRecord
-        } 
+        }
       }
     )
 
     revalidatePath(`/takedowns/case/${takedownId}`)
     return { success: true }
   } catch (error) {
-    logActionError({ loki_stream: LOKI_STREAMS.takedowns, app_action: 'uploadTakedownDocument', message: 'uploadTakedownDocument failed' }, error)
-    console.error('Upload error:', error)
+    logActionError({ loki_stream: LOKI_STREAMS.takedowns, app_action: 'confirmTakedownDocumentUpload', message: 'confirmTakedownDocumentUpload failed' }, error)
+    console.error('confirmTakedownDocumentUpload error:', error)
     return { success: false, error: error.message }
   }
 })
