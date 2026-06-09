@@ -1,4 +1,4 @@
-import { S3Client, GetObjectCommand, PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3"
+import { S3Client, GetObjectCommand, PutObjectCommand, DeleteObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s3"
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner"
 import { logActionError, LOKI_STREAMS } from '@/utils/otel-logger'
 
@@ -27,6 +27,59 @@ export async function deleteFileFromS3(key) {
       message: 'Error deleting from S3',
     }, error)
     console.error("Error deleting from S3:", error)
+    throw error
+  }
+}
+
+export function buildS3PublicUrl(key) {
+  return `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`
+}
+
+export async function getSignedUploadUrl(key, contentType, expiresIn = 300) {
+  try {
+    const command = new PutObjectCommand({
+      Bucket: process.env.AWS_BUCKET_NAME,
+      Key: key,
+      ContentType: contentType,
+    })
+    return await getSignedUrl(s3Client, command, { expiresIn })
+  } catch (error) {
+    logActionError({
+      loki_stream: LOKI_STREAMS.shared,
+      app_caller: 'aws/s3',
+      app_action: 'getSignedUploadUrl',
+      message: 'Error generating signed upload URL',
+    }, error)
+    console.error('Error generating signed upload URL:', error)
+    throw error
+  }
+}
+
+/**
+ * @returns {Promise<{ contentLength: number, contentType?: string } | null>}
+ */
+export async function headS3Object(key) {
+  try {
+    const command = new HeadObjectCommand({
+      Bucket: process.env.AWS_BUCKET_NAME,
+      Key: key,
+    })
+    const result = await s3Client.send(command)
+    return {
+      contentLength: result.ContentLength ?? 0,
+      contentType: result.ContentType,
+    }
+  } catch (error) {
+    if (error?.name === 'NotFound' || error?.$metadata?.httpStatusCode === 404) {
+      return null
+    }
+    logActionError({
+      loki_stream: LOKI_STREAMS.shared,
+      app_caller: 'aws/s3',
+      app_action: 'headS3Object',
+      message: 'Error checking S3 object',
+    }, error)
+    console.error('Error checking S3 object:', error)
     throw error
   }
 }

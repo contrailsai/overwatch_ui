@@ -2,7 +2,8 @@
 
 import clientPromise from '@/utils/mongodb/client'
 import { ObjectId } from 'mongodb'
-import { getSignedImageUrl, uploadFileToS3, deleteFileFromS3 } from '@/utils/aws/s3'
+import { getSignedImageUrl, deleteFileFromS3, getSignedUploadUrl, headS3Object, buildS3PublicUrl } from '@/utils/aws/s3'
+import { validateReviewImageMeta, sanitizeUploadFileName, validateS3HeadSize, REVIEW_IMAGE_MAX_BYTES } from '@/utils/aws/upload-validation'
 import { sendContentModerationSqsMessage } from '@/utils/aws/sqs'
 import { updateDailyMetrics } from '@/utils/supabase/metrics'
 import { markClientRequestedLinksEnlisted } from '@/utils/clientRequestedLinks/server'
@@ -1032,7 +1033,38 @@ export const getCaseMetadata = traceAction('getCaseMetadata', async (postId) => 
   }
 })
 
-export const uploadCaseImage = traceAction('uploadCaseImage', async (postId, _project, _clientDetails, formData) => {
+export const initCaseImageUpload = traceAction('initCaseImageUpload', async (postId, fileMeta) => {
+  try {
+    const { dbName } = await requireRole(['reviewer'])
+
+    if (!postId) {
+      return { success: false, error: 'Missing Post ID' }
+    }
+
+    const { fileName, contentType, fileSize } = fileMeta || {}
+    const validationError = validateReviewImageMeta({ contentType, fileSize })
+    if (validationError) {
+      return { success: false, error: validationError }
+    }
+
+    const sanitizedFileName = sanitizeUploadFileName(fileName)
+    const s3Key = `case-images/${dbName}/${postId}/${Date.now()}-${sanitizedFileName}`
+    const s3Url = buildS3PublicUrl(s3Key)
+    const uploadUrl = await getSignedUploadUrl(s3Key, contentType)
+
+    return { success: true, uploadUrl, s3Key, s3Url }
+  } catch (error) {
+    logActionError({
+      loki_stream: LOKI_STREAMS.review_cases,
+      app_action: 'initCaseImageUpload',
+      message: 'review_cases.initCaseImageUpload failed',
+    }, error)
+    console.error('initCaseImageUpload Error:', error)
+    return { success: false, error: error.message }
+  }
+})
+
+export const confirmCaseImageUpload = traceAction('confirmCaseImageUpload', async (postId, uploadMeta) => {
   try {
     const { dbName, clientDetails } = await requireRole(['reviewer'])
 
@@ -1040,32 +1072,28 @@ export const uploadCaseImage = traceAction('uploadCaseImage', async (postId, _pr
       return { success: false, error: 'Missing Post ID' }
     }
 
-    const file = formData.get('file')
-    if (!file) return { success: false, error: 'No file provided' }
-
-    // Validate file type
-    if (!file.type.startsWith('image/')) {
-      return { success: false, error: 'Only image files are allowed' }
+    const { s3Key, s3Url, contentType } = uploadMeta || {}
+    if (!s3Key || !s3Url || !contentType) {
+      return { success: false, error: 'Missing upload metadata' }
     }
 
-    // Validate file size (max 10MB)
-    const MAX_SIZE = 10 * 1024 * 1024
-    if (file.size > MAX_SIZE) {
-      return { success: false, error: 'File size exceeds 10MB limit' }
+    const expectedPrefix = `case-images/${dbName}/${postId}/`
+    if (!s3Key.startsWith(expectedPrefix)) {
+      return { success: false, error: 'Invalid upload key' }
     }
 
-    const buffer = Buffer.from(await file.arrayBuffer())
-    const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_')
-    const fileType = file.type
-    const s3Key = `case-images/${dbName}/${postId}/${Date.now()}-${sanitizedFileName}`
+    const head = await headS3Object(s3Key)
+    if (!head) {
+      return { success: false, error: 'Upload not found in S3' }
+    }
 
-    // 1. Upload to S3
-    await uploadFileToS3(buffer, s3Key, fileType)
+    const sizeError = validateS3HeadSize(head, REVIEW_IMAGE_MAX_BYTES)
+    if (sizeError) {
+      return { success: false, error: sizeError }
+    }
 
-    // 2. Construct the full S3 URL
-    const s3Url = `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${s3Key}`
+    const resolvedS3Url = buildS3PublicUrl(s3Key)
 
-    // 3. Update MongoDB — set post_content.media_urls with the new image
     const client = await clientPromise
     const db = client.db(dbName)
     const collection = db.collection('Posts')
@@ -1075,8 +1103,8 @@ export const uploadCaseImage = traceAction('uploadCaseImage', async (postId, _pr
       {
         $set: {
           'post_content.media_urls': [{
-            s3_url: s3Url,
-            media_type: fileType,
+            s3_url: resolvedS3Url,
+            media_type: contentType,
             uploaded_manually: true
           }],
           'metadata.updated_at': new Date().toISOString()
@@ -1091,17 +1119,16 @@ export const uploadCaseImage = traceAction('uploadCaseImage', async (postId, _pr
       }
     )
 
-    // 4. Generate signed URL for immediate display
-    const signedUrl = await getSignedImageUrl(s3Url)
+    const signedUrl = await getSignedImageUrl(resolvedS3Url)
 
     return { success: true, signedUrl }
   } catch (error) {
     logActionError({
       loki_stream: LOKI_STREAMS.review_cases,
-      app_action: 'uploadCaseImage',
-      message: 'review_cases.uploadCaseImage failed',
+      app_action: 'confirmCaseImageUpload',
+      message: 'review_cases.confirmCaseImageUpload failed',
     }, error)
-    console.error('uploadCaseImage Error:', error)
+    console.error('confirmCaseImageUpload Error:', error)
     return { success: false, error: error.message }
   }
 })

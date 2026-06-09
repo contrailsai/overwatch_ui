@@ -1,7 +1,9 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { getTakedownDetails, updateTakedown, addTakedownNote, uploadTakedownDocument, getTakedownDocuments, getDocumentDownloadUrl } from '../../actions'
+import { getTakedownDetails, updateTakedown, addTakedownNote, initTakedownDocumentUpload, confirmTakedownDocumentUpload, getTakedownDocuments, getDocumentDownloadUrl } from '../../actions'
+import { uploadFileViaPresignedUrl } from '@/utils/aws/upload-via-presigned-url'
+import { validateTakedownDocumentMeta, TAKEDOWN_DOC_MAX_BYTES, formatUploadSizeLimit } from '@/utils/aws/upload-validation'
 import { updatePostVisibility } from '@/app/(dashboard)/review-cases/actions'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -420,11 +422,37 @@ export default function TakedownDetails({ takedownId, initialData, initialDocume
     const file = e.target.files?.[0]
     if (!file) return
 
-    setUploading(true)
-    const formData = new FormData()
-    formData.append('file', file)
+    const validationError = validateTakedownDocumentMeta({
+      contentType: file.type,
+      fileSize: file.size,
+    })
+    if (validationError) {
+      alert(validationError)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+      return
+    }
 
-    const result = await uploadTakedownDocument(takedownId, formData)
+    setUploading(true)
+    try {
+    const initResult = await initTakedownDocumentUpload(takedownId, {
+      fileName: file.name,
+      contentType: file.type,
+      fileSize: file.size,
+    })
+
+    if (!initResult.success) {
+      alert('Upload failed: ' + initResult.error)
+      return
+    }
+
+    await uploadFileViaPresignedUrl(file, initResult.uploadUrl)
+
+    const result = await confirmTakedownDocumentUpload(takedownId, {
+      s3Key: initResult.s3Key,
+      fileName: file.name,
+      fileType: file.type,
+      fileSize: file.size,
+    })
 
     if (result.success) {
       const docs = await getTakedownDocuments(takedownId)
@@ -434,9 +462,12 @@ export default function TakedownDetails({ takedownId, initialData, initialDocume
     } else {
       alert('Upload failed: ' + result.error)
     }
-
+    } catch {
+      alert('Upload failed. Please try again.')
+    } finally {
     setUploading(false)
     if (fileInputRef.current) fileInputRef.current.value = ''
+    }
   }
 
   const handleDownload = async (doc) => {
@@ -872,7 +903,7 @@ export default function TakedownDetails({ takedownId, initialData, initialDocume
                         <p className="text-sm font-bold text-slate-700 group-hover:text-blue-700">
                           {uploading ? 'Uploading...' : 'Click to upload evidence'}
                         </p>
-                        <p className="text-xs font-medium text-slate-400">PDF, PNG, JPG supported</p>
+                        <p className="text-xs font-medium text-slate-400">PDF, PNG, JPG — up to {formatUploadSizeLimit(TAKEDOWN_DOC_MAX_BYTES)}</p>
                       </div>
                     </div>
                   )}
