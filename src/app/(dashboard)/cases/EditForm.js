@@ -345,7 +345,17 @@ export default function EditForm({ post, project, clientDetails, setIsEditing, o
                         )}
 
                         <div className="space-y-2 pt-2">
-                            <Label className="text-xs font-bold text-slate-500 uppercase">Analysis Notes</Label>
+                            <Label className="text-xs font-bold text-slate-500 uppercase">Simple Reasoning</Label>
+                            <Textarea
+                                name="simple_report_description"
+                                defaultValue={review.simple_report_description || ''}
+                                placeholder="Concise summary for reports..."
+                                className="min-h-[80px] bg-slate-50 border-slate-200 text-sm focus:bg-white transition-colors"
+                            />
+                        </div>
+
+                        <div className="space-y-2 pt-2">
+                            <Label className="text-xs font-bold text-slate-500 uppercase">Reasoning</Label>
                             <Textarea
                                 name="reasoning"
                                 defaultValue={full_analysis_reasonning}

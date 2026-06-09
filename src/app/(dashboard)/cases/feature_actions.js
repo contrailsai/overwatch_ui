@@ -146,6 +146,7 @@ export const submitCaseReview = traceAction('submitCaseReview', async (_project,
             // Text & Lists
             poi_names: formData.get('poi_names') ? formData.get('poi_names').split(',').map(s => s.trim()).filter(Boolean) : [],
             reasoning: formData.get('reasoning'),
+            simple_report_description: formData.get('simple_report_description') || null,
             reviewer_comments: formData.get('reviewer_comments'),
 
             // POI

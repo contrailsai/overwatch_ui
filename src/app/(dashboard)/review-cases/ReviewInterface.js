@@ -186,7 +186,8 @@ export function ReviewInterface({
         "MongoDB ID", "Post ID", "Original URL", "Caption", "Platform",
         "Author URL", "Author Username", "Author Full Name", "Timestamp",
         "Likes", "Comments", "Views", "Shares", "Retweets", "Quotes", "Replies",
-        "reviewer-reasoning"
+        "reviewer-reasoning",
+        "simple-report-description"
       ]
 
       const csvRows = [
@@ -209,7 +210,8 @@ export function ReviewInterface({
             post.engagement?.retweets || 0,
             post.engagement?.quotes || 0,
             post.engagement?.replies || 0,
-            post.review_details?.reasoning || ''
+            post.review_details?.reasoning || '',
+            post.review_details?.simple_report_description || ''
           ]
           return rowData
             .map(val => `"${String(val ?? '').replace(/"/g, '""').replace(/\n/g, ' ')}"`)
