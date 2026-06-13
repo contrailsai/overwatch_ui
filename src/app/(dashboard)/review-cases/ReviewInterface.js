@@ -183,8 +183,8 @@ export function ReviewInterface({
       }
 
       const headers = [
-        "MongoDB ID", "Post ID", "Original URL", "Caption", "Platform",
-        "Author URL", "Author Username", "Author Full Name", "Timestamp",
+        "Case ID", "Post ID", "Original URL", "Caption", "Platform",
+        "Author URL", "Author Username", "Author Full Name", "Publishing Date",
         "Likes", "Comments", "Views", "Shares", "Retweets", "Quotes", "Replies",
         "reviewer-reasoning",
         "simple-report-description"
@@ -254,8 +254,7 @@ export function ReviewInterface({
   const handleDownloadSingleJSON = (post) => {
     try {
       const exportData = {
-        _id: { $oid: post._id },
-        code: post.code || post.post_id || "",
+        case_id: { $oid: post._id },
         content: post.content || post.post_content?.content || post.caption || "",
         created_at: { $date: post.created_at || "" },
         engagement: {
@@ -282,7 +281,7 @@ export function ReviewInterface({
         analysis_results: post.analysis_results || {},
         review_details: post.review_details || {}
       }
-
+      
       const jsonString = JSON.stringify(exportData, null, 2)
       const blob = new Blob([jsonString], { type: 'application/json' })
       downloadBlob(blob, `case_${post._id}_${format(new Date(), 'yyyyMMdd_HHmmss')}.json`)

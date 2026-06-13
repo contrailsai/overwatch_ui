@@ -415,10 +415,24 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
     };
-
+  
     const handleDownloadJSON = () => {
         try {
-            const jsonString = JSON.stringify([localPost], null, 2);
+            
+        const clonedPost = JSON.parse(JSON.stringify(localPost))
+
+        delete clonedPost._id
+        delete clonedPost.id
+        delete clonedPost.code
+        delete clonedPost.signedImageUrl
+
+        const exportData = {
+            "Case ID": localPost._id,
+            ...clonedPost
+        }
+
+
+            const jsonString = JSON.stringify([exportData], null, 2);
             const blob = new Blob([jsonString], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
             const link = document.createElement('a');
