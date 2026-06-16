@@ -156,7 +156,7 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
 
         applyFormValues(buildReviewFormDefaults(post, project_details))
 
-        const activeRequest = findActiveCorrectionRequest(post.analysis_correction_requests)
+        const activeRequest = findActiveCorrectionRequest(post)
         if (activeRequest) {
             setActiveCorrectionId(activeRequest.id)
             setIsCorrectionPolling(true)
@@ -212,13 +212,32 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
         if (simpleReportDescRef.current) simpleReportDescRef.current.value = newAnalysis.simple_report_description || ''
     }, [])
 
-    const handleCorrectionComplete = useCallback((newAnalysis) => {
+    const handleCorrectionComplete = useCallback((newAnalysis, completedAt = null) => {
         const reviewed = Object.keys(localPost.review_details || {}).length > 0
-        setLocalPost((prev) => ({ ...prev, analysis_results: newAnalysis }))
+        const completedCorrectionRequest = localPost.analysis_correction_request
+            ? {
+                ...localPost.analysis_correction_request,
+                status: 'completed',
+                completed_at: completedAt || new Date().toISOString(),
+                error: null,
+            }
+            : undefined
+
+        setLocalPost((prev) => ({
+            ...prev,
+            analysis_results: newAnalysis,
+            ...(completedCorrectionRequest ? { analysis_correction_request: completedCorrectionRequest } : {}),
+        }))
         setAiBaseline({ ...newAnalysis })
         if (setPosts) {
             setPosts((prevPosts) => prevPosts.map((p) =>
-                p._id === localPost._id ? { ...p, analysis_results: newAnalysis } : p
+                p._id === localPost._id
+                    ? {
+                        ...p,
+                        analysis_results: newAnalysis,
+                        ...(completedCorrectionRequest ? { analysis_correction_request: completedCorrectionRequest } : {}),
+                    }
+                    : p
             ))
         }
         if (reviewed) {
@@ -235,7 +254,7 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
         setCorrectionPollTimedOut(false)
         pollFailCountRef.current = 0
         showToast('AI analysis updated', 'success')
-    }, [applyAnalysisResultsToForm, localPost._id, localPost.review_details, project_details, setPosts])
+    }, [applyAnalysisResultsToForm, localPost._id, localPost.review_details, localPost.analysis_correction_request, project_details, setPosts])
 
     useEffect(() => {
         if (!activeCorrectionId || !isCorrectionPolling) return undefined
@@ -254,7 +273,7 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
             pollFailCountRef.current = 0
 
             if (result.status === 'completed') {
-                handleCorrectionComplete(result.analysis_results || {})
+                handleCorrectionComplete(result.analysis_results || {}, result.completed_at)
                 return
             }
             if (result.status === 'failed') {
@@ -281,7 +300,7 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
         pollFailCountRef.current = 0
         const result = await getAnalysisCorrectionStatus(localPost._id, activeCorrectionId)
         if (result.success && result.status === 'completed') {
-            handleCorrectionComplete(result.analysis_results || {})
+            handleCorrectionComplete(result.analysis_results || {}, result.completed_at)
         } else if (result.success && result.status === 'failed') {
             setActiveCorrectionId(null)
             setIsCorrectionPolling(false)
@@ -304,6 +323,21 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
             })
 
             if (result.success) {
+                const pendingRequest = {
+                    id: correctionRequestId,
+                    status: 'pending',
+                    requested_at: new Date().toISOString(),
+                    requested_by: clientDetails?.email || 'unknown',
+                    correction,
+                    completed_at: null,
+                    error: null,
+                }
+                setLocalPost((prev) => ({ ...prev, analysis_correction_request: pendingRequest }))
+                if (setPosts) {
+                    setPosts((prevPosts) => prevPosts.map((p) =>
+                        p._id === localPost._id ? { ...p, analysis_correction_request: pendingRequest } : p
+                    ))
+                }
                 setActiveCorrectionId(correctionRequestId)
                 setIsCorrectionPolling(true)
                 setCorrectionPollTimedOut(false)
@@ -942,10 +976,12 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
                                         onClick={handleRunAIAnalysis}
                                         disabled={isPendingAnalysis || formDisabledForCorrection}
                                         className=" cursor-pointer h-7 px-3 text-xs rounded-full bg-blue-50/50 text-blue-600 border-blue-200 hover:bg-blue-100 hover:text-blue-700 transition-colors"
-                                        title="Full re-analysis from scratch — ignores your form edits"
+                                        title={hasAnalysis
+                                            ? 'Full re-analysis from scratch — ignores your form edits'
+                                            : 'Run AI analysis from scratch'}
                                     >
                                         {isPendingAnalysis ? <Loader2 className="w-3 h-3 mr-1.5 animate-spin" /> : <RefreshCw className="w-3 h-3 mr-1.5" />}
-                                        Re-run AI Analysis
+                                        {hasAnalysis ? 'Re-run AI Analysis' : 'Run AI Analysis'}
                                     </Button>
                                     <Button
                                         type="button"

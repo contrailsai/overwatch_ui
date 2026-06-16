@@ -2,7 +2,7 @@
  * Compare AI baseline vs current form state.
  * Returns the worker correction shape + UI helpers (hasChanges, summary).
  *
- * Worker payload (stored on Posts.analysis_correction_requests):
+ * Worker payload (stored on Posts.analysis_correction_request):
  * {
  *   add: { "AI violations": string[], "legal violations": string[] },
  *   remove: { "AI violations": string[], "legal violations": string[] },

@@ -10,25 +10,50 @@ import {
 
 const ACTIVE_STATUSES = ['pending', 'processing'];
 
-/**
- * @param {Array<{ id: string, status: string, requested_at?: string }> | undefined} requests
- * @returns {object | null} Most recent active correction request
- */
-export function findActiveCorrectionRequest(requests) {
+function getLatestLegacyCorrectionRequest(requests) {
   if (!Array.isArray(requests) || requests.length === 0) return null;
 
-  const active = requests.filter((r) => ACTIVE_STATUSES.includes(r.status));
-  if (active.length === 0) return null;
-
-  return active.sort((a, b) => {
+  return [...requests].sort((a, b) => {
     const ta = new Date(a.requested_at || 0).getTime();
     const tb = new Date(b.requested_at || 0).getTime();
     return tb - ta;
   })[0];
 }
 
-export function hasActiveCorrectionRequest(requests) {
-  return findActiveCorrectionRequest(requests) != null;
+/**
+ * @param {object | null | undefined} post
+ * @returns {object | null} Current correction request (singular field, or latest legacy array entry)
+ */
+export function getCorrectionRequest(post) {
+  if (!post) return null;
+
+  const singular = post.analysis_correction_request;
+  if (singular && typeof singular === 'object' && !Array.isArray(singular)) {
+    return singular;
+  }
+
+  return getLatestLegacyCorrectionRequest(post.analysis_correction_requests);
+}
+
+/**
+ * @param {object | null | undefined} request
+ * @returns {boolean}
+ */
+export function isActiveCorrectionRequest(request) {
+  return request != null && ACTIVE_STATUSES.includes(request.status);
+}
+
+/**
+ * @param {object | null | undefined} post
+ * @returns {object | null} Active correction request, if any
+ */
+export function findActiveCorrectionRequest(post) {
+  const request = getCorrectionRequest(post);
+  return isActiveCorrectionRequest(request) ? request : null;
+}
+
+export function hasActiveCorrectionRequest(post) {
+  return findActiveCorrectionRequest(post) != null;
 }
 
 /**

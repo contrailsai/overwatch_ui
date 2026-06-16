@@ -11,6 +11,11 @@ import { sendEmail } from '@/utils/email'
 import { traceAction } from '@/utils/tracing'
 import { requireRole } from '@/utils/auth-context'
 import { logActionError, logActionWarn, LOKI_STREAMS } from '@/utils/otel-logger'
+import {
+  getCorrectionRequest,
+  isActiveCorrectionRequest,
+  findActiveCorrectionRequest,
+} from '@/utils/analysis/correctionRequestUtils'
 
 /** Local helper — not a traced server action (avoids per-row trace overhead on list loads). */
 async function normalizeReviewS3Post(post) {
@@ -1316,17 +1321,14 @@ export const runAIAnalysis = traceAction('runAIAnalysis', async (postId, _projec
 
     const existingPost = await collection.findOne(
       { _id: new ObjectId(postId) },
-      { projection: { analysis_correction_requests: 1 } }
+      { projection: { analysis_correction_request: 1, analysis_correction_requests: 1 } }
     )
 
     if (!existingPost) {
       return { success: false, error: 'Post not found' }
     }
 
-    const hasPendingCorrection = (existingPost.analysis_correction_requests || []).some(
-      (r) => r.status === 'pending' || r.status === 'processing'
-    )
-    if (hasPendingCorrection) {
+    if (isActiveCorrectionRequest(getCorrectionRequest(existingPost))) {
       return { success: false, error: 'An AI correction is in progress. Wait for it to finish or refresh the case.' }
     }
 
@@ -1354,12 +1356,12 @@ function hasNonEmptyAnalysisResults(analysis) {
 
 async function markCorrectionRequestFailed(collection, postId, correctionRequestId, errorMessage) {
   await collection.updateOne(
-    { _id: new ObjectId(postId), 'analysis_correction_requests.id': correctionRequestId },
+    { _id: new ObjectId(postId), 'analysis_correction_request.id': correctionRequestId },
     {
       $set: {
-        'analysis_correction_requests.$.status': 'failed',
-        'analysis_correction_requests.$.error': errorMessage,
-        'analysis_correction_requests.$.completed_at': new Date().toISOString(),
+        'analysis_correction_request.status': 'failed',
+        'analysis_correction_request.error': errorMessage,
+        'analysis_correction_request.completed_at': new Date().toISOString(),
       },
     }
   )
@@ -1426,21 +1428,37 @@ export const requestAIAnalysisCorrection = traceAction(
       const result = await collection.updateOne(
         {
           _id: new ObjectId(postId),
-          analysis_correction_requests: {
-            $not: { $elemMatch: { status: { $in: ['pending', 'processing'] } } },
-          },
+          $and: [
+            {
+              $or: [
+                { analysis_correction_request: { $exists: false } },
+                { 'analysis_correction_request.status': { $nin: ['pending', 'processing'] } },
+              ],
+            },
+            {
+              $or: [
+                { analysis_correction_requests: { $exists: false } },
+                { analysis_correction_requests: { $size: 0 } },
+                {
+                  analysis_correction_requests: {
+                    $not: { $elemMatch: { status: { $in: ['pending', 'processing'] } } },
+                  },
+                },
+              ],
+            },
+          ],
         },
         {
+          $set: {
+            analysis_correction_request: correctionRequest,
+            'metadata.updated_at': new Date().toISOString(),
+          },
           $push: {
-            analysis_correction_requests: correctionRequest,
             'metadata.update_history': {
               updated_at: new Date(),
               updated_by: clientDetails?.email || 'unknown',
               changes_summary: 'Human-requested AI analysis correction',
             },
-          },
-          $set: {
-            'metadata.updated_at': new Date().toISOString(),
           },
         }
       )
@@ -1448,14 +1466,12 @@ export const requestAIAnalysisCorrection = traceAction(
       if (result.matchedCount === 0) {
         const blocked = await collection.findOne(
           { _id: new ObjectId(postId) },
-          { projection: { analysis_correction_requests: 1 } }
+          { projection: { analysis_correction_request: 1, analysis_correction_requests: 1 } }
         )
         if (!blocked) {
           return { success: false, error: 'Post not found' }
         }
-        const active = (blocked.analysis_correction_requests || []).find(
-          (r) => r.status === 'pending' || r.status === 'processing'
-        )
+        const active = findActiveCorrectionRequest(blocked)
         return {
           success: false,
           error: 'An AI correction is already in progress for this case',
@@ -1518,18 +1534,16 @@ export const getAnalysisCorrectionStatus = traceAction(
 
       const post = await collection.findOne(
         { _id: new ObjectId(postId) },
-        { projection: { analysis_results: 1, analysis_correction_requests: 1 } }
+        { projection: { analysis_results: 1, analysis_correction_request: 1, analysis_correction_requests: 1 } }
       )
 
       if (!post) {
         return { success: false, error: 'Post not found' }
       }
 
-      const request = (post.analysis_correction_requests || []).find(
-        (r) => r.id === correctionRequestId
-      )
+      const request = getCorrectionRequest(post)
 
-      if (!request) {
+      if (!request || request.id !== correctionRequestId) {
         return { success: false, error: 'Correction request not found' }
       }
 
