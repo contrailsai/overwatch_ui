@@ -712,6 +712,7 @@ export const getAllPostsForExport = traceAction('getAllPostsForExport', async (_
       },
       sourcing_date: { $date: toExportDate(post.sourcing_date || post.metadata?.sourcing_date) },
       url: post.original_url || post.url || post.result_origin?.source_url || '',
+      result_origin: post.result_origin && typeof post.result_origin === 'object' ? post.result_origin : {},
       analysis_results: post.analysis_results || {},
       review_details: post.review_details || {}
     }))
