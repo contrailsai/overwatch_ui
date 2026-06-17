@@ -1,5 +1,6 @@
 'use client'
 
+import { handleDownloadJSON } from '@/utils/exportJson'
 import * as React from "react"
 import { useState, useEffect, useActionState, useRef, useTransition } from 'react'
 import { format } from "date-fns"
@@ -416,10 +417,10 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
         setTimeout(() => setCopied(false), 2000);
     };
   
-    const handleDownloadJSON = () => {
+    const oldHandleDownloadJSON = (post) => {
         try {
             
-        const clonedPost = JSON.parse(JSON.stringify(localPost))
+        const clonedPost = JSON.parse(JSON.stringify(post))
 
         delete clonedPost._id
         delete clonedPost.id
@@ -427,7 +428,7 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
         delete clonedPost.signedImageUrl
 
         const exportData = {
-            "Case ID": localPost._id,
+            "Case ID": post._id,
             ...clonedPost
         }
 
@@ -437,7 +438,7 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
             const url = URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = url;
-            link.setAttribute('download', `case_${localPost._id}_${format(new Date(), 'yyyyMMdd_HHmmss')}.json`);
+            link.setAttribute('download', `case_${post._id}_${format(new Date(), 'yyyyMMdd_HHmmss')}.json`);
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
@@ -515,7 +516,7 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
                             <Button
                                 variant="ghost"
                                 size="icon"
-                                onClick={handleDownloadJSON}
+                                onClick={() => handleDownloadJSON(localPost)}
                                 className="h-9 w-9 text-slate-500 hover:text-emerald-600 rounded-full"
                                 title="Download JSON"
                             >
