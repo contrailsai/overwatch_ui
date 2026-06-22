@@ -68,10 +68,13 @@ export const sendReportSqsMessage = traceAction('sendReportSqsMessage', async (m
 
 /**
  * Sends a message to the SQS queue for content moderation (AI analysis).
- * @param {Object} messageBody - The payload to send to SQS.
- * @returns {Promise<Object>} - The response from SQS.
+ * @param {string} db_name
+ * @param {string} collection_name
+ * @param {string} object_id
+ * @param {{ mode?: 'revision', correction_request_id?: string }} [options] - Omit for legacy full re-run (3-field payload only).
+ * @returns {Promise<Object|null>} - The response from SQS, or null if queue not configured.
  */
-export const sendContentModerationSqsMessage = traceAction('sendContentModerationSqsMessage', async (db_name, collection_name, object_id) => {
+export const sendContentModerationSqsMessage = traceAction('sendContentModerationSqsMessage', async (db_name, collection_name, object_id, options) => {
   if (!CONTENT_MODERATION_SQS_QUEUE_URL) {
     console.log("AWS_CONTENT_MODERATION_SQS_QUEUE_URL not configured.");
     return null;
@@ -80,8 +83,13 @@ export const sendContentModerationSqsMessage = traceAction('sendContentModeratio
   const messageBody = {
     db_name,
     collection_name,
-    object_id
+    object_id,
   };
+
+  if (options?.mode === 'revision' && options.correction_request_id) {
+    messageBody.mode = 'revision';
+    messageBody.correction_request_id = options.correction_request_id;
+  }
 
   const command = new SendMessageCommand({
     QueueUrl: CONTENT_MODERATION_SQS_QUEUE_URL,

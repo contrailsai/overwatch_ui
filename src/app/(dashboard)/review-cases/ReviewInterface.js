@@ -58,6 +58,77 @@ function downloadBlob(blob, filename) {
   URL.revokeObjectURL(url)
 }
 
+function firstNonEmpty(...values) {
+  for (const value of values) {
+    if (value == null) continue
+    if (typeof value === 'string' && value.trim() === '') continue
+    return value
+  }
+  return ''
+}
+
+function stringifyCsvScalar(value) {
+  if (value == null) return ''
+  if (typeof value === 'string') return value
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  try {
+    return JSON.stringify(value)
+  } catch {
+    return String(value)
+  }
+}
+
+function getFuzzyResultOriginFields(resultOrigin) {
+  const origin = resultOrigin && typeof resultOrigin === 'object' ? resultOrigin : {}
+  const typeRaw = String(origin.type || '').toLowerCase()
+
+  let searchType = 'manual_or_unknown'
+  if (typeRaw.includes('web_search')) {
+    searchType = 'web_search'
+  } else if (typeRaw.includes('profile') || typeRaw.includes('screenshot')) {
+    searchType = 'profile_search'
+  } else if (typeRaw.includes('search')) {
+    searchType = 'platform_search'
+  } else if (origin.search_phrase || origin.query || origin.keyword || origin.mode || origin.search_tab || origin.facebook_search_tab || origin.x_search_tab || origin.instagram_search_mode) {
+    searchType = 'platform_search'
+  } else if (origin.profile_url || origin.username) {
+    searchType = 'profile_search'
+  }
+
+  const keyword = firstNonEmpty(origin.keyword, origin.actual_keyword, origin.query)
+  const query = firstNonEmpty(origin.query, origin.search_phrase)
+  const searchPhrase = firstNonEmpty(origin.search_phrase, origin.query, origin.keyword)
+  const profileUrl = firstNonEmpty(origin.profile_url)
+  const sourceUrl = firstNonEmpty(origin.source_url, origin.source, origin.url)
+  const searchUrl = firstNonEmpty(origin.search_url)
+  const siteKey = firstNonEmpty(origin.site_key)
+  const modeOrTab = firstNonEmpty(
+    origin.mode,
+    origin.search_tab,
+    origin.facebook_search_tab,
+    origin.x_search_tab,
+    origin.instagram_search_mode,
+    origin.tab,
+  )
+  const engines = firstNonEmpty(origin.searxng_engines, origin.search_engines, origin.engines)
+  const searchInput = firstNonEmpty(keyword, query, searchPhrase, profileUrl, sourceUrl, searchUrl)
+
+  return {
+    searchType,
+    searchInput,
+    typeRaw,
+    keyword,
+    query,
+    searchPhrase,
+    profileUrl,
+    sourceUrl,
+    searchUrl,
+    siteKey,
+    modeOrTab,
+    engines,
+  }
+}
+
 function ExportSelect({ selectKey, onExportDone, exportingType, posts, onExportCSV, onExportJSON, className }) {
   return (
     <Select
@@ -187,6 +258,10 @@ export function ReviewInterface({
         "Case ID", "Post ID", "Original URL", "Caption", "Platform",
         "Author URL", "Author Username", "Author Full Name", "Publishing Date",
         "Likes", "Comments", "Views", "Shares", "Retweets", "Quotes", "Replies",
+        "result_origin_search_type", "result_origin_search_input", "result_origin_type_raw",
+        // "result_origin_keyword", "result_origin_query", "result_origin_search_phrase",
+        // "result_origin_profile_url", "result_origin_source_url", "result_origin_search_url",
+        // "result_origin_site_key", "result_origin_mode_or_tab", "result_origin_engines",
         "reviewer-reasoning",
         "simple-report-description"
       ]
@@ -194,6 +269,7 @@ export function ReviewInterface({
       const csvRows = [
         headers.join(','),
         ...allPosts.map(post => {
+          const fuzzyOrigin = getFuzzyResultOriginFields(post.result_origin)
           const rowData = [
             post._id?.$oid || '',
             post.code || '',
@@ -211,6 +287,18 @@ export function ReviewInterface({
             post.engagement?.retweets || 0,
             post.engagement?.quotes || 0,
             post.engagement?.replies || 0,
+            fuzzyOrigin.searchType,
+            stringifyCsvScalar(fuzzyOrigin.searchInput),
+            fuzzyOrigin.typeRaw,
+            // stringifyCsvScalar(fuzzyOrigin.keyword),
+            // stringifyCsvScalar(fuzzyOrigin.query),
+            // stringifyCsvScalar(fuzzyOrigin.searchPhrase),
+            // stringifyCsvScalar(fuzzyOrigin.profileUrl),
+            // stringifyCsvScalar(fuzzyOrigin.sourceUrl),
+            // stringifyCsvScalar(fuzzyOrigin.searchUrl),
+            // stringifyCsvScalar(fuzzyOrigin.siteKey),
+            // stringifyCsvScalar(fuzzyOrigin.modeOrTab),
+            // stringifyCsvScalar(fuzzyOrigin.engines),
             post.review_details?.reasoning || '',
             post.review_details?.simple_report_description || ''
           ]

@@ -2,9 +2,9 @@
 
 import { handleDownloadJSON } from '@/utils/exportJson'
 import * as React from "react"
-import { useState, useEffect, useActionState, useRef, useTransition } from 'react'
+import { useState, useEffect, useActionState, useRef, useTransition, useMemo, useCallback } from 'react'
 import { format } from "date-fns"
-import { submitCaseReview, initCaseImageUpload, confirmCaseImageUpload, deleteCaseImage, updatePostVisibility, runAIAnalysis, deleteCase } from './actions'
+import { submitCaseReview, initCaseImageUpload, confirmCaseImageUpload, deleteCaseImage, updatePostVisibility, runAIAnalysis, deleteCase, requestAIAnalysisCorrection, getAnalysisCorrectionStatus } from './actions'
 import { uploadFileViaPresignedUrl } from '@/utils/aws/upload-via-presigned-url'
 import { REVIEW_IMAGE_MAX_BYTES, formatUploadSizeLimit } from '@/utils/aws/upload-validation'
 import {
@@ -18,6 +18,16 @@ import {
 import { Twitter, Reddit } from '@/utils/icons'
 import ProfilePic from '@/components/ProfilePic'
 import ResultOriginPanel from './ResultOriginPanel'
+import AnalysisCorrectionPanel from './AnalysisCorrectionPanel'
+import {
+    normalizeAnalysisForForm,
+    hasAnalysisResults,
+} from '@/utils/analysis/normalizeAnalysisForForm'
+import { buildAnalysisCorrectionDiff, buildCorrectionPayload } from '@/utils/analysis/buildAnalysisCorrectionDiff'
+import {
+    findActiveCorrectionRequest,
+    buildReviewFormDefaults,
+} from '@/utils/analysis/correctionRequestUtils'
 
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -34,9 +44,12 @@ const initialState = {
     error: null,
 }
 
+const CORRECTION_POLL_INTERVAL_MS = 5000
+const CORRECTION_POLL_TIMEOUT_MS = 180000
+
 export default function ReviewForm({ post, project, clientDetails, onClose, onNavigate, hasPrev, hasNext, setPosts }) {
     const { project_details } = project
-    console.log(post)
+    const initialFormDefaults = buildReviewFormDefaults(post, project.project_details)
     const submit_to_edit = submitCaseReview.bind(null, project, clientDetails)
     const [state, formAction, isPending] = useActionState(submit_to_edit, initialState)
 
@@ -67,14 +80,14 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
     };
 
 
-    // Keep localPost in sync if the user navigates Next/Prev
-    useEffect(() => {
-        setLocalPost(post)
-        setShowSuccess(false) // Reset success message on navigate
-        setUploadedImageUrl(null);
-        setMediaError(false);
-        setShowDeleteConfirm(false);
-    }, [post])
+    // AI correction state
+    const [aiBaseline, setAiBaseline] = useState(() => ({ ...(post.analysis_results || {}) }))
+    const [correctionPrompt, setCorrectionPrompt] = useState('')
+    const [activeCorrectionId, setActiveCorrectionId] = useState(null)
+    const [isCorrectionPolling, setIsCorrectionPolling] = useState(false)
+    const [correctionPollTimedOut, setCorrectionPollTimedOut] = useState(false)
+    const [isPendingCorrection, startCorrectionTransition] = useTransition()
+    const pollFailCountRef = useRef(0)
 
     // Sync state to parent AND local UI on successful submission
     useEffect(() => {
@@ -96,113 +109,263 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
         }
     }, [state]) // Run whenever the server action returns a new state
 
-    // --- Data Normalization & Initialization (Using localPost now!) ---
-    const review = localPost.review_details || {}
-    const analysis = localPost.analysis_results || {}
-    const analysisPoi = analysis.poi_check || {}
-    const hasReview = Object.keys(review).length > 0
+    const hasReview = Object.keys(localPost.review_details || {}).length > 0
 
-    const normalizeString = (str) => {
-        if (typeof str !== 'string') return '';
-        return str.toLowerCase().replace(/[-_]/g, ' ').replace(/\s+/g, ' ').trim();
-    };
-
-    const getInitialThreatTypes = () => {
-        const projectLabels = project_details.labels || [];
-
-        if (hasReview) {
-            return Array.from(new Set([
-                ...(review.threat_types || []),
-                ...(review.flags ? projectLabels.filter(l => review.flags[l.name]).map(l => l.name) : [])
-            ]));
-        }
-
-        const matchedThreatTypes = new Set();
-
-        for (const t of (analysis.threat_types || [])) {
-            const normalizedT = normalizeString(t);
-            const match = projectLabels.find(l => normalizeString(l.name) === normalizedT);
-            if (match) matchedThreatTypes.add(match.name);
-        }
-
-        if (analysis.flags) {
-            Object.entries(analysis.flags).forEach(([flagKey, value]) => {
-                if (value) {
-                    const normalizedKey = normalizeString(flagKey);
-                    const match = projectLabels.find(l => normalizeString(l.name) === normalizedKey);
-                    if (match) matchedThreatTypes.add(match.name);
-                }
-            });
-        }
-
-        return Array.from(matchedThreatTypes);
-    };
-
-    const initialThreatTypes = getInitialThreatTypes();
-
-    const getInitialLegalCodes = () => {
-        const projectLegalCodes = project_details.legal_codes || [];
-        const codes = [];
-
-        if (hasReview) {
-            for (const item of (review.legal_codes || [])) {
-                const codeName = typeof item === 'string' ? item : item.code;
-                const reasoning = typeof item === 'string' ? '' : item.reasoning || '';
-                if (!codes.some(c => c.code === codeName)) {
-                    codes.push({ code: codeName, reasoning });
-                }
-            }
-            return codes;
-        }
-
-        for (const item of (analysis.legal_codes || [])) {
-            const rawCodeName = typeof item === 'string' ? item : item.code;
-            const reasoning = typeof item === 'string' ? '' : item.reasoning || '';
-            const normalizedRaw = normalizeString(rawCodeName);
-
-            const match = projectLegalCodes.find(c => normalizeString(c.name) === normalizedRaw);
-
-            if (match) {
-                if (!codes.some(c => c.code === match.name)) {
-                    codes.push({ code: match.name, reasoning });
-                }
-            }
-        }
-        return codes;
-    }
-    const initialLegalCodes = getInitialLegalCodes();
-
-    // State
-    const [facePresent, setFacePresent] = useState(hasReview ? !!review.face_present : (analysis.face_present ?? !!analysisPoi.face_present))
-    const [namePresent, setNamePresent] = useState(hasReview ? !!review.name_present : (analysis.name_present ?? !!analysisPoi.poi_name_found))
-    const [poiNames, setPoiNames] = useState((hasReview ? review.poi_names : (analysis.poi_names || analysisPoi.poi_names)) || [])
+    const [facePresent, setFacePresent] = useState(initialFormDefaults.facePresent)
+    const [namePresent, setNamePresent] = useState(initialFormDefaults.namePresent)
+    const [poiNames, setPoiNames] = useState(initialFormDefaults.poiNames)
     const [newPoiInput, setNewPoiInput] = useState('')
-    const [threatScore, setThreatScore] = useState(hasReview ? (review.threat_score ?? 0) : (analysis.threat_score ?? 0))
-    const [threatTypes, setThreatTypes] = useState(initialThreatTypes)
-    const [selectedLegalCodes, setSelectedLegalCodes] = useState(initialLegalCodes)
-    const [isAIGC, setIsAIGC] = useState(hasReview ? !!review.is_aigc : !!analysis.is_aigc)
+    const [threatScore, setThreatScore] = useState(initialFormDefaults.threatScore)
+    const [threatTypes, setThreatTypes] = useState(initialFormDefaults.threatTypes)
+    const [selectedLegalCodes, setSelectedLegalCodes] = useState(initialFormDefaults.selectedLegalCodes)
+    const [isAIGC, setIsAIGC] = useState(initialFormDefaults.isAIGC)
     const [visibilityStatus, setVisibilityStatus] = useState(localPost.visibility_status === 'down' ? 'down' : 'online')
 
     const reasoningRef = useRef(null)
     const simpleReportDescRef = useRef(null)
     const reviewerCommentsRef = useRef(null)
 
-    const poiPresent = facePresent || namePresent
+    const [reasoningText, setReasoningText] = useState(initialFormDefaults.reasoningText)
+    const [simpleReportText, setSimpleReportText] = useState(initialFormDefaults.simpleReportText)
+    const [showAIInsights, setShowAIInsights] = useState(!hasReview)
 
-    // Dates
+    const applyFormValues = useCallback((defaults) => {
+        setThreatScore(defaults.threatScore)
+        setThreatTypes(defaults.threatTypes)
+        setSelectedLegalCodes(defaults.selectedLegalCodes)
+        setIsAIGC(defaults.isAIGC)
+        setFacePresent(defaults.facePresent)
+        setNamePresent(defaults.namePresent)
+        setPoiNames(defaults.poiNames)
+        setReasoningText(defaults.reasoningText)
+        setSimpleReportText(defaults.simpleReportText)
+        if (reasoningRef.current) reasoningRef.current.value = defaults.reasoningText
+        if (simpleReportDescRef.current) simpleReportDescRef.current.value = defaults.simpleReportText
+    }, [])
+
+    // Keep localPost in sync if the user navigates Next/Prev
+    useEffect(() => {
+        setLocalPost(post)
+        setShowSuccess(false)
+        setUploadedImageUrl(null)
+        setMediaError(false)
+        setShowDeleteConfirm(false)
+        setAiBaseline({ ...(post.analysis_results || {}) })
+        setCorrectionPrompt('')
+        setCorrectionPollTimedOut(false)
+        pollFailCountRef.current = 0
+
+        applyFormValues(buildReviewFormDefaults(post, project_details))
+
+        const activeRequest = findActiveCorrectionRequest(post)
+        if (activeRequest) {
+            setActiveCorrectionId(activeRequest.id)
+            setIsCorrectionPolling(true)
+        } else {
+            setActiveCorrectionId(null)
+            setIsCorrectionPolling(false)
+        }
+    }, [post, project_details, applyFormValues])
+
+    const review = localPost.review_details || {}
+    const analysis = localPost.analysis_results || {}
     const rawPostedDate = localPost.posted_date || localPost.metadata?.posted_date || localPost.timestamp || localPost.sourcing_date
     const rawSourcedDate = localPost.metadata?.created_at || localPost.created_at
     const posted_date = rawPostedDate ? format(new Date(rawPostedDate), "dd/MM/yyyy") : "N/A"
     const sourced_date = rawSourcedDate ? format(new Date(rawSourcedDate), "dd/MM/yyyy") : "N/A"
 
-    const default_reviewer_analysis = hasReview ? (review.reasoning || '') : (analysis.reasoning || '')
-    const default_simple_report_description = hasReview ? (review.simple_report_description || '') : (analysis.simple_report_description || '')
-    const [showAIInsights, setShowAIInsights] = useState(!hasReview)
+    const poiPresent = facePresent || namePresent
+
+    const normalizedAiBaseline = useMemo(
+        () => normalizeAnalysisForForm(aiBaseline, project_details),
+        [aiBaseline, project_details]
+    )
+
+    const correctionFormState = useMemo(() => ({
+        threatScore,
+        threatTypes,
+        selectedLegalCodes,
+        isAIGC,
+        poiNames,
+        facePresent,
+        namePresent,
+        reasoning: reasoningText,
+        simpleReportDescription: simpleReportText,
+    }), [threatScore, threatTypes, selectedLegalCodes, isAIGC, poiNames, facePresent, namePresent, reasoningText, simpleReportText])
+
+    const correctionDiff = useMemo(
+        () => buildAnalysisCorrectionDiff(normalizedAiBaseline, correctionFormState),
+        [normalizedAiBaseline, correctionFormState]
+    )
+
+    const applyAnalysisResultsToForm = useCallback((newAnalysis, projectLabels, projectLegalCodes) => {
+        const normalized = normalizeAnalysisForForm(newAnalysis, { labels: projectLabels, legal_codes: projectLegalCodes })
+        setThreatScore(normalized.threat_score)
+        setThreatTypes(normalized.threat_types)
+        setIsAIGC(normalized.is_aigc)
+        setFacePresent(normalized.face_present)
+        setNamePresent(normalized.name_present)
+        setPoiNames(normalized.poi_names)
+        setSelectedLegalCodes(normalized.legal_codes)
+        setReasoningText(newAnalysis.reasoning || '')
+        setSimpleReportText(newAnalysis.simple_report_description || '')
+        if (reasoningRef.current) reasoningRef.current.value = newAnalysis.reasoning || ''
+        if (simpleReportDescRef.current) simpleReportDescRef.current.value = newAnalysis.simple_report_description || ''
+    }, [])
+
+    const handleCorrectionComplete = useCallback((newAnalysis, completedAt = null) => {
+        const reviewed = Object.keys(localPost.review_details || {}).length > 0
+        const completedCorrectionRequest = localPost.analysis_correction_request
+            ? {
+                ...localPost.analysis_correction_request,
+                status: 'completed',
+                completed_at: completedAt || new Date().toISOString(),
+                error: null,
+            }
+            : undefined
+
+        setLocalPost((prev) => ({
+            ...prev,
+            analysis_results: newAnalysis,
+            ...(completedCorrectionRequest ? { analysis_correction_request: completedCorrectionRequest } : {}),
+        }))
+        setAiBaseline({ ...newAnalysis })
+        if (setPosts) {
+            setPosts((prevPosts) => prevPosts.map((p) =>
+                p._id === localPost._id
+                    ? {
+                        ...p,
+                        analysis_results: newAnalysis,
+                        ...(completedCorrectionRequest ? { analysis_correction_request: completedCorrectionRequest } : {}),
+                    }
+                    : p
+            ))
+        }
+        if (reviewed) {
+            setReasoningText(newAnalysis.reasoning || '')
+            setSimpleReportText(newAnalysis.simple_report_description || '')
+            if (reasoningRef.current) reasoningRef.current.value = newAnalysis.reasoning || ''
+            if (simpleReportDescRef.current) simpleReportDescRef.current.value = newAnalysis.simple_report_description || ''
+        } else {
+            applyAnalysisResultsToForm(newAnalysis, project_details.labels, project_details.legal_codes)
+        }
+        setCorrectionPrompt('')
+        setActiveCorrectionId(null)
+        setIsCorrectionPolling(false)
+        setCorrectionPollTimedOut(false)
+        pollFailCountRef.current = 0
+        showToast('AI analysis updated', 'success')
+    }, [applyAnalysisResultsToForm, localPost._id, localPost.review_details, localPost.analysis_correction_request, project_details, setPosts])
+
+    useEffect(() => {
+        if (!activeCorrectionId || !isCorrectionPolling) return undefined
+
+        const startedAt = Date.now()
+
+        const poll = async () => {
+            const result = await getAnalysisCorrectionStatus(localPost._id, activeCorrectionId)
+            if (!result.success) {
+                pollFailCountRef.current += 1
+                if (pollFailCountRef.current >= 3) {
+                    showToast('Lost contact while waiting for AI update. Try Refresh.', 'error')
+                }
+                return
+            }
+            pollFailCountRef.current = 0
+
+            if (result.status === 'completed') {
+                handleCorrectionComplete(result.analysis_results || {}, result.completed_at)
+                return
+            }
+            if (result.status === 'failed') {
+                setIsCorrectionPolling(false)
+                setActiveCorrectionId(null)
+                setCorrectionPollTimedOut(false)
+                showToast('AI correction failed: ' + (result.error || 'Unknown error'))
+                return
+            }
+            if (Date.now() - startedAt >= CORRECTION_POLL_TIMEOUT_MS) {
+                setCorrectionPollTimedOut(true)
+                setIsCorrectionPolling(false)
+            }
+        }
+
+        poll()
+        const interval = setInterval(poll, CORRECTION_POLL_INTERVAL_MS)
+        return () => clearInterval(interval)
+    }, [activeCorrectionId, isCorrectionPolling, localPost._id, handleCorrectionComplete])
+
+    const handleManualCorrectionRefresh = async () => {
+        if (!activeCorrectionId) return
+        setCorrectionPollTimedOut(false)
+        pollFailCountRef.current = 0
+        const result = await getAnalysisCorrectionStatus(localPost._id, activeCorrectionId)
+        if (result.success && result.status === 'completed') {
+            handleCorrectionComplete(result.analysis_results || {}, result.completed_at)
+        } else if (result.success && result.status === 'failed') {
+            setActiveCorrectionId(null)
+            setIsCorrectionPolling(false)
+            showToast('AI correction failed: ' + (result.error || 'Unknown error'))
+        } else {
+            setIsCorrectionPolling(true)
+        }
+    }
+
+    const handleRequestAIUpdate = () => {
+        if (!correctionDiff.hasChanges && !correctionPrompt.trim()) return
+
+        startCorrectionTransition(async () => {
+            const correctionRequestId = crypto.randomUUID()
+            const correction = buildCorrectionPayload(correctionDiff, correctionPrompt)
+
+            const result = await requestAIAnalysisCorrection(localPost._id, project, clientDetails, {
+                correctionRequestId,
+                correction,
+            })
+
+            if (result.success) {
+                const pendingRequest = {
+                    id: correctionRequestId,
+                    status: 'pending',
+                    requested_at: new Date().toISOString(),
+                    requested_by: clientDetails?.email || 'unknown',
+                    correction,
+                    completed_at: null,
+                    error: null,
+                }
+                setLocalPost((prev) => ({ ...prev, analysis_correction_request: pendingRequest }))
+                if (setPosts) {
+                    setPosts((prevPosts) => prevPosts.map((p) =>
+                        p._id === localPost._id ? { ...p, analysis_correction_request: pendingRequest } : p
+                    ))
+                }
+                setActiveCorrectionId(correctionRequestId)
+                setIsCorrectionPolling(true)
+                setCorrectionPollTimedOut(false)
+                showToast('AI update requested. Analysis will refresh shortly.', 'success')
+            } else {
+                if (result.activeCorrectionRequestId) {
+                    setActiveCorrectionId(result.activeCorrectionRequestId)
+                    setIsCorrectionPolling(true)
+                    setCorrectionPollTimedOut(false)
+                }
+                showToast('Failed to request AI update: ' + result.error)
+            }
+        })
+    }
+
+    const formDisabledForCorrection = isPendingCorrection || isCorrectionPolling || !!activeCorrectionId || isPending
+    const hasAnalysis = hasAnalysisResults(aiBaseline)
+    const serverCorrectionInFlight = !!activeCorrectionId
 
     // --- Handlers ---
     const [isPendingAnalysis, startAnalysisTransition] = useTransition()
 
     const handleRunAIAnalysis = () => {
+        if (serverCorrectionInFlight) {
+            showToast('An AI correction is in progress. Wait for it to finish or use Refresh.')
+            return
+        }
         startAnalysisTransition(async () => {
             const result = await runAIAnalysis(localPost._id, project, clientDetails)
             if (result.success) {
@@ -396,17 +559,10 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
     };
 
     const handleReset = () => {
-        setFacePresent(false)
-        setNamePresent(false)
-        setPoiNames([])
+        const defaults = buildReviewFormDefaults(localPost, project_details)
+        applyFormValues(defaults)
         setNewPoiInput('')
-        setThreatScore(0)
-        setThreatTypes([])
-        setSelectedLegalCodes([])
-        setIsAIGC(false)
         setVisibilityStatus(localPost.visibility_status === 'down' ? 'down' : 'online')
-        if (reasoningRef.current) reasoningRef.current.value = ''
-        if (simpleReportDescRef.current) simpleReportDescRef.current.value = ''
         if (reviewerCommentsRef.current) reviewerCommentsRef.current.value = ''
     }
 
@@ -833,11 +989,14 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
                                         variant="ghost"
                                         size="sm"
                                         onClick={handleRunAIAnalysis}
-                                        disabled={isPendingAnalysis}
+                                        disabled={isPendingAnalysis || formDisabledForCorrection}
                                         className=" cursor-pointer h-7 px-3 text-xs rounded-full bg-blue-50/50 text-blue-600 border-blue-200 hover:bg-blue-100 hover:text-blue-700 transition-colors"
+                                        title={hasAnalysis
+                                            ? 'Full re-analysis from scratch — ignores your form edits'
+                                            : 'Run AI analysis from scratch'}
                                     >
                                         {isPendingAnalysis ? <Loader2 className="w-3 h-3 mr-1.5 animate-spin" /> : <RefreshCw className="w-3 h-3 mr-1.5" />}
-                                        Re-run AI Analysis
+                                        {hasAnalysis ? 'Re-run AI Analysis' : 'Run AI Analysis'}
                                     </Button>
                                     <Button
                                         type="button"
@@ -1009,6 +1168,7 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
                                                 key={level.label}
                                                 type="button"
                                                 onClick={() => setThreatScore(level.val)}
+                                                disabled={formDisabledForCorrection}
                                                 className={cn(
                                                     "flex-1 py-2.5 px-3 rounded-lg border cursor-pointer text-xs sm:text-sm font-bold transition-all",
                                                     level.active
@@ -1052,6 +1212,7 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
                                         <Checkbox
                                             checked={isAIGC}
                                             onCheckedChange={(checked) => setIsAIGC(checked)}
+                                            disabled={formDisabledForCorrection}
                                             className={cn("w-5 h-5 border-2 transition-all", isAIGC ? "bg-blue-600 border-blue-600" : "border-slate-300 group-hover:border-blue-300")}
                                         />
                                     </label>
@@ -1068,6 +1229,7 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
                                             <Checkbox
                                                 checked={threatTypes.includes(item.name)}
                                                 onCheckedChange={() => toggleThreatType(item.name)}
+                                                disabled={formDisabledForCorrection}
                                                 className="border-slate-300 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
                                             />
                                             <span className={cn("text-xs font-bold uppercase", threatTypes.includes(item.name) ? "text-blue-700" : "text-slate-600")}>
@@ -1097,6 +1259,7 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
                                                             <Checkbox
                                                                 checked={isSelected}
                                                                 onCheckedChange={() => toggleLegalCode(item.name)}
+                                                                disabled={formDisabledForCorrection}
                                                                 className="border-slate-300 data-[state=checked]:bg-purple-600 data-[state=checked]:border-purple-600"
                                                             />
                                                             <span className={cn("text-xs font-bold uppercase", isSelected ? "text-purple-700" : "text-slate-600")}>
@@ -1131,11 +1294,11 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                         <div className="flex items-center justify-between bg-white p-3 rounded-lg border border-slate-200">
                                             <Label htmlFor="face-present" className="text-sm font-semibold text-slate-700 cursor-pointer">Face Detected</Label>
-                                            <Switch id="face-present" checked={facePresent} onCheckedChange={setFacePresent} />
+                                            <Switch id="face-present" checked={facePresent} onCheckedChange={setFacePresent} disabled={formDisabledForCorrection} />
                                         </div>
                                         <div className="flex items-center justify-between bg-white p-3 rounded-lg border border-slate-200">
                                             <Label htmlFor="name-present" className="text-sm font-semibold text-slate-700 cursor-pointer">Name Mentioned</Label>
-                                            <Switch id="name-present" checked={namePresent} onCheckedChange={setNamePresent} />
+                                            <Switch id="name-present" checked={namePresent} onCheckedChange={setNamePresent} disabled={formDisabledForCorrection} />
                                         </div>
                                     </div>
 
@@ -1171,6 +1334,26 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
                                 </div>
                             </section>
 
+                            <AnalysisCorrectionPanel
+                                diff={correctionDiff}
+                                prompt={correctionPrompt}
+                                onPromptChange={setCorrectionPrompt}
+                                onSubmit={handleRequestAIUpdate}
+                                isPending={isPendingCorrection}
+                                isCorrectionPolling={isCorrectionPolling}
+                                pollTimedOut={correctionPollTimedOut}
+                                correctionInFlight={serverCorrectionInFlight}
+                                onManualRefresh={handleManualCorrectionRefresh}
+                                onResumePolling={() => {
+                                    setCorrectionPollTimedOut(false)
+                                    setIsCorrectionPolling(true)
+                                    pollFailCountRef.current = 0
+                                }}
+                                hasAnalysis={hasAnalysis}
+                                hasReview={hasReview}
+                                disabled={isPending}
+                            />
+
                             {/* 6. ANALYSIS & NOTES (Grouped textareas at the bottom) */}
                             <section className="space-y-4 pt-2">
                                 <div className="grid grid-cols-1 gap-8">
@@ -1179,8 +1362,10 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
                                         <Textarea
                                             ref={reasoningRef}
                                             name="reasoning"
-                                            defaultValue={default_reviewer_analysis}
+                                            value={reasoningText}
+                                            onChange={(e) => setReasoningText(e.target.value)}
                                             placeholder="Enter your analysis reasoning here..."
+                                            disabled={formDisabledForCorrection}
                                             className="min-h-[100px] bg-slate-50 border-slate-200 text-sm focus:bg-white transition-colors resize-y"
                                         />
                                     </div>
@@ -1190,8 +1375,10 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
                                         <Textarea
                                             ref={simpleReportDescRef}
                                             name="simple_report_description"
-                                            defaultValue={default_simple_report_description}
+                                            value={simpleReportText}
+                                            onChange={(e) => setSimpleReportText(e.target.value)}
                                             placeholder="Concise summary for reports..."
+                                            disabled={formDisabledForCorrection}
                                             className="min-h-[80px] bg-slate-50 border-slate-200 text-sm focus:bg-white transition-colors resize-y"
                                         />
                                     </div>
@@ -1242,7 +1429,7 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
                                 </Button>
                                 <Button
                                     type="submit"
-                                    disabled={isPending}
+                                    disabled={isPending || formDisabledForCorrection}
                                     className="flex-[2] font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-600/20"
                                 >
                                     {isPending ? <Loader2 className="animate-spin" /> : (hasReview ? 'Update Review' : 'Submit to Client')}
