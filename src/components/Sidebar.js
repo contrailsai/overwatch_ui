@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { List, FileText, ShieldAlert, Settings, UserStar, LogOut, LayoutDashboard, ShieldCheck, GitPullRequestCreateArrow, Users, Menu, X, ScanEye, UserRoundPen } from 'lucide-react'
+import { List, FileText, ShieldAlert, Settings, UserStar, LogOut, LayoutDashboard, ShieldCheck, GitPullRequestCreateArrow, Users, Menu, X, ScanEye, UserRoundPen, Rss } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export function Sidebar({ user, clientDetails, project }) {
@@ -33,6 +33,7 @@ export function Sidebar({ user, clientDetails, project }) {
     { name: 'Review Cases', href: '/review-cases', icon: ScanEye, show: clientDetails?.permission === 'reviewer' },
     { name: 'Content List', href: '/cases', icon: List, show: true },
     { name: 'Review Profiles', href: '/review-profiles', icon: UserRoundPen, show: clientDetails?.permission === 'reviewer' },
+    { name: 'Manage Feeds', href: '/manage-feeds', icon: Rss, show: clientDetails?.permission === 'reviewer' },
     { name: 'Profile List', href: '/profiles', icon: Users, show: true },
     { name: 'Takedowns', href: '/takedowns', icon: ShieldAlert, show: true },
     { name: 'Upload Content', href: '/upload-content', icon: GitPullRequestCreateArrow, show: true },
