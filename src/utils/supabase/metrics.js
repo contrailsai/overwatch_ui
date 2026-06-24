@@ -9,6 +9,7 @@ import { logActionError, logActionWarn, LOKI_STREAMS } from '@/utils/otel-logger
 
 const DUPLICATE_KEY_CODE = '23505'
 const MISSING_RPC_CODE = 'PGRST202'
+const RPC_TYPE_COERCION_CODE = '42846'
 const ROW_FETCH_RETRIES = 3
 const ROW_FETCH_RETRY_MS = 50
 const UPSERT_MAX_ATTEMPTS = 3
@@ -21,6 +22,12 @@ function isDuplicateKeyError(error) {
 function isMissingRpcError(error) {
   return error?.code === MISSING_RPC_CODE
     || (typeof error?.message === 'string' && error.message.includes('Could not find the function'))
+}
+
+function shouldFallbackFromClientLogRpc(error) {
+  return isMissingRpcError(error)
+    || error?.code === RPC_TYPE_COERCION_CODE
+    || (typeof error?.message === 'string' && error.message.includes('COALESCE could not convert type json to jsonb'))
 }
 
 function sleep(ms) {
@@ -163,7 +170,7 @@ async function incrementClientLogActivityRpc(supabase, {
   })
 
   if (error) {
-    if (isMissingRpcError(error)) return false
+    if (shouldFallbackFromClientLogRpc(error)) return false
     throw error
   }
 

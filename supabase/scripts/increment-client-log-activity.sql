@@ -22,16 +22,16 @@ DECLARE
   v_cases_delta integer := GREATEST(COALESCE(p_reviewed_cases_delta, 0), 0);
   v_profiles_delta integer := GREATEST(COALESCE(p_reviewed_profiles_delta, 0), 0);
   v_report_delta integer := GREATEST(COALESCE(p_report_download_delta, 0), 0);
-  v_reports json;
+  v_reports jsonb;
 BEGIN
   IF auth.uid() IS DISTINCT FROM p_client_id THEN
     RAISE EXCEPTION 'not authorized';
   END IF;
 
   IF p_report_download_key IS NOT NULL AND v_report_delta > 0 THEN
-    v_reports := jsonb_build_object(p_report_download_key, v_report_delta)::json;
+    v_reports := jsonb_build_object(p_report_download_key, v_report_delta);
   ELSE
-    v_reports := '{}'::json;
+    v_reports := '{}'::jsonb;
   END IF;
 
   INSERT INTO client_logs (
@@ -62,16 +62,14 @@ BEGIN
     reviewed_profiles = COALESCE(client_logs.reviewed_profiles, 0) + v_profiles_delta,
     reports_download = CASE
       WHEN p_report_download_key IS NOT NULL AND v_report_delta > 0 THEN
-        (
-          COALESCE(client_logs.reports_download, '{}'::json)::jsonb
-          || jsonb_build_object(
-            p_report_download_key,
-            COALESCE(
-              (COALESCE(client_logs.reports_download, '{}'::json)::jsonb ->> p_report_download_key)::integer,
-              0
-            ) + v_report_delta
-          )
-        )::json
+        COALESCE(client_logs.reports_download, '{}'::jsonb)
+        || jsonb_build_object(
+          p_report_download_key,
+          COALESCE(
+            (COALESCE(client_logs.reports_download, '{}'::jsonb) ->> p_report_download_key)::integer,
+            0
+          ) + v_report_delta
+        )
       ELSE client_logs.reports_download
     END;
 END;
