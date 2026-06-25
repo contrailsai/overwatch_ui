@@ -8,6 +8,7 @@ import {
   DrawerHeader,
   DrawerTitle,
 } from '@/components/ui/drawer'
+import { cn } from '@/lib/utils'
 import { CasesFilterPanel } from './CasesFilterPanel'
 
 export function MobileCasesFilterDrawer({
@@ -18,10 +19,19 @@ export function MobileCasesFilterDrawer({
   hasActiveFilters,
   onClearFilters,
   filterPanelProps,
+  alwaysShow = false,
+  countLabel = 'cases',
+  elevated = false,
 }) {
   return (
     <Drawer open={open} onOpenChange={onOpenChange} shouldScaleBackground={false}>
-      <DrawerContent className="lg:hidden max-h-[96dvh] p-0 gap-0 flex flex-col">
+      <DrawerContent
+        elevated={elevated}
+        className={cn(
+          !alwaysShow && 'lg:hidden',
+          'max-h-[96dvh] p-0 gap-0 flex flex-col'
+        )}
+      >
         <DrawerHeader className="shrink-0 px-4 pt-2 pb-3 border-b border-slate-100 text-left space-y-0">
           <div className="mx-auto w-10 h-1 rounded-full bg-slate-300 mb-3" aria-hidden />
           <div className="flex items-start justify-between gap-3">
@@ -31,7 +41,7 @@ export function MobileCasesFilterDrawer({
                 <span className="text-2xl font-black text-slate-800 tabular-nums leading-none">
                   {totalCount.toLocaleString()}
                 </span>
-                <span className="text-xs font-semibold text-slate-500">cases</span>
+                <span className="text-xs font-semibold text-slate-500">{countLabel}</span>
                 {isPending && (
                   <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-600 shrink-0" />
                 )}

@@ -116,6 +116,7 @@ export function CasesFilterPanel({
   onBulkFlag,
   BulkActionMenu,
   clearFilters,
+  hideSearch = false,
 }) {
   const isStacked = layout === 'stacked'
   const compactInline = compactInlineProp ?? isStacked
@@ -385,47 +386,49 @@ export function CasesFilterPanel({
           </>
         )}
       </FilterField>
-      <FilterField
-        layout={layout}
-        compactInline={compactInline}
-        className={
-          !isStacked
-            ? 'w-full lg:w-auto lg:max-w-sm shrink-0'
-            : undefined
-        }
-      >
-        <Label className="text-[10px] uppercase font-bold text-slate-400 mb-2">Search</Label>
-        <div className="flex items-center gap-2">
-          <div className="relative flex-1">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <Search className="h-4 w-4 text-slate-400" />
+      {!hideSearch && (
+        <FilterField
+          layout={layout}
+          compactInline={compactInline}
+          className={
+            !isStacked
+              ? 'w-full lg:w-auto lg:max-w-sm shrink-0'
+              : undefined
+          }
+        >
+          <Label className="text-[10px] uppercase font-bold text-slate-400 mb-2">Search</Label>
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Search className="h-4 w-4 text-slate-400" />
+              </div>
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Search by text..."
+                className="w-full bg-white border border-slate-200 rounded-md pl-9 pr-3 h-9 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder:text-slate-400 shadow-sm transition-all"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    handleSearchApply()
+                  }
+                }}
+              />
             </div>
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search by text..."
-              className="w-full bg-white border border-slate-200 rounded-md pl-9 pr-3 h-9 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder:text-slate-400 shadow-sm transition-all"
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault()
-                  handleSearchApply()
-                }
-              }}
-            />
+            <Button
+              onClick={handleSearchApply}
+              className="h-9 w-9 p-0 shrink-0 bg-blue-600 hover:bg-blue-700 text-white shadow-sm cursor-pointer transition-colors"
+              title="Search"
+            >
+              <Search className="w-4 h-4" />
+            </Button>
           </div>
-          <Button
-            onClick={handleSearchApply}
-            className="h-9 w-9 p-0 shrink-0 bg-blue-600 hover:bg-blue-700 text-white shadow-sm cursor-pointer transition-colors"
-            title="Search"
-          >
-            <Search className="w-4 h-4" />
-          </Button>
-        </div>
-        {debouncedSearch && (
-          <p className="text-[9px] text-slate-400 mt-1">Search applies automatically as you type</p>
-        )}
-      </FilterField>
+          {debouncedSearch && (
+            <p className="text-[9px] text-slate-400 mt-1">Search applies automatically as you type</p>
+          )}
+        </FilterField>
+      )}
     </>
   )
 

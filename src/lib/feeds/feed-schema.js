@@ -24,6 +24,8 @@
  * }
  */
 
+import { buildFeedSlug } from '@/lib/feeds/feed-slug'
+
 export const FEEDS_COLLECTION = 'Feeds'
 export const TOPICS_COLLECTION = 'Topics'
 
@@ -42,9 +44,12 @@ export function serializeFeed(doc) {
   if (!doc) return null
   const topic_ids = Array.isArray(doc.topic_ids) ? doc.topic_ids : []
   const manual_post_ids = Array.isArray(doc.manual_post_ids) ? doc.manual_post_ids : []
+  const _id = doc._id ? doc._id.toString() : null
+  const title = doc.title || 'Untitled feed'
   return {
-    _id: doc._id ? doc._id.toString() : null,
-    title: doc.title || 'Untitled feed',
+    _id,
+    slug: _id ? buildFeedSlug({ _id, title }) : null,
+    title,
     description: doc.description || '',
     topic_ids,
     manual_post_ids,
