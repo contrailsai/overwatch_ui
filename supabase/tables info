@@ -32,6 +32,7 @@ create table public.client_logs (
   reviewed_profiles integer null,
   project_name text null,
   client_id uuid null,
+  reports_download jsonb null default '{}'::jsonb,
   constraint client - logs_pkey primary key (id),
   constraint client_logs_unique_day unique (client_id, project_name, date),
   constraint client - logs_project_name_fkey foreign KEY (project_name) references project (project_name),

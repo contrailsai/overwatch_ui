@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { List, FileText, ShieldAlert, Settings, UserStar, LogOut, LayoutDashboard, ShieldCheck, GitPullRequestCreateArrow, Users, Menu, X, ScanEye, UserRoundPen } from 'lucide-react'
+import { List, FileText, ShieldAlert, Settings, UserStar, LogOut, LayoutDashboard, ShieldCheck, GitPullRequestCreateArrow, Users, Menu, X, ScanEye, UserRoundPen, Rss, Library } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export function Sidebar({ user, clientDetails, project }) {
@@ -32,7 +32,9 @@ export function Sidebar({ user, clientDetails, project }) {
     { name: 'Analytics', href: '/', icon: LayoutDashboard, show: true },
     { name: 'Review Cases', href: '/review-cases', icon: ScanEye, show: clientDetails?.permission === 'reviewer' },
     { name: 'Content List', href: '/cases', icon: List, show: true },
+    { name: 'Feeds', href: '/feeds', icon: Library, show: true },
     { name: 'Review Profiles', href: '/review-profiles', icon: UserRoundPen, show: clientDetails?.permission === 'reviewer' },
+    { name: 'Manage Feeds', href: '/manage-feeds', icon: Rss, show: clientDetails?.permission === 'reviewer' },
     { name: 'Profile List', href: '/profiles', icon: Users, show: true },
     { name: 'Takedowns', href: '/takedowns', icon: ShieldAlert, show: true },
     { name: 'Upload Content', href: '/upload-content', icon: GitPullRequestCreateArrow, show: true },
@@ -165,7 +167,7 @@ export function Sidebar({ user, clientDetails, project }) {
   )
 
   return (
-    <>
+    <div className="contents">
       {/* Mobile Top Navigation Bar */}
       <div className="md:hidden flex items-center justify-between px-6 h-16 bg-white border-b border-slate-200 shrink-0 w-full z-30">
         <div className="flex items-center">
@@ -210,6 +212,6 @@ export function Sidebar({ user, clientDetails, project }) {
       )}>
         <SidebarContent />
       </div>
-    </>
+    </div>
   )
 }

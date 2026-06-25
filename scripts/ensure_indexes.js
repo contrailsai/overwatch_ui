@@ -40,6 +40,14 @@ async function createIndexes() {
     await collection.createIndex({ "analysis_results.risk_score": 1, "metadata.created_at": -1 }, { sparse: true });
     console.log('✓ Index created: { "analysis_results.risk_score": 1, "metadata.created_at": -1 } (sparse)');
 
+    const topicsCollection = db.collection('Topics');
+
+    await topicsCollection.createIndex({ topic_id: 1 }, { unique: true });
+    console.log('✓ Index created on Topics: { topic_id: 1 } (unique)');
+
+    await topicsCollection.createIndex({ posts: 1 });
+    console.log('✓ Index created on Topics: { posts: 1 } (multikey)');
+
     console.log('\n✓ All indexes created successfully!');
   } catch (error) {
     console.error('✗ Failed to create indexes:', error);

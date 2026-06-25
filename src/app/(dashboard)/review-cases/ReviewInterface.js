@@ -1,5 +1,6 @@
 'use client'
 
+import { handleDownloadJSON,formatExportData } from '@/utils/exportJson'
 import * as React from "react"
 import { useState, useEffect, useCallback, useRef, useTransition } from 'react'
 import { format } from "date-fns"
@@ -255,7 +256,7 @@ export function ReviewInterface({
 
       const headers = [
         "Case ID", "Post ID", "Original URL", "Caption", "Platform",
-        "Author URL", "Author Username", "Author Full Name", "Timestamp",
+        "Author URL", "Author Username", "Author Full Name", "Publishing Date",
         "Likes", "Comments", "Views", "Shares", "Retweets", "Quotes", "Replies",
         "result_origin_search_type", "result_origin_search_input", "result_origin_type_raw",
         // "result_origin_keyword", "result_origin_query", "result_origin_search_phrase",
@@ -328,7 +329,10 @@ export function ReviewInterface({
         return
       }
 
-      const jsonString = JSON.stringify(allPosts, null, 2)
+      const exportData = allPosts.map(formatExportData)
+
+      const jsonString = JSON.stringify(exportData, null, 2)
+      
       const blob = new Blob([jsonString], { type: 'application/json' })
       downloadBlob(blob, `cases_export_${format(new Date(), 'yyyyMMdd_HHmmss')}.json`)
     } catch (error) {
@@ -336,47 +340,6 @@ export function ReviewInterface({
       alert('Failed to export JSON. Please try again.')
     } finally {
       setExportingType(null)
-    }
-  }
-
-  const handleDownloadSingleJSON = (post) => {
-    try {
-      const exportData = {
-        _id: { $oid: post._id },
-        code: post.code || post.post_id || "",
-        content: post.content || post.post_content?.content || post.caption || "",
-        created_at: { $date: post.created_at || "" },
-        engagement: {
-          likes: post.engagement?.likes ?? post.stats?.like_count ?? 0,
-          comments: post.engagement?.comments ?? post.stats?.comment_count ?? 0,
-          shares: post.engagement?.shares ?? post.stats?.share_count ?? 0,
-          retweets: post.engagement?.retweets ?? post.stats?.retweet_count ?? 0,
-          quotes: post.engagement?.quotes ?? post.stats?.quote_count ?? 0,
-          replies: post.engagement?.replies ?? post.stats?.reply_count ?? 0,
-          views: post.engagement?.views ?? post.stats?.view_count ?? 0,
-          posted_at: { $date: post.posted_date || "" }
-        },
-        media_urls: post.media_urls || post.post_content?.media_urls || [],
-        platform: post.platform || "",
-        profile: {
-          platform_user_id: post.profile?.platform_user_id || null,
-          username: post.profile?.username || post.user?.username || "",
-          display_name: post.profile?.display_name || post.user?.full_name || "",
-          profile_url: post.profile?.profile_url || post.user?.profile_pic_url || "",
-          is_verified: post.profile?.is_verified ?? post.user?.is_verified ?? false
-        },
-        sourcing_date: { $date: post.sourcing_date || "" },
-        url: post.original_url || post.url || "",
-        analysis_results: post.analysis_results || {},
-        review_details: post.review_details || {}
-      }
-
-      const jsonString = JSON.stringify(exportData, null, 2)
-      const blob = new Blob([jsonString], { type: 'application/json' })
-      downloadBlob(blob, `case_${post._id}_${format(new Date(), 'yyyyMMdd_HHmmss')}.json`)
-    } catch (error) {
-      console.error('Download Error:', error)
-      alert('Failed to download JSON. Please try again.')
     }
   }
 
@@ -554,7 +517,7 @@ export function ReviewInterface({
                 <Button
                   size="sm"
                   variant="ghost"
-                  onClick={(e) => { e.stopPropagation(); handleDownloadSingleJSON(post) }}
+                  onClick={(e) => { e.stopPropagation(); handleDownloadJSON(post) }}
                   className="h-8 px-2.5 text-[11px] font-bold text-slate-600 border border-slate-200"
                 >
                   JSON
@@ -646,7 +609,7 @@ export function ReviewInterface({
             <Button
               size="sm"
               variant="ghost"
-              onClick={(e) => { e.stopPropagation(); handleDownloadSingleJSON(post) }}
+              onClick={(e) => { e.stopPropagation(); handleDownloadJSON(post) }}
               className={cn("font-bold transition-all shadow-sm", isSelected ? "bg-blue-600 hover:bg-blue-700 text-white" : "bg-white border border-slate-200 hover:bg-slate-50 hover:border-blue-300 text-slate-600")}
               title="Download JSON"
             >

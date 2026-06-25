@@ -1,0 +1,37 @@
+{
+    "_id": {
+      "$oid": "6a3bccbb95beabff422fb81a"
+    },
+    "title": "anant_ambani_gossip",
+    "description": "gossip about information on anant ambani and his personal life",
+    "topic_ids": [
+      "T00022",
+      "T00051",
+      "T00033"
+    ],
+    "manual_post_ids": [],
+    "cover_image_url": null,
+    "created_by": "reviewer@contrails.ai",
+    "created_at": {
+      "$date": "2026-06-24T12:25:31.304Z"
+    },
+    "updated_at": {
+      "$date": "2026-06-24T12:32:03.615Z"
+    },
+    "update_history": [
+      {
+        "updated_at": {
+          "$date": "2026-06-24T12:25:31.304Z"
+        },
+        "updated_by": "reviewer@contrails.ai",
+        "changes_summary": "feed created"
+      },
+      {
+        "updated_at": {
+          "$date": "2026-06-24T12:32:03.615Z"
+        },
+        "updated_by": "reviewer@contrails.ai",
+        "changes_summary": "feed updated"
+      }
+    ]
+  }

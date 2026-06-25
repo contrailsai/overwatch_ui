@@ -27,6 +27,7 @@ export default function ReportGenerate({
   project,
   showLabel = true,
   compact = false,
+  toolbar = false,
 }) {
   const idPrefix = useId()
   const [selectedFormat, setSelectedFormat] = useState('summary-pdf')
@@ -55,6 +56,59 @@ export default function ReportGenerate({
     setDownloadClicked(true)
     document.getElementById(`${idPrefix}-btn-${selectedFormat}`)?.querySelector('button')?.click()
     trackClientClick(`export_${selectedFormat}`, { page: 'CasesList' })
+  }
+
+  if (toolbar) {
+    return (
+      <div className={cn('flex shrink-0 flex-wrap items-center gap-2', isLoading && 'opacity-50 pointer-events-none')}>
+        <div className="flex items-center gap-0.5 rounded-lg border border-slate-200 bg-slate-50 p-0.5">
+          {FORMAT_OPTIONS.map((f) => (
+            <button
+              key={f.id}
+              type="button"
+              onClick={() => setSelectedFormat(f.id)}
+              disabled={isLoading}
+              title={f.downloadLabel}
+              aria-label={f.downloadLabel}
+              className={cn(
+                'rounded-md px-2.5 py-1.5 text-[10px] font-bold transition-all cursor-pointer whitespace-nowrap',
+                selectedFormat === f.id
+                  ? 'bg-white text-blue-600 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-700'
+              )}
+            >
+              {f.compactLabel}
+            </button>
+          ))}
+        </div>
+        <Button
+          size="sm"
+          onClick={handleDownload}
+          disabled={isLoading}
+          title="Download report"
+          className="h-9 gap-1.5 bg-blue-600 px-3 text-white hover:bg-blue-700 border border-blue-600"
+        >
+          {isLoading && downloadClicked ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <DownloadIcon className="w-4 h-4" />
+          )}
+          <span className="text-xs font-bold">Export</span>
+        </Button>
+        <div className="hidden">
+          {FORMAT_OPTIONS.map((f) => (
+            <div key={f.id} id={`${idPrefix}-btn-${f.id}`}>
+              <ReportExportButton
+                preset={f.preset}
+                posts={selectedPostsArray}
+                project={project}
+                onStateChange={onStateByFormat[f.id]}
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+    )
   }
 
   if (compact) {

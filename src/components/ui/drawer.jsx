@@ -41,14 +41,15 @@ function DrawerOverlay({ className, ...props }) {
   )
 }
 
-function DrawerContent({ className, children, ...props }) {
+function DrawerContent({ className, elevated = false, children, ...props }) {
   return (
     <DrawerPortal>
-      <DrawerOverlay />
+      <DrawerOverlay className={elevated ? 'z-[70]' : undefined} />
       <DrawerPrimitive.Content
         data-slot="drawer-content"
         className={cn(
           "fixed inset-x-0 bottom-0 z-50 mt-24 flex h-auto max-h-[96dvh] flex-col rounded-t-2xl border border-slate-200 bg-white outline-none",
+          elevated && "z-[70]",
           className
         )}
         {...props}
