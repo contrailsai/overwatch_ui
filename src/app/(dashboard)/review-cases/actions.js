@@ -16,6 +16,7 @@ import {
   isActiveCorrectionRequest,
   findActiveCorrectionRequest,
 } from '@/utils/analysis/correctionRequestUtils'
+import { removePostFromAllTopics } from '@/lib/feeds/topic-membership'
 
 /** Local helper — not a traced server action (avoids per-row trace overhead on list loads). */
 async function normalizeReviewS3Post(post) {
@@ -1290,6 +1291,9 @@ export const deleteCase = traceAction('deleteCase', async (postId, _project, _cl
         }
       }
     }
+
+    // Remove post from all topic memberships before hard-delete
+    await removePostFromAllTopics(db, postId)
 
     // Hard-delete the document
     await collection.deleteOne({ _id: new ObjectId(postId) })

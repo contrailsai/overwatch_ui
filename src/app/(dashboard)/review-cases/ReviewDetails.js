@@ -19,6 +19,7 @@ import { Twitter, Reddit } from '@/utils/icons'
 import ProfilePic from '@/components/ProfilePic'
 import ResultOriginPanel from './ResultOriginPanel'
 import AnalysisCorrectionPanel from './AnalysisCorrectionPanel'
+import { TopicAssignmentSection } from './TopicAssignmentSection'
 import {
     normalizeAnalysisForForm,
     hasAnalysisResults,
@@ -127,7 +128,9 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
 
     const [reasoningText, setReasoningText] = useState(initialFormDefaults.reasoningText)
     const [simpleReportText, setSimpleReportText] = useState(initialFormDefaults.simpleReportText)
-    const [showAIInsights, setShowAIInsights] = useState(!hasReview)
+    const [showAIInsights, setShowAIInsights] = useState(false)
+    const [showViolations, setShowViolations] = useState(false)
+    const [showPOI, setShowPOI] = useState(false)
 
     const applyFormValues = useCallback((defaults) => {
         setThreatScore(defaults.threatScore)
@@ -572,21 +575,21 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
     };
-  
+
     const oldHandleDownloadJSON = (post) => {
         try {
-            
-        const clonedPost = JSON.parse(JSON.stringify(post))
 
-        delete clonedPost._id
-        delete clonedPost.id
-        delete clonedPost.code
-        delete clonedPost.signedImageUrl
+            const clonedPost = JSON.parse(JSON.stringify(post))
 
-        const exportData = {
-            "Case ID": post._id,
-            ...clonedPost
-        }
+            delete clonedPost._id
+            delete clonedPost.id
+            delete clonedPost.code
+            delete clonedPost.signedImageUrl
+
+            const exportData = {
+                "Case ID": post._id,
+                ...clonedPost
+            }
 
 
             const jsonString = JSON.stringify([exportData], null, 2);
@@ -618,828 +621,855 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
 
     return (
         <>
-        <div className="h-full flex flex-col bg-white min-h-0">
+            <div className="h-full flex flex-col bg-white min-h-0">
 
-            {/* Mobile/tablet: one scroll — media & case data first, review form below. Desktop (xl+): two columns. */}
-            <div className="flex-1 min-h-0 overflow-y-auto xl:overflow-hidden flex flex-col xl:flex-row xl:divide-x divide-slate-100">
-                {/* Case content: source media, profile, caption, stats */}
-                <div className="shrink-0 xl:flex-1 xl:min-h-0 xl:overflow-y-auto bg-slate-50/50">
-                    {/* Header */}
-                    <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-100 flex items-center justify-between gap-2 bg-white/80 backdrop-blur-md xl:sticky xl:top-0 z-20">
-                        <div className="flex items-center gap-2 sm:gap-4 min-w-0">
-                            <div className="h-9 w-9 sm:h-10 sm:w-10 shrink-0 bg-slate-50 rounded-full flex items-center justify-center border border-slate-100">
-                                <Siren className="w-4 h-4 sm:w-5 sm:h-5 text-slate-500" />
-                            </div>
-                            <div className="min-w-0">
-                                <h2 className="text-base sm:text-lg font-bold text-slate-900 leading-tight">Case details</h2>
-                                <p className="text-[10px] sm:text-xs font-mono text-slate-400 truncate">ID: {post._id}</p>
-                            </div>
-                        </div>
-
-                        <div className="flex items-center gap-1 sm:gap-3 shrink-0">
-                            {onNavigate && (
-                                <div className="hidden sm:flex items-center gap-1 mr-2 border-r border-slate-200 pr-3">
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        onClick={() => onNavigate('prev')}
-                                        disabled={!hasPrev}
-                                        className="h-8 w-8 text-slate-500 hover:text-blue-600"
-                                    >
-                                        <ChevronLeft className="w-5 h-5" />
-                                    </Button>
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        onClick={() => onNavigate('next')}
-                                        disabled={!hasNext}
-                                        className="h-8 w-8 text-slate-500 hover:text-blue-600"
-                                    >
-                                        <ChevronRight className="w-5 h-5" />
-                                    </Button>
+                {/* Mobile/tablet: one scroll — media & case data first, review form below. Desktop (xl+): two columns. */}
+                <div className="flex-1 min-h-0 overflow-y-auto xl:overflow-hidden flex flex-col xl:flex-row xl:divide-x divide-slate-100">
+                    {/* Case content: source media, profile, caption, stats */}
+                    <div className="shrink-0 xl:flex-1 xl:min-h-0 xl:overflow-y-auto bg-slate-50/50">
+                        {/* Header */}
+                        <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-100 flex items-center justify-between gap-2 bg-white/80 backdrop-blur-md xl:sticky xl:top-0 z-20">
+                            <div className="flex items-center gap-2 sm:gap-4 min-w-0">
+                                <div className="h-9 w-9 sm:h-10 sm:w-10 shrink-0 bg-slate-50 rounded-full flex items-center justify-center border border-slate-100">
+                                    <Siren className="w-4 h-4 sm:w-5 sm:h-5 text-slate-500" />
                                 </div>
-                            )}
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={handleCopyLink}
-                                className="h-9 w-9 text-slate-500 hover:text-blue-600 rounded-full"
-                                title="Copy case link"
-                            >
-                                {copied ? <Check className="w-5 h-5 text-green-500" /> : <LinkIcon className="w-5 h-5" />}
-                            </Button>
+                                <div className="min-w-0">
+                                    <h2 className="text-base sm:text-lg font-bold text-slate-900 leading-tight">Case details</h2>
+                                    <p className="text-[10px] sm:text-xs font-mono text-slate-400 truncate">ID: {post._id}</p>
+                                </div>
+                            </div>
 
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleDownloadJSON(localPost)}
-                                className="h-9 w-9 text-slate-500 hover:text-emerald-600 rounded-full"
-                                title="Download JSON"
-                            >
-                                <FileJson className="w-5 h-5" />
-                            </Button>
-                            <Button
-                                variant="outline"
-                                size="icon"
-                                onClick={() => setShowDeleteCaseModal(true)}
-                                className="h-9 w-9 text-red-500 hover:bg-red-50 hover:text-red-600 border-red-200 rounded-full"
-                                title="Delete case"
-                            >
-                                <Trash2 className="w-5 h-5" />
-                            </Button>
-                            <Button variant="ghost" size="icon" onClick={onClose} className="rounded-full hover:bg-slate-100 text-slate-400">
-                                <X className="w-6 h-6" />
-                            </Button>
-                        </div>
-                    </div>
-
-                    <div className="flex flex-col gap-6 sm:gap-8 px-4 sm:px-8 pb-6 sm:pb-8">
-                        {/* Media Display */}
-                        <div className="bg-slate-900 rounded-xl sm:rounded-2xl overflow-hidden shadow-lg border border-slate-800 relative group flex items-center justify-center min-h-[220px] sm:min-h-[400px]">
-                            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-slate-800/50 to-slate-950 pointer-events-none" />
-
-                            <input
-                                ref={fileInputRef}
-                                type="file"
-                                accept="image/*"
-                                className="hidden"
-                                onChange={handleImageUpload}
-                            />
-
-                            {(() => {
-                                // Show action buttons for ANY image that is currently displayed
-                                const hasDisplayedImage = !!uploadedImageUrl || (!!localPost.signedImageUrl && !mediaError);
-                                if (!hasDisplayedImage) return null;
-                                return (
-                                    <div className="absolute top-4 right-4 z-20 flex gap-2">
-                                        {showDeleteConfirm ? (
-                                            <>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setShowDeleteConfirm(false)}
-                                                    disabled={isDeletingImage}
-                                                    className="bg-slate-900/80 backdrop-blur-sm hover:bg-slate-700 text-white px-3 py-2 rounded-lg shadow-lg text-xs font-bold transition-colors disabled:opacity-50"
-                                                >
-                                                    Cancel
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={handleDeleteImage}
-                                                    disabled={isDeletingImage}
-                                                    className="bg-rose-600 hover:bg-rose-700 text-white px-3 py-2 rounded-lg shadow-lg text-xs font-bold transition-colors flex items-center gap-1.5 disabled:opacity-50"
-                                                >
-                                                    {isDeletingImage ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
-                                                    Confirm Delete
-                                                </button>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <button
-                                                    type="button"
-                                                    onClick={handleReplaceImage}
-                                                    disabled={isUploadingImage || isDeletingImage}
-                                                    className="bg-slate-900/80 backdrop-blur-sm hover:bg-blue-600 text-white p-2 rounded-lg shadow-lg transition-colors disabled:opacity-50"
-                                                    title="Replace image"
-                                                >
-                                                    {isUploadingImage ? <Loader2 className="w-4 h-4 animate-spin" /> : <Pencil className="w-4 h-4" />}
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setShowDeleteConfirm(true)}
-                                                    disabled={isUploadingImage || isDeletingImage}
-                                                    className="bg-slate-900/80 backdrop-blur-sm hover:bg-rose-600 text-white p-2 rounded-lg shadow-lg transition-colors disabled:opacity-50"
-                                                    title="Delete image"
-                                                >
-                                                    <Trash2 className="w-4 h-4" />
-                                                </button>
-                                            </>
-                                        )}
+                            <div className="flex items-center gap-1 sm:gap-3 shrink-0">
+                                {onNavigate && (
+                                    <div className="hidden sm:flex items-center gap-1 mr-2 border-r border-slate-200 pr-3">
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            onClick={() => onNavigate('prev')}
+                                            disabled={!hasPrev}
+                                            className="h-8 w-8 text-slate-500 hover:text-blue-600"
+                                        >
+                                            <ChevronLeft className="w-5 h-5" />
+                                        </Button>
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            onClick={() => onNavigate('next')}
+                                            disabled={!hasNext}
+                                            className="h-8 w-8 text-slate-500 hover:text-blue-600"
+                                        >
+                                            <ChevronRight className="w-5 h-5" />
+                                        </Button>
                                     </div>
-                                );
-                            })()}
-
-                            {uploadedImageUrl ? (
-                                <img
-                                    src={uploadedImageUrl}
-                                    alt="Evidence"
-                                    className="max-w-full h-auto max-h-[600px] object-contain relative z-10"
-                                />
-                            ) : localPost.signedImageUrl && !mediaError ? (
-                                <img
-                                    src={localPost.signedImageUrl}
-                                    alt="Evidence"
-                                    className="max-w-full h-auto max-h-[600px] object-contain relative z-10"
-                                    onError={() => setMediaError(true)}
-                                />
-                            ) : (
-                                <div
-                                    className="text-center p-12 relative z-10 cursor-pointer group/upload"
-                                    onClick={() => !isUploadingImage && fileInputRef.current?.click()}
+                                )}
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={handleCopyLink}
+                                    className="h-9 w-9 text-slate-500 hover:text-blue-600 rounded-full"
+                                    title="Copy case link"
                                 >
-                                    <div className="border-2 border-dashed border-slate-600 group-hover/upload:border-blue-500 rounded-xl p-12 transition-colors duration-200">
-                                        {isUploadingImage ? (
-                                            <>
-                                                <Loader2 className="w-16 h-16 text-blue-400 mx-auto mb-4 animate-spin" />
-                                                <p className="text-slate-400 font-medium text-lg">Uploading...</p>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <Upload className="w-16 h-16 text-slate-600 group-hover/upload:text-blue-400 mx-auto mb-4 transition-colors duration-200" />
-                                                <p className="text-slate-400 group-hover/upload:text-slate-300 font-medium text-lg transition-colors duration-200">Click to upload image</p>
-                                                <p className="text-slate-600 text-sm mt-2">PNG, JPG, WEBP up to {formatUploadSizeLimit(REVIEW_IMAGE_MAX_BYTES)}</p>
-                                            </>
-                                        )}
-                                    </div>
-                                </div>
-                            )}
+                                    {copied ? <Check className="w-5 h-5 text-green-500" /> : <LinkIcon className="w-5 h-5" />}
+                                </Button>
+
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => handleDownloadJSON(localPost)}
+                                    className="h-9 w-9 text-slate-500 hover:text-emerald-600 rounded-full"
+                                    title="Download JSON"
+                                >
+                                    <FileJson className="w-5 h-5" />
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    size="icon"
+                                    onClick={() => setShowDeleteCaseModal(true)}
+                                    className="h-9 w-9 text-red-500 hover:bg-red-50 hover:text-red-600 border-red-200 rounded-full"
+                                    title="Delete case"
+                                >
+                                    <Trash2 className="w-5 h-5" />
+                                </Button>
+                                <Button variant="ghost" size="icon" onClick={onClose} className="rounded-full hover:bg-slate-100 text-slate-400">
+                                    <X className="w-6 h-6" />
+                                </Button>
+                            </div>
                         </div>
 
-                        {/* Unified User Context & Caption Card */}
-                        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
-                            <div className="p-5 flex items-center gap-5">
-                                <div className="relative shrink-0">
-                                    {(post.user?.profile_pic_url && !imgError) ? (
-                                        <img
-                                            src={post.user.profile_pic_url}
-                                            onError={() => setImgError(true)}
-                                            alt=""
-                                            className="w-16 h-16 rounded-full object-cover border-4 border-slate-50"
-                                        />
-                                    ) : (
-                                        <ProfilePic user={post.user?.username || 'Unknown'} size={64} />
-                                    )}
+                        <div className="flex flex-col gap-6 sm:gap-8 px-4 sm:px-8 pb-6 sm:pb-8">
+                            {/* Media Display */}
+                            <div className="bg-slate-900 rounded-xl sm:rounded-2xl overflow-hidden shadow-lg border border-slate-800 relative group flex items-center justify-center min-h-[220px] sm:min-h-[400px]">
+                                <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-slate-800/50 to-slate-950 pointer-events-none" />
+
+                                <input
+                                    ref={fileInputRef}
+                                    type="file"
+                                    accept="image/*"
+                                    className="hidden"
+                                    onChange={handleImageUpload}
+                                />
+
+                                {(() => {
+                                    // Show action buttons for ANY image that is currently displayed
+                                    const hasDisplayedImage = !!uploadedImageUrl || (!!localPost.signedImageUrl && !mediaError);
+                                    if (!hasDisplayedImage) return null;
+                                    return (
+                                        <div className="absolute top-4 right-4 z-20 flex gap-2">
+                                            {showDeleteConfirm ? (
+                                                <>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setShowDeleteConfirm(false)}
+                                                        disabled={isDeletingImage}
+                                                        className="bg-slate-900/80 backdrop-blur-sm hover:bg-slate-700 text-white px-3 py-2 rounded-lg shadow-lg text-xs font-bold transition-colors disabled:opacity-50"
+                                                    >
+                                                        Cancel
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={handleDeleteImage}
+                                                        disabled={isDeletingImage}
+                                                        className="bg-rose-600 hover:bg-rose-700 text-white px-3 py-2 rounded-lg shadow-lg text-xs font-bold transition-colors flex items-center gap-1.5 disabled:opacity-50"
+                                                    >
+                                                        {isDeletingImage ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                                                        Confirm Delete
+                                                    </button>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <button
+                                                        type="button"
+                                                        onClick={handleReplaceImage}
+                                                        disabled={isUploadingImage || isDeletingImage}
+                                                        className="bg-slate-900/80 backdrop-blur-sm hover:bg-blue-600 text-white p-2 rounded-lg shadow-lg transition-colors disabled:opacity-50"
+                                                        title="Replace image"
+                                                    >
+                                                        {isUploadingImage ? <Loader2 className="w-4 h-4 animate-spin" /> : <Pencil className="w-4 h-4" />}
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setShowDeleteConfirm(true)}
+                                                        disabled={isUploadingImage || isDeletingImage}
+                                                        className="bg-slate-900/80 backdrop-blur-sm hover:bg-rose-600 text-white p-2 rounded-lg shadow-lg transition-colors disabled:opacity-50"
+                                                        title="Delete image"
+                                                    >
+                                                        <Trash2 className="w-4 h-4" />
+                                                    </button>
+                                                </>
+                                            )}
+                                        </div>
+                                    );
+                                })()}
+
+                                {uploadedImageUrl ? (
+                                    <img
+                                        src={uploadedImageUrl}
+                                        alt="Evidence"
+                                        className="max-w-full h-auto max-h-[600px] object-contain relative z-10"
+                                    />
+                                ) : localPost.signedImageUrl && !mediaError ? (
+                                    <img
+                                        src={localPost.signedImageUrl}
+                                        alt="Evidence"
+                                        className="max-w-full h-auto max-h-[600px] object-contain relative z-10"
+                                        onError={() => setMediaError(true)}
+                                    />
+                                ) : (
+                                    <div
+                                        className="text-center p-12 relative z-10 cursor-pointer group/upload"
+                                        onClick={() => !isUploadingImage && fileInputRef.current?.click()}
+                                    >
+                                        <div className="border-2 border-dashed border-slate-600 group-hover/upload:border-blue-500 rounded-xl p-12 transition-colors duration-200">
+                                            {isUploadingImage ? (
+                                                <>
+                                                    <Loader2 className="w-16 h-16 text-blue-400 mx-auto mb-4 animate-spin" />
+                                                    <p className="text-slate-400 font-medium text-lg">Uploading...</p>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Upload className="w-16 h-16 text-slate-600 group-hover/upload:text-blue-400 mx-auto mb-4 transition-colors duration-200" />
+                                                    <p className="text-slate-400 group-hover/upload:text-slate-300 font-medium text-lg transition-colors duration-200">Click to upload image</p>
+                                                    <p className="text-slate-600 text-sm mt-2">PNG, JPG, WEBP up to {formatUploadSizeLimit(REVIEW_IMAGE_MAX_BYTES)}</p>
+                                                </>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Unified User Context & Caption Card */}
+                            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+                                <div className="p-5 flex items-center gap-5">
+                                    <div className="relative shrink-0">
+                                        {(post.user?.profile_pic_url && !imgError) ? (
+                                            <img
+                                                src={post.user.profile_pic_url}
+                                                onError={() => setImgError(true)}
+                                                alt=""
+                                                className="w-16 h-16 rounded-full object-cover border-4 border-slate-50"
+                                            />
+                                        ) : (
+                                            <ProfilePic user={post.user?.username || 'Unknown'} size={64} />
+                                        )}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <h3 className="text-xl font-bold text-slate-900 truncate flex items-center gap-2">
+                                            <div className="">
+                                                {/* platform */}
+                                                <div className="flex-1 min-w-4">
+                                                    {
+                                                        post.platform === "x" || post.platform === "twitter" ? (
+                                                            <span className="inline-block size-4 text-black">
+                                                                <Twitter className="w-3.5 h-3.5 text-slate-900" />
+                                                            </span>
+                                                        ) : post.platform?.toLowerCase() === "reddit" ? (
+                                                            <span className="inline-block size-7 text-black">
+                                                                <Reddit className="w-3.5 h-3.5" />
+                                                            </span>
+                                                        ) : post.platform?.toLowerCase() === "instagram" ? (
+                                                            <Instagram className="w-6 h-6 text-pink-500" />
+                                                        ) : post.platform?.toLowerCase() === "facebook" ? (
+                                                            <Facebook className="w-6 h-6 text-blue-500" />
+                                                        ) : post.platform?.toLowerCase() === "youtube" ? (
+                                                            <Youtube className="w-6 h-6 text-red-500" />
+                                                        ) : (
+                                                            <p className="text-slate-500 font-medium truncate">{post.platform}</p>
+                                                        )
+                                                    }
+                                                </div>
+                                            </div>
+                                            {post.user?.username || 'Unknown User'}
+                                            {post.user?.is_verified && <BadgeCheck className="w-5 h-5 text-blue-500 fill-blue-50" />}
+                                            {visibilityStatus === 'down' ? (
+                                                <Badge variant="outline" className="bg-slate-100 text-slate-500 border-slate-200">Taken Down</Badge>
+                                            ) : (
+                                                <Badge variant="outline" className="bg-emerald-100 text-emerald-700 border-emerald-200">Online</Badge>
+                                            )}
+                                        </h3>
+                                        <p className="text-slate-500 font-medium truncate">{post.user?.full_name}</p>
+                                    </div>
+                                    <a
+                                        href={post.url || post.original_url || '#'}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-sm font-bold transition-colors flex items-center gap-2"
+                                    >
+                                        <ExternalLink className="w-4 h-4" />
+                                        <span className="hidden sm:inline">View Source</span>
+                                    </a>
                                 </div>
-                                <div className="flex-1 min-w-0">
-                                    <h3 className="text-xl font-bold text-slate-900 truncate flex items-center gap-2">
-                                        <div className="">
-                                            {/* platform */}
-                                            <div className="flex-1 min-w-4">
+
+                                <div className="px-5 pb-5 pt-0">
+                                    <div className="bg-slate-50/50 rounded-lg p-4 border border-slate-100">
+                                        <h4 className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">
+                                            <MessageCircle className="w-3 h-3" />  {post.platform.toLowerCase() === "website" ? "Post Content" : "Post Caption"}
+                                        </h4>
+                                        <div className="text-slate-800 leading-relaxed whitespace-pre-wrap font-medium text-sm font-sans">
+                                            {post.caption || <span className="italic text-slate-400">No caption content available.</span>}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {localPost.result_origin && (
+                                <ResultOriginPanel resultOrigin={localPost.result_origin} />
+                            )}
+
+                            {
+                                post.platform.toLowerCase() !== "website" && (
+                                    <>
+                                        {/* Stats & Dates */}
+                                        <div className="space-y-6">
+                                            <div className="grid grid-cols-2 sm:flex sm:flex-row gap-3 sm:gap-4">
+                                                <div className="w-full bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-row justify-between gap-1">
+                                                    <span className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2"><Heart className="w-3.5 h-3.5 text-rose-500" /> Likes</span>
+                                                    <span className="font-bold text-lg text-slate-900">{post.stats?.like_count?.toLocaleString() || 0}</span>
+                                                </div>
+                                                <div className="w-full bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-row justify-between gap-1">
+                                                    <span className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2"><MessageCircle className="w-3.5 h-3.5 text-blue-500" /> Comments</span>
+                                                    <span className="font-bold text-lg text-slate-900">{post.stats?.comment_count?.toLocaleString() || 0}</span>
+                                                </div>
+                                                <div className="w-full bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-row justify-between gap-1">
+                                                    <span className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2"><Share2 className="w-3.5 h-3.5 text-green-500" /> Shares</span>
+                                                    <span className="font-bold text-lg text-slate-900">{post.stats?.share_count?.toLocaleString() || 0}</span>
+                                                </div>
                                                 {
-                                                    post.platform === "x" || post.platform === "twitter" ? (
-                                                        <span className="inline-block size-4 text-black">
-                                                            <Twitter className="w-3.5 h-3.5 text-slate-900" />
-                                                        </span>
-                                                    ) : post.platform?.toLowerCase() === "reddit" ? (
-                                                        <span className="inline-block size-7 text-black">
-                                                            <Reddit className="w-3.5 h-3.5" />
-                                                        </span>
-                                                    ) : post.platform?.toLowerCase() === "instagram" ? (
-                                                        <Instagram className="w-6 h-6 text-pink-500" />
-                                                    ) : post.platform?.toLowerCase() === "facebook" ? (
-                                                        <Facebook className="w-6 h-6 text-blue-500" />
-                                                    ) : post.platform?.toLowerCase() === "youtube" ? (
-                                                        <Youtube className="w-6 h-6 text-red-500" />
-                                                    ) : (
-                                                        <p className="text-slate-500 font-medium truncate">{post.platform}</p>
+                                                    post.stats?.view_count > 0 && (
+                                                        <div className="w-full bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-row justify-between gap-1">
+                                                            <span className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2"><Eye className="w-3.5 h-3.5 text-violet-600" /> Views</span>
+                                                            <span className="font-bold text-lg text-slate-900">{post.stats?.view_count?.toLocaleString() || 0}</span>
+                                                        </div>
                                                     )
                                                 }
                                             </div>
+                                            <div className="grid grid-cols-2 gap-10">
+                                                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between gap-1">
+                                                    <span className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2"><Calendar className="w-3.5 h-3.5 text-slate-500" /> Publish Date</span>
+                                                    <span className="font-bold text-sm text-slate-900">{posted_date}</span>
+                                                </div>
+                                                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between gap-1">
+                                                    <span className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2"><History className="w-3.5 h-3.5 text-slate-500" /> Alert Date</span>
+                                                    <span className="font-bold text-sm text-slate-900">{sourced_date}</span>
+                                                </div>
+                                            </div>
                                         </div>
-                                        {post.user?.username || 'Unknown User'}
-                                        {post.user?.is_verified && <BadgeCheck className="w-5 h-5 text-blue-500 fill-blue-50" />}
-                                        {visibilityStatus === 'down' ? (
-                                            <Badge variant="outline" className="bg-slate-100 text-slate-500 border-slate-200">Taken Down</Badge>
-                                        ) : (
-                                            <Badge variant="outline" className="bg-emerald-100 text-emerald-700 border-emerald-200">Online</Badge>
-                                        )}
-                                    </h3>
-                                    <p className="text-slate-500 font-medium truncate">{post.user?.full_name}</p>
-                                </div>
-                                <a
-                                    href={post.url || post.original_url || '#'}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-sm font-bold transition-colors flex items-center gap-2"
-                                >
-                                    <ExternalLink className="w-4 h-4" />
-                                    <span className="hidden sm:inline">View Source</span>
-                                </a>
-                            </div>
-
-                            <div className="px-5 pb-5 pt-0">
-                                <div className="bg-slate-50/50 rounded-lg p-4 border border-slate-100">
-                                    <h4 className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">
-                                        <MessageCircle className="w-3 h-3" />  {post.platform.toLowerCase() === "website" ? "Post Content" : "Post Caption"}
-                                    </h4>
-                                    <div className="text-slate-800 leading-relaxed whitespace-pre-wrap font-medium text-sm font-sans">
-                                        {post.caption || <span className="italic text-slate-400">No caption content available.</span>}
-                                    </div>
-                                </div>
-                            </div>
+                                    </>
+                                )
+                            }
                         </div>
-
-                        {localPost.result_origin && (
-                            <ResultOriginPanel resultOrigin={localPost.result_origin} />
-                        )}
-
-                        {
-                            post.platform.toLowerCase() !== "website" && (
-                                <>
-                                    {/* Stats & Dates */}
-                                    <div className="space-y-6">
-                                        <div className="grid grid-cols-2 sm:flex sm:flex-row gap-3 sm:gap-4">
-                                            <div className="w-full bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-row justify-between gap-1">
-                                                <span className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2"><Heart className="w-3.5 h-3.5 text-rose-500" /> Likes</span>
-                                                <span className="font-bold text-lg text-slate-900">{post.stats?.like_count?.toLocaleString() || 0}</span>
-                                            </div>
-                                            <div className="w-full bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-row justify-between gap-1">
-                                                <span className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2"><MessageCircle className="w-3.5 h-3.5 text-blue-500" /> Comments</span>
-                                                <span className="font-bold text-lg text-slate-900">{post.stats?.comment_count?.toLocaleString() || 0}</span>
-                                            </div>
-                                            <div className="w-full bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-row justify-between gap-1">
-                                                <span className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2"><Share2 className="w-3.5 h-3.5 text-green-500" /> Shares</span>
-                                                <span className="font-bold text-lg text-slate-900">{post.stats?.share_count?.toLocaleString() || 0}</span>
-                                            </div>
-                                            {
-                                                post.stats?.view_count > 0 && (
-                                                    <div className="w-full bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-row justify-between gap-1">
-                                                        <span className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2"><Eye className="w-3.5 h-3.5 text-violet-600" /> Views</span>
-                                                        <span className="font-bold text-lg text-slate-900">{post.stats?.view_count?.toLocaleString() || 0}</span>
-                                                    </div>
-                                                )
-                                            }
-                                        </div>
-                                        <div className="grid grid-cols-2 gap-10">
-                                            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between gap-1">
-                                                <span className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2"><Calendar className="w-3.5 h-3.5 text-slate-500" /> Publish Date</span>
-                                                <span className="font-bold text-sm text-slate-900">{posted_date}</span>
-                                            </div>
-                                            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between gap-1">
-                                                <span className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2"><History className="w-3.5 h-3.5 text-slate-500" /> Alert Date</span>
-                                                <span className="font-bold text-sm text-slate-900">{sourced_date}</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </>
-                            )
-                        }
                     </div>
-                </div>
 
-                {/* Review & analysis form */}
-                <div className="shrink-0 w-full xl:w-[500px] xl:shrink-0 xl:min-h-0 xl:overflow-y-auto bg-white border-t xl:border-t-0 border-slate-100">
-                    <div className="xl:hidden px-4 py-2 bg-slate-100 border-b border-slate-200">
-                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Review &amp; analysis</p>
-                    </div>
-                    {/* TOP PANNEL */}
-                    <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-100 flex items-center justify-between gap-2 bg-white/80 backdrop-blur-md xl:sticky xl:top-0 z-20">
-                        <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-wrap">
-                            <h2 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight">Review Case</h2>
-                            {/* The Badge will now appear instantly upon saving! */}
-                            {hasReview && (
-                                <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 gap-1.5 pl-2 animate-in zoom-in fade-in duration-300">
-                                    <CheckCircle className="w-3.5 h-3.5" /> Reviewed
-                                </Badge>
-                            )}
-                            <div className="hidden sm:block h-4 w-px bg-slate-200 mx-2" />
-                            <div className="flex items-center gap-1">
-                                <Button variant="ghost" size="icon" onClick={() => onNavigate('prev')} disabled={!hasPrev || isPending} className="h-8 w-8 text-slate-500 hover:text-blue-600">
-                                    <ChevronLeft className="h-5 w-5" />
-                                </Button>
-                                <span className="hidden sm:inline text-xs font-semibold text-slate-400 uppercase tracking-widest px-1">Nav</span>
-                                <Button variant="ghost" size="icon" onClick={() => onNavigate('next')} disabled={!hasNext || isPending} className="h-8 w-8 text-slate-500 hover:text-blue-600">
-                                    <ChevronRight className="h-5 w-5" />
-                                </Button>
-                            </div>
+                    {/* Review & analysis form */}
+                    <div className="shrink-0 w-full xl:w-[500px] xl:shrink-0 xl:min-h-0 xl:overflow-y-auto bg-white border-t xl:border-t-0 border-slate-100">
+                        <div className="xl:hidden px-4 py-2 bg-slate-100 border-b border-slate-200">
+                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Review &amp; analysis</p>
                         </div>
-                        <Button variant="ghost" size="icon" onClick={onClose} className="shrink-0 rounded-full hover:bg-slate-100 text-slate-500">
-                            <X className="h-6 w-6" />
-                        </Button>
-                    </div>
-                    <form action={formAction} className="flex flex-col min-h-full px-4 sm:px-0">
-
-                        {/* Data Mapping for Action State */}
-                        {Array.from(new Set([
-                            ...project_details.labels.map(l => l.name),
-                            ...threatTypes
-                        ])).map((labelName, index) => (
-                            <input key={`flag_${index}`} type="hidden" name={`flag_${labelName}`} value={threatTypes.includes(labelName) ? 'on' : 'off'} />
-                        ))}
-                        {Array.from(new Set([
-                            ...(project_details.legal_codes || []).map(c => c.name),
-                            ...selectedLegalCodes.map(c => c.code)
-                        ])).map((codeName, index) => {
-                            const selected = selectedLegalCodes.find(c => c.code === codeName);
-                            return (
-                                <React.Fragment key={`legal_${index}`}>
-                                    <input type="hidden" name={`legal_code_${codeName}`} value={selected ? 'on' : 'off'} />
-                                    {selected && <input type="hidden" name={`legal_reasoning_${codeName}`} value={selected.reasoning} />}
-                                </React.Fragment>
-                            );
-                        })}
-                        <input type="hidden" name="mongo_id" value={localPost._id || ''} />
-                        <input type="hidden" name="platform" value={localPost.platform || 'Instagram'} />
-                        <input type="hidden" name="poi_names" value={poiNames.join(',')} />
-                        <input type="hidden" name="poi_present" value={poiPresent.toString()} />
-                        <input type="hidden" name="poi_confirmed" value={poiPresent ? 'on' : 'off'} />
-                        <input type="hidden" name="is_aigc" value={isAIGC ? 'on' : 'off'} />
-                        <input type="hidden" name="face_present" value={facePresent.toString()} />
-                        <input type="hidden" name="name_present" value={namePresent.toString()} />
-                        <input type="hidden" name="threat_score" value={threatScore} />
-                        <input type="hidden" name="takedown_status" value={localPost.takedown_info?.takedown_status || 'None'} />
-                        <input type="hidden" name="visibility_status" value={visibilityStatus} />
-
-                        <div className="p-5 md:p-6 space-y-6 flex-1 relative flex flex-col mx-auto w-full">
-
-                            {/**adding edit logic for the Status of the post Online/Offline */}
-                            <section className="space-y-3">
-                                <div className="flex justify-end items-center gap-1.5 mb-1.5">
-                                    <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={handleRunAIAnalysis}
-                                        disabled={isPendingAnalysis || formDisabledForCorrection}
-                                        className=" cursor-pointer h-7 px-3 text-xs rounded-full bg-blue-50/50 text-blue-600 border-blue-200 hover:bg-blue-100 hover:text-blue-700 transition-colors"
-                                        title={hasAnalysis
-                                            ? 'Full re-analysis from scratch — ignores your form edits'
-                                            : 'Run AI analysis from scratch'}
-                                    >
-                                        {isPendingAnalysis ? <Loader2 className="w-3 h-3 mr-1.5 animate-spin" /> : <RefreshCw className="w-3 h-3 mr-1.5" />}
-                                        {hasAnalysis ? 'Re-run AI Analysis' : 'Run AI Analysis'}
-                                    </Button>
-                                    <Button
-                                        type="button"
-                                        variant="ghost" size="sm"
-                                        onClick={handleReset}
-                                        className="cursor-pointer h-7 px-3 text-xs rounded-full text-slate-500 hover:text-slate-700 hover:bg-slate-100"
-                                    >
-                                        <RotateCcw className="w-3 h-3 mr-1.5" />
-                                        Reset Form
-                                    </Button>
-                                </div>
-                                <div className="flex items-center justify-start gap-2 mb-1">
-                                    <div className="flex items-center gap-2">
-                                        <span className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-bold">1</span>
-                                        <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Visibility Status</h3>
-                                    </div>
-                                </div>
-                                <div className="bg-slate-50 rounded-xl p-4 border border-slate-200 shadow-sm flex items-center justify-between">
-                                    <div className="flex items-center gap-3">
-                                        <div className={cn(
-                                            "w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all shadow-inner",
-                                            visibilityStatus === 'online' ? "bg-emerald-50 border-emerald-100 text-emerald-600" : "bg-slate-100 border-slate-200 text-slate-400"
-                                        )}>
-                                            {visibilityStatus === 'online' ? <Globe className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
-                                        </div>
-                                        <div>
-                                            <p className="text-sm font-bold text-slate-900">{visibilityStatus === 'online' ? 'Online' : 'Taken Down'}</p>
-                                            <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">Current Status on Source</p>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <span className={cn("text-[10px] font-bold uppercase tracking-widest", visibilityStatus === 'down' ? "text-slate-900" : "text-slate-400")}>Down</span>
-                                        <Switch
-                                            checked={visibilityStatus === 'online'}
-                                            onCheckedChange={handleVisibilityChange}
-                                        />
-                                        <span className={cn("text-[10px] font-bold uppercase tracking-widest", visibilityStatus === 'online' ? "text-slate-900" : "text-slate-400")}>Online</span>
-                                    </div>
-                                </div>
-                            </section>
-
-                            {/* 5. AI INSIGHTS & EVIDENCE */}
-                            <section className="space-y-3">
-                                <div className="flex items-center justify-between mb-1 cursor-pointer group" onClick={() => setShowAIInsights(!showAIInsights)}>
-                                    <div className="flex items-center gap-2">
-                                        <span className="flex items-center justify-center w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold">
-                                            <Sparkles className="w-3.5 h-3.5" />
-                                        </span>
-                                        <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider group-hover:text-indigo-600 transition-colors">AI Context & Evidence</h3>
-                                    </div>
-                                    <Button type="button" variant="ghost" size="icon" className="h-6 w-6 text-slate-400 group-hover:text-indigo-600 transition-colors">
-                                        {showAIInsights ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                                    </Button>
-                                </div>
-
-                                {showAIInsights && (
-                                    <div className="bg-indigo-50/30 rounded-xl p-4 border border-indigo-100 shadow-sm space-y-4 animate-in slide-in-from-top-2 fade-in duration-200">
-                                        {analysis.takedown_timeline && (
-                                            <div className="flex items-center justify-between bg-rose-50 border border-rose-100 p-3 rounded-lg shadow-sm">
-                                                <div className="flex items-center gap-2">
-                                                    <Clock className="w-4 h-4 text-rose-600" />
-                                                    <span className="text-xs font-bold text-rose-900 uppercase tracking-wider">Recommended Takedown</span>
-                                                </div>
-                                                <Badge className="bg-rose-100 text-rose-700 hover:bg-rose-100 border-rose-200 shadow-none font-bold">{analysis.takedown_timeline}</Badge>
-                                            </div>
-                                        )}
-
-                                        {analysis.simple_report_description && (
-                                            <div className="space-y-1.5">
-                                                <h5 className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest flex items-center gap-1.5">
-                                                    <FileText className="w-3 h-3" /> Simple Reasoning
-                                                </h5>
-                                                <div className="p-3 rounded-lg border border-emerald-100 bg-emerald-50/50 text-xs text-slate-700 leading-relaxed shadow-sm">
-                                                    {analysis.simple_report_description}
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {analysis.profile_summary && (
-                                            <div className="space-y-1.5">
-                                                <h5 className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest flex items-center gap-1.5">
-                                                    <User className="w-3 h-3" /> Profile Summary
-                                                </h5>
-                                                <div className="p-3 rounded-lg border border-indigo-100 bg-white text-xs text-slate-700 leading-relaxed shadow-sm">
-                                                    {analysis.profile_summary}
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {analysis.misinformation_explanation && (
-                                            <div className="space-y-1.5">
-                                                <h5 className="text-[10px] font-bold text-orange-600 uppercase tracking-widest flex items-center gap-1.5">
-                                                    <ShieldAlert className="w-3 h-3" /> Misinformation Analysis
-                                                </h5>
-                                                <div className="p-3 rounded-lg border border-orange-100 bg-orange-50/50 text-xs text-slate-700 leading-relaxed shadow-sm">
-                                                    {analysis.misinformation_explanation}
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {analysis.aigc_forensic_summary && (
-                                            <div className="space-y-1.5">
-                                                <h5 className="text-[10px] font-bold text-purple-600 uppercase tracking-widest flex items-center gap-1.5">
-                                                    <FileSearch className="w-3 h-3" /> AIGC Forensic Summary
-                                                </h5>
-                                                <div className="p-3 rounded-lg border border-purple-100 bg-purple-50/50 text-xs text-slate-700 leading-relaxed shadow-sm">
-                                                    {analysis.aigc_forensic_summary}
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {analysis.anti_india_reasoning && (
-                                            <div className="space-y-1.5">
-                                                <h5 className="text-[10px] font-bold text-red-600 uppercase tracking-widest flex items-center gap-1.5">
-                                                    <AlertCircle className="w-3 h-3" /> Policy Violation Focus
-                                                </h5>
-                                                <div className="p-3 rounded-lg border border-red-100 bg-red-50/50 text-xs text-slate-700 leading-relaxed shadow-sm">
-                                                    {analysis.anti_india_reasoning}
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {analysis.reasoning && (
-                                            <div className="space-y-1.5">
-                                                <h5 className="text-[10px] font-bold text-blue-600 uppercase tracking-widest flex items-center gap-1.5">
-                                                    <FileText className="w-3 h-3" /> General Reasoning
-                                                </h5>
-                                                <div className="p-3 rounded-lg border border-blue-100 bg-blue-50/50 text-xs text-slate-700 leading-relaxed shadow-sm">
-                                                    {analysis.reasoning}
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {analysis.urls && analysis.urls.length > 0 && (
-                                            <div className="space-y-2 pt-2 border-t border-indigo-100/50">
-                                                <h5 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-                                                    <LinkIcon className="w-3 h-3" /> References & Grounding Sources
-                                                </h5>
-                                                <div className="flex flex-col gap-1.5">
-                                                    {analysis.urls.map((url, i) => (
-                                                        <a key={i} href={url} target="_blank" rel="noreferrer" title={url} className="text-[11px] text-blue-600 hover:text-blue-800 hover:bg-blue-100 truncate flex items-center gap-2 bg-blue-50/50 p-2 rounded-md border border-blue-100 transition-colors">
-                                                            <ExternalLink className="w-3.5 h-3.5 shrink-0 text-blue-400" />
-                                                            <span className="truncate">{url}</span>
-                                                        </a>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
+                        {/* TOP PANNEL */}
+                        <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-100 flex items-center justify-between gap-2 bg-white/80 backdrop-blur-md xl:sticky xl:top-0 z-20">
+                            <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-wrap">
+                                <h2 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight">Review Case</h2>
+                                {/* The Badge will now appear instantly upon saving! */}
+                                {hasReview && (
+                                    <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 gap-1.5 pl-2 animate-in zoom-in fade-in duration-300">
+                                        <CheckCircle className="w-3.5 h-3.5" /> Reviewed
+                                    </Badge>
                                 )}
-                            </section>
-
-                            {/* 1. VERDICT & RISK LEVEL (Moved to Top) */}
-                            <section className="space-y-3">
-                                <div className="flex items-center gap-2 mb-1">
-                                    <span className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-bold">2</span>
-                                    <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Verdict & Risk Level</h3>
+                                <div className="hidden sm:block h-4 w-px bg-slate-200 mx-2" />
+                                <div className="flex items-center gap-1">
+                                    <Button variant="ghost" size="icon" onClick={() => onNavigate('prev')} disabled={!hasPrev || isPending} className="h-8 w-8 text-slate-500 hover:text-blue-600">
+                                        <ChevronLeft className="h-5 w-5" />
+                                    </Button>
+                                    <span className="hidden sm:inline text-xs font-semibold text-slate-400 uppercase tracking-widest px-1">Nav</span>
+                                    <Button variant="ghost" size="icon" onClick={() => onNavigate('next')} disabled={!hasNext || isPending} className="h-8 w-8 text-slate-500 hover:text-blue-600">
+                                        <ChevronRight className="h-5 w-5" />
+                                    </Button>
                                 </div>
+                            </div>
+                            <Button variant="ghost" size="icon" onClick={onClose} className="shrink-0 rounded-full hover:bg-slate-100 text-slate-500">
+                                <X className="h-6 w-6" />
+                            </Button>
+                        </div>
+                        <form action={formAction} className="flex flex-col min-h-full px-4 sm:px-0">
 
-                                <div className="bg-slate-50 rounded-xl p-4 border border-slate-200 shadow-sm">
-                                    <div className="flex gap-2">
-                                        {[
-                                            { label: "Safe", val: 0, active: threatScore < 41, color: "bg-emerald-500 border-emerald-600 shadow-emerald-200" },
-                                            { label: "Low Risk", val: 41, active: threatScore > 40 && threatScore < 76, color: "bg-amber-400 border-amber-500 shadow-amber-200" },
-                                            { label: "Medium Risk", val: 76, active: threatScore > 75 && threatScore < 96, color: "bg-orange-400 border-orange-500 shadow-orange-200" },
-                                            { label: "High Risk", val: 96, active: threatScore > 95, color: "bg-rose-500 border-rose-600 shadow-rose-200" },
-                                        ].map((level) => (
-                                            <button
-                                                key={level.label}
+                            {/* Data Mapping for Action State */}
+                            {Array.from(new Set([
+                                ...project_details.labels.map(l => l.name),
+                                ...threatTypes
+                            ])).map((labelName, index) => (
+                                <input key={`flag_${index}`} type="hidden" name={`flag_${labelName}`} value={threatTypes.includes(labelName) ? 'on' : 'off'} />
+                            ))}
+                            {Array.from(new Set([
+                                ...(project_details.legal_codes || []).map(c => c.name),
+                                ...selectedLegalCodes.map(c => c.code)
+                            ])).map((codeName, index) => {
+                                const selected = selectedLegalCodes.find(c => c.code === codeName);
+                                return (
+                                    <React.Fragment key={`legal_${index}`}>
+                                        <input type="hidden" name={`legal_code_${codeName}`} value={selected ? 'on' : 'off'} />
+                                        {selected && <input type="hidden" name={`legal_reasoning_${codeName}`} value={selected.reasoning} />}
+                                    </React.Fragment>
+                                );
+                            })}
+                            <input type="hidden" name="mongo_id" value={localPost._id || ''} />
+                            <input type="hidden" name="platform" value={localPost.platform || 'Instagram'} />
+                            <input type="hidden" name="poi_names" value={poiNames.join(',')} />
+                            <input type="hidden" name="poi_present" value={poiPresent.toString()} />
+                            <input type="hidden" name="poi_confirmed" value={poiPresent ? 'on' : 'off'} />
+                            <input type="hidden" name="is_aigc" value={isAIGC ? 'on' : 'off'} />
+                            <input type="hidden" name="face_present" value={facePresent.toString()} />
+                            <input type="hidden" name="name_present" value={namePresent.toString()} />
+                            <input type="hidden" name="threat_score" value={threatScore} />
+                            <input type="hidden" name="takedown_status" value={localPost.takedown_info?.takedown_status || 'None'} />
+                            <input type="hidden" name="visibility_status" value={visibilityStatus} />
+
+                            <div className="p-5 md:p-6 space-y-6 flex-1 relative flex flex-col mx-auto w-full">
+
+                                {/**adding edit logic for the Status of the post Online/Offline */}
+                                <section className="space-y-3">
+                                    <div className="flex justify-between items-center gap-1.5 mb-1.5 flex-wrap">
+                                        <div className="flex w-full justify-end items-center gap-1.5">
+                                            <div className="flex w-full justify-start items-center">
+                                                <TopicAssignmentSection post={localPost} onShowToast={showToast} />
+                                            </div>
+                                            <Button
                                                 type="button"
-                                                onClick={() => setThreatScore(level.val)}
-                                                disabled={formDisabledForCorrection}
-                                                className={cn(
-                                                    "flex-1 py-2.5 px-3 rounded-lg border cursor-pointer text-xs sm:text-sm font-bold transition-all",
-                                                    level.active
-                                                        ? `${level.color} text-white border-b-0 translate-y-[1px]`
-                                                        : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300"
-                                                )}
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={handleRunAIAnalysis}
+                                                disabled={isPendingAnalysis || formDisabledForCorrection}
+                                                className=" cursor-pointer h-7 px-3 text-xs rounded-full bg-blue-50/50 text-blue-600 border-blue-200 hover:bg-blue-100 hover:text-blue-700 transition-colors"
+                                                title={hasAnalysis
+                                                    ? 'Full re-analysis from scratch — ignores your form edits'
+                                                    : 'Run AI analysis from scratch'}
                                             >
-                                                {level.label}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-                            </section>
-
-                            {/* 2. THREAT CLASSIFICATION */}
-                            <section className="space-y-3">
-                                <div className="flex items-center gap-2 mb-1">
-                                    <span className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-bold">3</span>
-                                    <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">VIOLATIONS</h3>
-                                </div>
-
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                    {/* AIGC Toggle (Spans full width or 1 col depending on preference, set to full width here for emphasis) */}
-                                    <label
-                                        className={cn(
-                                            "col-span-1 sm:col-span-2 flex items-center justify-between p-3.5 rounded-xl border-2 cursor-pointer transition-all duration-200 group",
-                                            isAIGC ? "bg-blue-50/50 border-blue-200 shadow-sm ring-1 ring-blue-100" : "bg-slate-50/30 border-slate-200 hover:border-blue-200 hover:bg-white"
-                                        )}
-                                    >
-                                        <div className="flex items-center gap-4">
-                                            <div className={cn(
-                                                "w-9 h-9 rounded-lg flex items-center justify-center transition-colors",
-                                                isAIGC ? "bg-blue-100 text-blue-600" : "bg-slate-100 text-slate-400 group-hover:bg-blue-50 group-hover:text-blue-400"
-                                            )}>
-                                                <Bot className="w-5 h-5" />
-                                            </div>
-                                            <span className={cn("text-xs font-bold uppercase tracking-wider", isAIGC ? "text-blue-900" : "text-slate-500")}>
-                                                AI Generated Content
-                                            </span>
-                                        </div>
-                                        <Checkbox
-                                            checked={isAIGC}
-                                            onCheckedChange={(checked) => setIsAIGC(checked)}
-                                            disabled={formDisabledForCorrection}
-                                            className={cn("w-5 h-5 border-2 transition-all", isAIGC ? "bg-blue-600 border-blue-600" : "border-slate-300 group-hover:border-blue-300")}
-                                        />
-                                    </label>
-
-                                    {/* Dynamic Threat Categories */}
-                                    {project_details.labels.map((item) => (
-                                        <label
-                                            key={item.name}
-                                            className={cn(
-                                                "flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all hover:shadow-sm",
-                                                threatTypes.includes(item.name) ? "bg-blue-50 border-blue-200 ring-1 ring-blue-200" : "bg-white border-slate-200 hover:border-blue-200"
-                                            )}
-                                        >
-                                            <Checkbox
-                                                checked={threatTypes.includes(item.name)}
-                                                onCheckedChange={() => toggleThreatType(item.name)}
-                                                disabled={formDisabledForCorrection}
-                                                className="border-slate-300 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
-                                            />
-                                            <span className={cn("text-xs font-bold uppercase", threatTypes.includes(item.name) ? "text-blue-700" : "text-slate-600")}>
-                                                {item.name}
-                                            </span>
-                                        </label>
-                                    ))}
-                                </div>
-
-                                {/* Legal Framework Codes */}
-                                {(project_details.legal_codes || []).length > 0 && (
-                                    <div className="pt-2">
-                                        <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Legal Framework Codes</h4>
-                                        <div className="grid grid-cols-1 gap-3">
-                                            {project_details.legal_codes.map((item) => {
-                                                const selected = selectedLegalCodes.find(c => c.code === item.name);
-                                                const isSelected = !!selected;
-                                                return (
-                                                    <div
-                                                        key={item.name}
-                                                        className={cn(
-                                                            "flex flex-col gap-2 p-3 rounded-lg border transition-all hover:shadow-sm",
-                                                            isSelected ? "bg-purple-50 border-purple-200 ring-1 ring-purple-200" : "bg-white border-slate-200 hover:border-purple-200"
-                                                        )}
-                                                    >
-                                                        <label className="flex items-center gap-3 cursor-pointer">
-                                                            <Checkbox
-                                                                checked={isSelected}
-                                                                onCheckedChange={() => toggleLegalCode(item.name)}
-                                                                disabled={formDisabledForCorrection}
-                                                                className="border-slate-300 data-[state=checked]:bg-purple-600 data-[state=checked]:border-purple-600"
-                                                            />
-                                                            <span className={cn("text-xs font-bold uppercase", isSelected ? "text-purple-700" : "text-slate-600")}>
-                                                                {item.name}
-                                                            </span>
-                                                        </label>
-                                                        {isSelected && (
-                                                            <Textarea
-                                                                value={selected.reasoning}
-                                                                onChange={(e) => updateLegalCodeReasoning(item.name, e.target.value)}
-                                                                placeholder={`Provide reasoning for selecting ${item.name}...`}
-                                                                className="mt-2 text-sm bg-white border-purple-200 min-h-[60px]"
-                                                            />
-                                                        )}
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
-                                    </div>
-                                )}
-                            </section>
-
-                            {/* 3. POI IDENTIFICATION */}
-                            <section className="space-y-3">
-                                <div className="flex items-center gap-2 mb-1">
-                                    <span className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-bold">4</span>
-                                    <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">POI Context</h3>
-                                </div>
-
-                                <div className="bg-slate-50 rounded-xl p-4 border border-slate-200 space-y-4">
-                                    {/* Toggles placed side-by-side to save space */}
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                        <div className="flex items-center justify-between bg-white p-3 rounded-lg border border-slate-200">
-                                            <Label htmlFor="face-present" className="text-sm font-semibold text-slate-700 cursor-pointer">Face Detected</Label>
-                                            <Switch id="face-present" checked={facePresent} onCheckedChange={setFacePresent} disabled={formDisabledForCorrection} />
-                                        </div>
-                                        <div className="flex items-center justify-between bg-white p-3 rounded-lg border border-slate-200">
-                                            <Label htmlFor="name-present" className="text-sm font-semibold text-slate-700 cursor-pointer">Name Mentioned</Label>
-                                            <Switch id="name-present" checked={namePresent} onCheckedChange={setNamePresent} disabled={formDisabledForCorrection} />
-                                        </div>
-                                    </div>
-
-                                    <Separator className="bg-slate-200" />
-
-                                    <div className="space-y-3">
-                                        <Label className="text-xs font-bold text-slate-500 uppercase">Tagged Subjects</Label>
-                                        <div className="flex flex-wrap gap-2 min-h-[32px] items-center">
-                                            {poiNames.map((name, index) => (
-                                                <Badge key={index} variant="secondary" className="pl-2.5 pr-1 py-1 h-7 bg-white border border-blue-200 text-blue-700 shadow-sm flex items-center gap-1">
-                                                    {name}
-                                                    <button type="button" onClick={() => handleRemovePoi(index)} className="hover:bg-red-50 hover:text-red-600 rounded-full p-0.5 transition-colors">
-                                                        <X className="w-3 h-3" />
-                                                    </button>
-                                                </Badge>
-                                            ))}
-                                            {poiNames.length === 0 && <span className="text-xs text-slate-400 italic">No tags added</span>}
-                                        </div>
-
-                                        <div className="flex gap-2">
-                                            <Input
-                                                value={newPoiInput}
-                                                onChange={(e) => setNewPoiInput(e.target.value)}
-                                                onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddPoi())}
-                                                placeholder="Add subject name..."
-                                                className="h-9 bg-white text-sm"
-                                            />
-                                            <Button type="button" onClick={handleAddPoi} size="sm" className="h-9 px-4 bg-white border border-slate-300 text-slate-700 hover:bg-slate-50">
-                                                <Plus className="w-4 h-4 mr-1" /> Add
+                                                {isPendingAnalysis ? <Loader2 className="w-3 h-3 mr-1.5 animate-spin" /> : <RefreshCw className="w-3 h-3 mr-1.5" />}
+                                                {hasAnalysis ? 'Re-run AI Analysis' : 'Run AI Analysis'}
+                                            </Button>
+                                            <Button
+                                                type="button"
+                                                variant="ghost" size="sm"
+                                                onClick={handleReset}
+                                                className="cursor-pointer h-7 px-3 text-xs rounded-full text-slate-500 hover:text-slate-700 hover:bg-slate-100"
+                                            >
+                                                <RotateCcw className="w-3 h-3 mr-1.5" />
+                                                Reset Form
                                             </Button>
                                         </div>
                                     </div>
-                                </div>
-                            </section>
+                                    <div className="flex items-center justify-start gap-2 mb-1">
+                                        <div className="flex items-center gap-2">
+                                            <span className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-bold">1</span>
+                                            <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Visibility Status</h3>
+                                        </div>
+                                    </div>
+                                    <div className="bg-slate-50 rounded-xl p-4 border border-slate-200 shadow-sm flex items-center justify-between">
+                                        <div className="flex items-center gap-3">
+                                            <div className={cn(
+                                                "w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all shadow-inner",
+                                                visibilityStatus === 'online' ? "bg-emerald-50 border-emerald-100 text-emerald-600" : "bg-slate-100 border-slate-200 text-slate-400"
+                                            )}>
+                                                {visibilityStatus === 'online' ? <Globe className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
+                                            </div>
+                                            <div>
+                                                <p className="text-sm font-bold text-slate-900">{visibilityStatus === 'online' ? 'Online' : 'Taken Down'}</p>
+                                                <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">Current Status on Source</p>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <span className={cn("text-[10px] font-bold uppercase tracking-widest", visibilityStatus === 'down' ? "text-slate-900" : "text-slate-400")}>Down</span>
+                                            <Switch
+                                                checked={visibilityStatus === 'online'}
+                                                onCheckedChange={handleVisibilityChange}
+                                            />
+                                            <span className={cn("text-[10px] font-bold uppercase tracking-widest", visibilityStatus === 'online' ? "text-slate-900" : "text-slate-400")}>Online</span>
+                                        </div>
+                                    </div>
+                                </section>
 
-                            <AnalysisCorrectionPanel
-                                diff={correctionDiff}
-                                prompt={correctionPrompt}
-                                onPromptChange={setCorrectionPrompt}
-                                onSubmit={handleRequestAIUpdate}
-                                isPending={isPendingCorrection}
-                                isCorrectionPolling={isCorrectionPolling}
-                                pollTimedOut={correctionPollTimedOut}
-                                correctionInFlight={serverCorrectionInFlight}
-                                onManualRefresh={handleManualCorrectionRefresh}
-                                onResumePolling={() => {
-                                    setCorrectionPollTimedOut(false)
-                                    setIsCorrectionPolling(true)
-                                    pollFailCountRef.current = 0
-                                }}
-                                hasAnalysis={hasAnalysis}
-                                hasReview={hasReview}
-                                disabled={isPending}
-                            />
-
-                            {/* 6. ANALYSIS & NOTES (Grouped textareas at the bottom) */}
-                            <section className="space-y-4 pt-2">
-                                <div className="grid grid-cols-1 gap-8">
-                                    <div className="space-y-2">
-                                        <Label className="text-xs font-bold text-slate-500 uppercase">Reasoning</Label>
-                                        <Textarea
-                                            ref={reasoningRef}
-                                            name="reasoning"
-                                            value={reasoningText}
-                                            onChange={(e) => setReasoningText(e.target.value)}
-                                            placeholder="Enter your analysis reasoning here..."
-                                            disabled={formDisabledForCorrection}
-                                            className="min-h-[100px] bg-slate-50 border-slate-200 text-sm focus:bg-white transition-colors resize-y"
-                                        />
+                                {/* 5. AI INSIGHTS & EVIDENCE */}
+                                <section className="space-y-3">
+                                    <div className="flex items-center justify-between mb-1 cursor-pointer group" onClick={() => setShowAIInsights(!showAIInsights)}>
+                                        <div className="flex items-center gap-2">
+                                            <span className="flex items-center justify-center w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold">
+                                                <Sparkles className="w-3.5 h-3.5" />
+                                            </span>
+                                            <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider group-hover:text-indigo-600 transition-colors">AI Context & Evidence</h3>
+                                        </div>
+                                        <Button type="button" variant="ghost" size="icon" className="h-6 w-6 text-slate-400 group-hover:text-indigo-600 transition-colors">
+                                            {showAIInsights ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                                        </Button>
                                     </div>
 
-                                    <div className="space-y-2">
-                                        <Label className="text-xs font-bold text-slate-500 uppercase">Simple Reasoning</Label>
-                                        <Textarea
-                                            ref={simpleReportDescRef}
-                                            name="simple_report_description"
-                                            value={simpleReportText}
-                                            onChange={(e) => setSimpleReportText(e.target.value)}
-                                            placeholder="Concise summary for reports..."
-                                            disabled={formDisabledForCorrection}
-                                            className="min-h-[80px] bg-slate-50 border-slate-200 text-sm focus:bg-white transition-colors resize-y"
-                                        />
+                                    {showAIInsights && (
+                                        <div className="bg-indigo-50/30 rounded-xl p-4 border border-indigo-100 shadow-sm space-y-4 animate-in slide-in-from-top-2 fade-in duration-200">
+                                            {analysis.takedown_timeline && (
+                                                <div className="flex items-center justify-between bg-rose-50 border border-rose-100 p-3 rounded-lg shadow-sm">
+                                                    <div className="flex items-center gap-2">
+                                                        <Clock className="w-4 h-4 text-rose-600" />
+                                                        <span className="text-xs font-bold text-rose-900 uppercase tracking-wider">Recommended Takedown</span>
+                                                    </div>
+                                                    <Badge className="bg-rose-100 text-rose-700 hover:bg-rose-100 border-rose-200 shadow-none font-bold">{analysis.takedown_timeline}</Badge>
+                                                </div>
+                                            )}
+
+                                            {analysis.simple_report_description && (
+                                                <div className="space-y-1.5">
+                                                    <h5 className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest flex items-center gap-1.5">
+                                                        <FileText className="w-3 h-3" /> Simple Reasoning
+                                                    </h5>
+                                                    <div className="p-3 rounded-lg border border-emerald-100 bg-emerald-50/50 text-xs text-slate-700 leading-relaxed shadow-sm">
+                                                        {analysis.simple_report_description}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {analysis.profile_summary && (
+                                                <div className="space-y-1.5">
+                                                    <h5 className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest flex items-center gap-1.5">
+                                                        <User className="w-3 h-3" /> Profile Summary
+                                                    </h5>
+                                                    <div className="p-3 rounded-lg border border-indigo-100 bg-white text-xs text-slate-700 leading-relaxed shadow-sm">
+                                                        {analysis.profile_summary}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {analysis.misinformation_explanation && (
+                                                <div className="space-y-1.5">
+                                                    <h5 className="text-[10px] font-bold text-orange-600 uppercase tracking-widest flex items-center gap-1.5">
+                                                        <ShieldAlert className="w-3 h-3" /> Misinformation Analysis
+                                                    </h5>
+                                                    <div className="p-3 rounded-lg border border-orange-100 bg-orange-50/50 text-xs text-slate-700 leading-relaxed shadow-sm">
+                                                        {analysis.misinformation_explanation}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {analysis.aigc_forensic_summary && (
+                                                <div className="space-y-1.5">
+                                                    <h5 className="text-[10px] font-bold text-purple-600 uppercase tracking-widest flex items-center gap-1.5">
+                                                        <FileSearch className="w-3 h-3" /> AIGC Forensic Summary
+                                                    </h5>
+                                                    <div className="p-3 rounded-lg border border-purple-100 bg-purple-50/50 text-xs text-slate-700 leading-relaxed shadow-sm">
+                                                        {analysis.aigc_forensic_summary}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {analysis.anti_india_reasoning && (
+                                                <div className="space-y-1.5">
+                                                    <h5 className="text-[10px] font-bold text-red-600 uppercase tracking-widest flex items-center gap-1.5">
+                                                        <AlertCircle className="w-3 h-3" /> Policy Violation Focus
+                                                    </h5>
+                                                    <div className="p-3 rounded-lg border border-red-100 bg-red-50/50 text-xs text-slate-700 leading-relaxed shadow-sm">
+                                                        {analysis.anti_india_reasoning}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {analysis.reasoning && (
+                                                <div className="space-y-1.5">
+                                                    <h5 className="text-[10px] font-bold text-blue-600 uppercase tracking-widest flex items-center gap-1.5">
+                                                        <FileText className="w-3 h-3" /> General Reasoning
+                                                    </h5>
+                                                    <div className="p-3 rounded-lg border border-blue-100 bg-blue-50/50 text-xs text-slate-700 leading-relaxed shadow-sm">
+                                                        {analysis.reasoning}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {analysis.urls && analysis.urls.length > 0 && (
+                                                <div className="space-y-2 pt-2 border-t border-indigo-100/50">
+                                                    <h5 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                                                        <LinkIcon className="w-3 h-3" /> References & Grounding Sources
+                                                    </h5>
+                                                    <div className="flex flex-col gap-1.5">
+                                                        {analysis.urls.map((url, i) => (
+                                                            <a key={i} href={url} target="_blank" rel="noreferrer" title={url} className="text-[11px] text-blue-600 hover:text-blue-800 hover:bg-blue-100 truncate flex items-center gap-2 bg-blue-50/50 p-2 rounded-md border border-blue-100 transition-colors">
+                                                                <ExternalLink className="w-3.5 h-3.5 shrink-0 text-blue-400" />
+                                                                <span className="truncate">{url}</span>
+                                                            </a>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </section>
+
+                                {/* 1. VERDICT & RISK LEVEL (Moved to Top) */}
+                                <section className="space-y-3">
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <span className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-bold">2</span>
+                                        <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Verdict & Risk Level</h3>
                                     </div>
 
-                                    <div className="space-y-2">
-                                        <Label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2">
-                                            Reviewer Notes
-                                            <Badge variant="outline" className="text-[10px] uppercase bg-amber-50 text-amber-700 border-amber-200">Internal Only &nbsp; | &nbsp; Not visible to end users</Badge>
-                                        </Label>
-                                        <Textarea
-                                            ref={reviewerCommentsRef}
-                                            name="reviewer_comments"
-                                            defaultValue={review.reviewer_comments || ''}
-                                            placeholder="Add private context or notes for other reviewers..."
-                                            className="min-h-[80px] bg-white border-slate-200 text-sm focus:border-blue-500 resize-y"
-                                        />
+                                    <div className="bg-slate-50 rounded-xl p-4 border border-slate-200 shadow-sm">
+                                        <div className="flex gap-2">
+                                            {[
+                                                { label: "Safe", val: 0, active: threatScore < 41, color: "bg-emerald-500 border-emerald-600 shadow-emerald-200" },
+                                                { label: "Low Risk", val: 41, active: threatScore > 40 && threatScore < 76, color: "bg-amber-400 border-amber-500 shadow-amber-200" },
+                                                { label: "Medium Risk", val: 76, active: threatScore > 75 && threatScore < 96, color: "bg-orange-400 border-orange-500 shadow-orange-200" },
+                                                { label: "High Risk", val: 96, active: threatScore > 95, color: "bg-rose-500 border-rose-600 shadow-rose-200" },
+                                            ].map((level) => (
+                                                <button
+                                                    key={level.label}
+                                                    type="button"
+                                                    onClick={() => setThreatScore(level.val)}
+                                                    disabled={formDisabledForCorrection}
+                                                    className={cn(
+                                                        "flex-1 py-2.5 px-3 rounded-lg border cursor-pointer text-xs sm:text-sm font-bold transition-all",
+                                                        level.active
+                                                            ? `${level.color} text-white border-b-0 translate-y-[1px]`
+                                                            : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300"
+                                                    )}
+                                                >
+                                                    {level.label}
+                                                </button>
+                                            ))}
+                                        </div>
                                     </div>
-                                </div>
-                            </section>
+                                </section>
 
-                        </div>
+                                {/* 2. THREAT CLASSIFICATION */}
+                                <section className="space-y-3">
+                                    <div
+                                        className="flex items-center justify-between mb-1 cursor-pointer group"
+                                        onClick={() => setShowViolations(!showViolations)}
+                                    >
+                                        <div className="flex items-center gap-2">
+                                            <span className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-bold">3</span>
+                                            <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider group-hover:text-blue-600 transition-colors">VIOLATIONS</h3>
+                                        </div>
+                                        <Button type="button" variant="ghost" size="icon" className="h-6 w-6 text-slate-400 group-hover:text-blue-600 transition-colors">
+                                            {showViolations ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                                        </Button>
+                                    </div>
 
-                        {/* Sticky Footer with Floating Notification */}
-                        <div className="relative p-6 bg-white border-t border-slate-100 sticky bottom-0 z-10">
+                                    {showViolations && (
+                                        <div className="animate-in slide-in-from-top-2 fade-in duration-200">
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                                {/* AIGC Toggle (Spans full width or 1 col depending on preference, set to full width here for emphasis) */}
+                                                <label
+                                                    className={cn(
+                                                        "col-span-1 sm:col-span-2 flex items-center justify-between p-3.5 rounded-xl border-2 cursor-pointer transition-all duration-200 group",
+                                                        isAIGC ? "bg-blue-50/50 border-blue-200 shadow-sm ring-1 ring-blue-100" : "bg-slate-50/30 border-slate-200 hover:border-blue-200 hover:bg-white"
+                                                    )}
+                                                >
+                                                    <div className="flex items-center gap-4">
+                                                        <div className={cn(
+                                                            "w-9 h-9 rounded-lg flex items-center justify-center transition-colors",
+                                                            isAIGC ? "bg-blue-100 text-blue-600" : "bg-slate-100 text-slate-400 group-hover:bg-blue-50 group-hover:text-blue-400"
+                                                        )}>
+                                                            <Bot className="w-5 h-5" />
+                                                        </div>
+                                                        <span className={cn("text-xs font-bold uppercase tracking-wider", isAIGC ? "text-blue-900" : "text-slate-500")}>
+                                                            AI Generated Content
+                                                        </span>
+                                                    </div>
+                                                    <Checkbox
+                                                        checked={isAIGC}
+                                                        onCheckedChange={(checked) => setIsAIGC(checked)}
+                                                        disabled={formDisabledForCorrection}
+                                                        className={cn("w-5 h-5 border-2 transition-all", isAIGC ? "bg-blue-600 border-blue-600" : "border-slate-300 group-hover:border-blue-300")}
+                                                    />
+                                                </label>
 
-                            {/* Floating Success Toast */}
-                            {showSuccess && (
-                                <div className="absolute -top-12 left-1/2 -translate-x-1/2 bg-emerald-100 border border-emerald-300 text-slate-700 text-xs font-bold px-4 py-2 rounded-full shadow shadow-emerald-200 flex items-center gap-2 animate-in slide-in-from-bottom-2 fade-in zoom-in duration-200">
-                                    <CheckCircle className="w-3.5 h-3.5 text-emerald-600 stroke-2 " />
-                                    Review saved successfully!
-                                </div>
-                            )}
+                                                {/* Dynamic Threat Categories */}
+                                                {project_details.labels.map((item) => (
+                                                    <label
+                                                        key={item.name}
+                                                        className={cn(
+                                                            "flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all hover:shadow-sm",
+                                                            threatTypes.includes(item.name) ? "bg-blue-50 border-blue-200 ring-1 ring-blue-200" : "bg-white border-slate-200 hover:border-blue-200"
+                                                        )}
+                                                    >
+                                                        <Checkbox
+                                                            checked={threatTypes.includes(item.name)}
+                                                            onCheckedChange={() => toggleThreatType(item.name)}
+                                                            disabled={formDisabledForCorrection}
+                                                            className="border-slate-300 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
+                                                        />
+                                                        <span className={cn("text-xs font-bold uppercase", threatTypes.includes(item.name) ? "text-blue-700" : "text-slate-600")}>
+                                                            {item.name}
+                                                        </span>
+                                                    </label>
+                                                ))}
+                                            </div>
 
-                            {/* Floating Toast Notification */}
-                            {toast && (
-                                <div className={cn(
-                                    "absolute -top-12 left-1/2 -translate-x-1/2 border text-xs font-bold px-4 py-2 rounded-full shadow flex items-center gap-2 animate-in slide-in-from-bottom-2 fade-in zoom-in duration-200",
-                                    toast.type === 'success' ? "bg-emerald-100 border-emerald-300 text-emerald-800" : "bg-rose-100 border-rose-300 text-rose-800"
-                                )}>
-                                    {toast.type === 'success' ? <CheckCircle className="w-3.5 h-3.5" /> : <X className="w-3.5 h-3.5" />}
-                                    {toast.message}
-                                </div>
-                            )}
+                                            {/* Legal Framework Codes */}
+                                            {(project_details.legal_codes || []).length > 0 && (
+                                                <div className="pt-2">
+                                                    <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Legal Framework Codes</h4>
+                                                    <div className="grid grid-cols-1 gap-3">
+                                                        {project_details.legal_codes.map((item) => {
+                                                            const selected = selectedLegalCodes.find(c => c.code === item.name);
+                                                            const isSelected = !!selected;
+                                                            return (
+                                                                <div
+                                                                    key={item.name}
+                                                                    className={cn(
+                                                                        "flex flex-col gap-2 p-3 rounded-lg border transition-all hover:shadow-sm",
+                                                                        isSelected ? "bg-purple-50 border-purple-200 ring-1 ring-purple-200" : "bg-white border-slate-200 hover:border-purple-200"
+                                                                    )}
+                                                                >
+                                                                    <label className="flex items-center gap-3 cursor-pointer">
+                                                                        <Checkbox
+                                                                            checked={isSelected}
+                                                                            onCheckedChange={() => toggleLegalCode(item.name)}
+                                                                            disabled={formDisabledForCorrection}
+                                                                            className="border-slate-300 data-[state=checked]:bg-purple-600 data-[state=checked]:border-purple-600"
+                                                                        />
+                                                                        <span className={cn("text-xs font-bold uppercase", isSelected ? "text-purple-700" : "text-slate-600")}>
+                                                                            {item.name}
+                                                                        </span>
+                                                                    </label>
+                                                                    {isSelected && (
+                                                                        <Textarea
+                                                                            value={selected.reasoning}
+                                                                            onChange={(e) => updateLegalCodeReasoning(item.name, e.target.value)}
+                                                                            placeholder={`Provide reasoning for selecting ${item.name}...`}
+                                                                            className="mt-2 text-sm bg-white border-purple-200 min-h-[60px]"
+                                                                        />
+                                                                    )}
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </section>
 
-                            <div className="flex gap-3">
-                                <Button type="button" variant="outline" onClick={onClose} className="flex-1 font-bold border-slate-200 text-slate-600">
-                                    Cancel
-                                </Button>
-                                <Button
-                                    type="submit"
-                                    disabled={isPending || formDisabledForCorrection}
-                                    className="flex-[2] font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-600/20"
-                                >
-                                    {isPending ? <Loader2 className="animate-spin" /> : (hasReview ? 'Update Review' : 'Submit to Client')}
-                                </Button>
+                                {/* 3. POI IDENTIFICATION */}
+                                <section className="space-y-3">
+                                    <div
+                                        className="flex items-center justify-between mb-1 cursor-pointer group"
+                                        onClick={() => setShowPOI(!showPOI)}
+                                    >
+                                        <div className="flex items-center gap-2">
+                                            <span className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-bold">4</span>
+                                            <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider group-hover:text-blue-600 transition-colors">POI Context</h3>
+                                        </div>
+                                        <Button type="button" variant="ghost" size="icon" className="h-6 w-6 text-slate-400 group-hover:text-blue-600 transition-colors">
+                                            {showPOI ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                                        </Button>
+                                    </div>
+
+                                    {showPOI && (
+                                        <div className="bg-slate-50 rounded-xl p-4 border border-slate-200 space-y-4 animate-in slide-in-from-top-2 fade-in duration-200">
+                                            {/* Toggles placed side-by-side to save space */}
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                                <div className="flex items-center justify-between bg-white p-3 rounded-lg border border-slate-200">
+                                                    <Label htmlFor="face-present" className="text-sm font-semibold text-slate-700 cursor-pointer">Face Detected</Label>
+                                                    <Switch id="face-present" checked={facePresent} onCheckedChange={setFacePresent} disabled={formDisabledForCorrection} />
+                                                </div>
+                                                <div className="flex items-center justify-between bg-white p-3 rounded-lg border border-slate-200">
+                                                    <Label htmlFor="name-present" className="text-sm font-semibold text-slate-700 cursor-pointer">Name Mentioned</Label>
+                                                    <Switch id="name-present" checked={namePresent} onCheckedChange={setNamePresent} disabled={formDisabledForCorrection} />
+                                                </div>
+                                            </div>
+
+                                            <Separator className="bg-slate-200" />
+
+                                            <div className="space-y-3">
+                                                <Label className="text-xs font-bold text-slate-500 uppercase">Tagged Subjects</Label>
+                                                <div className="flex flex-wrap gap-2 min-h-[32px] items-center">
+                                                    {poiNames.map((name, index) => (
+                                                        <Badge key={index} variant="secondary" className="pl-2.5 pr-1 py-1 h-7 bg-white border border-blue-200 text-blue-700 shadow-sm flex items-center gap-1">
+                                                            {name}
+                                                            <button type="button" onClick={() => handleRemovePoi(index)} className="hover:bg-red-50 hover:text-red-600 rounded-full p-0.5 transition-colors">
+                                                                <X className="w-3 h-3" />
+                                                            </button>
+                                                        </Badge>
+                                                    ))}
+                                                    {poiNames.length === 0 && <span className="text-xs text-slate-400 italic">No tags added</span>}
+                                                </div>
+
+                                                <div className="flex gap-2">
+                                                    <Input
+                                                        value={newPoiInput}
+                                                        onChange={(e) => setNewPoiInput(e.target.value)}
+                                                        onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddPoi())}
+                                                        placeholder="Add subject name..."
+                                                        className="h-9 bg-white text-sm"
+                                                    />
+                                                    <Button type="button" onClick={handleAddPoi} size="sm" className="h-9 px-4 bg-white border border-slate-300 text-slate-700 hover:bg-slate-50">
+                                                        <Plus className="w-4 h-4 mr-1" /> Add
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </section>
+
+                                <AnalysisCorrectionPanel
+                                    diff={correctionDiff}
+                                    prompt={correctionPrompt}
+                                    onPromptChange={setCorrectionPrompt}
+                                    onSubmit={handleRequestAIUpdate}
+                                    isPending={isPendingCorrection}
+                                    isCorrectionPolling={isCorrectionPolling}
+                                    pollTimedOut={correctionPollTimedOut}
+                                    correctionInFlight={serverCorrectionInFlight}
+                                    onManualRefresh={handleManualCorrectionRefresh}
+                                    onResumePolling={() => {
+                                        setCorrectionPollTimedOut(false)
+                                        setIsCorrectionPolling(true)
+                                        pollFailCountRef.current = 0
+                                    }}
+                                    hasAnalysis={hasAnalysis}
+                                    hasReview={hasReview}
+                                    disabled={isPending}
+                                />
+
+                                {/* 6. ANALYSIS & NOTES (Grouped textareas at the bottom) */}
+                                <section className="space-y-4 pt-2">
+                                    <div className="grid grid-cols-1 gap-8">
+                                        <div className="space-y-2">
+                                            <Label className="text-xs font-bold text-slate-500 uppercase">Reasoning</Label>
+                                            <Textarea
+                                                ref={reasoningRef}
+                                                name="reasoning"
+                                                value={reasoningText}
+                                                onChange={(e) => setReasoningText(e.target.value)}
+                                                placeholder="Enter your analysis reasoning here..."
+                                                disabled={formDisabledForCorrection}
+                                                className="min-h-[100px] bg-slate-50 border-slate-200 text-sm focus:bg-white transition-colors resize-y"
+                                            />
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <Label className="text-xs font-bold text-slate-500 uppercase">Simple Reasoning</Label>
+                                            <Textarea
+                                                ref={simpleReportDescRef}
+                                                name="simple_report_description"
+                                                value={simpleReportText}
+                                                onChange={(e) => setSimpleReportText(e.target.value)}
+                                                placeholder="Concise summary for reports..."
+                                                disabled={formDisabledForCorrection}
+                                                className="min-h-[80px] bg-slate-50 border-slate-200 text-sm focus:bg-white transition-colors resize-y"
+                                            />
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <Label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2">
+                                                Reviewer Notes
+                                                <Badge variant="outline" className="text-[10px] uppercase bg-amber-50 text-amber-700 border-amber-200">Internal Only &nbsp; | &nbsp; Not visible to end users</Badge>
+                                            </Label>
+                                            <Textarea
+                                                ref={reviewerCommentsRef}
+                                                name="reviewer_comments"
+                                                defaultValue={review.reviewer_comments || ''}
+                                                placeholder="Add private context or notes for other reviewers..."
+                                                className="min-h-[80px] bg-white border-slate-200 text-sm focus:border-blue-500 resize-y"
+                                            />
+                                        </div>
+                                    </div>
+                                </section>
+
                             </div>
-                        </div>
-                    </form>
+
+                            {/* Sticky Footer with Floating Notification */}
+                            <div className="relative p-6 bg-white border-t border-slate-100 sticky bottom-0 z-10">
+
+                                {/* Floating Success Toast */}
+                                {showSuccess && (
+                                    <div className="absolute -top-12 left-1/2 -translate-x-1/2 bg-emerald-100 border border-emerald-300 text-slate-700 text-xs font-bold px-4 py-2 rounded-full shadow shadow-emerald-200 flex items-center gap-2 animate-in slide-in-from-bottom-2 fade-in zoom-in duration-200">
+                                        <CheckCircle className="w-3.5 h-3.5 text-emerald-600 stroke-2 " />
+                                        Review saved successfully!
+                                    </div>
+                                )}
+
+                                {/* Floating Toast Notification */}
+                                {toast && (
+                                    <div className={cn(
+                                        "absolute -top-12 left-1/2 -translate-x-1/2 border text-xs font-bold px-4 py-2 rounded-full shadow flex items-center gap-2 animate-in slide-in-from-bottom-2 fade-in zoom-in duration-200",
+                                        toast.type === 'success' ? "bg-emerald-100 border-emerald-300 text-emerald-800" : "bg-rose-100 border-rose-300 text-rose-800"
+                                    )}>
+                                        {toast.type === 'success' ? <CheckCircle className="w-3.5 h-3.5" /> : <X className="w-3.5 h-3.5" />}
+                                        {toast.message}
+                                    </div>
+                                )}
+
+                                <div className="flex gap-3">
+                                    <Button type="button" variant="outline" onClick={onClose} className="flex-1 font-bold border-slate-200 text-slate-600">
+                                        Cancel
+                                    </Button>
+                                    <Button
+                                        type="submit"
+                                        disabled={isPending || formDisabledForCorrection}
+                                        className="flex-[2] font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-600/20"
+                                    >
+                                        {isPending ? <Loader2 className="animate-spin" /> : (hasReview ? 'Update Review' : 'Submit to Client')}
+                                    </Button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
                 </div>
             </div>
-        </div>
 
             {/* ── Delete Case Confirmation Modal ── */}
             {showDeleteCaseModal && (

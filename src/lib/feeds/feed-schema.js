@@ -22,6 +22,9 @@
  *   updated_at: Date,
  *   update_history: [{ updated_at: Date, updated_by: string, changes_summary: string }]
  * }
+ *
+ * Topics collection — post membership is stored on topic docs (`posts[]` hex ids).
+ * `source` values: CSV imports (e.g. "posts_ledger.csv") or "review-cases" for app-created topics.
  */
 
 import { buildFeedSlug } from '@/lib/feeds/feed-slug'
