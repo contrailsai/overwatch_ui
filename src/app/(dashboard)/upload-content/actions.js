@@ -99,25 +99,30 @@ export const bulkRequestLinks = traceAction('bulkRequestLinks_upload', async (li
   }
 })
 
-export const getRequestedLinks = traceAction('getRequestedLinks_upload', async () => {
+export const getRequestedLinks = traceAction(
+  'getRequestedLinks_upload',
+  async ({ offset = 0, limit = 50 } = {}) => {
   const ctx = await getAuthContext()
   if (!ctx?.user?.id || !ctx.clientDetails?.project_name) {
     return { error: 'Not authenticated' }
   }
 
-  const { data, error } = await runInSpan(
+  const { data, count, error } = await runInSpan(
     'upload_content.getRequestedLinks.supabase_query',
     async () =>
       getClientRequestedLinksForUser({
         userId: ctx.user.id,
         projectName: ctx.clientDetails.project_name,
+        offset,
+        limit,
       }),
     { 'app.span_type': 'supabase_query' }
   )
+
 
   if (error) {
     return { error }
   }
 
-  return { data }
+  return { data, count,}
 })

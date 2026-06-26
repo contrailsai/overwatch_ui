@@ -77,14 +77,21 @@ export async function insertClientRequestedLinks({ userId, projectName, rawLinks
 /**
  * List requested links for the authenticated user on their project.
  */
-export async function getClientRequestedLinksForUser({ userId, projectName }) {
+export async function getClientRequestedLinksForUser({
+  userId,
+  projectName,
+  offset = 0,
+  limit = 50,
+}) {
   const supabase = await createClient()
-  const { data, error } = await supabase
+
+  const { data, error, count } = await supabase
     .from('client_requested_links')
-    .select('*')
+    .select('*', { count: 'exact' })
     .eq('requested_by', userId)
     .eq('project', projectName)
     .order('created_at', { ascending: false })
+    .range(offset, offset + limit - 1)
 
   if (error) {
     logActionError({
@@ -97,7 +104,7 @@ export async function getClientRequestedLinksForUser({ userId, projectName }) {
     return { error: 'Failed to fetch requested links', data: null }
   }
 
-  return { data, error: null }
+  return { data, count, error: null }
 }
 
 /**
