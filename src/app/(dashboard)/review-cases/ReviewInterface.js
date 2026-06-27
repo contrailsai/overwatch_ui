@@ -23,6 +23,8 @@ import { useIsMobile } from '@/hooks/use-media-query'
 import ReviewForm from "./ReviewDetails"
 import { ReviewCasesFilterPanel } from "./ReviewCasesFilterPanel"
 import { MobileReviewCasesFilterDrawer } from "./MobileReviewCasesFilterDrawer"
+import { isTypingTarget } from './keyboard-utils'
+import { warmTopicCacheForPosts, prefetchTopicsForPosts } from './topic-cache'
 
 function PostPlatformBadge({ platform, size = 'md' }) {
   const p = platform?.toLowerCase() || ''
@@ -204,6 +206,10 @@ export function ReviewInterface({
   }, [initialPosts])
 
   useEffect(() => {
+    void warmTopicCacheForPosts(posts.map((p) => p._id))
+  }, [posts])
+
+  useEffect(() => {
     setSearchTerm(searchParams.get('semantic_search') || '')
   }, [searchParams])
 
@@ -357,6 +363,13 @@ export function ReviewInterface({
     if (nextIndex >= 0 && nextIndex < posts.length) {
       const nextPost = posts[nextIndex]
       setSelectedPost(nextPost)
+
+      const neighborIds = [
+        posts[nextIndex - 1]?._id,
+        posts[nextIndex + 1]?._id,
+      ].filter(Boolean)
+      prefetchTopicsForPosts(neighborIds)
+
       setTimeout(() => {
         const postElement = postRefs.current[nextPost._id]
         if (postElement) {
@@ -369,7 +382,7 @@ export function ReviewInterface({
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (!selectedPost) return
-      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return
+      if (isTypingTarget(e.target)) return
 
       if (e.key === 'ArrowLeft') {
         e.preventDefault()

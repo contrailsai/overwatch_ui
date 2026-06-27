@@ -53,6 +53,53 @@ export async function getTopicForPost(postId) {
   }
 }
 
+/** Batch lookup — one round trip for many posts (e.g. current review-cases page). */
+export async function getTopicsForPosts(postIds) {
+  try {
+    const { dbName } = await requireRole(['reviewer'])
+    const idEntries = (postIds || [])
+      .map((id) => ({ inputId: String(id), hexId: getPostHexId(id) }))
+      .filter((entry) => entry.hexId)
+
+    if (idEntries.length === 0) {
+      return { success: true, topicsByPostId: {} }
+    }
+
+    const hexIds = [...new Set(idEntries.map((entry) => entry.hexId))]
+    const client = await clientPromise
+    const collection = client.db(dbName).collection(TOPICS_COLLECTION)
+
+    const topics = await collection
+      .find(
+        { posts: { $in: hexIds } },
+        { projection: { topic_id: 1, title: 1, post_count: 1, first_posted_at: 1, last_posted_at: 1, posts: 1 } }
+      )
+      .toArray()
+
+    const hexToTopic = new Map()
+    for (const topic of topics) {
+      const serialized = serializeTopicOption(topic)
+      for (const postHex of topic.posts || []) {
+        const hex = String(postHex).toLowerCase()
+        if (hexIds.includes(hex) && !hexToTopic.has(hex)) {
+          hexToTopic.set(hex, serialized)
+        }
+      }
+    }
+
+    const topicsByPostId = {}
+    for (const { inputId, hexId } of idEntries) {
+      topicsByPostId[inputId] = hexToTopic.get(hexId) ?? null
+    }
+
+    return { success: true, topicsByPostId }
+  } catch (e) {
+    logActionError({ ...TOPIC_LOG, app_action: 'getTopicsForPosts', message: 'getTopicsForPosts failed' }, e)
+    console.error('getTopicsForPosts Error:', e)
+    return { success: false, error: e.message || 'Failed to load topics.', topicsByPostId: {} }
+  }
+}
+
 /** Move a post to an existing topic (removes from any prior topic). */
 export async function assignPostToTopic(postId, topicId) {
   try {

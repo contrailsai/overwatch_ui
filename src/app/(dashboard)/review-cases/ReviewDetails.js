@@ -39,6 +39,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { cn } from "@/lib/utils"
+import { isTypingTarget, focusScrollPanelOnPointerDown } from './keyboard-utils'
 
 const initialState = {
     success: false,
@@ -125,6 +126,8 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
     const reasoningRef = useRef(null)
     const simpleReportDescRef = useRef(null)
     const reviewerCommentsRef = useRef(null)
+    const contentScrollRef = useRef(null)
+    const formScrollRef = useRef(null)
 
     const [reasoningText, setReasoningText] = useState(initialFormDefaults.reasoningText)
     const [simpleReportText, setSimpleReportText] = useState(initialFormDefaults.simpleReportText)
@@ -169,6 +172,30 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
             setIsCorrectionPolling(false)
         }
     }, [post, project_details, applyFormValues])
+
+    useEffect(() => {
+        contentScrollRef.current?.focus({ preventScroll: true })
+    }, [post._id])
+
+    useEffect(() => {
+        const handleKeyDown = (e) => {
+            if (isTypingTarget(e.target)) return
+            if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return
+
+            const scrollEl =
+                (formScrollRef.current?.contains(e.target) ? formScrollRef.current : null) ??
+                (contentScrollRef.current?.contains(e.target) ? contentScrollRef.current : null) ??
+                contentScrollRef.current
+
+            if (!scrollEl) return
+
+            e.preventDefault()
+            scrollEl.scrollBy({ top: e.key === 'ArrowUp' ? -80 : 80, behavior: 'smooth' })
+        }
+
+        window.addEventListener('keydown', handleKeyDown)
+        return () => window.removeEventListener('keydown', handleKeyDown)
+    }, [])
 
     const review = localPost.review_details || {}
     const analysis = localPost.analysis_results || {}
@@ -626,7 +653,12 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
                 {/* Mobile/tablet: one scroll — media & case data first, review form below. Desktop (xl+): two columns. */}
                 <div className="flex-1 min-h-0 overflow-y-auto xl:overflow-hidden flex flex-col xl:flex-row xl:divide-x divide-slate-100">
                     {/* Case content: source media, profile, caption, stats */}
-                    <div className="shrink-0 xl:flex-1 xl:min-h-0 xl:overflow-y-auto bg-slate-50/50">
+                    <div
+                        ref={contentScrollRef}
+                        tabIndex={0}
+                        onMouseDown={focusScrollPanelOnPointerDown}
+                        className="shrink-0 xl:flex-1 xl:min-h-0 xl:overflow-y-auto bg-slate-50/50 focus:outline-none"
+                    >
                         {/* Header */}
                         <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-100 flex items-center justify-between gap-2 bg-white/80 backdrop-blur-md xl:sticky xl:top-0 z-20">
                             <div className="flex items-center gap-2 sm:gap-4 min-w-0">
@@ -920,7 +952,12 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
                     </div>
 
                     {/* Review & analysis form */}
-                    <div className="shrink-0 w-full xl:w-[500px] xl:shrink-0 xl:min-h-0 xl:overflow-y-auto bg-white border-t xl:border-t-0 border-slate-100">
+                    <div
+                        ref={formScrollRef}
+                        tabIndex={0}
+                        onMouseDown={focusScrollPanelOnPointerDown}
+                        className="shrink-0 w-full xl:w-[500px] xl:shrink-0 xl:min-h-0 xl:overflow-y-auto bg-white border-t xl:border-t-0 border-slate-100 focus:outline-none"
+                    >
                         <div className="xl:hidden px-4 py-2 bg-slate-100 border-b border-slate-200">
                             <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Review &amp; analysis</p>
                         </div>
