@@ -303,28 +303,31 @@ export function buildCasesMatchQuery(filters = {}) {
   return query
 }
 
-export function buildCasesDateAddFieldsStage() {
+/** Handles Date, ISO string, and integer epoch values in aggregation pipelines. */
+function coerceMongoDateExpr(inputExpr) {
   return {
-    sort_original_date: {
-      $toDate: {
-        $ifNull: ['$engagement.posted_at', '$metadata.posted_date'],
-      },
+    $convert: {
+      input: inputExpr,
+      to: 'date',
+      onError: { $toDate: { $toLong: inputExpr } },
+      onNull: null,
     },
-    sort_processed_after: {
-      $toDate: {
-        $ifNull: ['$review_details.reviewed_at', '$metadata.updated_at'],
-      },
-    },
+  }
+}
+
+export function buildCasesDateAddFieldsStage() {
+  const originalDateInput = { $ifNull: ['$engagement.posted_at', '$metadata.posted_date'] }
+  const processedAfterInput = { $ifNull: ['$review_details.reviewed_at', '$metadata.updated_at'] }
+
+  return {
+    sort_original_date: coerceMongoDateExpr(originalDateInput),
+    sort_processed_after: coerceMongoDateExpr(processedAfterInput),
     sort_processed_after_hour: {
       $cond: [
-        { $ne: [{ $ifNull: ['$review_details.reviewed_at', '$metadata.updated_at'] }, null] },
+        { $ne: [processedAfterInput, null] },
         {
           $dateTrunc: {
-            date: {
-              $toDate: {
-                $ifNull: ['$review_details.reviewed_at', '$metadata.updated_at'],
-              },
-            },
+            date: coerceMongoDateExpr(processedAfterInput),
             unit: 'hour',
             timezone: CASES_ALERT_HOUR_TIMEZONE,
           },
