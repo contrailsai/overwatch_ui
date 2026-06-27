@@ -1334,7 +1334,7 @@ export const runAIAnalysis = traceAction('runAIAnalysis', async (postId, _projec
     }
 
     if (isActiveCorrectionRequest(getCorrectionRequest(existingPost))) {
-      return { success: false, error: 'An AI correction is in progress. Wait for it to finish or refresh the case.' }
+      return { success: false, error: 'An AI correction is in progress. Check correction status or cancel it first.' }
     }
 
     const response = await sendContentModerationSqsMessage(dbName, 'Posts', postId);
@@ -1370,6 +1370,75 @@ async function markCorrectionRequestFailed(collection, postId, correctionRequest
       },
     }
   )
+}
+
+async function queueCorrectionRevision({
+  collection,
+  dbName,
+  postId,
+  clientDetails,
+  correctionRequestId,
+  correction,
+  changesSummary,
+}) {
+  const correctionRequest = {
+    id: correctionRequestId,
+    status: 'pending',
+    requested_at: new Date().toISOString(),
+    requested_by: clientDetails?.email || 'unknown',
+    correction,
+    completed_at: null,
+    error: null,
+  }
+
+  const result = await collection.updateOne(
+    { _id: new ObjectId(postId) },
+    {
+      $set: {
+        analysis_correction_request: correctionRequest,
+        'metadata.updated_at': new Date().toISOString(),
+      },
+      $push: {
+        'metadata.update_history': {
+          updated_at: new Date(),
+          updated_by: clientDetails?.email || 'unknown',
+          changes_summary: changesSummary,
+        },
+      },
+    }
+  )
+
+  if (result.matchedCount === 0) {
+    return { success: false, error: 'Post not found' }
+  }
+
+  if (result.modifiedCount === 0) {
+    return { success: false, error: 'Failed to queue AI correction' }
+  }
+
+  let sqsResponse
+  try {
+    sqsResponse = await sendContentModerationSqsMessage(dbName, 'Posts', postId, {
+      mode: 'revision',
+      correction_request_id: correctionRequestId,
+    })
+  } catch (sqsError) {
+    const sqsMessage = sqsError.message || 'Failed to send correction to AI queue'
+    await markCorrectionRequestFailed(collection, postId, correctionRequestId, sqsMessage)
+    return { success: false, error: sqsMessage }
+  }
+
+  if (!sqsResponse) {
+    await markCorrectionRequestFailed(
+      collection,
+      postId,
+      correctionRequestId,
+      'AI analysis queue not configured'
+    )
+    return { success: false, error: 'AI analysis queue not configured' }
+  }
+
+  return { success: true, correctionRequestId, correctionRequest }
 }
 
 export const requestAIAnalysisCorrection = traceAction(
@@ -1549,7 +1618,12 @@ export const getAnalysisCorrectionStatus = traceAction(
       const request = getCorrectionRequest(post)
 
       if (!request || request.id !== correctionRequestId) {
-        return { success: false, error: 'Correction request not found' }
+        return {
+          success: false,
+          notFound: true,
+          error: 'Correction request not found',
+          currentRequest: request || null,
+        }
       }
 
       return {
@@ -1558,6 +1632,7 @@ export const getAnalysisCorrectionStatus = traceAction(
         error: request.error || null,
         analysis_results: post.analysis_results || {},
         completed_at: request.completed_at || null,
+        correction_request: request,
       }
     } catch (error) {
       logActionError({
@@ -1566,6 +1641,144 @@ export const getAnalysisCorrectionStatus = traceAction(
         message: 'review_cases.getAnalysisCorrectionStatus failed',
       }, error)
       console.error('getAnalysisCorrectionStatus Error:', error)
+      return { success: false, error: error.message }
+    }
+  }
+)
+
+export const restartAIAnalysisCorrection = traceAction(
+  'restartAIAnalysisCorrection',
+  async (postId, _project, clientDetails) => {
+    try {
+      const { dbName } = await requireRole(['reviewer'])
+
+      if (!postId) {
+        return { success: false, error: 'Missing Post ID' }
+      }
+
+      const client = await clientPromise
+      const db = client.db(dbName)
+      const collection = db.collection('Posts')
+
+      const existingPost = await collection.findOne(
+        { _id: new ObjectId(postId) },
+        { projection: { analysis_correction_request: 1, analysis_correction_requests: 1, analysis_results: 1 } }
+      )
+
+      if (!existingPost) {
+        return { success: false, error: 'Post not found' }
+      }
+
+      if (!hasNonEmptyAnalysisResults(existingPost.analysis_results)) {
+        return { success: false, error: 'No AI analysis exists for this case yet' }
+      }
+
+      const currentRequest = getCorrectionRequest(existingPost)
+      const correction = currentRequest?.correction
+      if (!correction) {
+        return { success: false, error: 'No correction payload to restart' }
+      }
+
+      const correctionRequestId = crypto.randomUUID()
+      const queued = await queueCorrectionRevision({
+        collection,
+        dbName,
+        postId,
+        clientDetails,
+        correctionRequestId,
+        correction,
+        changesSummary: 'Reviewer restarted AI analysis correction',
+      })
+
+      if (!queued.success) {
+        return queued
+      }
+
+      return {
+        success: true,
+        correctionRequestId,
+        correctionRequest: queued.correctionRequest,
+      }
+    } catch (error) {
+      logActionError({
+        loki_stream: LOKI_STREAMS.review_cases,
+        app_action: 'restartAIAnalysisCorrection',
+        message: 'review_cases.restartAIAnalysisCorrection failed',
+      }, error)
+      console.error('restartAIAnalysisCorrection Error:', error)
+      return { success: false, error: error.message }
+    }
+  }
+)
+
+export const cancelAIAnalysisCorrection = traceAction(
+  'cancelAIAnalysisCorrection',
+  async (postId, _project, clientDetails) => {
+    try {
+      const { dbName } = await requireRole(['reviewer'])
+
+      if (!postId) {
+        return { success: false, error: 'Missing Post ID' }
+      }
+
+      const client = await clientPromise
+      const db = client.db(dbName)
+      const collection = db.collection('Posts')
+
+      const existingPost = await collection.findOne(
+        { _id: new ObjectId(postId) },
+        { projection: { analysis_correction_request: 1, analysis_correction_requests: 1 } }
+      )
+
+      if (!existingPost) {
+        return { success: false, error: 'Post not found' }
+      }
+
+      const currentRequest = getCorrectionRequest(existingPost)
+      if (!currentRequest || !isActiveCorrectionRequest(currentRequest)) {
+        return { success: false, error: 'No active correction to cancel' }
+      }
+
+      const now = new Date().toISOString()
+      const cancelledRequest = {
+        id: crypto.randomUUID(),
+        status: 'failed',
+        requested_at: currentRequest.requested_at || now,
+        requested_by: currentRequest.requested_by || clientDetails?.email || 'unknown',
+        correction: currentRequest.correction || null,
+        completed_at: now,
+        error: 'Cancelled by reviewer',
+      }
+
+      const result = await collection.updateOne(
+        { _id: new ObjectId(postId) },
+        {
+          $set: {
+            analysis_correction_request: cancelledRequest,
+            'metadata.updated_at': now,
+          },
+          $push: {
+            'metadata.update_history': {
+              updated_at: new Date(),
+              updated_by: clientDetails?.email || 'unknown',
+              changes_summary: 'Reviewer cancelled AI analysis correction',
+            },
+          },
+        }
+      )
+
+      if (result.matchedCount === 0) {
+        return { success: false, error: 'Post not found' }
+      }
+
+      return { success: true, correctionRequest: cancelledRequest }
+    } catch (error) {
+      logActionError({
+        loki_stream: LOKI_STREAMS.review_cases,
+        app_action: 'cancelAIAnalysisCorrection',
+        message: 'review_cases.cancelAIAnalysisCorrection failed',
+      }, error)
+      console.error('cancelAIAnalysisCorrection Error:', error)
       return { success: false, error: error.message }
     }
   }

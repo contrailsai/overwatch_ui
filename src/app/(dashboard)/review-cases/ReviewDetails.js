@@ -4,7 +4,7 @@ import { handleDownloadJSON } from '@/utils/exportJson'
 import * as React from "react"
 import { useState, useEffect, useActionState, useRef, useTransition, useMemo, useCallback } from 'react'
 import { format } from "date-fns"
-import { submitCaseReview, initCaseImageUpload, confirmCaseImageUpload, deleteCaseImage, updatePostVisibility, runAIAnalysis, deleteCase, requestAIAnalysisCorrection, getAnalysisCorrectionStatus } from './actions'
+import { submitCaseReview, initCaseImageUpload, confirmCaseImageUpload, deleteCaseImage, updatePostVisibility, runAIAnalysis, deleteCase, requestAIAnalysisCorrection, getAnalysisCorrectionStatus, restartAIAnalysisCorrection, cancelAIAnalysisCorrection } from './actions'
 import { uploadFileViaPresignedUrl } from '@/utils/aws/upload-via-presigned-url'
 import { REVIEW_IMAGE_MAX_BYTES, formatUploadSizeLimit } from '@/utils/aws/upload-validation'
 import {
@@ -24,10 +24,12 @@ import {
     normalizeAnalysisForForm,
     hasAnalysisResults,
 } from '@/utils/analysis/normalizeAnalysisForForm'
-import { buildAnalysisCorrectionDiff, buildCorrectionPayload } from '@/utils/analysis/buildAnalysisCorrectionDiff'
+import { buildAnalysisCorrectionDiff, buildCorrectionPayload, applyStoredCorrectionToFormState } from '@/utils/analysis/buildAnalysisCorrectionDiff'
 import {
     findActiveCorrectionRequest,
     buildReviewFormDefaults,
+    getCorrectionRequest,
+    isActiveCorrectionRequest,
 } from '@/utils/analysis/correctionRequestUtils'
 
 import { Input } from "@/components/ui/input"
@@ -48,6 +50,7 @@ const initialState = {
 
 const CORRECTION_POLL_INTERVAL_MS = 5000
 const CORRECTION_POLL_TIMEOUT_MS = 180000
+const CORRECTION_POLL_BURST_MS = 60000
 
 export default function ReviewForm({ post, project, clientDetails, onClose, onNavigate, hasPrev, hasNext, setPosts }) {
     const { project_details } = project
@@ -90,6 +93,11 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
     const [correctionPollTimedOut, setCorrectionPollTimedOut] = useState(false)
     const [isPendingCorrection, startCorrectionTransition] = useTransition()
     const pollFailCountRef = useRef(0)
+    const pollBurstUntilRef = useRef(0)
+    const [isCheckingCorrectionStatus, setIsCheckingCorrectionStatus] = useState(false)
+    const [isRestartingCorrection, setIsRestartingCorrection] = useState(false)
+    const [isCancellingCorrection, setIsCancellingCorrection] = useState(false)
+    const [dismissedFailureId, setDismissedFailureId] = useState(null)
 
     // Sync state to parent AND local UI on successful submission
     useEffect(() => {
@@ -160,6 +168,8 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
         setCorrectionPrompt('')
         setCorrectionPollTimedOut(false)
         pollFailCountRef.current = 0
+        pollBurstUntilRef.current = 0
+        setDismissedFailureId(null)
 
         applyFormValues(buildReviewFormDefaults(post, project_details))
 
@@ -167,6 +177,7 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
         if (activeRequest) {
             setActiveCorrectionId(activeRequest.id)
             setIsCorrectionPolling(true)
+            setCorrectionPrompt(activeRequest.correction?.update_note || '')
         } else {
             setActiveCorrectionId(null)
             setIsCorrectionPolling(false)
@@ -244,25 +255,33 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
     }, [])
 
     const handleCorrectionComplete = useCallback((newAnalysis, completedAt = null) => {
-        const reviewed = Object.keys(localPost.review_details || {}).length > 0
-        const completedCorrectionRequest = localPost.analysis_correction_request
-            ? {
-                ...localPost.analysis_correction_request,
-                status: 'completed',
-                completed_at: completedAt || new Date().toISOString(),
-                error: null,
-            }
-            : undefined
+        let reviewed = false
+        let postId = null
+        let completedCorrectionRequest
 
-        setLocalPost((prev) => ({
-            ...prev,
-            analysis_results: newAnalysis,
-            ...(completedCorrectionRequest ? { analysis_correction_request: completedCorrectionRequest } : {}),
-        }))
+        setLocalPost((prev) => {
+            reviewed = Object.keys(prev.review_details || {}).length > 0
+            postId = prev._id
+            completedCorrectionRequest = prev.analysis_correction_request
+                ? {
+                    ...prev.analysis_correction_request,
+                    status: 'completed',
+                    completed_at: completedAt || new Date().toISOString(),
+                    error: null,
+                }
+                : undefined
+
+            return {
+                ...prev,
+                analysis_results: newAnalysis,
+                ...(completedCorrectionRequest ? { analysis_correction_request: completedCorrectionRequest } : {}),
+            }
+        })
+
         setAiBaseline({ ...newAnalysis })
-        if (setPosts) {
+        if (setPosts && postId) {
             setPosts((prevPosts) => prevPosts.map((p) =>
-                p._id === localPost._id
+                p._id === postId
                     ? {
                         ...p,
                         analysis_results: newAnalysis,
@@ -285,36 +304,99 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
         setCorrectionPollTimedOut(false)
         pollFailCountRef.current = 0
         showToast('AI analysis updated', 'success')
-    }, [applyAnalysisResultsToForm, localPost._id, localPost.review_details, localPost.analysis_correction_request, project_details, setPosts])
+    }, [applyAnalysisResultsToForm, project_details, setPosts])
+
+    const handleCorrectionFailed = useCallback((error, request) => {
+        setIsCorrectionPolling(false)
+        setActiveCorrectionId(null)
+        setCorrectionPollTimedOut(false)
+        pollFailCountRef.current = 0
+        setDismissedFailureId(null)
+
+        let failedRequest
+        let postId = null
+
+        setLocalPost((prev) => {
+            postId = prev._id
+            failedRequest = request || {
+                ...(getCorrectionRequest(prev) || {}),
+                status: 'failed',
+                error: error || 'Unknown error',
+                completed_at: new Date().toISOString(),
+            }
+            return { ...prev, analysis_correction_request: failedRequest }
+        })
+
+        if (setPosts && postId && failedRequest) {
+            setPosts((prevPosts) => prevPosts.map((p) =>
+                p._id === postId ? { ...p, analysis_correction_request: failedRequest } : p
+            ))
+        }
+
+        if (failedRequest?.error !== 'Cancelled by reviewer') {
+            showToast('AI correction failed: ' + (error || 'Unknown error'))
+        }
+    }, [setPosts])
+
+    const handleCorrectionCompleteRef = useRef(handleCorrectionComplete)
+    const handleCorrectionFailedRef = useRef(handleCorrectionFailed)
+    handleCorrectionCompleteRef.current = handleCorrectionComplete
+    handleCorrectionFailedRef.current = handleCorrectionFailed
 
     useEffect(() => {
         if (!activeCorrectionId || !isCorrectionPolling) return undefined
 
-        const startedAt = Date.now()
+        const sessionStartedAt = Date.now()
 
         const poll = async () => {
             const result = await getAnalysisCorrectionStatus(localPost._id, activeCorrectionId)
             if (!result.success) {
+                if (result.notFound) {
+                    setActiveCorrectionId(null)
+                    setIsCorrectionPolling(false)
+                    if (result.currentRequest) {
+                        setLocalPost((prev) => ({ ...prev, analysis_correction_request: result.currentRequest }))
+                        if (isActiveCorrectionRequest(result.currentRequest)) {
+                            setActiveCorrectionId(result.currentRequest.id)
+                            setIsCorrectionPolling(true)
+                        }
+                    }
+                    showToast('Correction was updated in another window. Status reloaded.', 'error')
+                    return
+                }
                 pollFailCountRef.current += 1
                 if (pollFailCountRef.current >= 3) {
-                    showToast('Lost contact while waiting for AI update. Try Refresh.', 'error')
+                    showToast('Could not reach the server. Use Check correction status.', 'error')
                 }
                 return
             }
             pollFailCountRef.current = 0
 
             if (result.status === 'completed') {
-                handleCorrectionComplete(result.analysis_results || {}, result.completed_at)
+                handleCorrectionCompleteRef.current(result.analysis_results || {}, result.completed_at)
                 return
             }
             if (result.status === 'failed') {
-                setIsCorrectionPolling(false)
-                setActiveCorrectionId(null)
-                setCorrectionPollTimedOut(false)
-                showToast('AI correction failed: ' + (result.error || 'Unknown error'))
+                handleCorrectionFailedRef.current(result.error, result.correction_request)
                 return
             }
-            if (Date.now() - startedAt >= CORRECTION_POLL_TIMEOUT_MS) {
+
+            if (result.correction_request) {
+                setLocalPost((prev) => {
+                    const current = getCorrectionRequest(prev)
+                    if (
+                        current?.id === result.correction_request.id &&
+                        current?.status === result.correction_request.status
+                    ) {
+                        return prev
+                    }
+                    return { ...prev, analysis_correction_request: result.correction_request }
+                })
+            }
+
+            const elapsed = Date.now() - sessionStartedAt
+            const inBurst = Date.now() < pollBurstUntilRef.current
+            if (elapsed >= CORRECTION_POLL_TIMEOUT_MS && !inBurst) {
                 setCorrectionPollTimedOut(true)
                 setIsCorrectionPolling(false)
             }
@@ -323,22 +405,125 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
         poll()
         const interval = setInterval(poll, CORRECTION_POLL_INTERVAL_MS)
         return () => clearInterval(interval)
-    }, [activeCorrectionId, isCorrectionPolling, localPost._id, handleCorrectionComplete])
+    }, [activeCorrectionId, isCorrectionPolling, localPost._id])
 
-    const handleManualCorrectionRefresh = async () => {
+    const handleCheckCorrectionStatus = async () => {
         if (!activeCorrectionId) return
-        setCorrectionPollTimedOut(false)
-        pollFailCountRef.current = 0
-        const result = await getAnalysisCorrectionStatus(localPost._id, activeCorrectionId)
-        if (result.success && result.status === 'completed') {
-            handleCorrectionComplete(result.analysis_results || {}, result.completed_at)
-        } else if (result.success && result.status === 'failed') {
-            setActiveCorrectionId(null)
-            setIsCorrectionPolling(false)
-            showToast('AI correction failed: ' + (result.error || 'Unknown error'))
-        } else {
-            setIsCorrectionPolling(true)
+        setIsCheckingCorrectionStatus(true)
+        try {
+            const result = await getAnalysisCorrectionStatus(localPost._id, activeCorrectionId)
+            if (result.notFound) {
+                setActiveCorrectionId(null)
+                setIsCorrectionPolling(false)
+                if (result.currentRequest) {
+                    setLocalPost((prev) => ({ ...prev, analysis_correction_request: result.currentRequest }))
+                    if (isActiveCorrectionRequest(result.currentRequest)) {
+                        setActiveCorrectionId(result.currentRequest.id)
+                        setIsCorrectionPolling(true)
+                    }
+                }
+                showToast('Correction was updated in another window. Status reloaded.', 'error')
+                return
+            }
+            if (!result.success) {
+                showToast(result.error || 'Could not check correction status', 'error')
+                return
+            }
+            if (result.status === 'completed') {
+                handleCorrectionComplete(result.analysis_results || {}, result.completed_at)
+            } else if (result.status === 'failed') {
+                handleCorrectionFailed(result.error, result.correction_request)
+            } else {
+                setCorrectionPollTimedOut(false)
+                pollFailCountRef.current = 0
+                pollBurstUntilRef.current = Date.now() + CORRECTION_POLL_BURST_MS
+                setIsCorrectionPolling(true)
+                if (result.correction_request) {
+                    setLocalPost((prev) => {
+                        const current = getCorrectionRequest(prev)
+                        if (
+                            current?.id === result.correction_request.id &&
+                            current?.status === result.correction_request.status
+                        ) {
+                            return prev
+                        }
+                        return { ...prev, analysis_correction_request: result.correction_request }
+                    })
+                }
+            }
+        } finally {
+            setIsCheckingCorrectionStatus(false)
         }
+    }
+
+    const handleRestartCorrection = () => {
+        setIsRestartingCorrection(true)
+        startCorrectionTransition(async () => {
+            try {
+                const result = await restartAIAnalysisCorrection(localPost._id, project, clientDetails)
+                if (result.success) {
+                    setLocalPost((prev) => ({ ...prev, analysis_correction_request: result.correctionRequest }))
+                    if (setPosts) {
+                        setPosts((prevPosts) => prevPosts.map((p) =>
+                            p._id === localPost._id ? { ...p, analysis_correction_request: result.correctionRequest } : p
+                        ))
+                    }
+                    setActiveCorrectionId(result.correctionRequestId)
+                    setIsCorrectionPolling(true)
+                    setCorrectionPollTimedOut(false)
+                    pollBurstUntilRef.current = 0
+                    showToast('Correction restarted. Usually ready in 1–3 minutes.', 'success')
+                } else {
+                    showToast('Failed to restart correction: ' + result.error)
+                }
+            } finally {
+                setIsRestartingCorrection(false)
+            }
+        })
+    }
+
+    const handleCancelCorrection = () => {
+        setIsCancellingCorrection(true)
+        startCorrectionTransition(async () => {
+            try {
+                const result = await cancelAIAnalysisCorrection(localPost._id, project, clientDetails)
+                if (result.success) {
+                    setLocalPost((prev) => ({ ...prev, analysis_correction_request: result.correctionRequest }))
+                    if (setPosts) {
+                        setPosts((prevPosts) => prevPosts.map((p) =>
+                            p._id === localPost._id ? { ...p, analysis_correction_request: result.correctionRequest } : p
+                        ))
+                    }
+                    setActiveCorrectionId(null)
+                    setIsCorrectionPolling(false)
+                    setCorrectionPollTimedOut(false)
+                    showToast('Correction cancelled.', 'success')
+                } else {
+                    showToast('Failed to cancel correction: ' + result.error)
+                }
+            } finally {
+                setIsCancellingCorrection(false)
+            }
+        })
+    }
+
+    const handleTryAgainCorrection = () => {
+        const failed = getCorrectionRequest(localPost)
+        if (!failed?.correction) return
+
+        const applied = applyStoredCorrectionToFormState(normalizedAiBaseline, failed.correction)
+        if (applied) {
+            setThreatScore(applied.threatScore)
+            setThreatTypes(applied.threatTypes)
+            setSelectedLegalCodes(applied.selectedLegalCodes)
+            setCorrectionPrompt(applied.update_note || '')
+        }
+        setDismissedFailureId(failed.id)
+    }
+
+    const handleDismissCorrectionFailure = () => {
+        const failed = getCorrectionRequest(localPost)
+        if (failed?.id) setDismissedFailureId(failed.id)
     }
 
     const handleRequestAIUpdate = () => {
@@ -372,7 +557,8 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
                 setActiveCorrectionId(correctionRequestId)
                 setIsCorrectionPolling(true)
                 setCorrectionPollTimedOut(false)
-                showToast('AI update requested. Analysis will refresh shortly.', 'success')
+                setDismissedFailureId(null)
+                showToast('Correction queued. Usually ready in 1–3 minutes.', 'success')
             } else {
                 if (result.activeCorrectionRequestId) {
                     setActiveCorrectionId(result.activeCorrectionRequestId)
@@ -384,16 +570,30 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
         })
     }
 
-    const formDisabledForCorrection = isPendingCorrection || isCorrectionPolling || !!activeCorrectionId || isPending
+    const correctionRequest = getCorrectionRequest(localPost)
+    const isActiveInFlight = Boolean(
+        activeCorrectionId &&
+        correctionRequest?.id === activeCorrectionId &&
+        isActiveCorrectionRequest(correctionRequest)
+    )
+    const activeCorrectionRequestProp = isActiveInFlight ? correctionRequest : null
+    const failedCorrectionRequestProp =
+        correctionRequest?.status === 'failed' &&
+        !isActiveInFlight &&
+        correctionRequest.id !== dismissedFailureId
+            ? correctionRequest
+            : null
+
+    const formDisabledForCorrection = isPendingCorrection || isActiveInFlight || isPending
     const hasAnalysis = hasAnalysisResults(aiBaseline)
-    const serverCorrectionInFlight = !!activeCorrectionId
+    const serverCorrectionInFlight = isActiveInFlight
 
     // --- Handlers ---
     const [isPendingAnalysis, startAnalysisTransition] = useTransition()
 
     const handleRunAIAnalysis = () => {
         if (serverCorrectionInFlight) {
-            showToast('An AI correction is in progress. Wait for it to finish or use Refresh.')
+            showToast('A correction is in progress. Check correction status or cancel it first.')
             return
         }
         startAnalysisTransition(async () => {
@@ -1410,12 +1610,16 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
                                     isCorrectionPolling={isCorrectionPolling}
                                     pollTimedOut={correctionPollTimedOut}
                                     correctionInFlight={serverCorrectionInFlight}
-                                    onManualRefresh={handleManualCorrectionRefresh}
-                                    onResumePolling={() => {
-                                        setCorrectionPollTimedOut(false)
-                                        setIsCorrectionPolling(true)
-                                        pollFailCountRef.current = 0
-                                    }}
+                                    activeCorrectionRequest={activeCorrectionRequestProp}
+                                    failedCorrectionRequest={failedCorrectionRequestProp}
+                                    onCheckStatus={handleCheckCorrectionStatus}
+                                    isCheckingStatus={isCheckingCorrectionStatus}
+                                    onRestartCorrection={handleRestartCorrection}
+                                    isRestarting={isRestartingCorrection}
+                                    onCancelCorrection={handleCancelCorrection}
+                                    isCancelling={isCancellingCorrection}
+                                    onTryAgain={handleTryAgainCorrection}
+                                    onDismissFailure={handleDismissCorrectionFailure}
                                     hasAnalysis={hasAnalysis}
                                     hasReview={hasReview}
                                     disabled={isPending}
