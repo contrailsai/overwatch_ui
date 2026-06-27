@@ -25,12 +25,14 @@ const Checkbox = React.forwardRef(({ className, checked, defaultChecked, onCheck
         isChecked ? "bg-blue-600 border-blue-600 text-white" : "bg-white hover:border-blue-400",
         className
       )}
+      onMouseDown={(e) => e.preventDefault()}
       onClick={handleChange}
     >
       {isChecked && <Check className="h-3.5 w-3.5 stroke-[3px]" />}
       <input
         type="checkbox"
         className="hidden"
+        tabIndex={-1}
         ref={ref}
         checked={isChecked}
         onChange={() => { }} // Handled by div click

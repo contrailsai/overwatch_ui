@@ -188,9 +188,31 @@ Reviewer submits a second correction after the first completes. Client `$set`s a
 
 Poll `getAnalysisCorrectionStatus(postId, correctionRequestId)` every 5s until `completed` / `failed` / 3 min timeout.
 
-Returns `not_found` if the stored request `id` no longer matches (correction was overwritten while polling).
+Returns `not_found: true` if the stored request `id` no longer matches (correction was overwritten while polling). Response may include `currentRequest` for client resync.
 
-On case load, read `post.analysis_correction_request` (or legacy array fallback) for `pending`/`processing` and resume polling. On timeout, keep `activeCorrectionId` and block duplicate submits until status resolves (Refresh / Resume waiting).
+**Check correction status** (manual): same server action — reads `analysis_correction_request` + `analysis_results` only; does **not** reload the full Post document.
+
+On case load, read `post.analysis_correction_request` (or legacy array fallback) for `pending`/`processing` and resume polling. After 3 min auto-poll stop, reviewer uses **Check correction status** (resumes a 60s poll burst). After 10 min elapsed (`requested_at`), UI offers **Restart correction** and **Cancel correction**.
+
+---
+
+## Client restart & cancel (reviewer escape hatches)
+
+Both actions **orphan in-flight workers** by writing a **new UUID** to `analysis_correction_request`. Workers holding the old `correction_request_id` in SQS hit the stale-id guard and exit without writing.
+
+### Restart correction
+
+- Server action: `restartAIAnalysisCorrection(postId)`
+- Reads stored `correction` from Mongo, writes new request (`status: pending`, new `id`), re-queues SQS `mode: revision`
+- Same payload as the stuck request — does not re-read the live form
+
+### Cancel correction
+
+- Server action: `cancelAIAnalysisCorrection(postId)`
+- Writes new request: `status: failed`, `error: "Cancelled by reviewer"`, new `id`, preserves `correction` for audit/retry
+- Unlocks the review form; does **not** mark `failed` on the same UUID (avoids race if worker completes late)
+
+**Worker recommendation (defense in depth):** before writing `completed`, verify `status` is still `pending` or `processing`.
 
 ---
 
@@ -198,12 +220,12 @@ On case load, read `post.analysis_correction_request` (or legacy array fallback)
 
 | File | Role |
 |------|------|
-| `src/utils/analysis/buildAnalysisCorrectionDiff.js` | Auto-compute correction from form vs `analysis_results` |
+| `src/utils/analysis/buildAnalysisCorrectionDiff.js` | Auto-compute correction; `formatStoredCorrectionForDisplay` |
 | `src/utils/analysis/correctionRequestUtils.js` | `getCorrectionRequest`, active request lookup, form defaults |
 | `src/utils/analysis/normalizeAnalysisForForm.js` | Normalize AI baseline for comparison |
-| `src/app/(dashboard)/review-cases/actions.js` | `$set` overwrite + queue |
+| `src/app/(dashboard)/review-cases/actions.js` | Queue, restart, cancel, status check |
 | `src/app/(dashboard)/review-cases/ReviewDetails.js` | Form orchestration, polling, resume |
-| `src/app/(dashboard)/review-cases/AnalysisCorrectionPanel.js` | Reviewer UI |
+| `src/app/(dashboard)/review-cases/AnalysisCorrectionPanel.js` | In-flight panel, failure state, reviewer UI |
 
 ---
 

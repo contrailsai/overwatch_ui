@@ -1,288 +1,286 @@
-# Feeds Feature — Implementation Review (Phase 1)
+# Feeds & Topics — Implementation Guide
 
-**Status:** Reviewer-side **Manage Feeds** is implemented. Client-facing **Feeds** viewer is not started yet.
+**Status:** Complete (reviewer **Manage Feeds**, client **Feeds** viewer, and **Review Cases topic assignment**).
 
 **Last updated:** June 2026
 
 ---
 
-## 1. Goal
+## Table of contents
 
-Feeds let reviewers curate themed collections of content for clients. A feed combines:
-
-- **Topics** — pre-grouped sets of related posts (MongoDB `Topics` collection)
-- **Individual posts** — hand-picked cases added via search, outside of any topic
-
-Clients will eventually browse each feed like the cases list (filters, reports, publishing-date chart). **Phase 1** delivers only the reviewer tooling to create and edit feeds.
+1. [Overview](#1-overview)
+2. [Product decisions](#2-product-decisions)
+3. [Architecture](#3-architecture)
+4. [Data model](#4-data-model)
+5. [How resolution works](#5-how-resolution-works)
+6. [Routes & access control](#6-routes--access-control)
+7. [Code map](#7-code-map)
+8. [Deployment & database setup](#8-deployment--database-setup)
+9. [Codebase review](#9-codebase-review)
+10. [Known edge cases](#10-known-edge-cases)
+11. [Manual test checklist](#11-manual-test-checklist)
+12. [Future enhancements](#12-future-enhancements)
 
 ---
 
-## 2. Product decisions (locked in during planning)
+## 1. Overview
+
+The feeds system lets reviewers curate themed collections of content for clients. A **feed** is a lightweight MongoDB document that references:
+
+- **Topics** — groups of related posts (`Topics.posts[]`)
+- **Manual posts** — individual cases added by search, outside any topic
+
+Clients browse feeds at `/feeds` with the same filtering, detail panel, reports, and publishing-date chart behavior as `/cases`.
+
+**Topic assignment** (at `/review-cases`) is the in-app **write path** for topic membership. Posts do not store a `topic_id`; membership lives on topic documents. When a reviewer assigns or moves a case to a topic, any feed that references that topic updates automatically on the next read — no writes to `Feeds` are required.
+
+```mermaid
+flowchart LR
+  subgraph writes [Reviewer writes]
+    RC["/review-cases<br/>assign · move · create topic"]
+    MF["/manage-feeds<br/>CRUD feeds · pick topics/posts"]
+  end
+
+  subgraph data [MongoDB per tenant]
+    Topics["Topics.posts[]"]
+    Feeds["Feeds.topic_ids + manual_post_ids"]
+    Posts["Posts + review_details.threat_score"]
+  end
+
+  subgraph reads [All project users]
+    CF["/feeds → live resolve + reviewed filter"]
+  end
+
+  RC --> Topics
+  MF --> Feeds
+  Feeds --> Topics
+  Topics --> Posts
+  Feeds --> Posts
+  CF --> Feeds
+  CF --> Topics
+  CF --> Posts
+```
+
+---
+
+## 2. Product decisions
 
 | Decision | Choice |
 |----------|--------|
-| Topic sync | **Live** — feed reflects current topic membership; no frozen snapshot of post IDs on the feed document |
-| Post eligibility | **Reviewed only** — same gate as `/cases` (`review_details.threat_score` must exist) |
-| Topic inclusion | **Whole topic** — adding a topic includes all its posts (filtered to reviewed at read time) |
-| Visibility | **All users in project** — no per-user feed assignment or draft/publish toggle yet |
-| Reviewer page | **Manage Feeds** at `/manage-feeds` |
-| Client page (future) | **Feeds** at `/feeds` (not built) |
+| Topic sync | **Live** — feeds reflect current `Topics.posts[]`; no frozen post snapshot on the feed document |
+| Post eligibility (client view) | **Reviewed only** — `review_details.threat_score` must exist (same gate as `/cases`) |
+| Topic inclusion | **Whole topic** — adding a topic to a feed includes all its posts (filtered to reviewed at read time) |
+| Topic membership per post | **One topic per post** — enforced on assign/move; legacy multi-topic data is cleaned on next move |
+| Feed visibility | **All users in project** — no per-user assignment or draft/publish toggle |
+| Reviewer surfaces | `/manage-feeds` (feed CRUD), `/review-cases` (topic assignment) |
+| Client surface | `/feeds` (index + detail) |
 
 ---
 
-## 3. What is implemented
+## 3. Architecture
 
-### 3.1 MongoDB — `Feeds` collection
+### Read path (client feeds)
 
-New per-project collection (tenant DB from `project.mongo_db_map`). Auto-created on first `insertOne`; no migration script.
+1. Load `Feeds` document by id or slug.
+2. `resolveFeedPostObjectIds(feed)` — one `Topics` query for `topic_id ∈ feed.topic_ids`, union all `posts[]` with `manual_post_ids`, dedupe to `ObjectId[]`.
+3. One `Posts` aggregation with `_id: { $in }` + cases pipeline (`buildCasesMatchQuery` includes reviewed filter) + filters/sort/facet.
 
-**Sample document:** [`sample_documents/mongodb/Feed.json`](../../sample_documents/mongodb/Feed.json)
+### Write path (topic assignment)
 
-```json
+1. Reviewer assigns/moves/creates topic from `/review-cases`.
+2. `movePostToTopic` — `$pull` post hex id from **all** topics, `$addToSet` on target, `recomputeTopicStats` on affected topics.
+3. `createTopicForPost` — allocate next `T#####` id, insert topic with `source: 'review-cases'`.
+4. `deleteCase` — `removePostFromAllTopics` before hard-delete.
+
+### Shared libraries
+
+| Module | Role |
+|--------|------|
+| [`feed-schema.js`](../../src/lib/feeds/feed-schema.js) | Collection names, serializers, `sanitizeStringArray`, `escapeRegex` |
+| [`resolve-feed-posts.js`](../../src/lib/feeds/resolve-feed-posts.js) | Live post resolution + feed-scoped aggregation pipelines |
+| [`feed-slug.js`](../../src/lib/feeds/feed-slug.js) | URL slugs (`{title-slug}-{last8ofId}`) |
+| [`topic-membership.js`](../../src/lib/feeds/topic-membership.js) | Pure DB helpers (move, stats, allocate id) |
+| [`topic-membership-actions.js`](../../src/lib/feeds/topic-membership-actions.js) | Reviewer server actions for topic assignment |
+| [`pipeline-helpers.js`](../../src/lib/posts/pipeline-helpers.js) | Shared cases/feed query builders (extracted from `cases/actions.js`) |
+
+---
+
+## 4. Data model
+
+### `Feeds` collection
+
+Auto-created on first `insertOne`. One collection per tenant MongoDB database (`project.mongo_db_map`).
+
+**Sample:** [`sample_documents/mongodb/Feed.json`](../../sample_documents/mongodb/Feed.json)
+
+```js
 {
-  "_id": { "$oid": "..." },
-  "title": "anant_ambani_gossip",
-  "description": "gossip about information on anant ambani and his personal life",
-  "topic_ids": ["T00022", "T00051", "T00033"],
-  "manual_post_ids": [],
-  "cover_image_url": null,
-  "created_by": "reviewer@contrails.ai",
-  "created_at": { "$date": "..." },
-  "updated_at": { "$date": "..." },
-  "update_history": [
-    { "updated_at": { "$date": "..." }, "updated_by": "...", "changes_summary": "feed created" }
-  ]
+  _id: ObjectId,
+  title: String,
+  description: String,
+  topic_ids: [String],        // e.g. "T00002" — references Topics.topic_id
+  manual_post_ids: [String],  // Posts._id hex strings
+  cover_image_url: String | null,
+  created_by: String,         // reviewer email
+  created_at: Date,
+  updated_at: Date,
+  update_history: [{ updated_at, updated_by, changes_summary }]
 }
 ```
 
-**Design note:** The feed stores **references only** (`topic_ids`, `manual_post_ids`). It does **not** denormalize post documents. At read time (future client page), posts are resolved in two bounded queries:
+The feed stores **references only**. Post documents are never denormalized onto the feed.
 
-1. `Topics.find({ topic_id: { $in: feed.topic_ids } })` → union `posts[]`
-2. `Posts.aggregate` with `_id: { $in: unionedIds }` + reviewed filter + cases-list pipeline
+### `Topics` collection
 
-This keeps feeds live when topics gain new posts.
-
-### 3.2 Topics collection (existing, now consumed)
+Introduced via external CSV import; first in-app mutations are topic assignment and feed consumption.
 
 **Sample:** [`sample_documents/mongodb/topics.json`](../../sample_documents/mongodb/topics.json)
 
-Topics were introduced outside this app; Manage Feeds is the first UI that reads them.
+```js
+{
+  _id: ObjectId,
+  topic_id: String,           // stable id, e.g. "T00002" (referenced by feeds)
+  title: String,
+  posts: [String],            // Posts._id hex strings (membership store)
+  post_count: Number,         // denormalized; recomputed on membership change
+  first_posted_at: Date,
+  last_posted_at: Date,
+  imported_at: Date,
+  source: String              // e.g. "posts_ledger.csv" or "review-cases"
+}
+```
 
-| Field | Purpose |
-|-------|---------|
-| `topic_id` | Stable string ID referenced by feeds (e.g. `T00002`) |
-| `title` | Human-readable label for search/display |
-| `posts` | Array of `Posts._id` hex strings |
-| `post_count` | Denormalized count |
-| `first_posted_at` / `last_posted_at` | Date bounds for the topic’s posts |
+**Important:** Post → topic lookup is reverse: `Topics.findOne({ posts: hexId })`. There is no `topic_id` field on `Posts`.
 
-Collection name in code: `Topics` (see `TOPICS_COLLECTION` in feed-schema).
+### App-created topics
 
-### 3.3 Schema & helpers
+When a reviewer creates a topic from `/review-cases`:
 
-**File:** [`src/lib/feeds/feed-schema.js`](../../src/lib/feeds/feed-schema.js)
+- `topic_id` allocated as next `T#####` (zero-padded, e.g. `T00023`)
+- `source: 'review-cases'`
+- Post is sole initial member; any prior topic membership is cleared first
 
-| Export | Role |
-|--------|------|
-| `FEEDS_COLLECTION` | `'Feeds'` |
-| `TOPICS_COLLECTION` | `'Topics'` |
-| `serializeFeed(doc)` | Plain object for UI (counts, ISO dates) |
-| `serializeTopicOption(doc)` | Lightweight topic for picker lists |
-| `sanitizeStringArray(arr)` | Dedupe/trim `topic_ids` / `manual_post_ids` |
-| `escapeRegex(value)` | Safe regex for topic title search |
+---
 
-### 3.4 Server actions (reviewer-only)
+## 5. How resolution works
 
-**File:** [`src/app/(dashboard)/manage-feeds/actions.js`](../../src/app/(dashboard)/manage-feeds/actions.js)
+```mermaid
+sequenceDiagram
+  participant Client as /feeds/[slug]
+  participant Actions as feeds/actions.js
+  participant Resolve as resolve-feed-posts.js
+  participant Topics as Topics collection
+  participant Posts as Posts collection
 
-All actions call `requireRole(['reviewer'])` and use the tenant `dbName` from auth context.
+  Client->>Actions: getFeedPosts(feedId, filters, sort)
+  Actions->>Topics: find topic_id in feed.topic_ids
+  Topics-->>Resolve: union posts[] arrays
+  Resolve->>Resolve: merge manual_post_ids, dedupe ObjectIds
+  Actions->>Posts: aggregate _id $in + reviewed filter + cases pipeline
+  Posts-->>Client: paginated posts + total count
+```
+
+| Event | `Topics` | `Feeds` | `Posts` | Client `/feeds` |
+|-------|----------|---------|---------|-----------------|
+| Assign/move post to topic | `posts[]`, stats updated | No write | No change | Reflects on next read |
+| Create topic + assign | New doc; old topic cleaned | No write | No change | Same |
+| Add topic to feed | No change | `topic_ids` updated | No change | More posts on next read |
+| Submit review | Unchanged | Unchanged | `review_details` etc. | Post may appear once reviewed |
+| Delete case | Post pulled from all topics | `manual_post_ids` may orphan | Hard delete | Post disappears |
+
+---
+
+## 6. Routes & access control
+
+| Route | Audience | Guard |
+|-------|----------|-------|
+| `/manage-feeds` | Reviewer | Fake 404 for non-reviewers; `requireRole(['reviewer'])` in actions |
+| `/review-cases` | Reviewer | Same pattern |
+| `/feeds` | All project users | `requireAuthContext()` |
+| `/feeds/[feedId]` | All project users | Slug or raw ObjectId; redirects legacy ids to canonical slug |
+
+**Sidebar** ([`Sidebar.js`](../../src/components/Sidebar.js)):
+
+- **Feeds** — `show: true`
+- **Manage Feeds** — `show: permission === 'reviewer'`
+
+**Tenancy:** All Mongo access uses `dbName` from auth context (`mongo_db_map`). Never trust client-supplied database names.
+
+**Permission note:** Admin UI may show `client-reviewer`; runtime checks use `'reviewer'`.
+
+### Server actions summary
+
+**Manage feeds** — [`manage-feeds/actions.js`](../../src/app/(dashboard)/manage-feeds/actions.js)
 
 | Action | Description |
 |--------|-------------|
-| `listFeeds()` | All feeds for project, sorted by `updated_at` desc |
-| `getFeed(feedId)` | Feed + hydrated topics + normalized manual posts (for editor) |
-| `createFeed(input)` | Insert feed; requires `title` |
-| `updateFeed(feedId, input)` | Update fields; appends `update_history` entry |
-| `deleteFeed(feedId)` | Hard delete |
-| `searchTopics(query, limit)` | Title regex search; empty query returns recent topics |
-| `searchPostsForFeed(query, limit)` | Hybrid Atlas text + semantic vector search via `getSemanticSearchPosts` (reviewed-only) |
+| `listFeeds` | All feeds, sorted by `updated_at` |
+| `getFeed` | Feed + hydrated topics + manual posts (editor) |
+| `createFeed` / `updateFeed` / `deleteFeed` | CRUD |
+| `searchTopics` | Title regex search; empty query returns recent topics |
+| `searchPostsForFeed` | Hybrid Atlas text + vector search (reviewed-only) |
 
-Mutations call `revalidatePath('/manage-feeds')`.
+**Client feeds** — [`feeds/actions.js`](../../src/app/(dashboard)/feeds/actions.js)
 
-**Post search reuse:** `searchPostsForFeed` delegates to [`getSemanticSearchPosts`](../../src/app/(dashboard)/cases/actions.js) — same hybrid search as the content list (Atlas `$search` on index `default` + `$vectorSearch` on `text_embedding`). Limit defaults to 15, max 40.
+| Action | Description |
+|--------|-------------|
+| `listFeedsForClient` | Feed index for all users |
+| `getFeedById` | Metadata + slug |
+| `getFeedPosts` | Paginated, filterable, reviewed-only list |
+| `getFeedPostIds` | All matching ids (select-all, report export) |
+| `getFeedPublishingHistogram` | Daily publish-date buckets |
 
-**Manual post hydration:** `getFeed` uses [`getPostsByIds`](../../src/app/(dashboard)/cases/actions.js) for `manual_post_ids` (S3 signing + normalization).
+**Topic assignment** — [`topic-membership-actions.js`](../../src/lib/feeds/topic-membership-actions.js)
 
-### 3.5 Pages & UI
-
-| File | Role |
-|------|------|
-| [`page.js`](../../src/app/(dashboard)/manage-feeds/page.js) | Server Component: auth, reviewer guard, loads `listFeeds()` |
-| [`ManageFeedsClient.js`](../../src/app/(dashboard)/manage-feeds/ManageFeedsClient.js) | Feed index: cards, New Feed, edit/delete, opens builder |
-| [`FeedBuilder.js`](../../src/app/(dashboard)/manage-feeds/FeedBuilder.js) | Right-side slide-over panel for create/edit |
-
-#### Route: `/manage-feeds`
-
-- **Access:** Reviewer only (`permission === 'reviewer'`)
-- Non-reviewers see a fake **404** (same pattern as `/review-cases`)
-- Users without a project see the standard “Account Not Set Up” block
-
-#### Index UI (`ManageFeedsClient`)
-
-- Grid of feed cards: title, description, topic count, manual post count, last updated
-- Hover actions: edit (pencil), delete (with confirm)
-- Empty state with CTA to create first feed
-- **New Feed** button opens the builder with no preloaded feed
-
-#### Feed builder (`FeedBuilder`) — right slide-over panel
-
-Replaced an initial centered modal with a full-height **right-side panel** (`max-w-5xl`) for easier browsing.
-
-**Layout:**
-
-```
-┌──────────────────────────────────────────────────────────────┐
-│ [×] Edit feed                          [Cancel] [Save]       │
-├─────────────────┬────────────────────────────────────────────┤
-│ Title           │  [ Topics ] [ Posts ]  tabs                  │
-│ Description     │  Search…                                   │
-│ In this feed    │  ┌──────────────────────────────────────┐  │
-│ Selected topics │  │ scrollable results (tall)            │  │
-│ Added posts     │  └──────────────────────────────────────┘  │
-└─────────────────┴────────────────────────────────────────────┘
-```
-
-- **Left column:** metadata + live summary of selected topics/posts
-- **Right column:** tabbed search (Topics | Posts)
-- Topics: debounced title search; empty query browses recent topics
-- Posts: debounced hybrid search; larger thumbnails and multi-line captions
-- Body scroll locked while panel is open; backdrop click closes
-
-### 3.6 Navigation
-
-**File:** [`src/components/Sidebar.js`](../../src/components/Sidebar.js)
-
-```js
-{ name: 'Manage Feeds', href: '/manage-feeds', icon: Rss, show: clientDetails?.permission === 'reviewer' }
-```
-
-Placed after “Review Profiles”. No client “Feeds” nav item yet.
-
-### 3.7 Shared pipeline helpers (refactor)
-
-**File:** [`src/lib/posts/pipeline-helpers.js`](../../src/lib/posts/pipeline-helpers.js)
-
-Pure module (**no** `'use server'`) extracted from `cases/actions.js` to avoid Next.js registering query builders as Server Action HTTP endpoints.
-
-Exported for reuse by the future client feeds page:
-
-- `normalizeS3Post`
-- `buildCasesMatchQuery`
-- `buildCasesDateAddFieldsStage` / `buildCasesDateFilterStage`
-- `buildUniqueClustersStage`
-- `ONLINE_VISIBILITY_VALUES`, `CASES_ALERT_HOUR_TIMEZONE`, `escapeRegex`
-
-[`cases/actions.js`](../../src/app/(dashboard)/cases/actions.js) now imports these instead of defining them inline.
+| Action | Description |
+|--------|-------------|
+| `getTopicForPost` | Reverse lookup via `Topics.posts` |
+| `assignPostToTopic` | Move to existing topic |
+| `createTopicForPost` | New topic + assign |
+| `clearPostTopic` | Remove from all topics (unassigned) |
 
 ---
 
-## 4. Architecture diagram (current + planned read path)
-
-```mermaid
-flowchart TD
-  subgraph implemented [Implemented — Phase 1]
-    Reviewer["Reviewer @ /manage-feeds"]
-    FeedDoc["Feeds collection"]
-    Topics["Topics collection"]
-    Reviewer -->|CRUD| FeedDoc
-    Reviewer -->|searchTopics| Topics
-    Reviewer -->|searchPostsForFeed| PostsSearch["getSemanticSearchPosts"]
-    PostsSearch --> Posts["Posts collection"]
-  end
-
-  subgraph planned [Planned — Phase 2]
-    Client["Client @ /feeds/feedId"]
-  end
-
-  FeedDoc -->|topic_ids| Topics
-  Topics -->|posts[]| Resolve["resolveFeedPostIds"]
-  FeedDoc -->|manual_post_ids| Resolve
-  Resolve --> ListQ["getFeedPosts + pipeline-helpers"]
-  ListQ --> Posts
-  Client --> ListQ
-  Client --> Histogram["PublishingHistogram"]
-```
-
----
-
-## 5. Auth & security model
-
-| Layer | Mechanism |
-|-------|-----------|
-| Middleware | Auth only (redirect to `/login`) — no role checks |
-| Page | `clientDetails.permission !== 'reviewer'` → fake 404 |
-| Server actions | `requireRole(['reviewer'])` on every mutation/query |
-| Sidebar | Link hidden for non-reviewers |
-| Tenancy | All Mongo access scoped to `dbName` from `mongo_db_map` |
-
-**Note:** Admin UI can assign `client-reviewer` permission, but runtime checks use `'reviewer'`. Test accounts created via Admin should use the `reviewer` permission value.
-
----
-
-## 6. Bugs fixed during implementation
-
-| Issue | Fix |
-|-------|-----|
-| `Icon={Rss}` passed from Server Component to `PageHeader` (client) | Removed `Icon` prop from `page.js`; Lucide components cannot cross RSC boundary |
-| Pipeline helpers in `'use server'` file | Extracted to `src/lib/posts/pipeline-helpers.js` |
-| Cramped modal for feed editing | Replaced with right slide-over panel + two-column layout |
-
----
-
-## 7. Not implemented yet (Phase 2+)
-
-From the original plan — **intentionally deferred**:
-
-| Item | Notes |
-|------|-------|
-| Client `/feeds` index | List feeds for all project users |
-| Client `/feeds/[feedId]` | Cases-style list for one feed |
-| `feeds/actions.js` | `listFeedsForClient`, `getFeedPosts`, `getFeedPublishingHistogram` |
-| Live post resolution at scale | `resolveFeedPostIds` + faceted `Posts` query with `_id $in` |
-| Publishing-date histogram | Recharts horizontal bar chart grouped by `engagement.posted_at` |
-| Filters on feed view | Reuse `CasesFilterPanel` / URL param pattern |
-| Report export from feed | Reuse `ReportGenerate` with selected feed posts |
-| `CaseDetailPanel` on feed rows | Deep-link / side panel for a case in feed context |
-| Image/similar-post search in builder | Only text/semantic search today; `getSimilarPosts` available for later |
-| `cover_image_url` UI | Field exists on schema; no picker yet |
-| Draft/publish toggle | All feeds visible to entire project when client page ships |
-| MongoDB indexes | Recommend `Topics.topic_id` index before client page load |
-
----
-
-## 8. File inventory
+## 7. Code map
 
 ```
 src/
 ├── lib/
 │   ├── feeds/
-│   │   └── feed-schema.js          # Collection constants + serializers
+│   │   ├── feed-schema.js              # Serializers, collection constants
+│   │   ├── feed-slug.js                # URL slug helpers
+│   │   ├── resolve-feed-posts.js       # Live resolution + pipelines
+│   │   ├── topic-membership.js         # Pure topic DB helpers
+│   │   └── topic-membership-actions.js # Reviewer topic server actions
 │   └── posts/
-│       └── pipeline-helpers.js     # Shared cases/feed query helpers (new)
+│       └── pipeline-helpers.js         # Shared cases/feed query builders
 ├── app/(dashboard)/
-│   ├── cases/
-│   │   └── actions.js              # Refactored to use pipeline-helpers
-│   └── manage-feeds/
-│       ├── page.js                 # RSC page + reviewer guard
-│       ├── actions.js              # Server actions
-│       ├── ManageFeedsClient.js    # Index UI
-│       └── FeedBuilder.js          # Right slide-over create/edit panel
+│   ├── manage-feeds/
+│   │   ├── page.js                     # Reviewer index (404 guard)
+│   │   ├── actions.js                  # Feed CRUD + searchTopics
+│   │   ├── ManageFeedsClient.js        # Feed cards + delete
+│   │   └── FeedBuilder.js              # Right slide-over create/edit
+│   ├── feeds/
+│   │   ├── page.js                     # Client feed index
+│   │   ├── [feedId]/page.js            # Feed detail (filters, histogram)
+│   │   ├── actions.js                  # Client read actions
+│   │   ├── FeedsIndexClient.js         # Feed cards
+│   │   ├── FeedContentList.js          # Cases-style table + CaseDetailPanel
+│   │   └── PublishingHistogram.js      # Recharts horizontal bars
+│   └── review-cases/
+│       ├── TopicAssignmentSection.js   # Inline topic control
+│       ├── TopicPickerPanel.js         # Nested slide-over picker
+│       ├── ReviewDetails.js            # Wires TopicAssignmentSection
+│       └── actions.js                  # deleteCase → removePostFromAllTopics
 └── components/
-    └── Sidebar.js                  # "Manage Feeds" nav item
+    └── Sidebar.js                      # Feeds + Manage Feeds nav
+
+scripts/
+└── ensure_indexes.js                   # Posts + Topics indexes (per DB)
 
 sample_documents/mongodb/
-├── Feed.json                       # Sample feed document
-└── topics.json                     # Sample topic document
+├── Feed.json
+└── topics.json
 
 docs/feeds/
 └── manage-feeds-implementation-review.md   # This document
@@ -290,36 +288,236 @@ docs/feeds/
 
 ---
 
-## 9. Manual test checklist
+## 8. Deployment & database setup
 
-Use a **reviewer** account on a project with `Topics` and reviewed `Posts` data.
+### Prerequisites
 
-- [ ] Sidebar shows **Manage Feeds**; client/analyst accounts do not
-- [ ] Direct URL `/manage-feeds` as non-reviewer returns fake 404
-- [ ] Create feed with title + description only
-- [ ] Search topics (empty query shows recent; typed query filters by title)
-- [ ] Add whole topics; save; card shows correct topic count
-- [ ] Search posts by text; add individual posts; save; card shows manual post count
-- [ ] Edit existing feed: panel loads hydrated topics + manual posts
+| Requirement | Notes |
+|-------------|-------|
+| Per-tenant MongoDB | Each project has its own DB via Supabase `project.mongo_db_map` |
+| `Topics` collection | Must exist with imported data **or** reviewers create topics from `/review-cases` |
+| Atlas Search indexes | Required for feed post search in builder (same as `/cases` hybrid search) |
+| App deploy | No Supabase schema migration for feeds/topics |
+
+`Feeds` and app-created `Topics` documents are created at runtime. **No data migration script is required** for the feature itself.
+
+### Required indexes
+
+Run [`scripts/ensure_indexes.js`](../../scripts/ensure_indexes.js) on **every tenant database** that will use feeds/topics.
+
+```bash
+# From repo root, with .env.local pointing at the target tenant DB
+node scripts/ensure_indexes.js
+```
+
+The script creates:
+
+**Posts** (existing, still required):
+
+| Index | Purpose |
+|-------|---------|
+| `{ processed: 1, "metadata.created_at": -1 }` | Review queue |
+| `{ processed: 1, platform: 1, "metadata.created_at": -1 }` | Platform filter |
+| `{ processed: 1, "metadata.sourcing_date": -1 }` | Sourcing date |
+| `{ "analysis_results.risk_score": 1, "metadata.created_at": -1 }` sparse | AI analyzed filter |
+
+**Topics** (new for feeds + topic assignment):
+
+| Index | Options | Purpose |
+|-------|---------|---------|
+| `{ topic_id: 1 }` | **unique** | Feed resolution by `topic_ids`; safe topic id allocation |
+| `{ posts: 1 }` | multikey | Reverse lookup `getTopicForPost`; bulk pull on delete/move |
+
+### Multi-tenant index rollout
+
+`ensure_indexes.js` uses a single `MONGO_DB_NAME` from `.env.local`. **Repeat for each project database:**
+
+```bash
+# Example: run once per tenant
+MONGO_DB_NAME=acme_prod node scripts/ensure_indexes.js
+MONGO_DB_NAME=contoso_prod node scripts/ensure_indexes.js
+```
+
+Or temporarily set `MONGO_DB_NAME` in `.env.local`, run the script, then switch to the next tenant.
+
+> **Production tip:** Maintain a list of all `mongo_db_map` values from Supabase `project` and check them off as indexes are applied.
+
+### Pre-flight checks (recommended before deploy)
+
+Run these in each tenant DB **before** creating the unique `topic_id` index:
+
+**1. Duplicate `topic_id` values** (unique index will fail):
+
+```js
+db.Topics.aggregate([
+  { $group: { _id: '$topic_id', count: { $sum: 1 } } },
+  { $match: { count: { $gt: 1 } } }
+])
+```
+
+**2. Posts in multiple topics** (legacy import; app enforces single-topic on next move):
+
+```js
+db.Topics.aggregate([
+  { $unwind: '$posts' },
+  { $group: { _id: '$posts', topicCount: { $sum: 1 } } },
+  { $match: { topicCount: { $gt: 1 } } },
+  { $count: 'multiTopicPosts' }
+])
+```
+
+**3. Topics referenced by feeds but missing** (orphan references — feeds skip gracefully):
+
+```js
+const feedTopicIds = db.Feeds.distinct('topic_ids')
+const existing = db.Topics.distinct('topic_id')
+feedTopicIds.filter(id => !existing.includes(id))
+```
+
+**4. Verify `Topics` exists** (empty collection is OK; feeds with only manual posts still work):
+
+```js
+db.getCollectionNames().includes('Topics')
+```
+
+### What you do **not** need
+
+| Item | Reason |
+|------|--------|
+| Feeds collection migration | Created on first feed save |
+| Posts schema change | Membership stays on `Topics.posts[]` |
+| `revalidatePath('/feeds')` in deploy script | Live resolution; optional cache tuning only |
+| Backfill `source` on imported topics | Optional metadata; not required for reads |
+
+### Post-deploy smoke test
+
+1. Reviewer: create a feed with one topic → save.
+2. Reviewer: assign an unreviewed case to that topic → confirm topic `posts[]` updated.
+3. Client: open `/feeds` → case should **not** appear until reviewed.
+4. Reviewer: submit review with threat score → client feed shows the case.
+5. Reviewer: move case to another topic → old feed loses it, new feed gains it on refresh.
+
+---
+
+## 9. Codebase review
+
+### Strengths
+
+- **Clean separation:** `topic-membership.js` (pure) vs server actions vs UI; `resolve-feed-posts.js` centralizes read logic.
+- **Live sync model** is consistent across manage feeds, client feeds, and topic assignment — one source of truth (`Topics.posts[]`).
+- **Reuse:** Cases pipeline, filters, `CaseDetailPanel`, `ReportGenerate`, and hybrid search avoid duplicate behavior.
+- **Auth:** Reviewer mutations consistently use `requireRole(['reviewer'])`; client reads use `requireAuthContext()`.
+- **Delete cascade:** `deleteCase` calls `removePostFromAllTopics` before hard-delete.
+- **Slug URLs:** Human-readable feed URLs with legacy ObjectId redirect.
+- **Legacy tolerance:** Multi-topic posts log a warning and return first match until next move.
+
+### Issues & recommendations
+
+| Severity | Finding | Recommendation |
+|----------|---------|----------------|
+| **Medium** | `post_count` / topic picker counts include **unreviewed** posts; client feeds show **reviewed-only** | Document for reviewers (see §10) or add `reviewed_post_count` later |
+| **Medium** | `ensure_indexes.js` targets one `MONGO_DB_NAME` | Run per tenant before production (see §8) |
+| **Medium** | Unique `Topics.topic_id` index fails if imports have duplicates | Run pre-flight aggregation; dedupe before index |
+| **Low** | `loadFeedContext` loads **all feeds** to resolve slug suffix collisions | Fine at small scale; add `{ _id: regex }` query if feed count grows |
+| **Low** | Feed mutations only `revalidatePath('/manage-feeds')`, not `/feeds` | Usually OK (dynamic reads); add `/feeds` revalidation if stale index pages appear |
+| **Low** | `manual_post_ids` not pruned when a post is deleted | Orphan ids are harmless at read time; optional cleanup job later |
+| **Low** | Topic title search is unindexed regex | Acceptable while topic count is modest |
+| **Low** | `cover_image_url` on schema, no UI | Deferred feature |
+
+### Security
+
+No issues found beyond existing app patterns. Topic and feed mutations are reviewer-gated; tenant isolation flows through auth context `dbName`.
+
+---
+
+## 10. Known edge cases
+
+### Unreviewed posts in topics
+
+Reviewers can assign a topic **before** submitting review. The post is added to `Topics.posts[]` immediately but **does not appear** on `/feeds` until `review_details.threat_score` exists. Topic `post_count` in Manage Feeds may be higher than what clients see.
+
+### Legacy multi-topic membership
+
+CSV imports may place one post in multiple topics. `getTopicForPost` returns the first match and logs a warning. The next assign/move enforces single-topic membership.
+
+### Deleted posts in `manual_post_ids`
+
+If a post was manually added to a feed and later deleted, its id may remain in `manual_post_ids`. Resolution skips missing documents; no client-visible error.
+
+### Empty feeds
+
+A feed with no topics, no manual posts, or only unreviewed topic members shows an empty state on `/feeds`.
+
+### Topic assignment timing vs review submit
+
+Topic changes are **immediate** (not bundled with review form submit). Review submit does not touch topic membership.
+
+---
+
+## 11. Manual test checklist
+
+### Access & navigation
+
+- [ ] **Feeds** visible to all project users; **Manage Feeds** only for `reviewer`
+- [ ] Non-reviewer `/manage-feeds` returns fake 404
+- [ ] Unassigned project shows “Account Not Set Up”
+
+### Manage Feeds (`/manage-feeds`)
+
+- [ ] Create feed with title + description
+- [ ] Search topics (empty query → recent; typed → title filter)
+- [ ] Add whole topics; save; card shows topic count
+- [ ] Search posts; add manual posts; save; card shows manual count
+- [ ] Edit feed: hydrated topics + manual posts load
 - [ ] Remove topic/post in builder; save persists
-- [ ] Delete feed with confirm; card removed
-- [ ] Verify MongoDB `Feeds` document matches expected shape (`update_history`, `topic_ids`, etc.)
+- [ ] Delete feed with confirm
+- [ ] MongoDB `Feeds` doc shape matches schema (`update_history`, etc.)
+
+### Client Feeds (`/feeds`)
+
+- [ ] Index lists all feeds for project
+- [ ] Feed detail loads with slug URL (legacy ObjectId redirects)
+- [ ] Filters, sort, pagination match `/cases` behavior
+- [ ] Publishing histogram renders; bar click sets date filter
+- [ ] Case detail panel opens from row
+- [ ] Report export with selected posts works
+- [ ] Empty feed shows empty state
+
+### Topic assignment (`/review-cases`)
+
+- [ ] Unassigned post shows “Add topic”
+- [ ] Search + assign existing topic → section updates
+- [ ] Move to different topic → old topic `posts[]` updated, new topic gains post
+- [ ] Create new topic → `T#####` doc with `source: 'review-cases'`
+- [ ] Clear assignment → post unassigned; disappears from topic-only feeds
+- [ ] Assign before review → not on client feed until reviewed
+- [ ] After review → appears on feeds that include the topic
+- [ ] Delete case → post removed from all topics; stats recomputed
+- [ ] Non-reviewer cannot call topic actions (server-side)
+
+### Cross-feature
+
+- [ ] New topic from review-cases appears in Manage Feeds topic picker
+- [ ] Feed with that topic shows post after review
+- [ ] Moving post between topics updates client feeds without editing feed doc
 
 ---
 
-## 10. Recommended next steps (Phase 2)
+## 12. Future enhancements
 
-1. **`src/lib/feeds/resolve-feed-posts.js`** — `resolveFeedPostIds(feed)` + `getFeedPosts(feedId, page, filters, sort)` using `pipeline-helpers`
-2. **`/feeds` + `/feeds/[feedId]`** — client pages with `requireAuthContext()` only
-3. **Reuse cases UI** — filter panel, list table/cards, `CaseDetailPanel`, `ReportGenerate`
-4. **`PublishingHistogram`** — Mongo `$group` by publish day on resolved post set
-5. **Sidebar** — add **Feeds** link (`show: true`) for all authenticated users
-6. **Index** — `Topics.topic_id` if topic resolution is slow at scale
+| Item | Notes |
+|------|-------|
+| Topic UI on `/cases` | CaseDetailPanel topic display/edit |
+| `reviewed_post_count` on topics | Align picker counts with client view |
+| Prune `manual_post_ids` on delete | Keep feed metadata tidy |
+| `cover_image_url` picker | Field exists; no UI yet |
+| Draft/publish feeds | Per-feed visibility control |
+| Bulk topic assign | From review list view |
+| Image/similar-post search in FeedBuilder | `getSimilarPosts` available |
+| Multi-tenant index script | Loop all `mongo_db_map` values automatically |
 
 ---
 
-## 11. Summary
+## Summary
 
-Phase 1 delivers a complete **reviewer workflow** to define feeds as combinations of live topics and individually searched posts, persisted in MongoDB `Feeds`, with a polished management UI at `/manage-feeds`. The data model and shared pipeline helpers are positioned for Phase 2 client viewing without denormalizing posts or sacrificing live topic sync.
-
-The client-facing feed experience — list, filters, reports, and analytics — remains the next implementation slice.
+Feeds and topics form a **live, reference-based curation layer** on top of existing `Posts` and cases infrastructure. Reviewers build feeds from topics and hand-picked posts; assign cases to topics during review; clients browse the result with full cases-list capabilities. **Deployment requires per-tenant MongoDB indexes on `Topics` (especially `topic_id` unique and `posts` multikey)** — run `node scripts/ensure_indexes.js` for each project database before go-live.

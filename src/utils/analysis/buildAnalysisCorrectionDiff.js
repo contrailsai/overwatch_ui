@@ -135,3 +135,67 @@ export function correctionPayloadHasChanges(payload) {
   const remLegal = payload.remove?.['legal violations']?.length > 0;
   return addAi || addLegal || remAi || remLegal;
 }
+
+/**
+ * Format a persisted worker correction payload for read-only UI chips.
+ * @param {object | null | undefined} correction
+ */
+export function formatStoredCorrectionForDisplay(correction) {
+  const empty = {
+    hasChanges: false,
+    update_risk: null,
+    update_note: null,
+    add: { 'AI violations': [], 'legal violations': [] },
+    remove: { 'AI violations': [], 'legal violations': [] },
+  };
+  if (!correction || typeof correction !== 'object') return empty;
+
+  const add = {
+    'AI violations': [...(correction.add?.['AI violations'] || [])],
+    'legal violations': [...(correction.add?.['legal violations'] || [])],
+  };
+  const remove = {
+    'AI violations': [...(correction.remove?.['AI violations'] || [])],
+    'legal violations': [...(correction.remove?.['legal violations'] || [])],
+  };
+  const update_risk = correction.update_risk != null ? correction.update_risk : null;
+  const update_note = correction.update_note?.trim() || null;
+
+  const hasChanges =
+    add['AI violations'].length > 0 ||
+    add['legal violations'].length > 0 ||
+    remove['AI violations'].length > 0 ||
+    remove['legal violations'].length > 0 ||
+    update_risk != null ||
+    !!update_note;
+
+  return { hasChanges, update_risk, update_note, add, remove };
+}
+
+/**
+ * Apply a stored correction payload onto baseline form values (for Try again).
+ * @param {object} baseline - from normalizeAnalysisForForm(analysis_results)
+ * @param {object | null | undefined} correction
+ */
+export function applyStoredCorrectionToFormState(baseline, correction) {
+  if (!baseline || !correction) return null;
+
+  const threatTypes = new Set(baseline.threat_types || []);
+  for (const t of correction.add?.['AI violations'] || []) threatTypes.add(t);
+  for (const t of correction.remove?.['AI violations'] || []) threatTypes.delete(t);
+
+  const legalByCode = new Map((baseline.legal_codes || []).map((c) => [c.code, { ...c }]));
+  for (const code of correction.add?.['legal violations'] || []) {
+    if (!legalByCode.has(code)) legalByCode.set(code, { code, reasoning: '' });
+  }
+  for (const code of correction.remove?.['legal violations'] || []) {
+    legalByCode.delete(code);
+  }
+
+  return {
+    threatScore: correction.update_risk != null ? correction.update_risk : baseline.threat_score,
+    threatTypes: [...threatTypes],
+    selectedLegalCodes: [...legalByCode.values()],
+    update_note: correction.update_note?.trim() || '',
+  };
+}

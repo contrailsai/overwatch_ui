@@ -4,8 +4,12 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Layers, Loader2, Pencil, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { getTopicForPost } from '@/lib/feeds/topic-membership-actions'
 import { TopicPickerPanel } from './TopicPickerPanel'
+import {
+  fetchTopicForPost,
+  getCachedTopicForPost,
+  setCachedTopicForPost,
+} from './topic-cache'
 
 function captionSuggestion(post) {
   const text = post?.caption || post?.post_content?.caption || ''
@@ -14,11 +18,13 @@ function captionSuggestion(post) {
 
 /** Compact topic control — sits inline with Re-run / Reset toolbar buttons. */
 export function TopicAssignmentSection({ post, onShowToast }) {
-  const [topic, setTopic] = useState(null)
-  const [loading, setLoading] = useState(true)
+  const postId = post?._id
+  const cachedTopic = postId ? getCachedTopicForPost(postId) : undefined
+
+  const [topic, setTopic] = useState(() => (cachedTopic !== undefined ? cachedTopic : null))
+  const [loading, setLoading] = useState(() => cachedTopic === undefined && Boolean(postId))
   const [pickerOpen, setPickerOpen] = useState(false)
 
-  const postId = post?._id
   const titleSuggestion = useMemo(() => captionSuggestion(post), [post])
 
   const loadTopic = useCallback(async () => {
@@ -27,13 +33,22 @@ export function TopicAssignmentSection({ post, onShowToast }) {
       setLoading(false)
       return
     }
+
+    const cached = getCachedTopicForPost(postId)
+    if (cached !== undefined) {
+      setTopic(cached)
+      setLoading(false)
+      return
+    }
+
     setLoading(true)
-    const res = await getTopicForPost(postId)
-    setLoading(false)
-    if (res?.success) {
-      setTopic(res.topic)
-    } else {
-      onShowToast?.(res?.error || 'Failed to load topic.', 'error')
+    try {
+      const nextTopic = await fetchTopicForPost(postId)
+      setTopic(nextTopic)
+    } catch (err) {
+      onShowToast?.(err.message || 'Failed to load topic.', 'error')
+    } finally {
+      setLoading(false)
     }
   }, [postId, onShowToast])
 
@@ -42,11 +57,13 @@ export function TopicAssignmentSection({ post, onShowToast }) {
   }, [loadTopic])
 
   const handleAssigned = (assignedTopic) => {
+    setCachedTopicForPost(postId, assignedTopic)
     setTopic(assignedTopic)
     onShowToast?.(`Assigned to "${assignedTopic.title}".`, 'success')
   }
 
   const handleCleared = () => {
+    setCachedTopicForPost(postId, null)
     setTopic(null)
     onShowToast?.('Topic assignment cleared.', 'success')
   }
