@@ -20,6 +20,19 @@ export function focusScrollPanelOnPointerDown(e) {
   if (e.target.closest('button, a, input, textarea, select, label, [role="switch"], [role="checkbox"]')) {
     return
   }
-  e.preventDefault()
-  e.currentTarget.focus({ preventScroll: true })
+
+  const panel = e.currentTarget
+  const startX = e.clientX
+  const startY = e.clientY
+
+  const onMouseUp = (upEvent) => {
+    document.removeEventListener('mouseup', onMouseUp)
+    const moved = Math.abs(upEvent.clientX - startX) > 3 || Math.abs(upEvent.clientY - startY) > 3
+    const hasSelection = Boolean(window.getSelection()?.toString().length)
+    if (!moved && !hasSelection) {
+      panel.focus({ preventScroll: true })
+    }
+  }
+
+  document.addEventListener('mouseup', onMouseUp)
 }
