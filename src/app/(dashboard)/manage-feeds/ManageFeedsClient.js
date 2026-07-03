@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useCallback, useTransition } from 'react'
+import { format } from 'date-fns'
 import { Plus, Rss, Layers, FileText, Pencil, Trash2, Loader2, Clock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { listFeeds, getFeed, deleteFeed } from './actions'
@@ -9,7 +10,7 @@ import { FeedBuilder } from './FeedBuilder'
 function formatDate(iso) {
   if (!iso) return '—'
   try {
-    return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
+    return format(new Date(iso), 'MMM d, yyyy')
   } catch {
     return '—'
   }

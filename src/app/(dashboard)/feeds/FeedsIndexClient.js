@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { format } from 'date-fns'
 import { Rss, Layers, FileText, Clock, ArrowRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { feedDetailPath } from '@/lib/feeds/feed-slug'
@@ -8,7 +9,7 @@ import { feedDetailPath } from '@/lib/feeds/feed-slug'
 function formatDate(iso) {
   if (!iso) return '—'
   try {
-    return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
+    return format(new Date(iso), 'MMM d, yyyy')
   } catch {
     return '—'
   }

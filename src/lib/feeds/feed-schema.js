@@ -76,6 +76,7 @@ export function serializeTopicOption(doc) {
       : Array.isArray(doc.posts) ? doc.posts.length : 0,
     first_posted_at: toIso(doc.first_posted_at),
     last_posted_at: toIso(doc.last_posted_at),
+    source: doc.source || null,
   }
 }
 
