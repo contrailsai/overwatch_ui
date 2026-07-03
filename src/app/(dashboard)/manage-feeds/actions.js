@@ -13,7 +13,8 @@ import {
   sanitizeStringArray,
   escapeRegex,
 } from '@/lib/feeds/feed-schema'
-import { getSemanticSearchPosts, getPostsByIds } from '../cases/actions'
+import { getSemanticSearchPosts, getPosts, getPostsByIds } from '../cases/actions'
+import { parsePostSearchDork, hasStructuredPostFilters } from '@/lib/feeds/post-search-dork'
 
 const FEED_LOG = { loki_stream: LOKI_STREAMS.cases }
 
@@ -70,7 +71,7 @@ export async function getFeed(feedId) {
         .collection(TOPICS_COLLECTION)
         .find(
           { topic_id: { $in: serialized.topic_ids } },
-          { projection: { topic_id: 1, title: 1, post_count: 1, first_posted_at: 1, last_posted_at: 1, posts: 1 } }
+          { projection: { topic_id: 1, title: 1, post_count: 1, first_posted_at: 1, last_posted_at: 1, posts: 1, source: 1 } }
         )
         .toArray()
       topics = topicDocs.map(serializeTopicOption)
@@ -223,7 +224,7 @@ export async function searchTopics(query = '', limit = 12) {
 
     const topics = await collection
       .find(filter, {
-        projection: { topic_id: 1, title: 1, post_count: 1, first_posted_at: 1, last_posted_at: 1, posts: 1 },
+        projection: { topic_id: 1, title: 1, post_count: 1, first_posted_at: 1, last_posted_at: 1, posts: 1, source: 1 },
       })
       .sort({ last_posted_at: -1 })
       .limit(clampLimit(limit, 12, 50))
@@ -241,13 +242,25 @@ export async function searchTopics(query = '', limit = 12) {
  * Search reviewed posts (text + semantic hybrid) so reviewers can add individual
  * posts to a feed. Reuses the cases-list search pipeline (reviewed-only).
  */
-export async function searchPostsForFeed(query = '', limit = 15) {
+export async function searchPostsForFeed(query = '', limit = 15, extraFilters = {}) {
   try {
     await requireRole(['reviewer'])
     const q = (query || '').trim()
-    if (!q) return []
+    const { freeText, filters: parsedFilters } = parsePostSearchDork(q)
+    const mergedFilters = { ...parsedFilters, ...extraFilters }
+    const hasFilters = hasStructuredPostFilters(mergedFilters)
+    const hasText = Boolean(freeText)
 
-    const res = await getSemanticSearchPosts(null, q, clampLimit(limit, 15, 40))
+    if (!hasText && !hasFilters) return []
+
+    const clampedLimit = clampLimit(limit, 15, 40)
+
+    if (hasText) {
+      const res = await getSemanticSearchPosts(null, freeText, clampedLimit, mergedFilters)
+      return Array.isArray(res?.posts) ? res.posts : []
+    }
+
+    const res = await getPosts(null, 1, clampedLimit, mergedFilters)
     return Array.isArray(res?.posts) ? res.posts : []
   } catch (e) {
     logActionError({ ...FEED_LOG, app_action: 'searchPostsForFeed', message: 'searchPostsForFeed failed' }, e)

@@ -23,6 +23,7 @@ import { cn } from '@/lib/utils'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { format } from 'date-fns'
 import { DateFilterPopover } from '@/app/(dashboard)/cases/DateFilterPopover'
+import { getCaseInspectHref, isPendingReviewCase } from '@/lib/posts/reviewed-post-filter'
 
 const PlatformIcon = ({ platform, className }) => {
     const p = platform?.toLowerCase()
@@ -640,7 +641,8 @@ function ProfileDetailPanel({ profile, profiles = [], project, isOpen, onClose, 
                                             const risk = getRiskLabel(c.review_details?.threat_score)
                                             const statusCfg = getStatusConfig(c.client_status)
                                             const StatusIcon = statusCfg.icon
-                                            // console.log(c)
+                                            const pending = isPendingReviewCase(c)
+                                            const caseLinkClass = 'inline-flex items-center gap-1.5 text-[10px] font-bold text-slate-600 hover:text-blue-600 hover:bg-white hover:border-blue-200 px-2 py-1 rounded-md border border-slate-100 transition-all group/link'
 
                                             let posted_date = ""
                                             let sourced_date = ""
@@ -739,15 +741,40 @@ function ProfileDetailPanel({ profile, profiles = [], project, isOpen, onClose, 
                                                                 <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black bg-emerald-100 text-emerald-700 uppercase tracking-tighter shadow-sm">Online</span>
                                                             ) : null}
                                                         </div>
-                                                        <a
-                                                            href={`/cases/${c._id}`}
-                                                            target="_blank"
-                                                            rel="noreferrer"
-                                                            className="inline-flex items-center gap-1.5 text-[10px] font-bold text-slate-600 hover:text-blue-600 hover:bg-white hover:border-blue-200 px-2 py-1 rounded-md border border-slate-100 transition-all group/link"
-                                                        >
-                                                            Inspect Case
-                                                            <ArrowRight className="w-2.5 h-2.5 opacity-40 group-hover/link:opacity-100 group-hover/link:translate-x-0.5 transition-all" />
-                                                        </a>
+                                                        <div className="flex items-center gap-2">
+                                                            {pending ? (
+                                                                <a
+                                                                    href={getCaseInspectHref(c._id, { pending: true })}
+                                                                    target="_blank"
+                                                                    rel="noreferrer"
+                                                                    className={caseLinkClass}
+                                                                >
+                                                                    Inspect Case
+                                                                    <ArrowRight className="w-2.5 h-2.5 opacity-40 group-hover/link:opacity-100 group-hover/link:translate-x-0.5 transition-all" />
+                                                                </a>
+                                                            ) : (
+                                                                <>
+                                                                    <a
+                                                                        href={getCaseInspectHref(c._id, { pending: false })}
+                                                                        target="_blank"
+                                                                        rel="noreferrer"
+                                                                        className={caseLinkClass}
+                                                                    >
+                                                                        Inspect Case
+                                                                        <ArrowRight className="w-2.5 h-2.5 opacity-40 group-hover/link:opacity-100 group-hover/link:translate-x-0.5 transition-all" />
+                                                                    </a>
+                                                                    <a
+                                                                        href={`/review-cases/${c._id}`}
+                                                                        target="_blank"
+                                                                        rel="noreferrer"
+                                                                        className={caseLinkClass}
+                                                                    >
+                                                                        Review Case
+                                                                        <ArrowRight className="w-2.5 h-2.5 opacity-40 group-hover/link:opacity-100 group-hover/link:translate-x-0.5 transition-all" />
+                                                                    </a>
+                                                                </>
+                                                            )}
+                                                        </div>
                                                     </div>
                                                 </div>
                                             )
