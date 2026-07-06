@@ -10,6 +10,18 @@ import { getAuthContext } from '@/utils/auth-context'
 import { omitSafeThreatTypes } from '@/lib/utils'
 import crypto from 'crypto'
 import { logActionError, LOKI_STREAMS } from '@/utils/otel-logger'
+import { postsCollection } from '@/utils/mongodb/collections'
+import {
+  buildEffectiveThreatScoreRange,
+  buildTakedownInfoForUi,
+  fetchPostCaseEvents,
+  getAuthorSnapshot,
+  getFirstMediaS3Url,
+  getPostCaption,
+  insertCaseEvent,
+  toIsoDate,
+} from '@/utils/mongodb/v3-schema'
+import { normalizeS3Post } from '@/lib/posts/pipeline-helpers'
 
 export const trackClientClick = traceAction(
   'trackClientClick',
@@ -40,9 +52,10 @@ export const checkReviewerPermission = traceAction('checkReviewerPermission', as
 const buildTakedownMatchQuery = (filters = {}) => {
   let query = {
     $or: [
-      { client_status: { $regex: /^takedown$/i } },
-      { 'takedown_info.status': { $exists: true } }
-    ]
+      { 'workflow.client_status': 'takedown' },
+      { 'workflow.takedown_status': { $exists: true, $nin: [null, 'none'] } },
+      { 'takedown.status': { $exists: true, $nin: [null, 'none'] } },
+    ],
   }
 
   const andConditions = []
@@ -57,13 +70,13 @@ const buildTakedownMatchQuery = (filters = {}) => {
       'appealed again': ['appealed again', 're_appeal_takedown'],
       're_appeal_takedown': ['appealed again', 're_appeal_takedown'],
       'under process': ['under process', 'under_review'],
-      'under_review': ['under process', 'under_review']
-    };
-    
+      'under_review': ['under process', 'under_review'],
+    }
+
     if (statusMap[filters.status]) {
-      query['takedown_info.status'] = { $in: statusMap[filters.status] }
+      query['workflow.takedown_status'] = { $in: statusMap[filters.status] }
     } else {
-      query['takedown_info.status'] = filters.status
+      query['workflow.takedown_status'] = filters.status
     }
   }
 
@@ -73,39 +86,31 @@ const buildTakedownMatchQuery = (filters = {}) => {
   }
 
   // Risk Priority Filter
-  if (filters.risk_priority && filters.risk_priority !== 'all') {
-    if (filters.risk_priority === 'high') {
-      query['review_details.threat_score'] = { $gt: 95 }
-    } else if (filters.risk_priority === 'medium') {
-      query['review_details.threat_score'] = { $gt: 75, $lte: 95 }
-    } else if (filters.risk_priority === 'low') {
-      query['review_details.threat_score'] = { $gt: 40, $lte: 75 }
-    } else if (filters.risk_priority === 'safe') {
-      query['review_details.threat_score'] = { $lte: 40 }
-    }
+  const threatRange = buildEffectiveThreatScoreRange(filters.risk_priority)
+  if (threatRange) {
+    query['list.effective_threat_score'] = threatRange
   }
 
   // Violations filter
   if (filters.violations && filters.violations !== 'all') {
-    const violationsArray = filters.violations.split(',');
+    const violationsArray = filters.violations.split(',')
     if (violationsArray.length > 0) {
-      const normalViolations = violationsArray.filter(v => v !== 'aigc');
-      const hasAigc = violationsArray.includes('aigc');
-      
-      const violationConditions = [];
+      const normalViolations = violationsArray.filter((v) => v !== 'aigc')
+      const hasAigc = violationsArray.includes('aigc')
+
+      const violationConditions = []
       if (normalViolations.length > 0) {
-        violationConditions.push({ 'review_details.threat_types': { $in: normalViolations } });
-        const flagConditions = normalViolations.map(v => ({ [`review_details.flags.${v}`]: true }));
-        violationConditions.push(...flagConditions);
+        violationConditions.push({ 'list.violation_flags': { $in: normalViolations } })
+        violationConditions.push({ 'review_details.threat_types': { $in: normalViolations } })
+        const flagConditions = normalViolations.map((v) => ({ [`review_details.flags.${v}`]: true }))
+        violationConditions.push(...flagConditions)
       }
       if (hasAigc) {
-        violationConditions.push({ 'review_details.is_aigc': true });
+        violationConditions.push({ 'review_details.is_aigc': true })
       }
-      
+
       if (violationConditions.length > 0) {
-        andConditions.push({
-          $or: violationConditions
-        });
+        andConditions.push({ $or: violationConditions })
       }
     }
   }
@@ -122,17 +127,17 @@ const TAKEDOWN_SUCCESSFUL_STATUSES = ['takedown successful', 'takedown_successfu
 const buildTakedownDateAddFields = () => ({
   sort_original_date: {
     $toDate: {
-      $ifNull: ['$engagement.posted_at', '$metadata.posted_date']
-    }
+      $ifNull: ['$list.posted_at', { $ifNull: ['$engagement.posted_at', '$metadata.posted_date'] }],
+    },
   },
   sort_takedown_date: {
     $toDate: {
-      $ifNull: ['$takedown_info.takedown_start_date', '$metadata.updated_at']
-    }
+      $ifNull: ['$takedown.initiated_at', '$system.updated_at'],
+    },
   },
   sort_takedown_successful_date: {
-    $toDate: '$takedown_info.takedown_end_date'
-  }
+    $toDate: '$takedown.completed_at',
+  },
 })
 
 const buildTakedownDateFilterStages = (filters = {}) => {
@@ -179,14 +184,30 @@ const buildTakedownDateFilterStages = (filters = {}) => {
 
 const applyStatusOverride = (matchStage, statusOverride) => {
   if (!statusOverride) return matchStage
-  return { ...matchStage, 'takedown_info.status': statusOverride }
+  return { ...matchStage, 'workflow.takedown_status': statusOverride }
 }
 
-const normalizeMongoDate = (value) => {
-  if (!value) return null
-  if (value.$date) return value.$date
-  return value
+const inferHistoryAction = (eventType) => {
+  const normalized = String(eventType || '').toLowerCase()
+  if (normalized.includes('note')) return 'note_added'
+  if (normalized.includes('document')) return 'document_uploaded'
+  return 'update'
 }
+
+const mapCaseEventsToTakedownHistory = (events = []) =>
+  events.map((event) => ({
+    id: event.payload?.id || crypto.randomUUID(),
+    action: event.payload?.action || inferHistoryAction(event.event_type),
+    details: event.changes_summary || event.payload?.details || event.payload?.event || '',
+    created_at: event.updated_at || new Date().toISOString(),
+    created_by: event.updated_by || null,
+  }))
+
+const getTakedownDocumentsFromPost = (post) =>
+  post?.takedown?.documents || post?.takedown_info?.documents || []
+
+const getTakedownNotesFromPost = (post) =>
+  post?.takedown?.notes || post?.takedown_info?.notes || []
 
 /**
  * Fetch active takedowns with filters, server-side pagination, and enriched MongoDB data
@@ -202,27 +223,26 @@ export const getTakedowns = traceAction('getTakedowns_list', async (filters = {}
   try {
     const client = await clientPromise
     const db = client.db(ctx.dbName)
-    const collection = db.collection('Posts')
+    const collection = postsCollection(db)
 
     const { dateFilterStage, statusOverride, hasDateFilters } = buildTakedownDateFilterStages(filters)
     const matchStage = applyStatusOverride(buildTakedownMatchQuery(filters), statusOverride)
 
     const aggregationPipeline = [
       { $match: matchStage },
-      { $project: { text_embedding: 0, image_embedding: 0 } },
       { $addFields: buildTakedownDateAddFields() },
       ...(hasDateFilters ? [{ $match: dateFilterStage }] : []),
       {
         $facet: {
-          metadata: [{ $count: "totalCount" }],
+          metadata: [{ $count: 'totalCount' }],
           data: [
-            { $sort: { 'takedown_info.events.date': -1, 'metadata.updated_at': -1 } },
+            { $sort: { 'system.updated_at': -1, 'takedown.initiated_at': -1 } },
             { $skip: skip },
-            { $limit: pageSize }
-          ]
-        }
-      }
-    ];
+            { $limit: pageSize },
+          ],
+        },
+      },
+    ]
 
     const result = await runInSpan(
       'takedowns.getTakedowns.mongo_data_and_count',
@@ -235,61 +255,57 @@ export const getTakedowns = traceAction('getTakedowns_list', async (filters = {}
     const enrichedTakedowns = await runInSpan(
       'takedowns.getTakedowns.s3_signing',
       async () => Promise.all(posts.map(async (post) => {
-      let thumbnail = null
-      let caption = post.post_content?.caption || post.caption || ''
-      let username = post.user?.username || post.profile?.username || 'Unknown'
+        const takedownInfo = buildTakedownInfoForUi(post)
+        const author = getAuthorSnapshot(post)
+        const caption = getPostCaption(post)
+        let thumbnail = null
 
-      // Handle Media/Thumbnail
-      if (post.post_content?.media_urls?.length > 0) {
-        const media = post.post_content.media_urls[0]
-        const s3Url = media.thumbnail_url || media.s3_url
+        const s3Url = getFirstMediaS3Url(post)
         if (s3Url) {
           thumbnail = await getSignedImageUrl(s3Url)
         }
-      } else if (post.s3_url) {
-        thumbnail = await getSignedImageUrl(post.s3_url)
-      }
 
-      // Extract events to find last update date
-      const events = post.takedown_info?.events || []
-      let lastUpdateDate = events.length > 0 
-        ? events[events.length - 1].date 
-        : (post.takedown_info?.takedown_start_date || post.metadata?.updated_at || null)
+        const lastUpdateDate = toIsoDate(
+          post.system?.updated_at || post.takedown?.initiated_at || post.metadata?.updated_at || null,
+        )
+        const takedownStartDate = toIsoDate(takedownInfo.takedown_start_date)
+        const takedownSuccessfulDate = toIsoDate(takedownInfo.takedown_end_date)
+        const notes = getTakedownNotesFromPost(post)
 
-      lastUpdateDate = normalizeMongoDate(lastUpdateDate)
+        const { threat_types, violations_unknown } = getListThreatTypes(post.review_details)
 
-      const takedownStartDate = normalizeMongoDate(post.takedown_info?.takedown_start_date)
-      const takedownSuccessfulDate = normalizeMongoDate(post.takedown_info?.takedown_end_date)
-
-      const { threat_types, violations_unknown } = getListThreatTypes(post.review_details)
-
-      return {
-        id: post._id.toString(),
-        mongo_post_id: post._id.toString(),
-        post_platform_id: post.post_id || post.code || '',
-        platform: post.platform,
-        status: post.takedown_info?.status || 'initiated',
-        visibility_status: post.visibility_status || 'active',
-        risk_score: post.review_details?.threat_score || 0,
-        threat_type: threat_types[0] || (violations_unknown ? 'Unknown' : '-'),
-        threat_types,
-        violations_unknown,
-        last_update_date: lastUpdateDate,
-        takedown_start_date: takedownStartDate,
-        takedown_successful_date: takedownSuccessfulDate,
-        posted_at: post.engagement?.posted_at || post.metadata?.posted_date || null,
-        url: post.url || post.metadata?.url || '',
-        notes: post.takedown_info?.notes ? post.takedown_info.notes.join('\n\n') : '',
-        caption: post.caption || '',
-        user: post.user || '',
-        enrichment: {
-          caption: caption.length > 100 ? caption.substring(0, 100) + '...' : caption,
-          thumbnail,
-          username
+        return {
+          id: post._id.toString(),
+          mongo_post_id: post._id.toString(),
+          post_platform_id: post.platform_post_id || post.post_id || post.code || '',
+          platform: post.platform,
+          status: takedownInfo.status || 'initiated',
+          visibility_status: post.workflow?.visibility_status || post.visibility_status || 'active',
+          risk_score: post.list?.effective_threat_score ?? post.review_details?.threat_score ?? 0,
+          threat_type: threat_types[0] || (violations_unknown ? 'Unknown' : '-'),
+          threat_types,
+          violations_unknown,
+          last_update_date: lastUpdateDate,
+          takedown_start_date: takedownStartDate,
+          takedown_successful_date: takedownSuccessfulDate,
+          posted_at: toIsoDate(post.list?.posted_at || post.engagement?.posted_at || post.metadata?.posted_date || null),
+          url: post.url || post.metadata?.url || '',
+          notes: notes.length > 0 ? notes.join('\n\n') : '',
+          caption,
+          user: {
+            username: author.username,
+            full_name: author.display_name,
+            profile_pic_url: author.profile_url,
+            is_verified: author.is_verified,
+          },
+          enrichment: {
+            caption: caption.length > 100 ? `${caption.substring(0, 100)}...` : caption,
+            thumbnail,
+            username: author.username,
+          },
         }
-      }
-    })),
-      { 'app.span_type': 's3_signing' }
+      })),
+      { 'app.span_type': 's3_signing' },
     )
 
     return {
@@ -310,7 +326,7 @@ export const getTakedownMetrics = traceAction('getTakedownMetrics_page', async (
   try {
     const client = await clientPromise
     const db = client.db(ctx.dbName)
-    const collection = db.collection('Posts')
+    const collection = postsCollection(db)
     
     // Create filters clone without status
     const metricsFilters = { ...filters }
@@ -321,7 +337,6 @@ export const getTakedownMetrics = traceAction('getTakedownMetrics_page', async (
 
     const pipeline = [
       { $match: matchStage },
-      { $project: { text_embedding: 0, image_embedding: 0 } },
     ]
 
     if (hasDateFilters) {
@@ -331,9 +346,9 @@ export const getTakedownMetrics = traceAction('getTakedownMetrics_page', async (
 
     pipeline.push({
       $group: {
-        _id: "$takedown_info.status",
-        count: { $sum: 1 }
-      }
+        _id: '$workflow.takedown_status',
+        count: { $sum: 1 },
+      },
     })
 
     const metrics = await runInSpan(
@@ -459,18 +474,27 @@ export const confirmTakedownDocumentUpload = traceAction('confirmTakedownDocumen
       details: `Uploaded document: ${fileName}`,
       created_by: user.id,
       date: new Date().toISOString(),
-      created_at: new Date().toISOString()
+      created_at: new Date().toISOString(),
     }
 
-    await db.collection('Posts').updateOne(
+    const now = new Date()
+
+    await postsCollection(db).updateOne(
       { _id: new ObjectId(takedownId) },
       {
-        $push: {
-          'takedown_info.documents': documentRecord,
-          'takedown_info.events': eventRecord
-        }
-      }
+        $push: { 'takedown.documents': documentRecord },
+        $set: { 'system.updated_at': now },
+      },
     )
+
+    await insertCaseEvent(db, {
+      entityType: 'post',
+      entityId: takedownId,
+      eventType: 'Document Uploaded',
+      actor: user.id,
+      summary: eventRecord.details,
+      payload: eventRecord,
+    })
 
     revalidatePath(`/takedowns/case/${takedownId}`)
     return { success: true }
@@ -495,17 +519,15 @@ export const getTakedownDocuments = traceAction('getTakedownDocuments', async (t
     const post = await runInSpan(
       'takedowns.getTakedownDocuments.mongo_query',
       async () =>
-        db.collection('Posts').findOne(
-          { _id: new ObjectId(takedownId) },
-          { projection: { text_embedding: 0, image_embedding: 0 } }
-        ),
-      { 'app.span_type': 'mongo_query' }
+        postsCollection(db).findOne({ _id: new ObjectId(takedownId) }),
+      { 'app.span_type': 'mongo_query' },
     )
-    if (!post || !post.takedown_info || !post.takedown_info.documents) {
+    const documents = getTakedownDocumentsFromPost(post)
+    if (!documents.length) {
       return []
     }
 
-    const sortedDocs = post.takedown_info.documents.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+    const sortedDocs = documents.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
     
     // Generate signed view URLs for all documents so frontend can preview them
     const docsWithUrls = await runInSpan(
@@ -537,13 +559,16 @@ export const getDocumentDownloadUrl = traceAction('getDocumentDownloadUrl', asyn
     const client = await clientPromise
     const db = client.db(ctx.dbName)
     
-    const post = await db.collection('Posts').findOne(
-      { 'takedown_info.documents.id': documentId },
-      { projection: { text_embedding: 0, image_embedding: 0 } }
-    )
+    const post = await postsCollection(db).findOne({
+      $or: [
+        { 'takedown.documents.id': documentId },
+        { 'takedown_info.documents.id': documentId },
+      ],
+    })
     if (!post) return null
 
-    const doc = post.takedown_info.documents.find(d => d.id === documentId)
+    const documents = getTakedownDocumentsFromPost(post)
+    const doc = documents.find((d) => d.id === documentId)
     if (!doc) return null
 
     return await getSignedDownloadUrl(doc.s3_key, doc.file_name)
@@ -568,82 +593,35 @@ export const getTakedownDetails = traceAction('getTakedownDetails', async (id) =
     let post = await runInSpan(
       'takedowns.getTakedownDetails.mongo_query',
       async () =>
-        db.collection('Posts').findOne(
-          { _id: new ObjectId(id) },
-          { projection: { text_embedding: 0, image_embedding: 0 } }
-        ),
-      { 'app.span_type': 'mongo_query' }
+        postsCollection(db).findOne({ _id: new ObjectId(id) }),
+      { 'app.span_type': 'mongo_query' },
     )
 
     if (!post) return null
 
-    // Serialize MongoDB objects for Next.js Client Components
-    post = JSON.parse(JSON.stringify(post))
-
-    // Ensure _id is a string (JSON.stringify handles this but let's be explicit if needed)
-    if (post._id) post._id = post._id.toString()
-
-    // Handle signed URL here if needed by the UI
-    let s3UrlToSign = null
-    if (post.post_content?.media_urls && post.post_content.media_urls.length > 0) {
-      const firstMedia = post.post_content.media_urls[0]
-      s3UrlToSign = firstMedia.thumbnail_url || firstMedia.s3_url
-    } else if (post.s3_url) {
-      s3UrlToSign = post.s3_url
-    }
-    post.signedImageUrl = await runInSpan(
+    const normalizedPost = await runInSpan(
       'takedowns.getTakedownDetails.s3_signing',
-      async () => (s3UrlToSign ? getSignedImageUrl(s3UrlToSign) : null),
-      { 'app.span_type': 's3_signing' }
+      async () => normalizeS3Post(post, db),
+      { 'app.span_type': 's3_signing' },
     )
 
-    // NORMALIZE USER DATA HERE for consistency across UI
-    post.user = {
-      username: post.user?.username || post.profile?.username || 'Unknown',
-      full_name: post.user?.full_name || post.profile?.display_name || '',
-      profile_pic_url: post.user?.profile_pic_url || post.profile?.profile_pic_url || post.profile?.profile_url || '',
-      is_verified: post.user?.is_verified || post.profile?.is_verified || false
-    }
-
-    // NORMALIZE STATS
-    post.stats = {
-      like_count: post.stats?.like_count || post.engagement?.likes || 0,
-      comment_count: post.stats?.comment_count || post.engagement?.comments || 0,
-      share_count: post.stats?.share_count || post.engagement?.shares || 0,
-      view_count: post.stats?.view_count || post.engagement?.views || '-'
-    }
-
-    post.visibility_status = post.visibility_status || 'active'
-
-    // Prepare takedown object
-    let takedownStartDate = post.takedown_info?.takedown_start_date || post.metadata?.updated_at || post.created_at || null
-    if (takedownStartDate && takedownStartDate.$date) takedownStartDate = takedownStartDate.$date
+    const takedownInfo = buildTakedownInfoForUi(post)
+    const rawEvents = await fetchPostCaseEvents(db, id)
+    const history = mapCaseEventsToTakedownHistory(rawEvents)
+    history.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
 
     const takedown = {
-      id: post._id,
-      status: post.takedown_info?.status || 'initiated',
-      created_at: takedownStartDate,
-      post_platform_id: post.post_id || post.code,
-      notes: post.takedown_info?.notes || [],
+      id: normalizedPost._id,
+      status: takedownInfo.status || 'initiated',
+      created_at: takedownInfo.takedown_start_date || normalizedPost.updated_at || normalizedPost.created_at || null,
+      post_platform_id: normalizedPost.post_id,
+      notes: getTakedownNotesFromPost(post),
     }
-
-    // Prepare history array
-    const rawEvents = post.takedown_info?.events || []
-    
-    let history = rawEvents.map(e => ({
-      id: e.id || crypto.randomUUID(),
-      action: e.action || 'update',
-      details: e.details || e.event || '',
-      created_at: e.date || e.created_at || new Date().toISOString(),
-      created_by: e.created_by || null
-    }))
-    
-    history.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
 
     return {
       takedown,
       history,
-      post
+      post: normalizedPost,
     }
   } catch (e) {
     logActionError({ loki_stream: LOKI_STREAMS.takedowns, app_action: 'getTakedownDetails', message: 'getTakedownDetails failed' }, e)
@@ -668,12 +646,15 @@ export const updateTakedown = traceAction('updateTakedown', async (id, updates, 
     const client = await clientPromise
     const db = client.db(ctx.dbName)
     
-    const updateFields = {}
+    const updateFields = {
+      'system.updated_at': new Date(),
+    }
     if (updates.status !== undefined) {
-      updateFields['takedown_info.status'] = updates.status
+      updateFields['workflow.takedown_status'] = updates.status
+      updateFields['takedown.status'] = updates.status
       if (updates.status === 'takedown_successful') {
-        updateFields['takedown_info.takedown_end_date'] = new Date().toISOString()
-        updateFields['takedown_info.content_active'] = false
+        updateFields['takedown.completed_at'] = new Date()
+        updateFields['workflow.visibility_status'] = 'down'
       }
     }
 
@@ -684,16 +665,25 @@ export const updateTakedown = traceAction('updateTakedown', async (id, updates, 
       details: message,
       created_by: user?.id,
       date: new Date().toISOString(),
-      created_at: new Date().toISOString()
+      created_at: new Date().toISOString(),
     }
 
-    await db.collection('Posts').updateOne(
+    await postsCollection(db).updateOne(
       { _id: new ObjectId(id) },
-      { 
-        $set: updateFields,
-        $push: { 'takedown_info.events': eventRecord }
-      }
+      { $set: updateFields },
     )
+
+    await insertCaseEvent(db, {
+      entityType: 'post',
+      entityId: id,
+      eventType: 'Status Update',
+      actor: user?.id,
+      summary: message,
+      payload: {
+        ...eventRecord,
+        status: updates.status,
+      },
+    })
 
     revalidatePath(`/takedowns/case/${id}`)
     return { success: true }
@@ -721,26 +711,34 @@ export const addTakedownNote = traceAction('addTakedownNote', async (id, noteCon
     const db = client.db(ctx.dbName)
 
     const formattedNote = `[${new Date().toLocaleString()}] ${noteContent}`
-    
+    const now = new Date()
+
     const eventRecord = {
       id: crypto.randomUUID(),
       action: 'note_added',
       event: 'Note Added',
       details: noteContent,
       created_by: user?.id,
-      date: new Date().toISOString(),
-      created_at: new Date().toISOString()
+      date: now.toISOString(),
+      created_at: now.toISOString(),
     }
 
-    await db.collection('Posts').updateOne(
+    await postsCollection(db).updateOne(
       { _id: new ObjectId(id) },
-      { 
-        $push: { 
-          'takedown_info.notes': formattedNote,
-          'takedown_info.events': eventRecord
-        } 
-      }
+      {
+        $push: { 'takedown.notes': formattedNote },
+        $set: { 'system.updated_at': now },
+      },
     )
+
+    await insertCaseEvent(db, {
+      entityType: 'post',
+      entityId: id,
+      eventType: 'Note Added',
+      actor: user?.id,
+      summary: noteContent,
+      payload: eventRecord,
+    })
 
     revalidatePath(`/takedowns/case/${id}`)
     return { success: true }
@@ -761,17 +759,16 @@ export const getAllTakedownIds = traceAction('getAllTakedownIds', async (filters
   try {
     const client = await clientPromise
     const db = client.db(ctx.dbName)
-    const collection = db.collection('Posts')
+    const collection = postsCollection(db)
 
     const { dateFilterStage, statusOverride, hasDateFilters } = buildTakedownDateFilterStages(filters)
     const matchStage = applyStatusOverride(buildTakedownMatchQuery(filters), statusOverride)
 
     const pipeline = [
       { $match: matchStage },
-      { $project: { text_embedding: 0, image_embedding: 0 } },
       { $addFields: buildTakedownDateAddFields() },
       ...(hasDateFilters ? [{ $match: dateFilterStage }] : []),
-      { $project: { _id: 1 } }
+      { $project: { _id: 1 } },
     ]
 
     const result = await runInSpan(

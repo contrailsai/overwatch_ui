@@ -1,12 +1,26 @@
 /** Posts eligible for cases list, report ordering, and export pipelines. */
-export const REVIEWED_THREAT_SCORE_FILTER = { 'review_details.threat_score': { $exists: true } }
+export const REVIEWED_THREAT_SCORE_FILTER = {
+  'workflow.review_status': 'reviewed',
+}
 
 export function withReviewedThreatScoreFilter(query = {}) {
-  return { ...query, ...REVIEWED_THREAT_SCORE_FILTER }
+  return {
+    ...query,
+    $and: [
+      ...(query.$and || []),
+      {
+        $or: [
+          { 'workflow.review_status': 'reviewed' },
+          { 'list.review_threat_score': { $exists: true, $ne: null } },
+        ],
+      },
+    ],
+  }
 }
 
 export function isPendingReviewCase(post) {
-  return post?.review_details?.threat_score == null
+  return post?.workflow?.review_status === 'pending'
+    || post?.list?.review_threat_score == null
 }
 
 export function getCaseInspectHref(postId, { pending }) {

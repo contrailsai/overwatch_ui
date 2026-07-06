@@ -570,7 +570,7 @@ export function ProfilesList({ profiles, project, initialFilters, initialSort = 
                                                 )}
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap align-middle font-bold text-slate-700 text-sm border-b border-slate-50">
-                                                {profile.posts.length}
+                                                {profile.cases_count ?? 0}
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap align-middle border-b border-slate-50 hidden lg:table-cell">
                                                 {lastActive ? (
@@ -720,7 +720,7 @@ export function ProfilesList({ profiles, project, initialFilters, initialSort = 
                                         <div className="flex items-center gap-4">
                                             <div className="flex flex-col">
                                                 <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Cases</span>
-                                                <span className="text-xs font-bold text-slate-700 leading-none">{profile.posts.length}</span>
+                                                <span className="text-xs font-bold text-slate-700 leading-none">{profile.cases_count ?? 0}</span>
                                             </div>
                                             <div className="w-px h-6 bg-slate-100"></div>
                                             <a

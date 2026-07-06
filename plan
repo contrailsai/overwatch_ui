@@ -1,0 +1,21 @@
+checkout 
+@nexus_test 
+
+this is the uscase of D3 for showcasing graphs across POIs and and their topics with topics and their posts. 
+
+for this we are thingking of adding deterministic setups here
+
+-> a POI collection in db that stores information of POIs and other information.  
+-> the topics collection explands better (it would be of 3-4 types like is it a event that happened, an information relating to the POI disclosed, just gossip/jokes/what ifs on the POIs etc) 
+-> the topics would be relating to the POIs based on these. 
+-> the posts would be belonging to the topics and the topics would be made on analysis of the posts trying to assign them to a exisitng topic or make it a new topic seeing that it already exisits. 
+-> some topics may belong to bigger topics (like extra information disclosure on an IPO of a company being a passive topic to the Main topic of IPO coming soon)
+
+then based on this the topics we are calling here would become the fore-front of the information and news. 
+=> we would be able to see the freequency of information on a event, new news on them, sub-informations on them and so on. 
+=> we would be able to gather the sentiment of people based on the gossip / AI deepfakes and many others things done on their personas. (with potentially takedwons)
+
+topics and post would be accessable using each other so we would be very easily backtrack the informational posts from the topics and get the bigger picture expalnsion for the posts to topics.   
+
+
+we want to implement this.

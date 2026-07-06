@@ -360,12 +360,12 @@ function ProfileDetailPanel({ profile, profiles = [], project, isOpen, onClose, 
         let cancelled = false
         setCases(null)
         setIsBioExpanded(false)
-        if (profile.posts.length === 0) {
+        if ((profile.cases_count ?? 0) === 0) {
             setCases([])
             return
         }
         setLoading(true)
-        getProfileCases(project, profile.posts)
+        getProfileCases(project, profile._id)
             .then(result => { if (!cancelled) setCases(result) })
             .catch(() => { if (!cancelled) setCases([]) })
             .finally(() => { if (!cancelled) setLoading(false) })
@@ -389,9 +389,9 @@ function ProfileDetailPanel({ profile, profiles = [], project, isOpen, onClose, 
     const handlePrev = () => hasPrev && onSelectProfile(profiles[currentIndex - 1])
     const handleNext = () => hasNext && onSelectProfile(profiles[currentIndex + 1])
 
-    const highCount = cases?.filter(c => (c.review_details?.threat_score ?? 0) >= 96).length || 0
-    const medCount = cases?.filter(c => { const s = c.review_details?.threat_score ?? 0; return s >= 76 && s < 96 }).length || 0
-    const lowCount = cases?.filter(c => { const s = c.review_details?.threat_score ?? 0; return s >= 41 && s < 76 }).length || 0
+    const highCount = cases?.filter(c => (c.score ?? c.review_details?.threat_score ?? 0) >= 96).length || 0
+    const medCount = cases?.filter(c => { const s = c.score ?? c.review_details?.threat_score ?? 0; return s >= 76 && s < 96 }).length || 0
+    const lowCount = cases?.filter(c => { const s = c.score ?? c.review_details?.threat_score ?? 0; return s >= 41 && s < 76 }).length || 0
 
     return (
         <>
@@ -638,7 +638,7 @@ function ProfileDetailPanel({ profile, profiles = [], project, isOpen, onClose, 
                                 {!loading && cases && cases.length > 0 && (
                                     <div className="space-y-2.5">
                                         {cases.map(c => {
-                                            const risk = getRiskLabel(c.review_details?.threat_score)
+                                            const risk = getRiskLabel(c.score ?? c.review_details?.threat_score)
                                             const statusCfg = getStatusConfig(c.client_status)
                                             const StatusIcon = statusCfg.icon
                                             const pending = isPendingReviewCase(c)
@@ -1069,7 +1069,7 @@ export function ProfilesList({ profiles, project, initialFilters, currentPage })
                                         <td className="px-4 py-3 whitespace-nowrap align-middle">
                                             <span className="inline-flex items-center gap-1.5 text-sm font-bold text-slate-700">
                                                 <FileText className="w-3.5 h-3.5 text-slate-400" />
-                                                {profile.posts.length}
+                                                {profile.cases_count ?? 0}
                                             </span>
                                         </td>
 

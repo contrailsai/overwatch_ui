@@ -11,6 +11,8 @@ import { traceAction, recordClickMetric } from '@/utils/tracing'
 import { metadata } from '../layout'
 import { requireAuthContext, requireRole } from '@/utils/auth-context'
 import { logActionError, LOKI_STREAMS } from '@/utils/otel-logger'
+import { postsCollection } from '@/utils/mongodb/collections'
+import { insertCaseEvent } from '@/utils/mongodb/v3-schema'
 
 // ADD NOTE
 export const addReviewNote = traceAction('addReviewNote', async (caseId, noteText) => {
@@ -19,7 +21,7 @@ export const addReviewNote = traceAction('addReviewNote', async (caseId, noteTex
 
         const client = await clientPromise
         const db = client.db(dbName)
-        const collection = db.collection('Posts')
+        const collection = postsCollection(db)
 
         const newNote = {
             text: noteText,
@@ -30,19 +32,19 @@ export const addReviewNote = traceAction('addReviewNote', async (caseId, noteTex
         const result = await collection.updateOne(
             { _id: new ObjectId(caseId) },
             {
-                $set: { "metadata.updated_at": new Date().toISOString() },
-                $push: {
-                    client_notes: newNote,
-                    "metadata.update_history": {
-                        updated_at: new Date(),
-                        updated_by: clientDetails.email,
-                        changes_summary: "client added a review note"
-                    }
-                }
+                $set: { 'system.updated_at': new Date() },
+                $push: { client_notes: newNote },
             }
         )
 
         if (result.matchedCount > 0) {
+            await insertCaseEvent(db, {
+                entityType: 'post',
+                entityId: caseId,
+                eventType: 'Review Note Added',
+                actor: clientDetails.email,
+                summary: 'client added a review note',
+            })
             return { success: true, note: newNote }
         } else {
             return { success: false, error: "Case not found" }
@@ -123,13 +125,9 @@ export const submitCaseReview = traceAction('submitCaseReview', async (_project,
     try {
         const client = await clientPromise
         const db = client.db(dbName) // Use Correct DB
-        const collection = db.collection('Posts')
+        const collection = postsCollection(db)
 
-        // 1. Fetch existing post to get previous state
-        const existingPost = await collection.findOne(
-            { _id: new ObjectId(mongoId) },
-            { projection: { text_embedding: 0, image_embedding: 0 } }
-        )
+        const existingPost = await collection.findOne({ _id: new ObjectId(mongoId) })
         if (!existingPost) {
             return { success: false, error: 'Post not found' }
         }
@@ -159,7 +157,8 @@ export const submitCaseReview = traceAction('submitCaseReview', async (_project,
         // Check if it was previously reviewed to handle metrics updates correctly
         // We only treat it as an update if it has a valid threat_score from a previous session
         const prevReview = existingPost.review_details;
-        const isPreviouslyReviewed = existingPost.processed && prevReview && prevReview.threat_score !== undefined;
+        const isPreviouslyReviewed = existingPost.workflow?.review_status === 'reviewed'
+            || (prevReview && prevReview.threat_score !== undefined);
 
         const previousReviewData = isPreviouslyReviewed ? {
             threat_score: prevReview.threat_score,
@@ -169,25 +168,42 @@ export const submitCaseReview = traceAction('submitCaseReview', async (_project,
         } : null
 
         // 2. Update MongoDB
+        const reviewedAt = review_details.reviewed_at
+        const effectiveScore = review_details.threat_score
         const result = await collection.updateOne(
             { _id: new ObjectId(mongoId) },
             {
                 $set: {
                     review_details,
-                    takedown_info,
-                    processed: true,
-                    processed_at: new Date(),
-                    "metadata.updated_at": new Date().toISOString()
+                    takedown: {
+                        ...(existingPost.takedown || {}),
+                        status: takedown_info.takedown_status?.toLowerCase?.() === 'none'
+                            ? (existingPost.takedown?.status || 'none')
+                            : (takedown_info.takedown_status || existingPost.takedown?.status || 'none'),
+                    },
+                    'workflow.review_status': 'reviewed',
+                    'workflow.client_status': existingPost.workflow?.client_status || 'open',
+                    ...(!already_in_takedown
+                        ? { 'workflow.takedown_status': suggest_takedown ? 'requested' : 'none' }
+                        : {}),
+                    'list.review_threat_score': effectiveScore,
+                    'list.effective_threat_score': effectiveScore,
+                    'list.reviewed_at': new Date(reviewedAt),
+                    'list.threat_types': review_details.threat_types,
+                    'list.violation_flags': review_details.threat_types,
+                    'system.updated_at': new Date(),
                 },
-                $push: {
-                    "metadata.update_history": {
-                        updated_at: new Date(),
-                        updated_by: clientDetails.email,
-                        changes_summary: "client edited case review details"
-                    }
-                }
             }
         )
+
+        await insertCaseEvent(db, {
+            entityType: 'post',
+            entityId: mongoId,
+            eventType: 'Case Review Updated',
+            actor: clientDetails.email,
+            summary: 'client edited case review details',
+            payload: { review_details },
+        })
 
         // 3. Update Supabase Metrics
         const currentReviewData = {
@@ -269,24 +285,26 @@ export const assignCaseTo = traceAction('assignCaseTo', async (_project, _client
     try {
         const client = await clientPromise
         const db = client.db(dbName) // Use Correct DB
-        const collection = db.collection('Posts')
+        const collection = postsCollection(db)
 
         const result = await collection.updateOne(
             { _id: new ObjectId(post_id) },
             {
                 $set: {
-                    "assigned_to": assigned_email,
-                    "metadata.updated_at": new Date().toISOString()
+                    assigned_to: assigned_email,
+                    'system.updated_at': new Date(),
                 },
-                $push: {
-                    "metadata.update_history": {
-                        updated_at: new Date(),
-                        updated_by: clientDetails.email,
-                        changes_summary: "client admin assigned case to another client"
-                    }
-                }
             }
         )
+
+        await insertCaseEvent(db, {
+            entityType: 'post',
+            entityId: post_id,
+            eventType: 'Case Assigned',
+            actor: clientDetails.email,
+            summary: 'client admin assigned case to another client',
+            payload: { assigned_to: assigned_email },
+        })
 
         // FINALY ADD NOTIFICATION MESSAGE TO THE ASSIGNED CLIENT
         const supabase = await createClient()
@@ -326,7 +344,7 @@ export const bulkAssignCasesTo = traceAction('bulkAssignCasesTo', async (_projec
     try {
         const client = await clientPromise
         const db = client.db(dbName) // Use Correct DB
-        const collection = db.collection('Posts')
+        const collection = postsCollection(db)
 
         const objectIds = post_ids.map(id => new ObjectId(id))
 
@@ -334,18 +352,22 @@ export const bulkAssignCasesTo = traceAction('bulkAssignCasesTo', async (_projec
             { _id: { $in: objectIds } },
             {
                 $set: {
-                    "assigned_to": assigned_email,
-                    "metadata.updated_at": new Date().toISOString()
+                    assigned_to: assigned_email,
+                    'system.updated_at': new Date(),
                 },
-                $push: {
-                    "metadata.update_history": {
-                        updated_at: new Date(),
-                        updated_by: clientDetails.email,
-                        changes_summary: "admin assigned case to another client"
-                    }
-                }
             }
         )
+
+        await Promise.all(post_ids.map((postId) =>
+            insertCaseEvent(db, {
+                entityType: 'post',
+                entityId: postId,
+                eventType: 'Case Assigned',
+                actor: clientDetails.email,
+                summary: 'admin assigned case to another client',
+                payload: { assigned_to: assigned_email },
+            })
+        ))
 
         // FINALY ADD NOTIFICATION MESSAGE TO THE ASSIGNED CLIENT
         const supabase = await createClient()

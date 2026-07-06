@@ -131,13 +131,13 @@ export default function ProfileDetailPanel({ profile, project, isOpen, onClose, 
         setNoteText('')
         setIsBioExpanded(false)
 
-        if (profile.posts.length === 0) {
+        if ((profile.cases_count ?? 0) === 0) {
             setCases([])
             return
         }
         setShowProcessed("")
         setLoading(true)
-        getProfileCases(profile.posts)
+        getProfileCases(profile._id)
             .then(result => { if (!cancelled) setCases(result) })
             .catch(() => { if (!cancelled) setCases([]) })
             .finally(() => { if (!cancelled) setLoading(false) })
@@ -178,9 +178,9 @@ export default function ProfileDetailPanel({ profile, project, isOpen, onClose, 
     const reasoning = review.reasoning || 'No profile reasoning provided.'
     const violations = review.violations || []
 
-    const highCount = cases?.filter(c => (c.review_details?.threat_score ?? 0) >= 96).length || 0
-    const medCount = cases?.filter(c => { const s = c.review_details?.threat_score ?? 0; return s >= 76 && s < 96 }).length || 0
-    const lowCount = cases?.filter(c => { const s = c.review_details?.threat_score ?? 0; return s >= 41 && s < 76 }).length || 0
+    const highCount = cases?.filter(c => (c.score ?? c.review_details?.threat_score ?? 0) >= 96).length || 0
+    const medCount = cases?.filter(c => { const s = c.score ?? c.review_details?.threat_score ?? 0; return s >= 76 && s < 96 }).length || 0
+    const lowCount = cases?.filter(c => { const s = c.score ?? c.review_details?.threat_score ?? 0; return s >= 41 && s < 76 }).length || 0
     const reportPosts = cases != null ? cases.map((c) => ({ _id: c._id })) : undefined
 
     const profileRisk = getProfileRiskBadge(riskScore)
@@ -357,7 +357,7 @@ export default function ProfileDetailPanel({ profile, project, isOpen, onClose, 
                                 </div>
                                 <div className="flex flex-col">
                                     <span className="text-lg font-bold text-slate-900 tracking-tight">
-                                        {profile.metadata?.media_count?.toLocaleString() || profile.posts?.length || 0}
+                                        {profile.metadata?.media_count?.toLocaleString() || profile.cases_count || 0}
                                     </span>
                                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Posts</span>
                                 </div>

@@ -5,6 +5,7 @@ import clientPromise from '@/utils/mongodb/client'
 import { requireRole } from '@/utils/auth-context'
 import { logActionError, logActionWarn, LOKI_STREAMS } from '@/utils/otel-logger'
 import { TOPICS_COLLECTION, serializeTopicOption } from '@/lib/feeds/feed-schema'
+import { postsCollection } from '@/utils/mongodb/collections'
 import {
   allocateNextTopicId,
   getPostHexId,
@@ -134,7 +135,7 @@ export async function createTopicForPost({ title, postId }) {
     const db = client.db(dbName)
     const collection = db.collection(TOPICS_COLLECTION)
 
-    const postDoc = await db.collection('Posts').findOne(
+    const postDoc = await postsCollection(db).findOne(
       { _id: new ObjectId(hexId) },
       { projection: { 'engagement.posted_at': 1, 'metadata.posted_date': 1, posted_date: 1 } }
     )

@@ -1,4 +1,5 @@
 import { ObjectId } from 'mongodb'
+import { postsCollection } from '@/utils/mongodb/collections'
 import { TOPICS_COLLECTION } from '@/lib/feeds/feed-schema'
 import { toPostObjectIds } from '@/lib/feeds/resolve-feed-posts'
 
@@ -17,7 +18,8 @@ export function getPostHexId(postId) {
 /** Read publish date from a raw Posts document. */
 export function getPostPostedAt(post) {
   if (!post) return null
-  const raw = post.engagement?.posted_at
+  const raw = post.list?.posted_at
+    ?? post.engagement?.posted_at
     ?? post.metadata?.posted_date
     ?? post.posted_date
   if (!raw) return null
@@ -57,10 +59,10 @@ export async function recomputeTopicStats(db, topicId) {
 
   const objectIds = toPostObjectIds(posts)
   const postDocs = objectIds.length > 0
-    ? await db.collection('Posts')
+    ? await postsCollection(db)
       .find(
         { _id: { $in: objectIds } },
-        { projection: { 'engagement.posted_at': 1, 'metadata.posted_date': 1, posted_date: 1 } }
+        { projection: { 'list.posted_at': 1, 'engagement.posted_at': 1, 'metadata.posted_date': 1, posted_date: 1 } }
       )
       .toArray()
     : []

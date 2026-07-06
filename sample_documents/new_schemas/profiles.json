@@ -1,0 +1,44 @@
+{
+    "_id": {
+      "$oid": "69d75caa0c0f759055c842c8"
+    },
+    "schema_version": 3,
+    "platform": "youtube",
+    "platform_user_id": null,
+    "username": "@MostVivid",
+    "display_name": "Most Vivid",
+    "profile_url": "https://www.youtube.com/@MostVivid",
+    "is_verified": false,
+    "workflow": {
+      "review_status": "pending",
+      "client_status": "open",
+      "reviewed_at": null
+    },
+    "list": {
+      "risk": null,
+      "risk_rank": null,
+      "post_count": 0,
+      "reviewed_post_count": 0,
+      "max_threat_score": null,
+      "last_active_at": null,
+      "follower_count": null,
+      "location": null
+    },
+    "enrichment": {
+      "biography": null,
+      "profile_pic_s3": null,
+      "media_count": null,
+      "account_created_at": null,
+      "following_count": null,
+      "profile_pic": null
+    },
+    "review_details": {},
+    "client_notes": [],
+    "system": {
+      "created_at": null,
+      "updated_at": {
+        "$date": "2026-04-27T18:58:44.675Z"
+      },
+      "last_synced_from_post_at": null
+    }
+  }

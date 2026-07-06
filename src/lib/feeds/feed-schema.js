@@ -30,7 +30,8 @@
 import { buildFeedSlug } from '@/lib/feeds/feed-slug'
 
 export const FEEDS_COLLECTION = 'Feeds'
-export const TOPICS_COLLECTION = 'Topics'
+export const TOPICS_COLLECTION = 'topics'
+export const POSTS_COLLECTION = 'posts'
 
 const toIso = (value) => {
   if (!value) return null

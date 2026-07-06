@@ -1,6 +1,5 @@
 /**
- * Risk bucket thresholds — aligned with buildCasesMatchQuery in actions.js
- * high > 95, medium > 75 && <= 95, low > 40 && <= 75, safe <= 40
+ * Risk bucket thresholds — aligned with list.effective_threat_score materialization.
  */
 export const RISK_THRESHOLDS = {
   HIGH: 95,
@@ -14,6 +13,14 @@ export const RISK_RANK = {
   LOW: 2,
   SAFE: 1,
   UNKNOWN: 0,
+}
+
+const STRING_RISK_RANK = {
+  high: RISK_RANK.HIGH,
+  medium: RISK_RANK.MEDIUM,
+  mid: RISK_RANK.MEDIUM,
+  low: RISK_RANK.LOW,
+  safe: RISK_RANK.SAFE,
 }
 
 export function getRiskLabel(score) {
@@ -40,7 +47,6 @@ export const ENGAGEMENT_WEIGHTS = {
   shares: 4,
 }
 
-/** Weighted engagement: views + 2×likes + 3×comments + 4×shares */
 export function computeEngagementScore(views = 0, likes = 0, comments = 0, shares = 0) {
   const v = Number(views) || 0
   const l = Number(likes) || 0
@@ -54,85 +60,55 @@ export function computeEngagementScore(views = 0, likes = 0, comments = 0, share
   )
 }
 
-function engagementToLong(fieldPath) {
-  return { $convert: { input: { $ifNull: [fieldPath, 0] }, to: 'long', onError: 0, onNull: 0 } }
-}
-
-/** Mongo $addFields fragment for sort_engagement. */
-export function buildEngagementScoreAddFields() {
-  return {
-    sort_engagement: {
-      $add: [
-        engagementToLong('$engagement.views'),
-        { $multiply: [ENGAGEMENT_WEIGHTS.likes, engagementToLong('$engagement.likes')] },
-        { $multiply: [ENGAGEMENT_WEIGHTS.comments, engagementToLong('$engagement.comments')] },
-        { $multiply: [ENGAGEMENT_WEIGHTS.shares, engagementToLong('$engagement.shares')] },
-      ],
-    },
-  }
-}
-
-/** Combined sort-field helpers for cases list aggregation pipelines. */
+/** @deprecated v3 uses materialized list fields directly in sort pipelines. */
 export function buildCaseSortAddFields() {
-  return {
-    ...buildRiskRankAddFields(),
-    ...buildEngagementScoreAddFields(),
-  }
+  return {}
 }
 
 const engagementDesc = -1
 const dateDesc = -1
 const idAsc = 1
 
-/**
- * Default cases table sort (Risk column, desc): all keys descending except stable _id.
- * High -> Medium -> Low -> Safe, then newest alert hour (IST), highest engagement, publish, sub-hour alert.
- */
 export function buildCasesDefaultListSortPipeline() {
   return {
-    risk_rank: -1,
-    sort_processed_after_hour: -1,
-    sort_engagement: -1,
-    sort_original_date: -1,
-    sort_processed_after: -1,
+    'list.effective_threat_score': -1,
+    'list.alert_hour_ist': -1,
+    'list.engagement_score': -1,
+    'list.posted_at': -1,
+    'list.reviewed_at': -1,
     _id: idAsc,
   }
 }
 
-/**
- * Cases table / getPosts: default risk sort uses alert hour (IST) -> engagement -> publish -> full alert.
- * Alert/Publish column clicks use full timestamp for the active column. Tiebreakers stay desc unless noted.
- */
 export function buildCasesListSortPipeline(sort = {}) {
-  if (sort.field === 'original_date') {
+  if (sort.field === 'published_date' || sort.field === 'original_date') {
     return {
-      sort_original_date: sort.direction === 'asc' ? 1 : -1,
-      risk_rank: -1,
-      sort_processed_after: dateDesc,
-      sort_engagement: engagementDesc,
+      'list.posted_at': sort.direction === 'asc' ? 1 : -1,
+      'list.effective_threat_score': -1,
+      'list.reviewed_at': dateDesc,
+      'list.engagement_score': engagementDesc,
       _id: idAsc,
     }
   }
 
-  if (sort.field === 'processed_date') {
+  if (sort.field === 'alert_date' || sort.field === 'processed_date') {
     return {
-      sort_processed_after: sort.direction === 'asc' ? 1 : -1,
-      risk_rank: -1,
-      sort_original_date: dateDesc,
-      sort_engagement: engagementDesc,
+      'list.reviewed_at': sort.direction === 'asc' ? 1 : -1,
+      'list.effective_threat_score': -1,
+      'list.posted_at': dateDesc,
+      'list.engagement_score': engagementDesc,
       _id: idAsc,
     }
   }
 
-  // Default + Risk column: desc uses full default stack; asc only inverts risk bucket order.
   if (!sort.field || sort.field === 'threat_score') {
     if (sort.direction === 'asc') {
       return {
-        risk_rank: 1,
-        sort_processed_after_hour: dateDesc,
-        sort_engagement: engagementDesc,
-        sort_original_date: dateDesc,
-        sort_processed_after: dateDesc,
+        'list.effective_threat_score': 1,
+        'list.alert_hour_ist': dateDesc,
+        'list.engagement_score': engagementDesc,
+        'list.posted_at': dateDesc,
+        'list.reviewed_at': dateDesc,
         _id: idAsc,
       }
     }
@@ -142,36 +118,22 @@ export function buildCasesListSortPipeline(sort = {}) {
   return buildCasesDefaultListSortPipeline()
 }
 
-/**
- * PDF/DOCX report export (SQS postIds): risk -> engagement -> alert date -> publish date -> _id.
- * Fixed order; does not follow UI column sort.
- */
 export function buildCasesReportSortPipeline() {
   return {
-    risk_rank: -1,
-    sort_engagement: engagementDesc,
-    sort_processed_after: dateDesc,
-    sort_original_date: dateDesc,
+    'list.effective_threat_score': -1,
+    'list.engagement_score': engagementDesc,
+    'list.reviewed_at': dateDesc,
+    'list.posted_at': dateDesc,
     _id: idAsc,
   }
 }
 
-/** Pick best cluster representative to match list table priority (requires date + engagement fields). */
-export const UNIQUE_CLUSTER_LIST_SORT = {
-  risk_rank: -1,
-  sort_processed_after_hour: dateDesc,
-  sort_engagement: engagementDesc,
-  sort_original_date: dateDesc,
-  sort_processed_after: dateDesc,
-  'review_details.reviewed_at': dateDesc,
-  _id: idAsc,
-}
+export const UNIQUE_CLUSTER_LIST_SORT = buildCasesDefaultListSortPipeline()
 
-/** Cluster pick when only risk_rank + sort_engagement exist (e.g. vector search pipelines). */
 export const UNIQUE_CLUSTER_EARLY_SORT = {
-  risk_rank: -1,
-  sort_engagement: engagementDesc,
-  'review_details.reviewed_at': dateDesc,
+  'list.effective_threat_score': -1,
+  'list.engagement_score': engagementDesc,
+  'list.reviewed_at': dateDesc,
   _id: idAsc,
 }
 
@@ -180,30 +142,17 @@ export function buildCasesSortPipeline(sort = {}) {
   return buildCasesListSortPipeline(sort)
 }
 
-/** Mongo $addFields fragment for risk_rank (bucket sort key). */
+export function riskRankFromString(value) {
+  if (!value) return RISK_RANK.UNKNOWN
+  return STRING_RISK_RANK[String(value).toLowerCase()] ?? RISK_RANK.UNKNOWN
+}
+
+/** @deprecated v3 stores list.risk_rank; numeric mapping available via riskRankFromString. */
 export function buildRiskRankAddFields() {
-  const score = '$review_details.threat_score'
-  return {
-    risk_rank: {
-      $switch: {
-        branches: [
-          { case: { $gt: [score, RISK_THRESHOLDS.HIGH] }, then: RISK_RANK.HIGH },
-          {
-            case: {
-              $and: [{ $gt: [score, RISK_THRESHOLDS.MEDIUM] }, { $lte: [score, RISK_THRESHOLDS.HIGH] }],
-            },
-            then: RISK_RANK.MEDIUM,
-          },
-          {
-            case: {
-              $and: [{ $gt: [score, RISK_THRESHOLDS.LOW] }, { $lte: [score, RISK_THRESHOLDS.MEDIUM] }],
-            },
-            then: RISK_RANK.LOW,
-          },
-          { case: { $lte: [score, RISK_THRESHOLDS.LOW] }, then: RISK_RANK.SAFE },
-        ],
-        default: RISK_RANK.UNKNOWN,
-      },
-    },
-  }
+  return {}
+}
+
+/** @deprecated v3 stores list.engagement_score. */
+export function buildEngagementScoreAddFields() {
+  return {}
 }

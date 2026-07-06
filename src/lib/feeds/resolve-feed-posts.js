@@ -2,24 +2,26 @@ import { ObjectId } from 'mongodb'
 import { TOPICS_COLLECTION } from '@/lib/feeds/feed-schema'
 import {
   buildCasesMatchQuery,
-  buildCasesDateAddFieldsStage,
   buildCasesDateFilterStage,
   buildUniqueClustersStage,
 } from '@/lib/posts/pipeline-helpers'
-import { buildCaseSortAddFields, buildCasesListSortPipeline, buildCasesReportSortPipeline } from '@/app/(dashboard)/cases/riskBuckets'
+import { buildCasesListSortPipeline, buildCasesReportSortPipeline } from '@/app/(dashboard)/cases/riskBuckets'
 
-/** Convert hex post id strings to ObjectIds; skip invalid entries. */
-export function toPostObjectIds(hexIds = []) {
+/** Convert post id strings or ObjectIds to ObjectIds; skip invalid entries. */
+export function toPostObjectIds(ids = []) {
   const objectIds = []
   const seen = new Set()
-  for (const id of hexIds) {
-    if (!id || seen.has(id)) continue
+  for (const id of ids) {
+    if (id == null) continue
+    let hex
     try {
-      objectIds.push(new ObjectId(id))
-      seen.add(id)
+      hex = id instanceof ObjectId ? id.toHexString() : new ObjectId(String(id)).toHexString()
     } catch {
-      // skip invalid id
+      continue
     }
+    if (seen.has(hex)) continue
+    seen.add(hex)
+    objectIds.push(new ObjectId(hex))
   }
   return objectIds
 }
@@ -59,13 +61,6 @@ export function buildFeedScopedPipeline(postObjectIds, filters = {}) {
 
   return [
     { $match: matchStage },
-    { $project: { text_embedding: 0, image_embedding: 0 } },
-    {
-      $addFields: {
-        ...buildCasesDateAddFieldsStage(),
-        ...buildCaseSortAddFields(),
-      },
-    },
     ...(hasDateFilters ? [{ $match: dateFilterStage }] : []),
     ...buildUniqueClustersStage(filters),
   ]
@@ -87,7 +82,6 @@ export function buildFeedPostsFacetPipeline(postObjectIds, filters, sort, page, 
           { $sort: sortPipeline },
           { $skip: skip },
           { $limit: limit },
-          { $project: { text_embedding: 0, image_embedding: 0 } },
         ],
         total: [{ $count: 'total' }],
       },
@@ -114,12 +108,12 @@ export function buildFeedHistogramPipeline(postObjectIds, filters) {
 
   return [
     ...base,
-    { $match: { sort_original_date: { $ne: null } } },
+    { $match: { 'list.posted_at': { $ne: null } } },
     {
       $group: {
         _id: {
           $dateTrunc: {
-            date: '$sort_original_date',
+            date: '$list.posted_at',
             unit: 'day',
           },
         },

@@ -1,0 +1,21 @@
+{
+  "_id": {
+    "$oid": "6a4766bb5a6baf5cab95e447"
+  },
+  "entity_type": "post",
+  "entity_id": {
+    "$oid": "69810f0b3c24564a2cb28467"
+  },
+  "event_type": "Takedown Initiated",
+  "actor": null,
+  "summary": "Takedown initiated by client Pratik1.Nale@ril.com",
+  "payload": {
+    "event": "Takedown Initiated",
+    "date": "2026-05-02T09:11:46.148Z",
+    "details": "Takedown initiated by client Pratik1.Nale@ril.com"
+  },
+  "occurred_at": {
+    "$date": "2026-05-02T09:11:46.148Z"
+  },
+  "source": "client"
+}

@@ -27,17 +27,24 @@ export default async function CasesPage({ searchParams }) {
     visibility_status: resolvedParams.visibility_status || 'all',
     risk_priority: resolvedParams.risk_priority || 'all',
     violations: resolvedParams.violations || 'all',
-    original_date_from: resolvedParams.original_date_from || null,
-    original_date_to: resolvedParams.original_date_to || null,
-    processed_from: resolvedParams.processed_from || null,
-    processed_to: resolvedParams.processed_to || null,
+    published_from: resolvedParams.published_from || resolvedParams.original_date_from || null,
+    published_to: resolvedParams.published_to || resolvedParams.original_date_to || null,
+    alert_from: resolvedParams.alert_from || resolvedParams.processed_from || null,
+    alert_to: resolvedParams.alert_to || resolvedParams.processed_to || null,
     unique_clusters: resolvedParams.unique_clusters === 'true' || false
   }
 
   const isSimilaritySearch = !!resolvedParams.similar_to || !!resolvedParams.semantic_search;
 
+  const rawSortField = resolvedParams.sortField
+  const normalizedSortField = rawSortField === 'processed_date'
+    ? 'alert_date'
+    : rawSortField === 'original_date'
+      ? 'published_date'
+      : rawSortField
+
   const sort = {
-    field: resolvedParams.sortField || (isSimilaritySearch ? null : 'threat_score'),
+    field: normalizedSortField || (isSimilaritySearch ? null : 'threat_score'),
     direction: resolvedParams.sortDirection === 'asc' ? 'asc' : 'desc',
   }
 

@@ -1,0 +1,168 @@
+{
+    "_id": {
+      "$oid": "69810f0b3c24564a2cb28467"
+    },
+    "schema_version": 3,
+    "platform": "facebook",
+    "platform_post_id": "122109709275055636",
+    "original_url": "https://www.facebook.com/permalink.php?story_fbid=pfbid02rVKCgY5nfVcAwcFAz4d2cC6GLDPSLqCQXGzDrFrqd3k1hSKfTRWnGrcrqksntdhZl&id=61581669093032",
+    "profile_id": {
+      "$oid": "69dd135d0c0f759055410743"
+    },
+    "workflow": {
+      "ai_status": "pending",
+      "review_status": "reviewed",
+      "client_status": "alerted",
+      "visibility_status": "available",
+      "takedown_status": "under_review",
+      "alerted_at": {
+        "$date": "2026-04-09T08:24:26.913Z"
+      }
+    },
+    "list": {
+      "ai_threat_score": null,
+      "review_threat_score": 96,
+      "effective_threat_score": 96,
+      "risk_rank": "high",
+      "threat_types": [
+        "Fraud",
+        "Impersonation",
+        "scam"
+      ],
+      "violation_flags": [
+        "Fraud",
+        "Impersonation",
+        "scam"
+      ],
+      "posted_at": null,
+      "sourced_at": {
+        "$date": "2026-02-02T20:54:34.920Z"
+      },
+      "reviewed_at": {
+        "$date": "2026-04-09T08:24:26.909Z"
+      },
+      "alert_hour_ist": 13,
+      "engagement_score": 8018,
+      "cluster_id": {
+        "$oid": "6a1543bc2b9e2f9411c8410b"
+      },
+      "is_cluster_representative": true,
+      "poi_detected": true
+    },
+    "content": {
+      "caption": "Lottery number 0055\n#photography #photochallenge #photographychallenge #photographer #nitaambani #Jeeto25Lak",
+      "media": [
+        {
+          "original_url": "https://scontent.fblr2-3.fna.fbcdn.net/v/t39.30808-6/580836551_122109709287055636_8023740990299928555_n.jpg?_nc_cat=102&ccb=1-7&_nc_sid=833d8c&_nc_ohc=khCVwr0q6GwQ7kNvwHJMh_O&_nc_oc=AdkipJ65inYCoQuHf1GjoqBOCCJJN05OvnVZa4tFN9AV-WI8ERPrfV4B8-fC9HulHa0&_nc_zt=23&_nc_ht=scontent.fblr2-3.fna&_nc_gid=cqWDKgMT6CT1JMjoRSPAGQ&oh=00_Afs4EhcSVLsfZ1mIekxZx_9g_6qKHb27BaeEY3qRlsIptQ&oe=6986C73E",
+          "s3_url": "https://cxo-demo.s3.ap-south-1.amazonaws.com/facebook_data/122109709275055636/0.jpg"
+        }
+      ],
+      "language": null,
+      "post_type": "post"
+    },
+    "author_snapshot": {
+      "platform_user_id": null,
+      "username": "Nita ambani   India ",
+      "display_name": "Nita ambani   India ",
+      "profile_url": "https://www.facebook.com/profile.php?id=61581669093032",
+      "is_verified": false
+    },
+    "analysis_results": {
+      "risk_score": 80,
+      "category": "High Risk",
+      "categorization_reason": "Flags: aigc_generated, misinformation. The content is a harmless promotional post for a photography challenge with a trivia question related to Indian currency. There is no explicit, violent, hateful, or scam-related material. The context is educational and cultural, with no risk of harm or misinformation.",
+      "poi_check": {
+        "face_present": true,
+        "poi_name_found": true,
+        "poi_names": [
+          "Mukesh Ambani"
+        ],
+        "face_bbox": [],
+        "confidence": 0
+      },
+      "truth_check": {
+        "is_credible": false,
+        "explanation": "No evidence or context provided to verify the claim about a lottery number (0055) or its association with a hashtag (#Jeeto25Lak). The claim lacks verifiable sources, official announcements, or documented proof.",
+        "sources": []
+      },
+      "aigc_check": {
+        "is_aigc": true,
+        "score": 0.6928980350494385,
+        "provider": "local_ensemble"
+      },
+      "nsfw_check": {
+        "is_safe": true,
+        "reasoning": "The content is a harmless promotional post for a photography challenge with a trivia question related to Indian currency. There is no explicit, violent, hateful, or scam-related material. The context is educational and cultural, with no risk of harm or misinformation.",
+        "category": "safe",
+        "risk_level": "Low"
+      },
+      "hate_speech_check": {
+        "is_safe": true,
+        "reasoning": "The content is a harmless promotional post for a photography challenge with a trivia question related to Indian currency. There is no explicit, violent, hateful, or scam-related material. The context is educational and cultural, with no risk of harm or misinformation.",
+        "category": "safe",
+        "risk_level": "Low"
+      },
+      "analyzed_at": "2026-02-03T15:32:02.376000"
+    },
+    "review_details": {
+      "threat_score": 96,
+      "threat_types": [
+        "Fraud",
+        "Impersonation",
+        "scam"
+      ],
+      "legal_codes": [],
+      "is_aigc": true,
+      "flags": {
+        "scam": true,
+        "Hate-speech": false,
+        "Misinformation": false,
+        "Obscence/Sexual": false,
+        "Fraud": true,
+        "Impersonation": true,
+        "defamation": false
+      },
+      "poi_names": [
+        "Mukesh Ambani",
+        "Nita Ambani"
+      ],
+      "reasoning": "This is a malicious financial scam operating through direct impersonation. The bad actor has created a fake page (\"Nita ambani India\") and is using an image of Nita and Mukesh Ambani alongside a fake trivia game and \"lottery\" hashtags (#Jeeto25Lak) to lure vulnerable users. This is designed to trick people into engaging, likely leading to an advance-fee fraud or phishing scheme under the guise of an official Ambani-sponsored giveaway.\r\n\r\nIn-app option: Scam, fraud or false information (For the post) and Fake account / Impersonation (For the page itself).",
+      "reviewer_comments": "",
+      "face_present": true,
+      "name_present": true,
+      "reviewed_at": "2026-04-09T08:24:26.909Z"
+    },
+    "takedown": {
+      "status": "under_review",
+      "initiated_at": {
+        "$date": "2026-05-02T09:11:46.148Z"
+      },
+      "completed_at": null,
+      "client_reference_id": null,
+      "platform_case_id": null,
+      "notes": [],
+      "documents": []
+    },
+    "client_notes": [],
+    "supabase_refs": {
+      "case_id": null,
+      "alert_ids": [],
+      "chat_thread_ids": []
+    },
+    "ingestion": {
+      "type": "facebook_search",
+      "source_url": null,
+      "ingested_at": {
+        "$date": "2026-02-02T20:54:34.920Z"
+      }
+    },
+    "system": {
+      "created_at": {
+        "$date": "2026-02-02T20:54:34.920Z"
+      },
+      "updated_at": {
+        "$date": "2026-05-02T09:11:46.148Z"
+      },
+      "s3_stored": true
+    }
+  }
