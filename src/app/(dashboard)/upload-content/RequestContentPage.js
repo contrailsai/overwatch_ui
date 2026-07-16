@@ -30,11 +30,14 @@ function RequestLinksTabContent({ isReviewer = false }) {
     const [totalRequests, setTotalRequests] = useState(0)
 
     const [isLoadingLinks, setIsLoadingLinks] = useState(true)
+    const [isLoadingMore, setIsLoadingMore] = useState(false)
     const [bulkInput, setBulkInput] = useState('')
     const [parsedLinks, setParsedLinks] = useState([])
     const [isSubmittingBulk, setIsSubmittingBulk] = useState(false)
     const fileInputRef = useRef(null)
     const loadMoreRef = useRef(null)
+    const isLoadingMoreRef = useRef(false)
+    const loadMoreLinksRef = useRef(null)
 
    const fetchLinks = useCallback(async () => {
     setIsLoadingLinks(true)
@@ -58,12 +61,22 @@ function RequestLinksTabContent({ isReviewer = false }) {
 
         const loadMoreLinks = useCallback(async () => {
 
-            if (!hasMore || isLoadingLinks) return
+            if (!hasMore || isLoadingLinks || isLoadingMoreRef.current) return
 
+            isLoadingMoreRef.current = true
+            setIsLoadingMore(true)
+
+        try {
             const result = await getRequestedLinks({
                 offset,
                 limit: 30,
             })
+            
+
+            if (result.error) {
+            console.error('Failed to load more request links:', result.error)
+            return
+            }
 
             if (result.data) {
                 setRequestedLinks(prev => [...prev, ...result.data])
@@ -71,10 +84,18 @@ function RequestLinksTabContent({ isReviewer = false }) {
                 setOffset(prev => prev + result.data.length)
 
                 if (result.data.length < 30) {
-                setHasMore(false)
+                    setHasMore(false)
+                    }
                 }
+            } catch (error) {
+                console.error('Unexpected error loading more request links:', error)
+            } finally {
+                isLoadingMoreRef.current = false
+                setIsLoadingMore(false)
             }
-            }, [offset, hasMore, isLoadingLinks])
+        }, [offset, hasMore, isLoadingLinks])
+
+        loadMoreLinksRef.current = loadMoreLinks
 
     useEffect(() => {
         fetchLinks()
@@ -101,7 +122,7 @@ function RequestLinksTabContent({ isReviewer = false }) {
                 hasMore &&
                 !isLoadingLinks
                 ) {
-                    loadMoreLinks()
+                    loadMoreLinksRef.current?.()
                 }  
         },
         {
@@ -115,7 +136,7 @@ function RequestLinksTabContent({ isReviewer = false }) {
     }
 
     return () => observer.disconnect()
-    }, [loadMoreLinks, hasMore, isLoadingLinks])
+    }, [hasMore, isLoadingLinks])
 
     // Effect to update parsed links in real-time
     useEffect(() => {
@@ -356,7 +377,7 @@ function RequestLinksTabContent({ isReviewer = false }) {
                                     className="overflow-x-auto max-h-[600px] overflow-y-auto"
                                     >
                                         <table className="w-full text-left border-collapse">
-                                            <thead>
+                                            <thead className="sticky top-0 z-10 bg-white">
                                                 <tr className="bg-slate-50/50 border-b border-slate-100">
                                                     <th className="px-4 sm:px-8 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Link Source</th>
                                                     <th className="px-4 sm:px-8 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest whitespace-nowrap">Ingestion Status</th>
