@@ -356,4 +356,5 @@ Remaining follow-ups (not yet fixed):
 ## Related planning docs
 
 - Cursor plan: Posts & Profiles Schema V3 (`posts_profiles_schema_v3`)
+- **Service migration contract (ingest / worker / embeddings):** [`docs/contracts/posts-profiles-schema-v3.md`](./contracts/posts-profiles-schema-v3.md)
 - Sample schemas: `sample_documents/new_schemas/` (`posts.json`, `profiles.json`, `case_events.json`, `post_embeddings.json`, `topics.json`, `pois.json`)

@@ -215,3 +215,65 @@ If you encounter issues:
 2. Verify your `.env.local` configuration
 3. Ensure MongoDB connection is stable
 4. Review the "Old Data" section in error logs to understand what failed
+
+---
+
+## Schema V3 — Source → Target DB Migration
+
+Clones an entire tenant database into a **new** DB name while transforming `Posts` / `Profiles` into schema v3. Source DB is never modified.
+
+Contract: [`docs/contracts/posts-profiles-schema-v3.md`](../docs/contracts/posts-profiles-schema-v3.md)
+
+### What it does
+
+| Source | Target | Action |
+|--------|--------|--------|
+| `Posts` / `posts` | `posts` | Transform to v3; strip embeddings + `update_history` |
+| `Profiles` / `profiles` | `profiles` | Transform to v3; drop `posts[]`; set `profile_id` on posts |
+| *(derived)* | `post_embeddings` | Extract vectors from posts when present |
+| *(derived)* | `case_events` | Backfill from `metadata.update_history` + takedown events |
+| `Topics` | `topics` | Copy as-is (lowercase name) |
+| Everything else (`Feeds`, `Keywords`, …) | same name | Binary copy |
+
+### Prerequisites
+
+```env
+MONGO_URI=mongodb+srv://...
+```
+
+in `.env.local`.
+
+### Usage
+
+```bash
+# Preview (no writes)
+node scripts/migrate_v3.js --source Ambani-Data --target Ambani-Data-v2 --dry-run
+
+# Live migration into an empty target DB
+node scripts/migrate_v3.js --source Ambani-Data --target Ambani-Data-v2
+
+# Resume / overwrite target (upserts; clears prior migrated case_events + embeddings)
+node scripts/migrate_v3.js --source Ambani-Data --target Ambani-Data-v2 --force
+
+# Indexes only (also run automatically at end of migrate)
+node scripts/ensure_indexes_v3.js --db Ambani-Data-v2
+
+# Verify
+node scripts/verify_v3.js --db Ambani-Data-v2 --source Ambani-Data
+```
+
+### After migration
+
+1. Point the tenant’s Supabase `project.mongo_db_map` (and local `MONGO_DB` if used) at the **target** DB name.
+2. Create the Atlas **`vector_index`** on collection **`post_embeddings`** (paths `text_embedding` / `image_embedding`). Text search index `default` should stay on `posts` with v3 field paths.
+3. Run `verify_v3.js` and spot-check cases / review / profiles in the UI.
+
+`ensure_indexes_v3.js` dedupes colliding `(platform, platform_user_id)` values before creating the unique profile index: extras keep their `_id` / post links, but `platform_user_id` is set to `null` on all but the highest-`post_count` doc. Re-run indexes alone if migrate failed mid-index:
+
+```bash
+node scripts/ensure_indexes_v3.js --db Ambani-Data-v2
+```
+
+### Rollback
+
+Keep using the **source** DB name — nothing was written in-place. Delete or ignore the target DB if the migration is discarded.
