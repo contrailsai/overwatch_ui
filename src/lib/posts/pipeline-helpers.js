@@ -1,225 +1,98 @@
 /**
- * Shared MongoDB pipeline helpers for Posts/cases queries.
- * Plain module (no 'use server') — safe to import from server actions without
- * registering each helper as a Next.js Server Action endpoint.
+ * Shared MongoDB pipeline helpers for Posts/cases queries (schema v3).
  */
 
 import { getSignedImageUrl } from '@/utils/aws/s3'
+import {
+  ONLINE_VISIBILITY_VALUES,
+  buildEffectiveThreatScoreRange,
+  buildNormalizedPostForUi,
+  fetchPostCaseEvents,
+  getFirstMediaS3Url,
+  mapUiClientStatusToV3,
+  mapV3ClientStatusToUi,
+} from '@/utils/mongodb/v3-schema'
 import { withReviewedThreatScoreFilter } from '@/lib/posts/reviewed-post-filter'
 import {
   UNIQUE_CLUSTER_LIST_SORT,
   UNIQUE_CLUSTER_EARLY_SORT,
+  buildCasesListSortPipeline as buildListSortFromRiskBuckets,
+  buildCasesReportSortPipeline as buildReportSortFromRiskBuckets,
 } from '@/app/(dashboard)/cases/riskBuckets'
 
-export const ONLINE_VISIBILITY_VALUES = ['active', 'online', 'available']
+export { ONLINE_VISIBILITY_VALUES }
 
 export const CASES_ALERT_HOUR_TIMEZONE = 'Asia/Kolkata'
 
 export const escapeRegex = (value = '') => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
-export async function normalizeS3Post(post) {
-  let s3UrlToSign = null
-  if (post.post_content?.media_urls && post.post_content.media_urls.length > 0) {
-    const firstMedia = post.post_content.media_urls[0]
-    s3UrlToSign = firstMedia.s3_url
-  } else if (post.s3_url) {
-    s3UrlToSign = post.s3_url
-  }
-
+export async function normalizeS3Post(post, db = null) {
+  const s3UrlToSign = getFirstMediaS3Url(post)
   const signedUrl = s3UrlToSign ? await getSignedImageUrl(s3UrlToSign) : null
+  let updateHistory = []
 
-  return {
-    _id: post._id.toString(),
-    created_at: post.metadata?.created_at ? new Date(post.metadata.created_at).toISOString() : null,
-    sourcing_date: post.metadata?.sourcing_date ? new Date(post.metadata.sourcing_date).toISOString() : null,
-    posted_date: post.engagement?.posted_at
-      ? new Date(post.engagement.posted_at).toISOString()
-      : post.metadata?.posted_date
-        ? new Date(post.metadata.posted_date).toISOString()
-        : null,
-    taken_at: post.post_content?.taken_at || post.taken_at || null,
-    updated_at: post.metadata?.updated_at ? new Date(post.metadata.updated_at).toISOString() : null,
-    reviewed_at: post.review_details?.reviewed_at
-      ? new Date(post.review_details.reviewed_at).toISOString()
-      : null,
-    update_history: post.metadata?.update_history
-      ? post.metadata.update_history.map((update) => ({
-          ...update,
-          updated_at: update.updated_at ? new Date(update.updated_at).toISOString() : null,
-        }))
-      : [],
-    platform: post.platform ? post.platform.toLowerCase() : 'instagram',
-    processed: post.processed || false,
-    client_status: post.client_status || 'To Be Reviewed',
-    caption: post.post_content?.caption || post.caption || '',
-    signedImageUrl: signedUrl,
-    original_url: post.original_url,
-    post_id: post.post_id || post.code,
-    visibility_status: post.visibility_status || 'active',
-    user: {
-      username: post.profile?.username || post.user?.username || 'Unknown',
-      full_name: post.profile?.display_name || '',
-      profile_pic_url: post.profile?.profile_pic_url || post.profile?.profile_url || '',
-      is_verified: post.profile?.is_verified || false,
-    },
-    assigned_to: post?.assigned_to || null,
-    content_reviewed_by: post?.content_reviewed_by || null,
-    score: post.score || null,
-    review_details: post.review_details || null,
-    takedown_info: post.takedown_info || null,
-    analysis_results: post.analysis_results || null,
-    client_notes: post.client_notes || [],
-    stats: {
-      like_count: post.engagement?.likes || 0,
-      comment_count: post.engagement?.comments || 0,
-      share_count: post.engagement?.shares || 0,
-      view_count: post.engagement?.views || 0,
-    },
-    cluster_id: post.cluster_id ? post.cluster_id.toString() : null,
+  if (db && post?._id) {
+    try {
+      updateHistory = await fetchPostCaseEvents(db, post._id.toString())
+    } catch {
+      updateHistory = []
+    }
+  } else if (post?.metadata?.update_history) {
+    updateHistory = post.metadata.update_history.map((update) => ({
+      ...update,
+      updated_at: update.updated_at ? new Date(update.updated_at).toISOString() : null,
+    }))
   }
+
+  return buildNormalizedPostForUi(post, { updateHistory, signedImageUrl: signedUrl })
 }
 
 export function buildUniqueClustersStage(filters, { clusterSort = 'list' } = {}) {
   const clusterRankSort = clusterSort === 'early' ? UNIQUE_CLUSTER_EARLY_SORT : UNIQUE_CLUSTER_LIST_SORT
-  if (filters.unique_clusters === 'true' || filters.unique_clusters === true) {
-    const useStrictUniqueClustering = process.env.USE_STRICT_UNIQUE_CLUSTERING === 'true'
-    if (!useStrictUniqueClustering) {
-      return [
-        {
-          $addFields: {
-            _unique_group_key: {
-              $ifNull: [{ $toString: '$cluster_id' }, { $toString: '$_id' }],
-            },
-          },
-        },
-        {
-          $sort: {
-            _unique_group_key: 1,
-            ...clusterRankSort,
-          },
-        },
-        {
-          $group: {
-            _id: '$_unique_group_key',
-            doc: { $first: '$$ROOT' },
-          },
-        },
-        { $replaceRoot: { newRoot: '$doc' } },
-        {
-          $project: {
-            _unique_group_key: 0,
-          },
-        },
-      ]
-    }
 
+  if (filters.unique_clusters !== 'true' && filters.unique_clusters !== true) {
+    return []
+  }
+
+  const useStrictUniqueClustering = process.env.USE_STRICT_UNIQUE_CLUSTERING === 'true'
+  if (!useStrictUniqueClustering) {
     return [
       {
         $addFields: {
-          _cluster_id_str: {
-            $cond: [
-              { $ifNull: ['$cluster_id', false] },
-              { $toString: '$cluster_id' },
-              null,
-            ],
-          },
-          _doc_id_str: { $toString: '$_id' },
-        },
-      },
-      {
-        $lookup: {
-          from: 'unique_clusters',
-          let: { clusterIdObj: '$cluster_id', clusterIdStr: '$_cluster_id_str' },
-          pipeline: [
-            {
-              $match: {
-                $expr: {
-                  $or: [
-                    { $eq: ['$_id', '$$clusterIdObj'] },
-                    { $eq: [{ $toString: '$_id' }, '$$clusterIdStr'] },
-                  ],
-                },
-              },
-            },
-          ],
-          as: 'cluster_info',
-        },
-      },
-      {
-        $unwind: {
-          path: '$cluster_info',
-          preserveNullAndEmptyArrays: true,
-        },
-      },
-      {
-        $addFields: {
-          _representative_post_id_str: {
-            $cond: [
-              { $ifNull: ['$cluster_info.representative_post_id', false] },
-              { $toString: '$cluster_info.representative_post_id' },
-              null,
-            ],
-          },
-          _member_ids_str: {
-            $map: {
-              input: { $ifNull: ['$cluster_info.member_ids', []] },
-              as: 'memberId',
-              in: { $toString: '$$memberId' },
-            },
-          },
-        },
-      },
-      {
-        $addFields: {
-          _is_representative: { $eq: ['$_doc_id_str', '$_representative_post_id_str'] },
-          _is_member: { $in: ['$_doc_id_str', '$_member_ids_str'] },
-          _has_cluster_info: { $ne: ['$cluster_info', null] },
           _unique_group_key: {
-            $ifNull: [{ $toString: '$cluster_info._id' }, '$_doc_id_str'],
+            $ifNull: [{ $toString: '$list.cluster_id' }, { $toString: '$_id' }],
           },
         },
       },
-      {
-        $match: {
-          $expr: {
-            $or: [
-              { $not: ['$_has_cluster_info'] },
-              '$_is_representative',
-              '$_is_member',
-            ],
-          },
-        },
-      },
-      {
-        $sort: {
-          _unique_group_key: 1,
-          _is_representative: -1,
-          ...clusterRankSort,
-        },
-      },
-      {
-        $group: {
-          _id: '$_unique_group_key',
-          doc: { $first: '$$ROOT' },
-        },
-      },
+      { $sort: { _unique_group_key: 1, ...clusterRankSort } },
+      { $group: { _id: '$_unique_group_key', doc: { $first: '$$ROOT' } } },
       { $replaceRoot: { newRoot: '$doc' } },
-      {
-        $project: {
-          _cluster_id_str: 0,
-          _doc_id_str: 0,
-          _representative_post_id_str: 0,
-          _member_ids_str: 0,
-          _is_representative: 0,
-          _is_member: 0,
-          _has_cluster_info: 0,
-          _unique_group_key: 0,
-          cluster_info: 0,
-        },
-      },
+      { $project: { _unique_group_key: 0 } },
     ]
   }
-  return []
+
+  return [
+    {
+      $match: {
+        $or: [
+          { 'list.is_cluster_representative': true },
+          { 'list.cluster_id': { $exists: false } },
+          { 'list.cluster_id': null },
+        ],
+      },
+    },
+    {
+      $addFields: {
+        _unique_group_key: {
+          $ifNull: [{ $toString: '$list.cluster_id' }, { $toString: '$_id' }],
+        },
+      },
+    },
+    { $sort: { _unique_group_key: 1, ...clusterRankSort } },
+    { $group: { _id: '$_unique_group_key', doc: { $first: '$$ROOT' } } },
+    { $replaceRoot: { newRoot: '$doc' } },
+    { $project: { _unique_group_key: 0 } },
+  ]
 }
 
 export function buildCasesMatchQuery(filters = {}) {
@@ -234,13 +107,13 @@ export function buildCasesMatchQuery(filters = {}) {
   if (filters.visibility_status && filters.visibility_status !== 'all') {
     const visibilityLower = String(filters.visibility_status).toLowerCase()
     if (visibilityLower === 'down') {
-      query.visibility_status = 'down'
+      query['workflow.visibility_status'] = 'down'
     } else if (visibilityLower === 'active' || visibilityLower === 'online' || visibilityLower === 'available') {
       andConditions.push({
         $or: [
-          { visibility_status: { $in: ONLINE_VISIBILITY_VALUES } },
-          { visibility_status: { $exists: false } },
-          { visibility_status: null },
+          { 'workflow.visibility_status': { $in: ONLINE_VISIBILITY_VALUES } },
+          { 'workflow.visibility_status': { $exists: false } },
+          { 'workflow.visibility_status': null },
         ],
       })
     }
@@ -248,32 +121,25 @@ export function buildCasesMatchQuery(filters = {}) {
 
   if (filters.client_status && filters.client_status !== 'all') {
     const statusLower = filters.client_status.toLowerCase()
-    const escapedStatus = escapeRegex(filters.client_status)
+    const v3Status = mapUiClientStatusToV3(filters.client_status)
     if (statusLower === 'to be reviewed') {
       andConditions.push({
         $or: [
-          { client_status: { $exists: false } },
-          { client_status: null },
-          { client_status: { $regex: new RegExp('^to be reviewed$', 'i') } },
+          { 'workflow.client_status': { $in: ['open', 'alerted'] } },
+          { 'workflow.client_status': { $exists: false } },
+          { 'workflow.client_status': null },
         ],
       })
     } else if (statusLower === 'takedown' || statusLower === 'takedowns') {
-      query.client_status = { $regex: new RegExp('^takedowns?$', 'i') }
+      query['workflow.client_status'] = 'takedown'
     } else {
-      query.client_status = { $regex: new RegExp(`^${escapedStatus}$`, 'i') }
+      query['workflow.client_status'] = v3Status
     }
   }
 
-  if (filters.risk_priority && filters.risk_priority !== 'all') {
-    if (filters.risk_priority === 'high') {
-      query['review_details.threat_score'] = { $exists: true, $gt: 95 }
-    } else if (filters.risk_priority === 'medium') {
-      query['review_details.threat_score'] = { $exists: true, $gt: 75, $lte: 95 }
-    } else if (filters.risk_priority === 'low') {
-      query['review_details.threat_score'] = { $exists: true, $gt: 40, $lte: 75 }
-    } else if (filters.risk_priority === 'safe') {
-      query['review_details.threat_score'] = { $exists: true, $lte: 40 }
-    }
+  const threatRange = buildEffectiveThreatScoreRange(filters.risk_priority)
+  if (threatRange) {
+    query['list.effective_threat_score'] = threatRange
   }
 
   if (filters.violations && filters.violations !== 'all') {
@@ -283,6 +149,7 @@ export function buildCasesMatchQuery(filters = {}) {
       const hasAigc = violationsArray.includes('aigc')
       const violationConditions = []
       if (normalViolations.length > 0) {
+        violationConditions.push({ 'list.violation_flags': { $in: normalViolations } })
         violationConditions.push({ 'review_details.threat_types': { $in: normalViolations } })
         const flagConditions = normalViolations.map((v) => ({ [`review_details.flags.${v}`]: true }))
         violationConditions.push(...flagConditions)
@@ -297,69 +164,79 @@ export function buildCasesMatchQuery(filters = {}) {
   }
 
   if (andConditions.length > 0) {
-    query.$and = andConditions
+    query.$and = [...(query.$and || []), ...andConditions]
   }
 
   return query
 }
 
-/** Handles Date, ISO string, and integer epoch values in aggregation pipelines. */
-function coerceMongoDateExpr(inputExpr) {
+/** Parse URL search params into the filter object consumed by buildCasesMatchQuery. */
+export function parseCasesListFilters(searchParams = {}) {
   return {
-    $convert: {
-      input: inputExpr,
-      to: 'date',
-      onError: { $toDate: { $toLong: inputExpr } },
-      onNull: null,
-    },
+    platform: searchParams.platform || 'all',
+    client_status: searchParams.status || searchParams.client_status || 'all',
+    visibility_status: searchParams.visibility_status || 'all',
+    risk_priority: searchParams.risk_priority || 'all',
+    violations: searchParams.violations || 'all',
+    published_from: searchParams.published_from || searchParams.original_date_from || null,
+    published_to: searchParams.published_to || searchParams.original_date_to || null,
+    alert_from: searchParams.alert_from || searchParams.processed_from || null,
+    alert_to: searchParams.alert_to || searchParams.processed_to || null,
+    unique_clusters: searchParams.unique_clusters === 'true' || searchParams.unique_clusters === true,
   }
 }
 
-export function buildCasesDateAddFieldsStage() {
-  const originalDateInput = { $ifNull: ['$engagement.posted_at', '$metadata.posted_date'] }
-  const processedAfterInput = { $ifNull: ['$review_details.reviewed_at', '$metadata.updated_at'] }
+export function parseCasesListSort(searchParams = {}, { defaultField = 'threat_score' } = {}) {
+  const rawSortField = searchParams.sortField
+  const normalizedSortField = rawSortField === 'processed_date'
+    ? 'alert_date'
+    : rawSortField === 'original_date'
+      ? 'published_date'
+      : rawSortField
 
   return {
-    sort_original_date: coerceMongoDateExpr(originalDateInput),
-    sort_processed_after: coerceMongoDateExpr(processedAfterInput),
-    sort_processed_after_hour: {
-      $cond: [
-        { $ne: [processedAfterInput, null] },
-        {
-          $dateTrunc: {
-            date: coerceMongoDateExpr(processedAfterInput),
-            unit: 'hour',
-            timezone: CASES_ALERT_HOUR_TIMEZONE,
-          },
-        },
-        null,
-      ],
-    },
+    field: normalizedSortField || defaultField,
+    direction: searchParams.sortDirection === 'asc' ? 'asc' : 'desc',
   }
 }
 
 export function buildCasesDateFilterStage(filters = {}) {
   const dateFilterStage = {}
 
-  if (filters.original_date_from || filters.original_date_to) {
-    dateFilterStage.sort_original_date = {}
-    if (filters.original_date_from) {
-      dateFilterStage.sort_original_date.$gte = new Date(filters.original_date_from)
+  if (filters.published_from || filters.published_to) {
+    dateFilterStage['list.posted_at'] = {}
+    if (filters.published_from) {
+      dateFilterStage['list.posted_at'].$gte = new Date(filters.published_from)
     }
-    if (filters.original_date_to) {
-      dateFilterStage.sort_original_date.$lte = new Date(filters.original_date_to)
+    if (filters.published_to) {
+      dateFilterStage['list.posted_at'].$lte = new Date(filters.published_to)
     }
   }
 
-  if (filters.processed_from || filters.processed_to) {
-    dateFilterStage.sort_processed_after = {}
-    if (filters.processed_from) {
-      dateFilterStage.sort_processed_after.$gte = new Date(filters.processed_from)
+  if (filters.alert_from || filters.alert_to) {
+    dateFilterStage['list.reviewed_at'] = {}
+    if (filters.alert_from) {
+      dateFilterStage['list.reviewed_at'].$gte = new Date(filters.alert_from)
     }
-    if (filters.processed_to) {
-      dateFilterStage.sort_processed_after.$lte = new Date(filters.processed_to)
+    if (filters.alert_to) {
+      dateFilterStage['list.reviewed_at'].$lte = new Date(filters.alert_to)
     }
   }
 
   return dateFilterStage
 }
+
+/** @deprecated v3 stores materialized list.* fields; kept for callers still spreading this object. */
+export function buildCasesDateAddFieldsStage() {
+  return {}
+}
+
+export function buildCasesListSortPipeline(sort = {}) {
+  return buildListSortFromRiskBuckets(sort)
+}
+
+export function buildCasesReportSortPipeline() {
+  return buildReportSortFromRiskBuckets()
+}
+
+export { mapV3ClientStatusToUi, mapUiClientStatusToV3 }

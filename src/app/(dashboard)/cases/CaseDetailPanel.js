@@ -38,7 +38,7 @@ import { CaseExportDocxButton } from '@/components/docx/CaseExportDocxButton'
 import SafeDate from '@/components/SafeDate'
 import { getRiskLabel } from './riskBuckets'
 
-export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose, onNavigate, hasPrev, hasNext, onUpdateStatus, onUpdatePost, onShowToast, projectEmails, isMobileLayout = false }) {
+export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose, onNavigate, hasPrev, hasNext, onUpdateStatus, onUpdatePost, onShowToast, projectEmails, isMobileLayout = false, stackedLayout = false }) {
     const [isProcessing, setIsProcessing] = useState(false)
     const [imgError, setImgError] = useState(false)
     const router = useRouter()
@@ -178,7 +178,7 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
     const review = post.review_details || {};
     const analysis = post.analysis_results || {};
 
-    const riskScore = review.threat_score ?? analysis.risk_score ?? 0;
+    const riskScore = post.score ?? review.threat_score ?? analysis.risk_score ?? 0;
 
     let category = review.primary_threat_type || review.threat_type || analysis.category || 'Unknown';
     if (Array.isArray(review.threat_types) && review.threat_types.length > 0) {
@@ -266,21 +266,19 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
     const isRequested = (takedownStatus === 'requested');
 
     let posted_date = ""
-    let sourced_date = ""
+    let alert_date = ""
 
     if (post.posted_date)
         posted_date = format(new Date(post.posted_date), "dd/MM/yyyy");
-    else if (post.metadata?.posted_date)
-        posted_date = format(new Date(post.metadata.posted_date), "dd/MM/yyyy");
     else if (post.timestamp)
         posted_date = format(new Date(post.timestamp), "dd/MM/yyyy");
     else if (post.sourcing_date)
         posted_date = format(new Date(post.sourcing_date), "dd/MM/yyyy");
 
-    if (post.metadata?.created_at)
-        sourced_date = format(new Date(post.metadata.created_at), "dd/MM/yyyy");
-    else if (post.created_at)
-        sourced_date = format(new Date(post.created_at), "dd/MM/yyyy");
+    if (post.reviewed_at)
+        alert_date = format(new Date(post.reviewed_at), "dd/MM/yyyy");
+    else if (post.review_details?.reviewed_at)
+        alert_date = format(new Date(post.review_details.reviewed_at), "dd/MM/yyyy");
 
     const handleTakedown = async () => {
         setIsProcessing('takedown');
@@ -353,18 +351,29 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
             </Dialog>
         )}
         <div className={cn(
-            "flex-1 min-w-0 h-full bg-white font-sans flex flex-col border-l border-slate-200 overflow-hidden",
+            "min-w-0 h-full bg-white font-sans flex flex-col overflow-hidden",
+            !stackedLayout && "flex-1 border-l border-slate-200",
+            stackedLayout && "w-full",
             isMobileLayout
                 ? "fixed inset-0 z-50 animate-in slide-in-from-right duration-300"
-                : "animate-in slide-in-from-right duration-300"
+                : !stackedLayout && "animate-in slide-in-from-right duration-300"
         )}>
             {/* Main Content Area */}
-            <div className="flex-1 overflow-y-auto lg:overflow-hidden flex flex-col lg:flex-row lg:divide-x divide-slate-100">
+            <div className={cn(
+                "flex-1 overflow-y-auto flex flex-col divide-slate-100",
+                stackedLayout ? "overflow-y-auto" : "lg:overflow-hidden lg:flex-row lg:divide-x"
+            )}>
 
                 {/* LEFT PANEL (Source Content) */}
-                <div className="flex-none lg:flex-1 lg:overflow-y-auto space-y-4 bg-slate-50/50">
+                <div className={cn(
+                    "flex-none space-y-4 bg-slate-50/50",
+                    stackedLayout ? "w-full" : "lg:flex-1 lg:overflow-y-auto"
+                )}>
                     {/* Header */}
-                    <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-100 flex items-center justify-between bg-white/80 backdrop-blur-md sticky top-0 z-20">
+                    <div className={cn(
+                        "border-b border-slate-100 flex items-center justify-between bg-white/80 backdrop-blur-md sticky top-0 z-20",
+                        stackedLayout ? "px-3 py-2" : "px-4 sm:px-6 py-3 sm:py-4"
+                    )}>
                         <div className="flex items-center gap-3 sm:gap-4 min-w-0">
                             <Button variant="ghost" title="Close" size="icon" onClick={onClose} className="h-8 w-8 sm:h-10 sm:w-10 rounded-full cursor-pointer bg-slate-100 text-slate-700">
                                 <X className="w-5 h-5 sm:w-6 sm:h-6" />
@@ -373,7 +382,7 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
                                 <Siren className="w-4 h-4 sm:w-5 sm:h-5 text-slate-500" />
                             </div> */}
                             <div className="min-w-0">
-                                <h2 className="text-base sm:text-lg font-bold text-slate-900 leading-tight truncate">Content Review</h2>
+                                <h2 className="text-base sm:text-lg font-bold text-slate-900 leading-tight truncate">Content</h2>
                                 <p className="text-[10px] sm:text-xs font-mono text-slate-400 truncate">ID: {post._id}</p>
                             </div>
                         </div>
@@ -422,7 +431,10 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
                     </div>
 
                     {/* Mobile export & edit actions */}
-                    <div className="lg:hidden flex gap-2 px-4 sm:px-6 py-3 border-b border-slate-100 bg-white">
+                    <div className={cn(
+                        "flex gap-2 border-b border-slate-100 bg-white",
+                        stackedLayout ? "flex px-3 py-2" : "lg:hidden px-4 sm:px-6 py-3"
+                    )}>
                         <div onClick={() => trackClientClick('download_case_report', { page: 'CaseDetailPanel' })} className="flex flex-1 gap-2 min-w-0">
                             <CaseExportButton
                                 post={post}
@@ -445,16 +457,25 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
                         </Button>
                     </div>
 
-                    <div className=" flex flex-col gap-6 sm:gap-8 px-4 sm:px-8 pb-8 pt-4 sm:pt-0 ">
+                    <div className={cn(
+                        "flex flex-col",
+                        stackedLayout ? "gap-4 px-3 pb-4 pt-2" : "gap-6 sm:gap-8 px-4 sm:px-8 pb-8 pt-4 sm:pt-0"
+                    )}>
                         {/* Media Display */}
                         {post.signedImageUrl &&
-                        <div className="bg-slate-900 rounded-xl sm:rounded-2xl overflow-hidden shadow-lg border border-slate-800 relative group flex items-center justify-center min-h-[300px] sm:min-h-[400px]">
+                        <div className={cn(
+                            "bg-slate-900 rounded-xl overflow-hidden shadow-lg border border-slate-800 relative group flex items-center justify-center",
+                            stackedLayout ? "min-h-[180px] rounded-lg" : "sm:rounded-2xl min-h-[300px] sm:min-h-[400px]"
+                        )}>
                             <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-slate-800/50 to-slate-950 pointer-events-none" />
                               {post.signedImageUrl ? (
                                 <img
                                     src={post.signedImageUrl}
                                     alt="Evidence"
-                                    className="max-w-full h-auto max-h-[400px] sm:max-h-[600px] object-contain relative z-10"
+                                    className={cn(
+                                        "max-w-full h-auto object-contain relative z-10",
+                                        stackedLayout ? "max-h-[240px]" : "max-h-[400px] sm:max-h-[600px]"
+                                    )}
                                 />
                             ) : (
                                 <div className="text-center p-8 sm:p-12 relative z-10">
@@ -577,7 +598,7 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
                                             </div>
                                             <div className="bg-white p-3 sm:p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between gap-1">
                                                 <span className="text-[10px] sm:text-xs font-bold text-slate-500 uppercase flex items-center gap-1.5 sm:gap-2"><History className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-slate-500" /> Alert Date</span>
-                                                <span className="font-bold text-xs sm:text-sm text-slate-900">{sourced_date}</span>
+                                                <span className="font-bold text-xs sm:text-sm text-slate-900">{alert_date}</span>
                                             </div>
                                         </div>
                                     </div>
@@ -674,7 +695,7 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
                 {/* RIGHT PANEL */}
                 {
                     isEditing && !isMobileLayout ? (
-                        <div className="flex flex-row w-full lg:w-[500px] shrink-0">
+                        <div className={cn("flex flex-row w-full shrink-0", !stackedLayout && "lg:w-[500px]")}>
                             <EditForm
                                 post={post}
                                 project={project}
@@ -684,11 +705,17 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
                             />
                         </div>
                     ) : (
-                        <div className="relative w-full lg:w-[500px] bg-white flex flex-col lg:h-full shrink-0 border-t lg:border-t-0 border-slate-100">
+                        <div className={cn(
+                            "relative w-full bg-white flex flex-col shrink-0 border-t border-slate-100",
+                            stackedLayout ? "" : "lg:w-[500px] lg:h-full lg:border-t-0"
+                        )}>
 
                             {/* EDIT BUTTON HERE */}
-                            <div className="hidden sm:flex items-start justify-between gap-3 px-4 sm:px-6 pt-4 pb-3 border-b border-slate-100">
-                                <div onClick={() => trackClientClick('download_case_report', { page: 'CaseDetailPanel' })} className="hidden lg:flex gap-2">
+                            <div className={cn(
+                                "items-start justify-between gap-3 px-4 sm:px-6 pt-4 pb-3 border-b border-slate-100",
+                                stackedLayout ? "hidden" : "hidden sm:flex"
+                            )}>
+                                <div onClick={() => trackClientClick('download_case_report', { page: 'CaseDetailPanel' })} className={cn("gap-2", stackedLayout ? "flex flex-1" : "hidden lg:flex")}>
                                     <CaseExportButton
                                         post={post}
                                         project={project}
@@ -710,7 +737,10 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
                                 </Button>
                             </div>
 
-                            <div className="flex-none lg:flex-1 lg:overflow-y-auto p-4 sm:p-6">
+                            <div className={cn(
+                                "flex-none",
+                                stackedLayout ? "p-3" : "lg:flex-1 lg:overflow-y-auto p-4 sm:p-6"
+                            )}>
 
                                 {/* Legal Framework Section */}
                                 {legalCodes.length > 0 && (

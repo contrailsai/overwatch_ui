@@ -10,7 +10,6 @@ import { traceAction, recordClickMetric, runInSpan } from '@/utils/tracing'
 import { requireAuthContext } from '@/utils/auth-context'
 import { flushOtelLogs, isOtelLogsVerbose, logActionError, LOKI_STREAMS, otelLogger } from '@/utils/otel-logger'
 import {
-  buildCaseSortAddFields,
   buildCasesListSortPipeline,
   buildCasesReportSortPipeline,
 } from './riskBuckets'
@@ -18,10 +17,11 @@ import { withReviewedThreatScoreFilter } from '@/lib/posts/reviewed-post-filter'
 import {
   normalizeS3Post,
   buildCasesMatchQuery,
-  buildCasesDateAddFieldsStage,
   buildCasesDateFilterStage,
   buildUniqueClustersStage,
 } from '@/lib/posts/pipeline-helpers'
+import { postsCollection, postEmbeddingsCollection } from '@/utils/mongodb/collections'
+import { insertCaseEvent, mapUiClientStatusToV3 } from '@/utils/mongodb/v3-schema'
 
 const CASES_TRACE_OPTS = { loki_stream: LOKI_STREAMS.cases }
 
@@ -50,7 +50,7 @@ export const getPosts = traceAction('getPosts', async (_project, page = 1, limit
     }
     const client = await clientPromise
     const db = client.db(dbName)
-    const collection = db.collection('Posts')
+    const collection = postsCollection(db)
 
     const skip = (page - 1) * limit
 
@@ -64,15 +64,6 @@ export const getPosts = traceAction('getPosts', async (_project, page = 1, limit
 
     const basePipeline = [
       { $match: matchStage },
-      // Embeddings are large and never needed for cases listing/count paths.
-      // Drop them early so downstream stages ($lookup/$group/$facet) process smaller documents.
-      { $project: { text_embedding: 0, image_embedding: 0 } },
-      {
-        $addFields: {
-          ...buildCasesDateAddFieldsStage(),
-          ...buildCaseSortAddFields(),
-        }
-      },
       ...(hasDateFilters ? [{ $match: dateFilterStage }] : []),
       ...buildUniqueClustersStage(filters),
     ]
@@ -88,7 +79,6 @@ export const getPosts = traceAction('getPosts', async (_project, page = 1, limit
               { $sort: sortPipeline },
               { $skip: skip },
               { $limit: limit },
-              { $project: { text_embedding: 0, image_embedding: 0 } },
             ],
             total: [{ $count: 'total' }],
           }
@@ -109,7 +99,7 @@ export const getPosts = traceAction('getPosts', async (_project, page = 1, limit
     const signingStart = Date.now()
     const processedPosts = await runInSpan(
       'cases.getPosts.s3_signing',
-      async () => Promise.all(posts.map(normalizeS3Post)),
+      async () => Promise.all(posts.map((post) => normalizeS3Post(post, db))),
       { 'app.span_type': 's3_signing' }
     )
     const s3SigningMs = Date.now() - signingStart
@@ -166,16 +156,14 @@ export const getPostById = traceAction('getPostById', async (_project, id) => {
 
     const client = await clientPromise;
     const db = client.db(dbName);
-    const collection = db.collection('Posts');
+    const collection = postsCollection(db);
 
     const post = await collection.findOne(
-      withReviewedThreatScoreFilter({ _id: new ObjectId(id) }),
-      { projection: { text_embedding: 0, image_embedding: 0 } }
+      withReviewedThreatScoreFilter({ _id: new ObjectId(id) })
     );
     if (!post) return null;
 
-    // get normalized post
-    return await normalizeS3Post(post);
+    return await normalizeS3Post(post, db);
 
   } catch (e) {
     logActionError({ loki_stream: LOKI_STREAMS.cases, app_action: 'getPostById', message: 'getPostById failed' }, e)
@@ -204,16 +192,10 @@ export const orderPostIdsForReport = traceAction('orderPostIdsForReport', async 
     if (objectIds.length === 0) return []
 
     const client = await clientPromise
-    const collection = client.db(dbName).collection('Posts')
+    const collection = postsCollection(client.db(dbName))
 
     const docs = await collection.aggregate([
       { $match: withReviewedThreatScoreFilter({ _id: { $in: objectIds } }) },
-      {
-        $addFields: {
-          ...buildCasesDateAddFieldsStage(),
-          ...buildCaseSortAddFields(),
-        },
-      },
       { $sort: buildCasesReportSortPipeline() },
       { $project: { _id: 1 } },
     ]).toArray()
@@ -233,7 +215,7 @@ export const getAllPostIds = traceAction('getAllPostIds', async (_project, filte
 
     const client = await clientPromise
     const db = client.db(dbName)
-    const collection = db.collection('Posts')
+    const collection = postsCollection(db)
 
     const matchStage = buildCasesMatchQuery(filters)
     const dateFilterStage = buildCasesDateFilterStage(filters)
@@ -241,13 +223,6 @@ export const getAllPostIds = traceAction('getAllPostIds', async (_project, filte
 
     const pipeline = [
       { $match: matchStage },
-      { $project: { text_embedding: 0, image_embedding: 0 } },
-      {
-        $addFields: {
-          ...buildCasesDateAddFieldsStage(),
-          ...buildCaseSortAddFields(),
-        },
-      },
       ...(hasDateFilters ? [{ $match: dateFilterStage }] : []),
       ...buildUniqueClustersStage(filters),
       { $sort: buildCasesReportSortPipeline() },
@@ -271,16 +246,13 @@ export const getIdenticalPosts = traceAction('getIdenticalPosts', async (_projec
     const client = await clientPromise;
     const db = client.db(dbName);
     
-    const cluster = await db.collection('unique_clusters').findOne({ _id: new ObjectId(clusterId) });
-    if (!cluster || !cluster.member_ids) return [];
-    
-    const otherMemberIds = cluster.member_ids.filter(id => id !== currentPostId && id.toString() !== currentPostId);
-    if (otherMemberIds.length === 0) return [];
-    
-    const objectIds = otherMemberIds.map(id => new ObjectId(id));
-    const posts = await db.collection('Posts').find(withReviewedThreatScoreFilter({ _id: { $in: objectIds } })).toArray();
-    
-    return await Promise.all(posts.map(normalizeS3Post));
+    const clusterObjectId = new ObjectId(clusterId);
+    const posts = await postsCollection(db).find(withReviewedThreatScoreFilter({
+      'list.cluster_id': clusterObjectId,
+      _id: { $ne: new ObjectId(currentPostId) },
+    })).toArray();
+
+    return await Promise.all(posts.map((post) => normalizeS3Post(post, db)));
   } catch (e) {
     logActionError({ loki_stream: LOKI_STREAMS.cases, app_action: 'getIdenticalPosts', message: 'getIdenticalPosts failed' }, e)
     console.error('getIdenticalPosts Error:', e);
@@ -296,19 +268,17 @@ export const getPostsByIds = traceAction('getPostsByIds', async (_project, ids) 
     const { dbName } = await requireAuthContext()
     const client = await clientPromise
     const db = client.db(dbName)
-    const collection = db.collection('Posts')
+    const collection = postsCollection(db)
     const totalCount = ids.length;
     const page = 1;
     const limit = 100;
 
     const objectIds = ids.map(id => new ObjectId(id))
     const posts = await collection.find(
-      withReviewedThreatScoreFilter({ _id: { $in: objectIds } }),
-      { projection: { text_embedding: 0, image_embedding: 0 } }
+      withReviewedThreatScoreFilter({ _id: { $in: objectIds } })
     ).toArray()
 
-    // Normalize and Sign URLs (using the existing helper)
-    const processedPosts = await Promise.all(posts.map(normalizeS3Post))
+    const processedPosts = await Promise.all(posts.map((post) => normalizeS3Post(post, db)))
 
     // Important: Maintain the order of IDs if possible, or just return them
     // Returning processedPosts is enough for the export components
@@ -332,9 +302,9 @@ export const getSimilarPosts = traceAction('getSimilarPosts', async (_project, s
 
     const client = await clientPromise
     const db = client.db(dbName)
-    const collection = db.collection('Posts')
+    const collection = postsCollection(db)
+    const embeddings = postEmbeddingsCollection(db)
 
-    // 1. Get the source post (including embeddings for query, but also all other fields for display)
     const sourcePost = await collection.findOne(
       withReviewedThreatScoreFilter({ _id: new ObjectId(sourcePostId) })
     )
@@ -342,7 +312,8 @@ export const getSimilarPosts = traceAction('getSimilarPosts', async (_project, s
     if (!sourcePost) return { posts: [], totalCount: 0, page: 1, totalPages: 0 }
 
     const embeddingField = type === 'image' ? 'image_embedding' : 'text_embedding'
-    const queryVector = sourcePost[embeddingField]
+    const embDoc = await embeddings.findOne({ post_id: new ObjectId(sourcePostId) })
+    const queryVector = embDoc?.[embeddingField]
 
     if (!queryVector || !Array.isArray(queryVector) || queryVector.length === 0) {
       console.log(`No ${embeddingField} found for post ${sourcePostId}`)
@@ -369,35 +340,27 @@ export const getSimilarPosts = traceAction('getSimilarPosts', async (_project, s
           index: "vector_index",
           path: embeddingField,
           queryVector: queryVector,
-          numCandidates: 1000, // Fetch more to allow for post-filtering
-          limit: limit * 5 // Increase limit to ensure we get enough after match
+          numCandidates: 1000,
+          limit: limit * 5
         }
       },
       {
-        $match: matchQuery
+        $lookup: {
+          from: 'posts',
+          localField: 'post_id',
+          foreignField: '_id',
+          as: 'post_doc',
+        },
       },
-      { $addFields: buildCaseSortAddFields() },
+      { $unwind: '$post_doc' },
+      { $replaceRoot: { newRoot: '$post_doc' } },
+      { $match: matchQuery },
       ...buildUniqueClustersStage(filters, { clusterSort: 'early' }),
-      {
-        $addFields: {
-          score: { $meta: "vectorSearchScore" },
-          ...buildCasesDateAddFieldsStage(),
-        }
-      }
+      { $addFields: { score: { $meta: "vectorSearchScore" } } },
     ];
 
     // Add Date Filters
-    const dateFilterStage = {};
-    if (filters.original_date_from || filters.original_date_to) {
-      dateFilterStage.sort_original_date = {};
-      if (filters.original_date_from) dateFilterStage.sort_original_date.$gte = new Date(filters.original_date_from);
-      if (filters.original_date_to) dateFilterStage.sort_original_date.$lte = new Date(filters.original_date_to);
-    }
-    if (filters.processed_from || filters.processed_to) {
-      dateFilterStage.sort_processed_after = {};
-      if (filters.processed_from) dateFilterStage.sort_processed_after.$gte = new Date(filters.processed_from);
-      if (filters.processed_to) dateFilterStage.sort_processed_after.$lte = new Date(filters.processed_to);
-    }
+    const dateFilterStage = buildCasesDateFilterStage(filters);
     if (Object.keys(dateFilterStage).length > 0) {
       pipeline.push({ $match: dateFilterStage });
     }
@@ -410,15 +373,13 @@ export const getSimilarPosts = traceAction('getSimilarPosts', async (_project, s
     }
 
     pipeline.push(
-      { $limit: limit }, // Final limit after all sorting and matching
-      { $project: { text_embedding: 0, image_embedding: 0 } }
+      { $limit: limit },
     );
 
-    const posts = await collection.aggregate(pipeline).toArray()
-    const processedPosts = await Promise.all(posts.map(normalizeS3Post))
+    const posts = await embeddings.aggregate(pipeline).toArray()
+    const processedPosts = await Promise.all(posts.map((post) => normalizeS3Post(post, db)))
 
-    // 3. Prepend the source post to the results to show it at the top
-    const normalizedSourcePost = await normalizeS3Post(sourcePost)
+    const normalizedSourcePost = await normalizeS3Post(sourcePost, db)
     const finalPosts = [normalizedSourcePost, ...processedPosts]
 
     return {
@@ -480,24 +441,14 @@ export const getSemanticSearchPosts = traceAction('getSemanticSearchPosts', asyn
 
     const client = await clientPromise
     const db = client.db(dbName)
-    const collection = db.collection('Posts')
+    const collection = postsCollection(db)
+    const embeddings = postEmbeddingsCollection(db)
 
-    // 2. Build common match and date filters
     const matchQuery = buildCasesMatchQuery(filters);
 
     const sortPipeline = { score: -1, ...buildCasesListSortPipeline(sort) };
 
-    const dateFilterStage = {};
-    if (filters.original_date_from || filters.original_date_to) {
-      dateFilterStage.sort_original_date = {};
-      if (filters.original_date_from) dateFilterStage.sort_original_date.$gte = new Date(filters.original_date_from);
-      if (filters.original_date_to) dateFilterStage.sort_original_date.$lte = new Date(filters.original_date_to);
-    }
-    if (filters.processed_from || filters.processed_to) {
-      dateFilterStage.sort_processed_after = {};
-      if (filters.processed_from) dateFilterStage.sort_processed_after.$gte = new Date(filters.processed_from);
-      if (filters.processed_to) dateFilterStage.sort_processed_after.$lte = new Date(filters.processed_to);
-    }
+    const dateFilterStage = buildCasesDateFilterStage(filters);
 
     // 3. Setup Semantic Pipeline
     let semanticPosts = [];
@@ -512,24 +463,28 @@ export const getSemanticSearchPosts = traceAction('getSemanticSearchPosts', asyn
             limit: limit * 5
           }
         },
-        { $match: matchQuery },
-        { $addFields: buildCaseSortAddFields() },
-        ...buildUniqueClustersStage(filters, { clusterSort: 'early' }),
         {
-          $addFields: {
-            score: { $meta: "vectorSearchScore" },
-            ...buildCasesDateAddFieldsStage(),
-          }
+          $lookup: {
+            from: 'posts',
+            localField: 'post_id',
+            foreignField: '_id',
+            as: 'post_doc',
+          },
         },
-        { $match: { score: { $gt: 0.80} } } // Filter vectors with a score less than 0.75
+        { $unwind: '$post_doc' },
+        { $replaceRoot: { newRoot: '$post_doc' } },
+        { $match: matchQuery },
+        ...buildUniqueClustersStage(filters, { clusterSort: 'early' }),
+        { $addFields: { score: { $meta: "vectorSearchScore" } } },
+        { $match: { score: { $gt: 0.80} } }
       ];
 
       if (Object.keys(dateFilterStage).length > 0) semanticPipeline.push({ $match: dateFilterStage });
       if (sortPipeline) semanticPipeline.push({ $sort: sortPipeline });
-      semanticPipeline.push({ $limit: limit }, { $project: { text_embedding: 0, image_embedding: 0 } });
+      semanticPipeline.push({ $limit: limit });
       
       try {
-        semanticPosts = await collection.aggregate(semanticPipeline).toArray();
+        semanticPosts = await embeddings.aggregate(semanticPipeline).toArray();
       } catch (e) {
         logActionError({
           loki_stream: LOKI_STREAMS.cases,
@@ -566,10 +521,9 @@ export const getSemanticSearchPosts = traceAction('getSemanticSearchPosts', asyn
                 }
               },
               {
-                // Layer 3: The Partial Hash Match & other text fields (Normal Priority)
                 text: {
                   query: searchText,
-                  path: ['content', 'original_url', 'profile.display_name'],
+                  path: ['content.caption', 'original_url', 'author_snapshot.display_name'],
                   fuzzy: {
                     maxEdits: 2,
                     prefixLength: 2,
@@ -582,19 +536,13 @@ export const getSemanticSearchPosts = traceAction('getSemanticSearchPosts', asyn
         }
       },
       { $match: matchQuery },
-      { $addFields: buildCaseSortAddFields() },
       ...buildUniqueClustersStage(filters, { clusterSort: 'early' }),
-      {
-        $addFields: {
-          score: { $meta: "searchScore" },
-          ...buildCasesDateAddFieldsStage(),
-        }
-      }
+      { $addFields: { score: { $meta: "searchScore" } } }
     ];
 
     if (Object.keys(dateFilterStage).length > 0) textPipeline.push({ $match: dateFilterStage });
     if (sortPipeline) textPipeline.push({ $sort: sortPipeline });
-    textPipeline.push({ $limit: limit }, { $project: { text_embedding: 0, image_embedding: 0 } });
+    textPipeline.push({ $limit: limit });
     
     try {
       textPosts = await collection.aggregate(textPipeline).toArray();
@@ -629,7 +577,7 @@ export const getSemanticSearchPosts = traceAction('getSemanticSearchPosts', asyn
 
     // Apply the final threshold/limit
     const finalLimitedPosts = mergedPosts.slice(0, limit);
-    const processedPosts = await Promise.all(finalLimitedPosts.map(normalizeS3Post));
+    const processedPosts = await Promise.all(finalLimitedPosts.map((post) => normalizeS3Post(post, db)));
 
     return {
       posts: processedPosts,
@@ -668,21 +616,21 @@ export const updateClientStatus = traceAction('updateClientStatus', async (caseI
 
     const client = await clientPromise
     const db = client.db(authContext.dbName)
-    const collection = db.collection('Posts')
+    const collection = postsCollection(db)
 
     const objectIds = ids.map(id => new ObjectId(id))
     const isBulk = ids.length > 1
 
     const posts = await collection.find(
-      withReviewedThreatScoreFilter({ _id: { $in: objectIds } }),
-      { projection: { text_embedding: 0, image_embedding: 0 } }
+      withReviewedThreatScoreFilter({ _id: { $in: objectIds } })
     ).toArray()
 
     if (posts.length === 0) {
       return { success: false, error: "Case not found" }
     }
 
-    const nowIso = new Date().toISOString()
+    const now = new Date()
+    const v3Status = mapUiClientStatusToV3(status)
     const changesSummary = (isBulk ? "bulk " : "") + "client status change to " + status
 
     const bulkOps = posts.map(post => ({
@@ -690,22 +638,30 @@ export const updateClientStatus = traceAction('updateClientStatus', async (caseI
         filter: { _id: post._id },
         update: {
           $set: {
-            client_status: status,
-            "content_reviewed_by": authContext.clientDetails.email,
-            "metadata.updated_at": nowIso,
+            'workflow.client_status': v3Status,
+            content_reviewed_by: authContext.clientDetails.email,
+            'system.updated_at': now,
           },
-          $push: {
-            "metadata.update_history": {
-              updated_at: new Date(),
-              updated_by: authContext.clientDetails.email,
-              changes_summary: changesSummary
-            }
-          }
         }
       }
     }))
 
     const result = await collection.bulkWrite(bulkOps)
+
+    await Promise.all(posts.map((post) =>
+      insertCaseEvent(db, {
+        entityType: 'post',
+        entityId: post._id.toString(),
+        eventType: 'Client Status Updated',
+        actor: authContext.clientDetails.email,
+        summary: changesSummary,
+        payload: {
+          previous_status: post.workflow?.client_status || post.client_status || null,
+          new_status: v3Status,
+          ui_status: status,
+        },
+      })
+    ))
 
     // Track metrics for each post (parallel, errors swallowed)
     await updateClientReviewedMetricsBatch(

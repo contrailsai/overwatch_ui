@@ -13,6 +13,7 @@ import { sendContentModerationSqsMessage } from '@/utils/aws/sqs'
 import { traceAction, runInSpan } from '@/utils/tracing'
 import { requireRole } from '@/utils/auth-context'
 import { buildStrictPostDocument } from '@/utils/manual-post/buildStrictPostDocument'
+import { postsCollection } from '@/utils/mongodb/collections'
 import { triggerContrailsPostProcess } from '@/utils/embeddings/triggerContrailsPostProcess'
 import { logActionError, LOKI_STREAMS } from '@/utils/otel-logger'
 
@@ -179,9 +180,9 @@ function validatePayload(body) {
 
 async function assertManualPostIdAvailable(dbName, postId) {
   const client = await clientPromise
-  const collection = client.db(dbName).collection('Posts')
+  const collection = postsCollection(client.db(dbName))
   const dup = await collection.findOne({
-    $or: [{ post_id: postId }, { code: postId }, { id: postId }],
+    $or: [{ platform_post_id: postId }, { post_id: postId }, { code: postId }, { id: postId }],
   })
   if (dup) {
     return `A post with id "${postId}" already exists in this project.`
@@ -422,7 +423,7 @@ export const submitManualReviewerPost = traceAction('submitManualReviewerPost', 
 
   const client = await clientPromise
   const db = client.db(dbName)
-  const collection = db.collection('Posts')
+  const collection = postsCollection(db)
 
   const dup = await runInSpan(
     'upload_content.manual_post.dup_check',
@@ -485,7 +486,7 @@ export const submitManualReviewerPost = traceAction('submitManualReviewerPost', 
   if (form.queueAiAnalysis && process.env.AWS_CONTENT_MODERATION_SQS_QUEUE_URL) {
     const sqs = await runInSpan(
       'upload_content.manual_post.moderation_sqs',
-      async () => sendContentModerationSqsMessage(dbName, 'Posts', insertedId),
+      async () => sendContentModerationSqsMessage(dbName, 'posts', insertedId),
       { 'app.span_type': 'sqs_send' }
     )
     if (!sqs) {

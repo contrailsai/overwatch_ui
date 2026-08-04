@@ -2,6 +2,10 @@
 
 Guide for the **overwatch-content-moderation** team: how the AI analysis pipeline is triggered, what data you receive, where to read it from, and what to write back to MongoDB.
 
+> **Schema v3 (required):** Tenant DBs use lowercase `posts`, materialized `list.*` / `workflow.*`, embeddings in `post_embeddings`, and audit rows in `case_events`.  
+> **Migration contract for all services:** [`posts-profiles-schema-v3.md`](./posts-profiles-schema-v3.md)  
+> SQS `collection_name` is now **`"posts"`** (client already sends this). Treat `"Posts"` as a temporary legacy alias only.
+
 This document covers **two pipelines** that share the same SQS queue and the same output field (`analysis_results`), but differ in trigger shape and processing logic.
 
 | Pipeline | Trigger | Purpose |
@@ -54,7 +58,7 @@ Every message is JSON. All paths include these three fields:
 | Field | Type | Description |
 |-------|------|-------------|
 | `db_name` | string | Tenant Mongo database name (e.g. project-specific DB) |
-| `collection_name` | string | Always `"Posts"` today |
+| `collection_name` | string | `"posts"` (v3). Legacy tenants may still send `"Posts"` during migration |
 | `object_id` | string | Mongo `_id` of the post document |
 
 **Route on `mode`:**
@@ -85,7 +89,7 @@ Full re-run is **blocked** while a correction is `pending` or `processing` on th
 ```json
 {
   "db_name": "tenant_db",
-  "collection_name": "Posts",
+  "collection_name": "posts",
   "object_id": "507f1f77bcf86cd799439011"
 }
 ```
@@ -94,17 +98,18 @@ No other keys. Do not expect a correction payload in SQS.
 
 ### Where to read inputs (Mongo)
 
-Connect to `db_name` → collection `Posts` → find by `_id: object_id`.
+Connect to `db_name` → collection `posts` → find by `_id: object_id`.
 
 | Field | Use for |
 |-------|---------|
-| `post_content.caption` | Primary text evidence |
-| `post_content.media_urls[].s3_url` | Image/video for visual analysis |
-| `profile` | Author context (username, verified, etc.) |
-| `platform`, `original_url`, `engagement` | Context |
+| `content.caption` | Primary text evidence |
+| `content.media[].s3_url` | Image/video for visual analysis |
+| `author_snapshot` | Author context (username, verified, etc.) |
+| `profile_id` | Optional join to `profiles` for enrichment |
+| `platform`, `original_url`, `list.engagement_score` | Context |
 | `analysis_results` | **Optional on full run** — may be empty `{}` or stale; treat as overwrite target, not as instructions |
 
-**Legacy field fallbacks** (older documents): `caption`, `content`, `media_urls`, `author`, `user` — prefer `post_content` / `profile` when present.
+**Legacy field fallbacks** (pre-v3 docs only): `post_content.caption`, `post_content.media_urls`, `profile` / `author` / `user`, top-level `caption`. Prefer v3 paths when `schema_version === 3`.
 
 **Do not read** `review_details` for analysis — that is the reviewer's submitted verdict, not AI input.
 
@@ -121,13 +126,21 @@ Connect to `db_name` → collection `Posts` → find by `_id: object_id`.
 | Field | Action |
 |-------|--------|
 | `analysis_results` | **Replace** entire object with new analysis |
-| `analysis_results.reviewed_at` | Set to current ISO timestamp |
-| `metadata.updated_at` | Set to current ISO timestamp |
-| `metadata.update_history` | Append entry: `updated_by: "ai_moderation_lambda"` (or your service id), `changes_summary: "Automated AI content analysis"` |
+| `analysis_results.reviewed_at` / `analyzed_at` | Set to current timestamp (keep existing analysis_results convention) |
+| `workflow.ai_status` | e.g. `completed` / `failed` |
+| `list.ai_threat_score` | From AI score |
+| `list.threat_types` / `list.violation_flags` | From AI labels |
+| `list.poi_detected` | From POI / face-name checks |
+| `list.effective_threat_score` | `list.review_threat_score ?? list.ai_threat_score` |
+| `list.risk_rank` | From effective score (`high` / `medium` / `low` / `safe`) — see schema v3 contract |
+| `system.updated_at` | Current `Date` |
+| `case_events` | **Insert** audit row (`source: "ai_moderation_lambda"`); do **not** `$push` `metadata.update_history` |
 
 **Do not write** `analysis_correction_request` on full analysis — unless a stale correction was already on the document, leave it unchanged.
 
-**Do not write** `review_details`.
+**Do not write** `review_details`, `list.review_threat_score`, or embeddings onto the post document.
+
+See [`posts-profiles-schema-v3.md`](./posts-profiles-schema-v3.md) for ownership rules and formulas.
 
 ---
 
@@ -150,7 +163,7 @@ This is **not** a blind re-run. The reviewer has told you what to change; you re
 ```json
 {
   "db_name": "tenant_db",
-  "collection_name": "Posts",
+  "collection_name": "posts",
   "object_id": "507f1f77bcf86cd799439011",
   "mode": "revision",
   "correction_request_id": "550e8400-e29b-41d4-a716-446655440000"
@@ -163,7 +176,7 @@ The correction payload is **too large for SQS** — always load it from Mongo.
 
 Same post lookup as full analysis, plus:
 
-#### `Posts.analysis_correction_request` (singular object)
+#### `posts.analysis_correction_request` (singular object)
 
 One object per post, **overwritten** on each new correction request.
 
@@ -209,7 +222,7 @@ One object per post, **overwritten** on each new correction request.
 
 Empty arrays are sent when nothing to add/remove in that category. `update_risk` and `update_note` are omitted when unchanged / blank.
 
-**Also read** existing `Posts.analysis_results` — this is the draft you are revising, not starting from scratch.
+**Also read** existing `posts.analysis_results` — this is the draft you are revising, not starting from scratch.
 
 ### Revision processing steps
 
@@ -225,8 +238,10 @@ Empty arrays are sent when nothing to add/remove in that category. `update_risk`
 7. On success (only if id still matches):
    - Replace `analysis_results` (full object, same schema as full analysis)
    - Set `analysis_results.reviewed_at`
+   - Update `list.ai_threat_score`, `list.threat_types`, `list.violation_flags`, recompute `list.effective_threat_score` / `list.risk_rank` (same rules as full analysis)
    - Set `analysis_correction_request.status = "completed"`, `completed_at = now`, `error = null`
-   - Append `metadata.update_history` (e.g. `"Human-guided AI analysis revision"`)
+   - Insert `case_events` (e.g. summary `"Human-guided AI analysis revision"`); do not push `metadata.update_history`
+   - Set `system.updated_at`
 8. On failure (only if id still matches):
    - `analysis_correction_request.status = "failed"`
    - `analysis_correction_request.error = "<message>"`
@@ -309,7 +324,7 @@ Write the **same object shape** for both full analysis and revision. The review 
 |-------|------|-------------|
 | `urls` | string[] | Grounding / reference URLs from search |
 
-See [`sample_documents/mongodb/Posts.json`](../../sample_documents/mongodb/Posts.json) for a real example document.
+See [`sample_documents/new_schemas/posts.json`](../../sample_documents/new_schemas/posts.json) for a v3 example document.
 
 ### `flags` consistency
 
@@ -322,9 +337,10 @@ See [`sample_documents/mongodb/Posts.json`](../../sample_documents/mongodb/Posts
 | Field | Owner |
 |-------|-------|
 | `review_details` | Human reviewer (submitted verdict to client) |
-| `takedown_info` | Takedown workflow |
+| `takedown` / `workflow.takedown_status` / `workflow.client_status` | Client / takedown workflow |
 | `supabase_refs` | Client app integrations |
-| `text_embedding` / `image_embedding` | Separate embedding pipeline |
+| `text_embedding` / `image_embedding` on `posts` | Embedding service writes `post_embeddings` only |
+| `list.review_threat_score` / `list.reviewed_at` | Human review only |
 
 ---
 
@@ -346,12 +362,12 @@ See [`sample_documents/mongodb/Posts.json`](../../sample_documents/mongodb/Posts
 
 **SQS:**
 ```json
-{ "db_name": "cxo_demo", "collection_name": "Posts", "object_id": "6a1ea20d3574bd095b506f5b" }
+{ "db_name": "cxo_demo", "collection_name": "posts", "object_id": "6a1ea20d3574bd095b506f5b" }
 ```
 
-**Read:** `post_content.caption`, image at `post_content.media_urls[0].s3_url`, `profile`.
+**Read:** `content.caption`, image at `content.media[0].s3_url`, `author_snapshot`.
 
-**Write:** Full `analysis_results` with `threat_score: 85`, `threat_types: ["Misinformation"]`, legal codes, reasoning, flags, etc.
+**Write:** Full `analysis_results` plus v3 `list.*` / `workflow.ai_status` / `case_events` as in the write table above (e.g. `threat_score: 85`, `threat_types: ["Misinformation"]`).
 
 ---
 
@@ -361,7 +377,7 @@ See [`sample_documents/mongodb/Posts.json`](../../sample_documents/mongodb/Posts
 ```json
 {
   "db_name": "cxo_demo",
-  "collection_name": "Posts",
+  "collection_name": "posts",
   "object_id": "6a1ea20d3574bd095b506f5b",
   "mode": "revision",
   "correction_request_id": "550e8400-e29b-41d4-a716-446655440000"
@@ -424,5 +440,6 @@ You do not need to push to the client — **writing Mongo correctly is sufficien
 
 ## Related docs
 
+- [posts-profiles-schema-v3.md](./posts-profiles-schema-v3.md) — **v3 migration contract** (collections, ownership, formulas, indexes)
 - [analysis-correction-request.md](./analysis-correction-request.md) — detailed revision contract (payload examples, edge cases)
-- [sample_documents/mongodb/Posts.json](../../sample_documents/mongodb/Posts.json) — example Post with `analysis_results` and `review_details`
+- [sample_documents/new_schemas/posts.json](../../sample_documents/new_schemas/posts.json) — example v3 post with `analysis_results` and `review_details`

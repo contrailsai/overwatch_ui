@@ -17,79 +17,44 @@ import {
   findActiveCorrectionRequest,
 } from '@/utils/analysis/correctionRequestUtils'
 import { removePostFromAllTopics } from '@/lib/feeds/topic-membership'
+import { normalizeS3Post } from '@/lib/posts/pipeline-helpers'
+import { postsCollection, postEmbeddingsCollection } from '@/utils/mongodb/collections'
+import {
+  buildTakedownInfoForUi,
+  buildEffectiveThreatScoreRange,
+  getPostMedia,
+  insertCaseEvent,
+  ONLINE_VISIBILITY_VALUES,
+} from '@/utils/mongodb/v3-schema'
 
-/** Local helper — not a traced server action (avoids per-row trace overhead on list loads). */
-async function normalizeReviewS3Post(post) {
-  if (!post) return null;
+function getPostMediaItems(post) {
+  return post?.content?.media || post?.post_content?.media_urls || []
+}
 
-  // Find S3 URL to sign from post_content.media_urls
-  const firstMedia = post?.post_content?.media_urls?.[0] || null;
-  // Prefer thumbnail for videos, otherwise use s3_url
-  const s3UrlToSign = firstMedia ? (firstMedia.thumbnail_url || firstMedia.s3_url) : null;
+/** Review list helper — extends shared normalizeS3Post with review UI fields. */
+async function normalizeReviewS3Post(post, db = null) {
+  if (!post) return null
 
-  const signedUrl = s3UrlToSign ? await getSignedImageUrl(s3UrlToSign) : null;
+  const normalized = await normalizeS3Post(post, db)
+  const firstMedia = getPostMedia(post)[0] || null
 
-  // Map to frontend structure
-  const normalized = {
-    ...post,
-    _id: post?._id?.toString() || post?.id?.toString() || '',
-    created_at: post?.metadata?.created_at ? new Date(post.metadata.created_at).toISOString() : null,
-    sourcing_date: post?.metadata?.sourcing_date ? new Date(post.metadata.sourcing_date).toISOString() : null,
-    signedImageUrl: signedUrl,
+  return {
+    ...normalized,
     uploadedManually: firstMedia?.uploaded_manually === true,
-
-    // Content
-    caption: post.post_content?.caption || post.post_content?.content || '',
-
-    // Profile
-    user: {
-      username: post.profile?.username || 'Unknown',
-      full_name: post.profile?.display_name || '',
-      profile_pic_url: post.profile?.profile_pic_url || '', // Note: DB field is currently profile_url or profile_pic_url, need to check specific sample if strictly one. Samples show 'profile_url' in facebook/instagram but 'profile_pic' in x. Let's try to grab what's there.
-      is_verified: post.profile?.is_verified || false
-    },
-    // Fix for profile pic url variation in samples if needed, but strict mapping:
-    // Instagram sample: profile_pic_url
-    // Facebook sample: profile_url
-    // X sample: profile_pic (null in sample)
-    // Let's robustly grab it below:
-
-    // Timestamp
-    taken_at: post.engagement?.posted_at ? Math.floor(new Date(post.engagement.posted_at).getTime() / 1000) : null,
-
-    // Stats
+    taken_at: normalized.posted_date
+      ? Math.floor(new Date(normalized.posted_date).getTime() / 1000)
+      : null,
     stats: {
-      like_count: post.engagement?.likes || 0,
-      comment_count: post.engagement?.comments || 0,
-      view_count: post.engagement?.views || 0,
-      share_count: post.engagement?.shares || 0,
-      retweet_count: post.engagement?.retweets || 0,
-      quote_count: post.engagement?.quotes || 0,
-      reply_count: post.engagement?.replies || 0
+      like_count: post?.engagement?.likes || post?.stats?.like_count || 0,
+      comment_count: post?.engagement?.comments || post?.stats?.comment_count || 0,
+      view_count: post?.engagement?.views || post?.stats?.view_count || 0,
+      share_count: post?.engagement?.shares || post?.stats?.share_count || 0,
+      retweet_count: post?.engagement?.retweets || 0,
+      quote_count: post?.engagement?.quotes || 0,
+      reply_count: post?.engagement?.replies || 0,
     },
-
-    // AI ANALYSIS
-    analysis_results: post.analysis_results || {},
-    review_details: post.review_details || {},
-    takedown_info: post.takedown_info || {},
-
-    // Metadata
-    created_at: post.metadata?.created_at ? new Date(post.metadata.created_at).toISOString() : null,
-    sourcing_date: post.metadata?.sourcing_date ? new Date(post.metadata.sourcing_date).toISOString() : null,
-    posted_date: post.engagement?.posted_at ? new Date(post.engagement.posted_at).toISOString() : post.metadata?.posted_date ? new Date(post.metadata.posted_date).toISOString() : null,
-    updated_at: post.metadata?.updated_at ? new Date(post.metadata.updated_at).toISOString() : null,
-
-    // Platform
-    platform: post.platform ? post.platform.toLowerCase() : 'instagram',
-    visibility_status: post.visibility_status || 'active',
-    url: post.original_url || post.url || post.result_origin?.source_url || '',
-    original_url: post.original_url || post.url || post.result_origin?.source_url || '',
-  };
-
-  // Robust profile pic handling
-  normalized.user.profile_pic_url = post.profile?.profile_pic_url || post.profile?.profile_url || post.profile?.profile_pic || '';
-
-  return JSON.parse(JSON.stringify(normalized));
+    url: post.original_url || post.url || normalized.original_url || '',
+  }
 }
 
 function analysisResultsKeyCountExpr() {
@@ -102,28 +67,26 @@ function normalizeAiAnalyzedFilter(value) {
   return 'all'
 }
 
-const ONLINE_VISIBILITY_VALUES = ['active', 'online', 'available']
-
 function buildReviewPostsDateFilterStage(filters = {}) {
   const dateFilterStage = {}
 
   if (filters.sourcingDateStart || filters.sourcingDateEnd) {
-    dateFilterStage.sort_sourced_at = {}
+    dateFilterStage['list.sourced_at'] = {}
     if (filters.sourcingDateStart) {
-      dateFilterStage.sort_sourced_at.$gte = new Date(filters.sourcingDateStart)
+      dateFilterStage['list.sourced_at'].$gte = new Date(filters.sourcingDateStart)
     }
     if (filters.sourcingDateEnd) {
-      dateFilterStage.sort_sourced_at.$lte = new Date(filters.sourcingDateEnd)
+      dateFilterStage['list.sourced_at'].$lte = new Date(filters.sourcingDateEnd)
     }
   }
 
   if (filters.postingDateStart || filters.postingDateEnd) {
-    dateFilterStage.sort_posted_at = {}
+    dateFilterStage['list.posted_at'] = {}
     if (filters.postingDateStart) {
-      dateFilterStage.sort_posted_at.$gte = new Date(filters.postingDateStart)
+      dateFilterStage['list.posted_at'].$gte = new Date(filters.postingDateStart)
     }
     if (filters.postingDateEnd) {
-      dateFilterStage.sort_posted_at.$lte = new Date(filters.postingDateEnd)
+      dateFilterStage['list.posted_at'].$lte = new Date(filters.postingDateEnd)
     }
   }
 
@@ -133,55 +96,11 @@ function buildReviewPostsDateFilterStage(filters = {}) {
   }
 }
 
-function buildReviewPostsAddFieldsStage() {
-  return {
-    $addFields: {
-      sort_posted_at: {
-        $convert: {
-          input: { $ifNull: ['$engagement.posted_at', '$metadata.posted_date'] },
-          to: 'date',
-          onError: {
-            $toDate: { $toLong: { $ifNull: ['$engagement.posted_at', '$metadata.posted_date'] } }
-          },
-          onNull: null,
-        },
-      },
-      sort_sourced_at: {
-        $convert: {
-          input: '$metadata.created_at',
-          to: 'date',
-          onError: { $toDate: { $toLong: '$metadata.created_at' } },
-          onNull: null,
-        },
-      },
-      // Human review score wins; otherwise AI threat_score, then legacy risk_score
-      effective_threat_score: {
-        $convert: {
-          input: {
-            $ifNull: [
-              '$review_details.threat_score',
-              '$analysis_results.threat_score',
-              '$analysis_results.risk_score',
-            ],
-          },
-          to: 'double',
-          onError: null,
-          onNull: null,
-        },
-      },
-    },
-  }
-}
-
 /** high > 95, medium > 75 && <= 95, low > 40 && <= 75, safe <= 40 */
 function buildReviewRiskBucketMatch(aiRisk) {
-  const risk = aiRisk && aiRisk !== 'all' ? String(aiRisk).toLowerCase() : null
-  if (!risk) return null
-  if (risk === 'high') return { $match: { effective_threat_score: { $gt: 95 } } }
-  if (risk === 'medium') return { $match: { effective_threat_score: { $gt: 75, $lte: 95 } } }
-  if (risk === 'low') return { $match: { effective_threat_score: { $gt: 40, $lte: 75 } } }
-  if (risk === 'safe') return { $match: { effective_threat_score: { $lte: 40 } } }
-  return null
+  const range = buildEffectiveThreatScoreRange(aiRisk && aiRisk !== 'all' ? String(aiRisk).toLowerCase() : null)
+  if (!range) return null
+  return { $match: { 'list.effective_threat_score': range } }
 }
 
 function buildReviewPostsPipelineStages(filters = {}) {
@@ -190,8 +109,6 @@ function buildReviewPostsPipelineStages(filters = {}) {
 
   return [
     { $match: buildReviewPostsMatchQuery(filters) },
-    { $project: { text_embedding: 0, image_embedding: 0 } },
-    buildReviewPostsAddFieldsStage(),
     ...(hasDateFilters ? [{ $match: dateFilterStage }] : []),
     ...(riskMatch ? [riskMatch] : []),
   ]
@@ -203,9 +120,15 @@ function buildReviewPostsMatchQuery(filters = {}) {
   const andConditions = []
 
   if (filters.status === 'pending') {
-    andConditions.push({ 'review_details.threat_score': { $exists: false } })
+    andConditions.push({
+      $or: [
+        { 'workflow.review_status': 'pending' },
+        { 'list.review_threat_score': { $exists: false } },
+        { 'list.review_threat_score': null },
+      ],
+    })
   } else if (filters.status === 'reviewed') {
-    andConditions.push({ 'review_details.threat_score': { $exists: true } })
+    andConditions.push({ 'workflow.review_status': 'reviewed' })
   }
 
   const aiMode = normalizeAiAnalyzedFilter(filters.aiAnalyzed)
@@ -231,7 +154,7 @@ function buildReviewPostsMatchQuery(filters = {}) {
   if (filters.visibility_status && filters.visibility_status !== 'all') {
     const visibilityLower = String(filters.visibility_status).toLowerCase()
     if (visibilityLower === 'down') {
-      query.visibility_status = 'down'
+      query['workflow.visibility_status'] = 'down'
     } else if (
       visibilityLower === 'active' ||
       visibilityLower === 'online' ||
@@ -239,9 +162,9 @@ function buildReviewPostsMatchQuery(filters = {}) {
     ) {
       andConditions.push({
         $or: [
-          { visibility_status: { $in: ONLINE_VISIBILITY_VALUES } },
-          { visibility_status: { $exists: false } },
-          { visibility_status: null },
+          { 'workflow.visibility_status': { $in: ONLINE_VISIBILITY_VALUES } },
+          { 'workflow.visibility_status': { $exists: false } },
+          { 'workflow.visibility_status': null },
         ],
       })
     }
@@ -271,7 +194,7 @@ export const getPosts = traceAction('getPosts_review', async (_project_mongo_db_
     // console.log(data.mongo_db_map)
     const client = await clientPromise
     const db = client.db(dbName)
-    const collection = db.collection('Posts')
+    const collection = postsCollection(db)
 
     const skip = (page - 1) * limit
     const basePipeline = buildReviewPostsPipelineStages(filters)
@@ -282,7 +205,7 @@ export const getPosts = traceAction('getPosts_review', async (_project_mongo_db_
         {
           $facet: {
             data: [
-              { $sort: { sort_sourced_at: -1 } },
+              { $sort: { 'list.sourced_at': -1 } },
               { $skip: skip },
               { $limit: limit }
             ],
@@ -295,7 +218,7 @@ export const getPosts = traceAction('getPosts_review', async (_project_mongo_db_
     const posts = facetResult?.[0]?.data || []
     const totalCount = facetResult?.[0]?.total?.[0]?.total || 0
 
-    const processedPosts = await Promise.all(posts.map((p) => normalizeReviewS3Post(p)))
+    const processedPosts = await Promise.all(posts.map((p) => normalizeReviewS3Post(p, db)))
 
     return { posts: processedPosts, totalCount, page, totalPages: Math.ceil(totalCount / limit) }
   } catch (e) {
@@ -340,12 +263,9 @@ function buildReviewAtlasSearchCompound(searchText) {
         text: {
           query: searchText,
           path: [
-            'content',
+            'content.caption',
+            'author_snapshot.display_name',
             'original_url',
-            'url',
-            'result_origin.source_url',
-            'post_content.caption',
-            'profile.display_name',
           ],
           fuzzy,
         },
@@ -402,13 +322,10 @@ function buildReviewUrlRegexMatch(searchText) {
     const re = { $regex: escaped, $options: 'i' }
     orConditions.push(
       { original_url: re },
-      { url: re },
-      { 'result_origin.source_url': re },
+      { 'content.caption': re },
+      { 'author_snapshot.display_name': re },
+      { platform_post_id: re },
       { post_id: re },
-      { code: re },
-      { content: re },
-      { 'post_content.caption': re },
-      { 'post_content.content': re },
     )
   }
 
@@ -438,11 +355,9 @@ async function runReviewRegexSearch(collection, searchText, limit, filters) {
 
   const pipeline = [
     { $match: matchQuery },
-    { $project: { text_embedding: 0, image_embedding: 0 } },
-    buildReviewPostsAddFieldsStage(),
     ...(hasDateFilters ? [{ $match: dateFilterStage }] : []),
     ...(riskMatch ? [riskMatch] : []),
-    { $sort: { sort_sourced_at: -1 } },
+    { $sort: { 'list.sourced_at': -1 } },
     { $limit: limit },
   ]
 
@@ -503,7 +418,8 @@ export const getReviewSemanticSearchPosts = traceAction(
 
       const client = await clientPromise
       const db = client.db(dbName)
-      const collection = db.collection('Posts')
+      const collection = postsCollection(db)
+      const embeddings = postEmbeddingsCollection(db)
 
       const matchQuery = buildReviewPostsMatchQuery(filters)
       const { dateFilterStage, hasDateFilters } = buildReviewPostsDateFilterStage(filters)
@@ -511,8 +427,6 @@ export const getReviewSemanticSearchPosts = traceAction(
 
       const postMatchStages = [
         { $match: matchQuery },
-        { $project: { text_embedding: 0, image_embedding: 0 } },
-        buildReviewPostsAddFieldsStage(),
         ...(hasDateFilters ? [{ $match: dateFilterStage }] : []),
         ...(riskMatch ? [riskMatch] : []),
       ]
@@ -536,6 +450,16 @@ export const getReviewSemanticSearchPosts = traceAction(
               limit: limit * 5,
             },
           },
+          {
+            $lookup: {
+              from: 'posts',
+              localField: 'post_id',
+              foreignField: '_id',
+              as: 'post_doc',
+            },
+          },
+          { $unwind: '$post_doc' },
+          { $replaceRoot: { newRoot: '$post_doc' } },
           ...postMatchStages,
           {
             $addFields: {
@@ -543,12 +467,12 @@ export const getReviewSemanticSearchPosts = traceAction(
             },
           },
           { $match: { score: { $gt: 0.8 } } },
-          { $sort: { score: -1, sort_sourced_at: -1 } },
+          { $sort: { score: -1, 'list.sourced_at': -1 } },
           { $limit: limit },
         ]
 
         try {
-          semanticPosts = await collection.aggregate(semanticPipeline).toArray()
+          semanticPosts = await embeddings.aggregate(semanticPipeline).toArray()
         } catch (e) {
           logActionError({
             loki_stream: LOKI_STREAMS.review_cases,
@@ -573,7 +497,7 @@ export const getReviewSemanticSearchPosts = traceAction(
               score: { $meta: 'searchScore' },
             },
           },
-          { $sort: { score: -1, sort_sourced_at: -1 } },
+          { $sort: { score: -1, 'list.sourced_at': -1 } },
           { $limit: limit },
         ]
 
@@ -611,7 +535,7 @@ export const getReviewSemanticSearchPosts = traceAction(
       }
 
       const finalLimitedPosts = mergedPosts.slice(0, limit)
-      const processedPosts = await Promise.all(finalLimitedPosts.map((p) => normalizeReviewS3Post(p)))
+      const processedPosts = await Promise.all(finalLimitedPosts.map((p) => normalizeReviewS3Post(p, db)))
 
       return {
         posts: processedPosts,
@@ -641,15 +565,12 @@ export const getPostById = traceAction('getPostById', async (_project, case_id) 
     const { dbName } = await requireRole(['reviewer'])
     const client = await clientPromise
     const db = client.db(dbName)
-    const collection = db.collection('Posts')
+    const collection = postsCollection(db)
 
-    const post = await collection.findOne(
-      { _id: new ObjectId(case_id) },
-      { projection: { text_embedding: 0, image_embedding: 0 } }
-    )
+    const post = await collection.findOne({ _id: new ObjectId(case_id) })
 
-    // Serialize and Sign URLs - use new unified schema
-    const processedPost = await normalizeReviewS3Post(post);
+    // Serialize and Sign URLs - use v3 schema normalization
+    const processedPost = await normalizeReviewS3Post(post, db);
 
     return processedPost
   } catch (e) {
@@ -677,11 +598,11 @@ export const getAllPostsForExport = traceAction('getAllPostsForExport', async (_
 
     const client = await clientPromise
     const db = client.db(dbName)
-    const collection = db.collection('Posts')
+    const collection = postsCollection(db)
 
     const pipeline = [
       ...buildReviewPostsPipelineStages(filters),
-      { $sort: { sort_sourced_at: -1 } },
+      { $sort: { 'list.sourced_at': -1 } },
     ]
 
     const posts = await collection.aggregate(pipeline).toArray()
@@ -694,9 +615,9 @@ export const getAllPostsForExport = traceAction('getAllPostsForExport', async (_
 
     const processedPosts = posts.map(post => ({
       _id: { $oid: post._id.toString() },
-      code: post.code || post.post_id || '',
-      content: post.content || post.post_content?.content || post.caption || '',
-      created_at: { $date: toExportDate(post.created_at || post.metadata?.created_at) },
+      code: post.code || post.platform_post_id || post.post_id || '',
+      content: post.content?.caption || post.content || post.caption || '',
+      created_at: { $date: toExportDate(post.system?.created_at || post.created_at || post.metadata?.created_at) },
       engagement: {
         likes: post.engagement?.likes ?? post.stats?.like_count ?? 0,
         comments: post.engagement?.comments ?? post.stats?.comment_count ?? 0,
@@ -705,19 +626,19 @@ export const getAllPostsForExport = traceAction('getAllPostsForExport', async (_
         quotes: post.engagement?.quotes ?? post.stats?.quote_count ?? 0,
         replies: post.engagement?.replies ?? post.stats?.reply_count ?? 0,
         views: post.engagement?.views ?? post.stats?.view_count ?? 0,
-        posted_at: { $date: toExportDate(post.engagement?.posted_at || post.metadata?.posted_date) }
+        posted_at: { $date: toExportDate(post.list?.posted_at || post.engagement?.posted_at || post.metadata?.posted_date) }
       },
-      media_urls: post.media_urls || post.post_content?.media_urls || [],
+      media_urls: post.content?.media || post.media_urls || post.post_content?.media_urls || [],
       platform: post.platform ? post.platform.toLowerCase() : '',
       profile: {
-        platform_user_id: post.profile?.platform_user_id || null,
-        username: post.profile?.username || post.author?.username || '',
-        display_name: post.profile?.display_name || post.author?.name || '',
-        profile_url: post.profile?.profile_url || post.author?.url || '',
-        is_verified: post.profile?.is_verified || false
+        platform_user_id: post.author_snapshot?.platform_user_id || post.profile?.platform_user_id || null,
+        username: post.author_snapshot?.username || post.profile?.username || post.author?.username || '',
+        display_name: post.author_snapshot?.display_name || post.profile?.display_name || post.author?.name || '',
+        profile_url: post.author_snapshot?.profile_url || post.profile?.profile_url || post.author?.url || '',
+        is_verified: post.author_snapshot?.is_verified || post.profile?.is_verified || false
       },
-      sourcing_date: { $date: toExportDate(post.sourcing_date || post.metadata?.sourcing_date) },
-      url: post.original_url || post.url || post.result_origin?.source_url || '',
+      sourcing_date: { $date: toExportDate(post.list?.sourced_at || post.sourcing_date || post.metadata?.sourcing_date) },
+      url: post.original_url || post.url || '',
       result_origin: post.result_origin && typeof post.result_origin === 'object' ? post.result_origin : {},
       analysis_results: post.analysis_results || {},
       review_details: post.review_details || {}
@@ -867,13 +788,10 @@ export const submitCaseReview = traceAction('submitCaseReview', async (_project,
   try {
     const client = await clientPromise
     const db = client.db(dbName) // Use Correct DB
-    const collection = db.collection('Posts')
+    const collection = postsCollection(db)
 
     // 1. Fetch existing post to get previous state
-    const existingPost = await collection.findOne(
-      { _id: new ObjectId(mongoId) },
-      { projection: { text_embedding: 0, image_embedding: 0 } }
-    )
+    const existingPost = await collection.findOne({ _id: new ObjectId(mongoId) })
     if (!existingPost) {
       return { success: false, error: 'Post not found' }
     }
@@ -901,9 +819,9 @@ export const submitCaseReview = traceAction('submitCaseReview', async (_project,
     }
 
     // Check if it was previously reviewed to handle metrics updates correctly
-    // We only treat it as an update if it has a valid threat_score from a previous session
     const prevReview = existingPost.review_details;
-    const isPreviouslyReviewed = existingPost.processed && prevReview && prevReview.threat_score !== undefined;
+    const isPreviouslyReviewed = existingPost.workflow?.review_status === 'reviewed'
+      || (prevReview && prevReview.threat_score !== undefined);
 
     const previousReviewData = isPreviouslyReviewed ? {
       threat_score: prevReview.threat_score,
@@ -912,26 +830,46 @@ export const submitCaseReview = traceAction('submitCaseReview', async (_project,
       platform: existingPost.platform
     } : null
 
+    const reviewedAt = review_details.reviewed_at
+    const effectiveScore = review_details.threat_score
+
     // 2. Update MongoDB
     const result = await collection.updateOne(
       { _id: new ObjectId(mongoId) },
       {
         $set: {
           review_details,
-          takedown_info,
-          processed: true,
-          processed_at: new Date(),
-          "metadata.updated_at": new Date().toISOString()
+          takedown: {
+            ...(existingPost.takedown || {}),
+            status: takedown_info.takedown_status?.toLowerCase?.() === 'none'
+              ? (existingPost.takedown?.status || 'none')
+              : (takedown_info.takedown_status || existingPost.takedown?.status || 'none'),
+          },
+          'workflow.review_status': 'reviewed',
+          'workflow.client_status': existingPost.workflow?.client_status || 'alerted',
+          'workflow.alerted_at': existingPost.workflow?.alerted_at || new Date(),
+          ...(!already_in_takedown
+            ? { 'workflow.takedown_status': suggest_takedown ? 'requested' : 'none' }
+            : {}),
+          content_reviewed_by: clientDetails.email,
+          'list.review_threat_score': effectiveScore,
+          'list.effective_threat_score': effectiveScore,
+          'list.reviewed_at': new Date(reviewedAt),
+          'list.threat_types': review_details.threat_types,
+          'list.violation_flags': review_details.threat_types,
+          'system.updated_at': new Date(),
         },
-        $push: {
-          "metadata.update_history": {
-            updated_at: new Date(),
-            updated_by: clientDetails.email,
-            changes_summary: "Case Alerted "
-          }
-        }
       }
     )
+
+    await insertCaseEvent(db, {
+      entityType: 'post',
+      entityId: mongoId,
+      eventType: 'Case Alerted',
+      actor: clientDetails.email,
+      summary: 'Case Alerted',
+      payload: { review_details, takedown_info },
+    })
 
     // 3. Update Supabase Metrics
     const currentReviewData = {
@@ -1013,20 +951,17 @@ export const getCaseMetadata = traceAction('getCaseMetadata', async (postId) => 
     const { dbName } = await requireRole(['reviewer'])
     const client = await clientPromise
     const db = client.db(dbName)
-    const collection = db.collection('Posts')
+    const collection = postsCollection(db)
 
-    const post = await collection.findOne(
-      { post_id: postId },
-      { projection: { text_embedding: 0, image_embedding: 0 } }
-    )
+    const post = await collection.findOne({ post_id: postId })
 
-    if (!post || (!post.review_details && !post.takedown_info)) {
+    if (!post || (!post.review_details && !post.takedown && !post.takedown_info)) {
       return null
     }
 
     return {
       review_details: post.review_details,
-      takedown_info: post.takedown_info,
+      takedown_info: buildTakedownInfoForUi(post),
       analysis_results: post.analysis_results
     }
   } catch (e) {
@@ -1103,28 +1038,42 @@ export const confirmCaseImageUpload = traceAction('confirmCaseImageUpload', asyn
 
     const client = await clientPromise
     const db = client.db(dbName)
-    const collection = db.collection('Posts')
+    const collection = postsCollection(db)
+
+    const existingPost = await collection.findOne(
+      { _id: new ObjectId(postId) },
+      { projection: { 'content.media': 1, 'post_content.media_urls': 1 } }
+    )
+
+    if (!existingPost) {
+      return { success: false, error: 'Post not found' }
+    }
+
+    const existingMedia = getPostMediaItems(existingPost)
+    const preservedMedia = existingMedia.filter((m) => !m?.uploaded_manually)
+    const manualEntry = {
+      s3_url: resolvedS3Url,
+      media_type: contentType,
+      uploaded_manually: true,
+    }
 
     await collection.updateOne(
       { _id: new ObjectId(postId) },
       {
         $set: {
-          'post_content.media_urls': [{
-            s3_url: resolvedS3Url,
-            media_type: contentType,
-            uploaded_manually: true
-          }],
-          'metadata.updated_at': new Date().toISOString()
+          'content.media': [...preservedMedia, manualEntry],
+          'system.updated_at': new Date(),
         },
-        $push: {
-          'metadata.update_history': {
-            updated_at: new Date(),
-            updated_by: clientDetails.email,
-            changes_summary: 'Image uploaded manually for case'
-          }
-        }
       }
     )
+
+    await insertCaseEvent(db, {
+      entityType: 'post',
+      entityId: postId,
+      eventType: 'Image Uploaded',
+      actor: clientDetails.email,
+      summary: 'Image uploaded manually for case',
+    })
 
     const signedUrl = await getSignedImageUrl(resolvedS3Url)
 
@@ -1150,18 +1099,18 @@ export const deleteCaseImage = traceAction('deleteCaseImage', async (postId, _pr
 
     const client = await clientPromise
     const db = client.db(dbName)
-    const collection = db.collection('Posts')
+    const collection = postsCollection(db)
 
     const existingPost = await collection.findOne(
       { _id: new ObjectId(postId) },
-      { projection: { 'post_content.media_urls': 1 } }
+      { projection: { 'content.media': 1, 'post_content.media_urls': 1 } }
     )
 
     if (!existingPost) {
       return { success: false, error: 'Post not found' }
     }
 
-    const mediaUrls = existingPost?.post_content?.media_urls || []
+    const mediaUrls = getPostMediaItems(existingPost)
 
     // Best-effort: only delete manually uploaded files from S3 to avoid removing original scraped media
     for (const m of mediaUrls) {
@@ -1181,22 +1130,25 @@ export const deleteCaseImage = traceAction('deleteCaseImage', async (postId, _pr
       }
     }
 
+    const preservedMedia = mediaUrls.filter((m) => !m?.uploaded_manually)
+
     await collection.updateOne(
       { _id: new ObjectId(postId) },
       {
         $set: {
-          'post_content.media_urls': [],
-          'metadata.updated_at': new Date().toISOString()
+          'content.media': preservedMedia,
+          'system.updated_at': new Date(),
         },
-        $push: {
-          'metadata.update_history': {
-            updated_at: new Date(),
-            updated_by: clientDetails.email,
-            changes_summary: 'Image deleted manually for case'
-          }
-        }
       }
     )
+
+    await insertCaseEvent(db, {
+      entityType: 'post',
+      entityId: postId,
+      eventType: 'Image Deleted',
+      actor: clientDetails.email,
+      summary: 'Image deleted manually for case',
+    })
 
     return { success: true }
   } catch (error) {
@@ -1220,24 +1172,26 @@ export const updatePostVisibility = traceAction('updatePostVisibility', async (p
 
     const client = await clientPromise
     const db = client.db(dbName)
-    const collection = db.collection('Posts')
+    const collection = postsCollection(db)
 
     await collection.updateOne(
       { _id: new ObjectId(postId) },
       {
         $set: {
-          visibility_status: status,
-          "metadata.updated_at": new Date().toISOString()
+          'workflow.visibility_status': status,
+          'system.updated_at': new Date(),
         },
-        $push: {
-          "metadata.update_history": {
-            updated_at: new Date(),
-            updated_by: clientDetails.email,
-            changes_summary: `Visibility status updated to ${status}`
-          }
-        }
       }
     )
+
+    await insertCaseEvent(db, {
+      entityType: 'post',
+      entityId: postId,
+      eventType: 'Visibility Updated',
+      actor: clientDetails.email,
+      summary: `Visibility status updated to ${status}`,
+      payload: { visibility_status: status },
+    })
 
     return { success: true }
   } catch (error) {
@@ -1261,12 +1215,12 @@ export const deleteCase = traceAction('deleteCase', async (postId, _project, _cl
 
     const client = await clientPromise
     const db = client.db(dbName)
-    const collection = db.collection('Posts')
+    const collection = postsCollection(db)
 
     // Fetch media to attempt S3 cleanup before deleting the document
     const existingPost = await collection.findOne(
       { _id: new ObjectId(postId) },
-      { projection: { 'post_content.media_urls': 1 } }
+      { projection: { 'content.media': 1, 'post_content.media_urls': 1 } }
     )
 
     if (!existingPost) {
@@ -1274,7 +1228,7 @@ export const deleteCase = traceAction('deleteCase', async (postId, _project, _cl
     }
 
     // Best-effort: delete any manually uploaded S3 files
-    const mediaUrls = existingPost?.post_content?.media_urls || []
+    const mediaUrls = existingPost?.content?.media || existingPost?.post_content?.media_urls || []
     for (const m of mediaUrls) {
       if (m?.uploaded_manually && m?.s3_url) {
         try {
@@ -1295,7 +1249,17 @@ export const deleteCase = traceAction('deleteCase', async (postId, _project, _cl
     // Remove post from all topic memberships before hard-delete
     await removePostFromAllTopics(db, postId)
 
-    // Hard-delete the document
+    await insertCaseEvent(db, {
+      entityType: 'post',
+      entityId: postId,
+      eventType: 'Case Deleted',
+      actor: clientDetails.email,
+      summary: `Case deleted by ${clientDetails.email}`,
+    })
+
+    await postEmbeddingsCollection(db).deleteOne({ post_id: new ObjectId(postId) })
+
+    // Hard-delete the document (case_events retained for audit trail)
     await collection.deleteOne({ _id: new ObjectId(postId) })
 
     console.log(`Case ${postId} deleted by ${clientDetails.email}`)
@@ -1314,7 +1278,7 @@ export const deleteCase = traceAction('deleteCase', async (postId, _project, _cl
 
 export const runAIAnalysis = traceAction('runAIAnalysis', async (postId, _project, _clientDetails) => {
   try {
-    const { dbName } = await requireRole(['reviewer'])
+    const { dbName, clientDetails } = await requireRole(['reviewer'])
 
     if (!postId) {
       return { success: false, error: 'Missing Post ID' }
@@ -1322,7 +1286,7 @@ export const runAIAnalysis = traceAction('runAIAnalysis', async (postId, _projec
 
     const client = await clientPromise
     const db = client.db(dbName)
-    const collection = db.collection('Posts')
+    const collection = postsCollection(db)
 
     const existingPost = await collection.findOne(
       { _id: new ObjectId(postId) },
@@ -1337,11 +1301,19 @@ export const runAIAnalysis = traceAction('runAIAnalysis', async (postId, _projec
       return { success: false, error: 'An AI correction is in progress. Check correction status or cancel it first.' }
     }
 
-    const response = await sendContentModerationSqsMessage(dbName, 'Posts', postId);
+    const response = await sendContentModerationSqsMessage(dbName, 'posts', postId);
     
     if (!response) {
       return { success: false, error: 'AI analysis queue not configured' }
     }
+
+    await insertCaseEvent(db, {
+      entityType: 'post',
+      entityId: postId,
+      eventType: 'AI Analysis Requested',
+      actor: clientDetails.email,
+      summary: 'AI analysis queued for post',
+    })
 
     return { success: true }
   } catch (error) {
@@ -1374,6 +1346,7 @@ async function markCorrectionRequestFailed(collection, postId, correctionRequest
 
 async function queueCorrectionRevision({
   collection,
+  db,
   dbName,
   postId,
   clientDetails,
@@ -1396,14 +1369,7 @@ async function queueCorrectionRevision({
     {
       $set: {
         analysis_correction_request: correctionRequest,
-        'metadata.updated_at': new Date().toISOString(),
-      },
-      $push: {
-        'metadata.update_history': {
-          updated_at: new Date(),
-          updated_by: clientDetails?.email || 'unknown',
-          changes_summary: changesSummary,
-        },
+        'system.updated_at': new Date(),
       },
     }
   )
@@ -1416,9 +1382,17 @@ async function queueCorrectionRevision({
     return { success: false, error: 'Failed to queue AI correction' }
   }
 
+  await insertCaseEvent(db, {
+    entityType: 'post',
+    entityId: postId,
+    eventType: 'AI Correction Queued',
+    actor: clientDetails?.email || 'unknown',
+    summary: changesSummary,
+  })
+
   let sqsResponse
   try {
-    sqsResponse = await sendContentModerationSqsMessage(dbName, 'Posts', postId, {
+    sqsResponse = await sendContentModerationSqsMessage(dbName, 'posts', postId, {
       mode: 'revision',
       correction_request_id: correctionRequestId,
     })
@@ -1446,6 +1420,7 @@ export const requestAIAnalysisCorrection = traceAction(
   async (postId, _project, clientDetails, payload) => {
     let correctionRequestId = null
     let collection = null
+    let db = null
 
     try {
       const { dbName } = await requireRole(['reviewer'])
@@ -1473,8 +1448,8 @@ export const requestAIAnalysisCorrection = traceAction(
       }
 
       const client = await clientPromise
-      const db = client.db(dbName)
-      collection = db.collection('Posts')
+      db = client.db(dbName)
+      collection = postsCollection(db)
 
       const existingPost = await collection.findOne(
         { _id: new ObjectId(postId) },
@@ -1525,14 +1500,7 @@ export const requestAIAnalysisCorrection = traceAction(
         {
           $set: {
             analysis_correction_request: correctionRequest,
-            'metadata.updated_at': new Date().toISOString(),
-          },
-          $push: {
-            'metadata.update_history': {
-              updated_at: new Date(),
-              updated_by: clientDetails?.email || 'unknown',
-              changes_summary: 'Human-requested AI analysis correction',
-            },
+            'system.updated_at': new Date(),
           },
         }
       )
@@ -1557,9 +1525,17 @@ export const requestAIAnalysisCorrection = traceAction(
         return { success: false, error: 'Failed to queue AI correction' }
       }
 
+      await insertCaseEvent(db, {
+        entityType: 'post',
+        entityId: postId,
+        eventType: 'AI Correction Queued',
+        actor: clientDetails?.email || 'unknown',
+        summary: 'Human-requested AI analysis correction',
+      })
+
       let sqsResponse
       try {
-        sqsResponse = await sendContentModerationSqsMessage(dbName, 'Posts', postId, {
+        sqsResponse = await sendContentModerationSqsMessage(dbName, 'posts', postId, {
           mode: 'revision',
           correction_request_id: correctionRequestId,
         })
@@ -1604,7 +1580,7 @@ export const getAnalysisCorrectionStatus = traceAction(
 
       const client = await clientPromise
       const db = client.db(dbName)
-      const collection = db.collection('Posts')
+      const collection = postsCollection(db)
 
       const post = await collection.findOne(
         { _id: new ObjectId(postId) },
@@ -1658,7 +1634,7 @@ export const restartAIAnalysisCorrection = traceAction(
 
       const client = await clientPromise
       const db = client.db(dbName)
-      const collection = db.collection('Posts')
+      const collection = postsCollection(db)
 
       const existingPost = await collection.findOne(
         { _id: new ObjectId(postId) },
@@ -1682,6 +1658,7 @@ export const restartAIAnalysisCorrection = traceAction(
       const correctionRequestId = crypto.randomUUID()
       const queued = await queueCorrectionRevision({
         collection,
+        db,
         dbName,
         postId,
         clientDetails,
@@ -1723,7 +1700,7 @@ export const cancelAIAnalysisCorrection = traceAction(
 
       const client = await clientPromise
       const db = client.db(dbName)
-      const collection = db.collection('Posts')
+      const collection = postsCollection(db)
 
       const existingPost = await collection.findOne(
         { _id: new ObjectId(postId) },
@@ -1755,14 +1732,7 @@ export const cancelAIAnalysisCorrection = traceAction(
         {
           $set: {
             analysis_correction_request: cancelledRequest,
-            'metadata.updated_at': now,
-          },
-          $push: {
-            'metadata.update_history': {
-              updated_at: new Date(),
-              updated_by: clientDetails?.email || 'unknown',
-              changes_summary: 'Reviewer cancelled AI analysis correction',
-            },
+            'system.updated_at': new Date(now),
           },
         }
       )
@@ -1770,6 +1740,14 @@ export const cancelAIAnalysisCorrection = traceAction(
       if (result.matchedCount === 0) {
         return { success: false, error: 'Post not found' }
       }
+
+      await insertCaseEvent(db, {
+        entityType: 'post',
+        entityId: postId,
+        eventType: 'AI Correction Cancelled',
+        actor: clientDetails?.email || 'unknown',
+        summary: 'Reviewer cancelled AI analysis correction',
+      })
 
       return { success: true, correctionRequest: cancelledRequest }
     } catch (error) {

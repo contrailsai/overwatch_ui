@@ -1,3 +1,9 @@
+import { resolveClientStatusForUi } from '@/utils/mongodb/v3-schema'
+
+function getPostClientStatus(post) {
+  return resolveClientStatusForUi(post)
+}
+
 function computeClientReviewedDeltas(reviewData, previousReviewData = null) {
   const getRiskBucket = (score) => {
     if (score === undefined || score === null) return null
@@ -50,13 +56,15 @@ export function countReviewedCaseActivityDelta(posts, targetStatus) {
       client_status: targetStatus,
       platform,
     }
-    const previousReviewData = post.client_status && post.client_status !== 'To Be Reviewed'
-      ? {
-          risk_score: post.review_details?.threat_score || 0,
-          client_status: post.client_status,
-          platform,
-        }
-      : null
+    const previousReviewData = (() => {
+      const previousStatus = getPostClientStatus(post)
+      if (!previousStatus || previousStatus === 'To Be Reviewed') return null
+      return {
+        risk_score: post.review_details?.threat_score || post.list?.review_threat_score || 0,
+        client_status: previousStatus,
+        platform,
+      }
+    })()
 
     total += computeClientReviewedDeltas(currentReviewData, previousReviewData).totalDelta
   }

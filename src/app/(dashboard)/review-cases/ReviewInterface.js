@@ -2,7 +2,7 @@
 
 import { handleDownloadJSON,formatExportData } from '@/utils/exportJson'
 import * as React from "react"
-import { useState, useEffect, useCallback, useRef, useTransition } from 'react'
+import { useState, useEffect, useCallback, useRef, useTransition, useMemo } from 'react'
 import { format } from "date-fns"
 import { getAllPostsForExport } from './actions'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
@@ -25,6 +25,26 @@ import { ReviewCasesFilterPanel } from "./ReviewCasesFilterPanel"
 import { MobileReviewCasesFilterDrawer } from "./MobileReviewCasesFilterDrawer"
 import { isTypingTarget } from './keyboard-utils'
 import { warmTopicCacheForPosts, prefetchTopicsForPosts } from './topic-cache'
+
+function parseReviewFiltersFromSearchParams(searchParams) {
+  const aiAnalyzedRaw = searchParams.get('aiAnalyzed')
+  let aiAnalyzed = 'all'
+  if (aiAnalyzedRaw === 'analyzed' || aiAnalyzedRaw === 'true') aiAnalyzed = 'analyzed'
+  else if (aiAnalyzedRaw === 'not_analyzed') aiAnalyzed = 'not_analyzed'
+
+  return {
+    platform: searchParams.get('platform') || 'all',
+    status: searchParams.get('status') || 'pending',
+    aiAnalyzed,
+    poiDetected: searchParams.get('poiDetected') === 'true',
+    visibility_status: searchParams.get('visibility_status') || 'all',
+    aiRisk: searchParams.get('aiRisk') || 'all',
+    sourcingDateStart: searchParams.get('sourcingDateStart') || undefined,
+    sourcingDateEnd: searchParams.get('sourcingDateEnd') || undefined,
+    postingDateStart: searchParams.get('postingDateStart') || undefined,
+    postingDateEnd: searchParams.get('postingDateEnd') || undefined,
+  }
+}
 
 function PostPlatformBadge({ platform, size = 'md' }) {
   const p = platform?.toLowerCase() || ''
@@ -253,7 +273,7 @@ export function ReviewInterface({
   const handleExportCSV = async () => {
     setExportingType('csv')
     try {
-      const { posts: allPosts } = await getAllPostsForExport(project.mongo_db_map, initialFilters)
+      const { posts: allPosts } = await getAllPostsForExport(project.mongo_db_map, currentFilters)
 
       if (!allPosts || allPosts.length === 0) {
         alert("No posts found to export.")
@@ -328,7 +348,7 @@ export function ReviewInterface({
   const handleExportJSON = async () => {
     setExportingType('json')
     try {
-      const { posts: allPosts } = await getAllPostsForExport(project.mongo_db_map, initialFilters)
+      const { posts: allPosts } = await getAllPostsForExport(project.mongo_db_map, currentFilters)
 
       if (!allPosts || allPosts.length === 0) {
         alert("No posts found to export.")
@@ -399,7 +419,10 @@ export function ReviewInterface({
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [selectedPost, posts, navigatePost])
 
-  const currentFilters = initialFilters || {}
+  const currentFilters = useMemo(
+    () => parseReviewFiltersFromSearchParams(searchParams),
+    [searchParams]
+  )
 
   const hasFilterBesidesSearch =
     currentFilters.status !== 'pending' ||

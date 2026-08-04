@@ -10,6 +10,9 @@ import { ObjectId } from 'mongodb'
 import { traceAction } from '@/utils/tracing'
 import { requireAuthContext } from '@/utils/auth-context'
 import { logActionError, LOKI_STREAMS } from '@/utils/otel-logger'
+import { postsCollection } from '@/utils/mongodb/collections'
+import { insertCaseEvent, mapUiClientStatusToV3 } from '@/utils/mongodb/v3-schema'
+import { normalizeS3Post } from '@/lib/posts/pipeline-helpers'
 // import { metadata } from '../layout'
 
 //--------- TAKEDOWNS RELATED SETUP
@@ -26,29 +29,27 @@ export const initiateTakedown = traceAction('initiateTakedown', async (caseIds, 
 
         const client = await clientPromise
         const db = client.db(dbName)
-        const collection = db.collection('Posts')
+        const collection = postsCollection(db)
 
         const objectIds = ids.map(id => new ObjectId(id))
         const isBulk = ids.length > 1
 
-        // Only target cases not already in a takedown process
         const posts = await collection.find(
             {
                 _id: { $in: objectIds },
                 $and: [
-                    { $or: [{ 'takedown_info.in_takedown_process': { $ne: true } }, { takedown_info: { $exists: false } }] },
-                    { $or: [{ client_status: { $ne: 'Takedown' } }, { client_status: { $exists: false } }] }
-                ]
-            },
-            { projection: { text_embedding: 0, image_embedding: 0 } }
+                    { 'workflow.takedown_status': { $nin: ['initiated', 'under_review', 'takedown_successful'] } },
+                    { 'workflow.client_status': { $ne: 'takedown' } },
+                ],
+            }
         ).toArray()
 
         if (posts.length === 0) {
             return { success: false, error: "No eligible cases found (already in takedown or missing)" }
         }
 
-        const nowIso = new Date().toISOString()
-        const status = "Takedown"
+        const now = new Date()
+        const v3Status = mapUiClientStatusToV3('Takedown')
         const changesSummary = isBulk ? "client initiated bulk case takedown" : "client initiated case takedown"
         const eventDetails = `Takedown initiated by client ${clientDetails.email}${isBulk ? ' (bulk)' : ''}`
 
@@ -57,48 +58,51 @@ export const initiateTakedown = traceAction('initiateTakedown', async (caseIds, 
                 filter: { _id: post._id },
                 update: {
                     $set: {
-                        client_status: status,
+                        'workflow.client_status': v3Status,
+                        'workflow.takedown_status': 'initiated',
                         content_reviewed_by: clientDetails.email,
-                        "metadata.updated_at": nowIso,
-                        takedown_info: {
-                            in_takedown_process: true,
+                        'system.updated_at': now,
+                        takedown: {
+                            ...(post.takedown || {}),
                             status: 'initiated',
-                            takedown_start_date: nowIso,
-                            notes: [],
-                            documents: [],
-                            events: [
-                                {
-                                    event: 'Takedown Initiated',
-                                    date: nowIso,
-                                    details: eventDetails
-                                }
-                            ]
-                        }
+                            initiated_at: now,
+                            completed_at: post.takedown?.completed_at || null,
+                            notes: post.takedown?.notes || [],
+                            documents: post.takedown?.documents || [],
+                        },
                     },
-                    $push: {
-                        "metadata.update_history": {
-                            updated_at: new Date(),
-                            updated_by: clientDetails.email,
-                            changes_summary: changesSummary
-                        }
-                    }
                 }
             }
         }))
 
         const result = await collection.bulkWrite(bulkOps)
 
+        await Promise.all(posts.map((post) =>
+            insertCaseEvent(db, {
+                entityType: 'post',
+                entityId: post._id.toString(),
+                eventType: 'Takedown Initiated',
+                actor: clientDetails.email,
+                summary: eventDetails,
+                payload: {
+                    event: 'Takedown Initiated',
+                    date: now.toISOString(),
+                    details: eventDetails,
+                },
+            })
+        ))
+
         await updateClientReviewedMetricsBatch(
             { project_name: clientDetails.project_name },
             posts,
-            status
+            'Takedown'
         ).catch(err => logActionError({
             loki_stream: LOKI_STREAMS.cases,
             app_action: 'initiateTakedown',
             message: 'Failed to update client metrics',
         }, err))
 
-        const reviewedActivityCount = countReviewedCaseActivityDelta(posts, status)
+        const reviewedActivityCount = countReviewedCaseActivityDelta(posts, 'Takedown')
         if (reviewedActivityCount > 0) {
             await updateClientMetaStats(
                 clientDetails.project_name,
@@ -137,54 +141,21 @@ export const getPriorityTakedowns = traceAction('getPriorityTakedowns', async ()
 
         const client = await clientPromise
         const db = client.db(dbName)
-        const collection = db.collection('Posts')
+        const collection = postsCollection(db)
 
-        // Fetch all requested takedowns (priority)
         const posts = await collection.find(
-            { 'takedown_info.takedown_status': 'requested' },
-            { projection: { text_embedding: 0, image_embedding: 0 } }
+            {
+                $or: [
+                    { 'review_details.flags': { $exists: true } },
+                    { 'workflow.takedown_status': 'requested' },
+                ],
+                'workflow.review_status': 'reviewed',
+            }
         )
-            .sort({ 'metadata.created_at': -1 })
+            .sort({ 'list.reviewed_at': -1 })
             .toArray()
 
-        // Serialize and Sign URLs (reuse logic)
-        const processedPosts = await Promise.all(posts.map(async (post) => {
-            let s3UrlToSign = null;
-            if (post.post_content?.media_urls && post.post_content.media_urls.length > 0) {
-                const firstMedia = post.post_content.media_urls[0];
-                s3UrlToSign = firstMedia.thumbnail_url || firstMedia.s3_url;
-            } else if (post.s3_url) {
-                s3UrlToSign = post.s3_url;
-            }
-
-            const signedUrl = s3UrlToSign ? await getSignedImageUrl(s3UrlToSign) : null;
-
-            const normalized = {
-                _id: post._id.toString(),
-                created_at: post.metadata?.created_at ? new Date(post.metadata.created_at).toISOString() : null,
-                taken_at: post.post_content?.taken_at || post.taken_at || null,
-                platform: post.platform ? post.platform.toLowerCase() : 'instagram',
-                processed: post.processed || false,
-                client_status: post.client_status || 'To Be Reviewed',
-                caption: post.post_content?.caption || post.caption || '',
-                signedImageUrl: signedUrl,
-                user: {
-                    username: post.profile?.username || post.user?.username || 'Unknown',
-                    full_name: post.profile?.display_name || '',
-                    profile_pic_url: post.profile?.profile_pic_url || post.profile?.profile_url || '',
-                    is_verified: post.profile?.is_verified || false
-                },
-                review_details: post.review_details || null,
-                takedown_info: post.takedown_info || null,
-                analysis_results: post.analysis_results || null,
-                stats: {
-                    like_count: post.engagement?.likes || 0,
-                    comment_count: post.engagement?.comments || 0,
-                    share_count: post.engagement?.shares || 0
-                }
-            };
-            return normalized;
-        }));
+        const processedPosts = await Promise.all(posts.map((post) => normalizeS3Post(post, db)));
 
         return processedPosts;
     } catch (e) {
@@ -199,8 +170,8 @@ export const getRaisedCount = traceAction('getRaisedCount', async () => {
         const { dbName } = await requireAuthContext()
         const client = await clientPromise
         const db = client.db(dbName)
-        const collection = db.collection('Posts')
-        return await collection.countDocuments({ 'takedown_info.takedown_status': 'raised' })
+        const collection = postsCollection(db)
+        return await collection.countDocuments({ 'workflow.takedown_status': { $in: ['initiated', 'under_review'] } })
     } catch (e) {
         logActionError({ loki_stream: LOKI_STREAMS.cases, app_action: 'getRaisedCount', message: 'getRaisedCount failed' }, e)
         console.error('getRaisedCount Error:', e)

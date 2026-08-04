@@ -192,6 +192,21 @@ export function ReviewCasesFilterPanel({
         </Select>
       </FilterField>
 
+      <FilterField label="POI Detected" className={fieldClass}>
+        <Select
+          value={currentFilters.poiDetected ? 'true' : 'all'}
+          onValueChange={(val) => applyAndClose(() => handleFilterChange('poiDetected', val === 'true' ? 'true' : null))}
+        >
+          <SelectTrigger size="sm" className={TRIGGER_CLASS}>
+            <SelectValue placeholder="All Cases" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Cases</SelectItem>
+            <SelectItem value="true">POI Detected</SelectItem>
+          </SelectContent>
+        </Select>
+      </FilterField>
+
       <FilterField
         label="AI Analysis"
         className={fieldClass}

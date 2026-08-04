@@ -1,8 +1,10 @@
+import { computeEngagementScore } from '@/app/(dashboard)/cases/riskBuckets'
+
 /**
- * Maps simplified manual-ingest input to the strict Posts collection shape
- * (aligned with Python manual_ingest enforce_strict_schema).
- * @param {Record<string, unknown>} data - Merged input; may include `media` as list of { type, original_url, s3_url }
- * @returns {Record<string, unknown>} Document suitable for Mongo insertOne (uses native Date where helpful)
+ * Maps simplified manual-ingest input to the strict posts v3 collection shape.
+ * @param {Record<string, unknown>} data
+ * @param {boolean} s3Stored
+ * @param {string} updatedBy
  */
 
 function getFlexible(data, keys, defaultValue = null) {
@@ -165,123 +167,80 @@ export function buildStrictPostDocument(data, s3Stored, updatedBy) {
     }
   }
 
-  const metadata = {
-    created_at: nowUtc,
-    updated_at: nowUtc,
-    sourcing_date: nowUtc,
-    update_history: [
-      {
-        updated_at: nowUtc,
-        updated_by: updatedBy,
-        changes_summary: 'Manual post from reviewer upload UI',
-      },
-    ],
-    schema_version: 1,
-  }
-
-  const engagementPostedAt = timestamp
+  const engagementScore = computeEngagementScore(views, likes, comments, shares)
 
   return {
-    id: postId,
-    code: postId,
-    post_id: postId,
-
+    schema_version: 3,
     platform,
-    url: postUrl,
+    platform_post_id: postId,
     original_url: postUrl,
-    content,
-    caption: content,
-
-    post_content: {
-      caption: content,
-      media_urls: mediaList,
-      post_type: getFlexible(data, ['post_type', 'post_content.post_type'], 'post'),
-      language: getFlexible(data, ['language', 'post_content.language']) ?? null,
-      taken_at: takenAtUnix,
+    profile_id: null,
+    workflow: {
+      ai_status: 'pending',
+      review_status: 'pending',
+      client_status: 'open',
+      visibility_status: data.visibility_status != null ? data.visibility_status : 'available',
+      takedown_status: 'none',
+      alerted_at: null,
     },
-
-    type: getFlexible(data, ['type'], 'post'),
-    timestamp,
-    created_at: timestamp,
-    sourcing_date: metadata.sourcing_date,
-    visibility_status: data.visibility_status != null ? data.visibility_status : 'available',
-
-    profile: {
-      platform_user_id: platformUserId ?? '',
+    list: {
+      ai_threat_score: null,
+      review_threat_score: null,
+      effective_threat_score: null,
+      risk_rank: null,
+      threat_types: [],
+      violation_flags: [],
+      posted_at: timestamp,
+      sourced_at: nowUtc,
+      reviewed_at: null,
+      alert_hour_ist: null,
+      engagement_score: engagementScore,
+      cluster_id: null,
+      is_cluster_representative: true,
+      poi_detected: false,
+    },
+    content: {
+      caption: content,
+      media: mediaList,
+      language: getFlexible(data, ['language', 'post_content.language']) ?? null,
+      post_type: getFlexible(data, ['post_type', 'post_content.post_type'], 'post'),
+    },
+    author_snapshot: {
+      platform_user_id: platformUserId ?? null,
       username,
       display_name: String(
         getFlexible(data, ['profile.full_name', 'profile.display_name', 'display_name'], username) ?? username
       ),
-      profile_url: profileLink,
+      profile_url: profileLink || null,
       is_verified: Boolean(
         getFlexible(data, ['is_verified', 'profile.is_verified', 'profile.verified', 'verified'], false)
       ),
-      metadata: {
-        description: getFlexible(data, ['profile.description', 'description', 'biography', 'profile.biography']) ?? '',
-        profile_pic:
-          getFlexible(data, ['profile.profile_pic', 'profile_pic', 'profile.profile_pic_url', 'profile_pic_url']) ??
-          '',
-        followers_count:
-          Number.parseInt(
-            String(getFlexible(data, ['profile.followers_count', 'followers_count', 'follower_count'], 0) ?? 0),
-            10
-          ) || 0,
-        following_count:
-          Number.parseInt(
-            String(getFlexible(data, ['profile.following_count', 'following_count'], 0) ?? 0),
-            10
-          ) || 0,
-        media_count:
-          Number.parseInt(String(getFlexible(data, ['profile.media_count', 'media_count'], 0) ?? 0), 10) || 0,
-        posts_count:
-          Number.parseInt(String(getFlexible(data, ['profile.posts_count', 'posts_count'], 0) ?? 0), 10) || 0,
-        favourites_count:
-          Number.parseInt(
-            String(getFlexible(data, ['profile.favourites_count', 'favourites_count'], 0) ?? 0),
-            10
-          ) || 0,
-        location: getFlexible(data, ['profile.location', 'location']) ?? '',
-        external_url: getFlexible(data, ['profile.external_url', 'external_url']) ?? '',
-        account_created_at:
-          getFlexible(data, ['profile.account_created_at', 'account_created_at', 'account_creation_date']) ?? '',
-      },
     },
-    author: { name: username, url: profileLink },
-    user: { name: username, url: profileLink },
-
-    engagement: {
-      likes,
-      comments,
-      shares,
-      retweets: 0,
-      quotes: 0,
-      replies: 0,
-      views,
-      posted_at: engagementPostedAt,
-    },
-    stats: { likes, comments, shares },
-
-    media_urls: mediaList,
-    taken_at: takenAtUnix,
-    metadata,
-
     analysis_results: data.analysis_results && typeof data.analysis_results === 'object' ? data.analysis_results : {},
     review_details: data.review_details && typeof data.review_details === 'object' ? data.review_details : {},
-    takedown_info:
-      data.takedown_info && typeof data.takedown_info === 'object'
-        ? data.takedown_info
-        : { takedown_status: 'None' },
+    takedown: {
+      status: 'none',
+      initiated_at: null,
+      completed_at: null,
+      client_reference_id: null,
+      platform_case_id: null,
+      notes: [],
+      documents: [],
+    },
+    client_notes: [],
     supabase_refs:
       data.supabase_refs && typeof data.supabase_refs === 'object'
         ? data.supabase_refs
         : { case_id: null, alert_ids: [], chat_thread_ids: [] },
-
-    processed: false,
-    processed_at: nowUtc,
-    s3_stored: s3Stored,
-    result_origin: {
+    ingestion: {
       type: 'manual_upload',
-      source_url: postUrl,
+      source_url: postUrl || null,
+      ingested_at: nowUtc,
+    },
+    system: {
+      created_at: nowUtc,
+      updated_at: nowUtc,
+      s3_stored: s3Stored,
     },
   }
 }

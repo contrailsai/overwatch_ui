@@ -1,10 +1,13 @@
 import { notFound, redirect } from 'next/navigation'
 import { getClientandProjectDetails } from '@/app/(dashboard)/actions'
+import PageHeader from '@/components/PageHeader'
 import { fetch_clients_in_project } from '@/app/(dashboard)/cases/feature_actions'
 import { getPostById } from '@/app/(dashboard)/cases/actions'
 import { buildFeedSlug } from '@/lib/feeds/feed-slug'
-import { getFeedById, getFeedPosts, getFeedPublishingHistogram } from '../actions'
+import { parseCasesListFilters, parseCasesListSort } from '@/lib/posts/pipeline-helpers'
+import { countFeeds, getFeedById, getFeedPosts, getFeedPublishingHistogram } from '../actions'
 import { FeedContentList } from '../FeedContentList'
+import { FeedsSubNav } from '../FeedsSubNav'
 
 export async function generateMetadata({ params }) {
   const { feedId } = await params
@@ -55,33 +58,21 @@ export default async function FeedDetailPage({ params, searchParams }) {
   const currentPage = Number.isNaN(parsedPage) ? 1 : Math.max(parsedPage, 1)
   const itemsPerPage = Math.min(Number.isNaN(parsedLimit) ? 25 : Math.max(parsedLimit, 1), 100)
 
-  const filters = {
-    platform: resolvedParams.platform || 'all',
-    client_status: resolvedParams.status || 'all',
-    visibility_status: resolvedParams.visibility_status || 'all',
-    risk_priority: resolvedParams.risk_priority || 'all',
-    violations: resolvedParams.violations || 'all',
-    original_date_from: resolvedParams.original_date_from || null,
-    original_date_to: resolvedParams.original_date_to || null,
-    processed_from: resolvedParams.processed_from || null,
-    processed_to: resolvedParams.processed_to || null,
-    unique_clusters: resolvedParams.unique_clusters === 'true' || false,
-  }
+  const filters = parseCasesListFilters(resolvedParams)
+  const sort = parseCasesListSort(resolvedParams)
 
-  const sort = {
-    field: resolvedParams.sortField || 'threat_score',
-    direction: resolvedParams.sortDirection === 'asc' ? 'asc' : 'desc',
-  }
-
-  const [postsResult, histogramData, initialCase, projectEmails] = await Promise.all([
+  const [postsResult, histogramData, initialCase, projectEmails, feedCount] = await Promise.all([
     getFeedPosts(feedId, currentPage, itemsPerPage, filters, sort),
     getFeedPublishingHistogram(feedId, filters),
     resolvedParams.case_id ? getPostById(project, resolvedParams.case_id) : Promise.resolve(null),
     fetch_clients_in_project(clientDetails.project_name),
+    countFeeds(),
   ])
 
   return (
     <main className="flex-1 flex flex-col h-full min-h-0 overflow-hidden bg-slate-50">
+      <PageHeader title="Feeds" description={feed.title} />
+      <FeedsSubNav feedCount={feedCount} />
       <div className="flex-1 min-h-0 overflow-hidden">
         <FeedContentList
           feedId={feed._id}

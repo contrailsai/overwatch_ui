@@ -181,18 +181,23 @@ export function CasesFilterPanel({
       onRemove: () => handleFilterChange('unique_clusters', 'false'),
     })
   }
-  if (initialFilters.processed_from || initialFilters.processed_to) {
+  if (initialFilters.alert_from || initialFilters.alert_to) {
     activeChips.push({
       label: 'Alert date',
       onRemove: () =>
-        updateQueryParams({ processed_from: null, processed_to: null }),
+        updateQueryParams({ alert_from: null, alert_to: null, processed_from: null, processed_to: null }),
     })
   }
-  if (initialFilters.original_date_from || initialFilters.original_date_to) {
+  if (initialFilters.published_from || initialFilters.published_to) {
     activeChips.push({
       label: 'Publish date',
       onRemove: () =>
-        updateQueryParams({ original_date_from: null, original_date_to: null }),
+        updateQueryParams({
+          published_from: null,
+          published_to: null,
+          original_date_from: null,
+          original_date_to: null,
+        }),
     })
   }
 
@@ -250,17 +255,19 @@ export function CasesFilterPanel({
           <InlineFilterRow label="Alert">
             <DateFilterPopover
               title="Alert Date"
-              initialFrom={initialFilters.processed_from}
-              initialTo={initialFilters.processed_to}
+              initialFrom={initialFilters.alert_from}
+              initialTo={initialFilters.alert_to}
               applyWhenRangeComplete={applyWhenRangeComplete}
               onApply={(range) =>
                 updateQueryParams({
-                  processed_from: range?.from
+                  alert_from: range?.from
                     ? format(range.from, "yyyy-MM-dd'T'HH:mm:ssXXX")
                     : null,
-                  processed_to: range?.to
+                  alert_to: range?.to
                     ? format(range.to, "yyyy-MM-dd'T'HH:mm:ssXXX")
                     : null,
+                  processed_from: null,
+                  processed_to: null,
                 })
               }
             />
@@ -270,17 +277,19 @@ export function CasesFilterPanel({
             <Label className="text-[10px] uppercase font-bold text-slate-400">Alert Date</Label>
             <DateFilterPopover
               title="Alert Date"
-              initialFrom={initialFilters.processed_from}
-              initialTo={initialFilters.processed_to}
+              initialFrom={initialFilters.alert_from}
+              initialTo={initialFilters.alert_to}
               applyWhenRangeComplete={applyWhenRangeComplete}
               onApply={(range) =>
                 updateQueryParams({
-                  processed_from: range?.from
+                  alert_from: range?.from
                     ? format(range.from, "yyyy-MM-dd'T'HH:mm:ssXXX")
                     : null,
-                  processed_to: range?.to
+                  alert_to: range?.to
                     ? format(range.to, "yyyy-MM-dd'T'HH:mm:ssXXX")
                     : null,
+                  processed_from: null,
+                  processed_to: null,
                 })
               }
             />
@@ -292,17 +301,19 @@ export function CasesFilterPanel({
           <InlineFilterRow label="Publish">
             <DateFilterPopover
               title="Publish Date"
-              initialFrom={initialFilters.original_date_from}
-              initialTo={initialFilters.original_date_to}
+              initialFrom={initialFilters.published_from}
+              initialTo={initialFilters.published_to}
               applyWhenRangeComplete={applyWhenRangeComplete}
               onApply={(range) =>
                 updateQueryParams({
-                  original_date_from: range?.from
+                  published_from: range?.from
                     ? format(range.from, "yyyy-MM-dd'T'HH:mm:ssXXX")
                     : null,
-                  original_date_to: range?.to
+                  published_to: range?.to
                     ? format(range.to, "yyyy-MM-dd'T'HH:mm:ssXXX")
                     : null,
+                  original_date_from: null,
+                  original_date_to: null,
                 })
               }
             />
@@ -312,17 +323,19 @@ export function CasesFilterPanel({
             <Label className="text-[10px] uppercase font-bold text-slate-400">Publish Date</Label>
             <DateFilterPopover
               title="Publish Date"
-              initialFrom={initialFilters.original_date_from}
-              initialTo={initialFilters.original_date_to}
+              initialFrom={initialFilters.published_from}
+              initialTo={initialFilters.published_to}
               applyWhenRangeComplete={applyWhenRangeComplete}
               onApply={(range) =>
                 updateQueryParams({
-                  original_date_from: range?.from
+                  published_from: range?.from
                     ? format(range.from, "yyyy-MM-dd'T'HH:mm:ssXXX")
                     : null,
-                  original_date_to: range?.to
+                  published_to: range?.to
                     ? format(range.to, "yyyy-MM-dd'T'HH:mm:ssXXX")
                     : null,
+                  original_date_from: null,
+                  original_date_to: null,
                 })
               }
             />
@@ -441,10 +454,10 @@ export function CasesFilterPanel({
       initialFilters.client_status !== 'all' ||
       (initialFilters.visibility_status && initialFilters.visibility_status !== 'all') ||
       (initialFilters.violations && initialFilters.violations !== 'all') ||
-      initialFilters.original_date_from ||
-      initialFilters.original_date_to ||
-      initialFilters.processed_from ||
-      initialFilters.processed_to ||
+      initialFilters.published_from ||
+      initialFilters.published_to ||
+      initialFilters.alert_from ||
+      initialFilters.alert_to ||
       searchParams.get('similar_to') ||
       searchParams.get('semantic_search')) && (
       <div className="flex flex-wrap items-center gap-2 bg-slate-50/80 border border-slate-100 rounded-md px-3 h-9 shadow-sm shrink-0 w-full xl:w-auto mt-2 xl:mt-5">

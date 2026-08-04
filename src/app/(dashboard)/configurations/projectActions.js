@@ -2,6 +2,7 @@
 
 import { createClient } from '@/utils/supabase/server'
 import clientPromise from '@/utils/mongodb/client'
+import { postsCollection } from '@/utils/mongodb/collections'
 import { revalidatePath } from 'next/cache'
 import { getAuthContext, requireRole } from '@/utils/auth-context'
 import { runInSpan, traceAction } from '@/utils/tracing'
@@ -370,24 +371,24 @@ export const updateLabels = traceAction('configurations.updateLabels', async (pr
         async () => {
           const client = await clientPromise
           const db = client.db(ctx.dbName)
-          const postsCollection = db.collection('Posts')
+          const postsCol = postsCollection(db)
 
           for (const { oldName, newName } of renamedLabels) {
-            await postsCollection.updateMany(
+            await postsCol.updateMany(
               { 'review_details.threat_types': oldName },
               { $set: { 'review_details.threat_types.$': newName } }
             )
 
             const renameOp = {}
             renameOp[`review_details.flags.${oldName}`] = `review_details.flags.${newName}`
-            await postsCollection.updateMany(
+            await postsCol.updateMany(
               { [`review_details.flags.${oldName}`]: { $exists: true } },
               { $rename: renameOp }
             )
           }
 
           for (const { oldName, newName } of renamedLegalCodes) {
-            await postsCollection.updateMany(
+            await postsCol.updateMany(
               { 'review_details.legal_codes': oldName },
               { $set: { 'review_details.legal_codes.$': newName } }
             )

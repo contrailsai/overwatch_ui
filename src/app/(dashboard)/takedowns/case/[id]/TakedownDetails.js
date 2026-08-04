@@ -539,21 +539,19 @@ export default function TakedownDetails({ takedownId, initialData, initialDocume
   const analysis = post?.analysis_results || {}
 
   let posted_date = ""
-  let sourced_date = ""
+  let alert_date = ""
 
   if (post?.posted_date)
     posted_date = format(new Date(post.posted_date), "dd/MM/yyyy");
-  else if (post?.metadata?.posted_date)
-    posted_date = format(new Date(post.metadata.posted_date), "dd/MM/yyyy");
   else if (post?.timestamp)
     posted_date = format(new Date(post.timestamp), "dd/MM/yyyy");
   else if (post?.sourcing_date)
     posted_date = format(new Date(post.sourcing_date), "dd/MM/yyyy");
 
-  if (post?.metadata?.created_at)
-    sourced_date = format(new Date(post.metadata.created_at), "dd/MM/yyyy");
-  else if (post?.created_at)
-    sourced_date = format(new Date(post.created_at), "dd/MM/yyyy");
+  if (post?.reviewed_at)
+    alert_date = format(new Date(post.reviewed_at), "dd/MM/yyyy");
+  else if (post?.review_details?.reviewed_at)
+    alert_date = format(new Date(post.review_details.reviewed_at), "dd/MM/yyyy");
 
   const getStatusColorClass = (s) => {
     switch (s) {
@@ -819,7 +817,7 @@ export default function TakedownDetails({ takedownId, initialData, initialDocume
                         </div>
                         <div>
                           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Alerted</p>
-                          <p className="text-sm font-bold text-slate-700">{sourced_date || 'N/A'}</p>
+                          <p className="text-sm font-bold text-slate-700">{alert_date || 'N/A'}</p>
                         </div>
                       </div>
                       <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 flex items-center gap-3">
@@ -1168,7 +1166,7 @@ export default function TakedownDetails({ takedownId, initialData, initialDocume
               {post?.platform?.toLowerCase() !== "website" && (
                 <div className="flex items-center justify-between px-4 py-2.5 bg-slate-50/80 border-b border-slate-100 text-[10px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider">
                   <div className="flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" /> Published: {posted_date}</div>
-                  <div className="flex items-center gap-1.5"><History className="w-3.5 h-3.5" /> Alerted: {sourced_date}</div>
+                  <div className="flex items-center gap-1.5"><History className="w-3.5 h-3.5" /> Alerted: {alert_date}</div>
                 </div>
               )}
 

@@ -13,6 +13,7 @@ import { REPORT_FORMATS, REPORT_TYPES } from '@/features/reports/constants'
 import { logActionError, LOKI_STREAMS } from '@/utils/otel-logger'
 import { orderPostIdsForReport } from '@/app/(dashboard)/cases/actions'
 import { REVIEWED_THREAT_SCORE_FILTER } from '@/lib/posts/reviewed-post-filter'
+import { postsCollection as getPostsCollection } from '@/utils/mongodb/collections'
 
 const OBJECT_ID_HEX = /^[a-fA-F0-9]{24}$/
 
@@ -112,15 +113,14 @@ export const getOrCreateReportJob = traceAction('getOrCreateReportJob', async ({
     throw new Error('No valid post IDs for report generation')
   }
 
-  const postsCollection = db.collection('Posts')
+  const postsCol = getPostsCollection(db)
   let reportObjectIds = objectIds
 
   const isProfileFamily =
     reportType === REPORT_TYPES.PROFILE || reportType === REPORT_TYPES.SIMPLE_PROFILE
 
   if (isProfileFamily) {
-    // Profile.posts may reference stale, pending, or duplicate IDs — only export reviewed posts that exist.
-    const reviewedPosts = await postsCollection
+    const reviewedPosts = await postsCol
       .find({ _id: { $in: objectIds }, ...REVIEWED_THREAT_SCORE_FILTER }, { projection: { _id: 1 } })
       .toArray()
 
@@ -129,7 +129,7 @@ export const getOrCreateReportJob = traceAction('getOrCreateReportJob', async ({
     }
     reportObjectIds = reviewedPosts.map((p) => p._id)
   } else {
-    const validatedPosts = await postsCollection
+    const validatedPosts = await postsCol
       .find({ _id: { $in: objectIds } }, { projection: { _id: 1 } })
       .toArray()
 
@@ -137,7 +137,7 @@ export const getOrCreateReportJob = traceAction('getOrCreateReportJob', async ({
       throw new Error('Some requested posts do not belong to your project scope')
     }
 
-    const reviewedPosts = await postsCollection
+    const reviewedPosts = await postsCol
       .find({ _id: { $in: objectIds }, ...REVIEWED_THREAT_SCORE_FILTER }, { projection: { _id: 1 } })
       .toArray()
 

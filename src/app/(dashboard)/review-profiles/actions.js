@@ -4,6 +4,8 @@ import clientPromise from '@/utils/mongodb/client'
 import { ObjectId } from 'mongodb'
 import { traceAction, runInSpan } from '@/utils/tracing'
 import { getSignedImageUrl } from '@/utils/aws/s3'
+import { profilesCollection, postsCollection } from '@/utils/mongodb/collections'
+import { buildNormalizedProfileForUi, insertCaseEvent } from '@/utils/mongodb/v3-schema'
 import { normalized_S3_post } from '@/app/(dashboard)/profiles/actions'
 import { requireRole } from '@/utils/auth-context'
 import { logActionError, logActionWarn, LOKI_STREAMS } from '@/utils/otel-logger'
@@ -25,26 +27,22 @@ function buildProfileMatchQuery(filters) {
     }
 
     if (filters.publish_date_from || filters.publish_date_to) {
-        matchQuery.last_relevant_publish_date = {}
+        matchQuery['list.last_active_at'] = {}
         if (filters.publish_date_from) {
-            matchQuery.last_relevant_publish_date.$gte = new Date(filters.publish_date_from)
+            matchQuery['list.last_active_at'].$gte = new Date(filters.publish_date_from)
         }
         if (filters.publish_date_to) {
-            matchQuery.last_relevant_publish_date.$lte = new Date(filters.publish_date_to)
+            matchQuery['list.last_active_at'].$lte = new Date(filters.publish_date_to)
         }
     }
 
-    matchQuery.metadata = { $exists: true }
-
     if (filters.reviewStatus === 'reviewed') {
-        andConditions.push({ 'review_details.reviewed_at': { $exists: true, $ne: null } })
+        andConditions.push({ 'workflow.review_status': 'reviewed' })
     } else if (filters.reviewStatus === 'pending') {
         andConditions.push({
             $or: [
-                { review_details: { $exists: false } },
-                { review_details: null },
-                { 'review_details.reviewed_at': { $exists: false } },
-                { 'review_details.reviewed_at': null },
+                { 'workflow.review_status': 'pending' },
+                { 'workflow.review_status': { $exists: false } },
             ],
         })
     }
@@ -75,20 +73,14 @@ export const getProfiles = traceAction('getProfiles_review', async (_project, pa
         const { dbName } = await requireRole(['reviewer'])
         const client = await clientPromise
         const db = client.db(dbName)
-        const collection = db.collection('Profiles')
+        const collection = profilesCollection(db)
 
         const skip = (page - 1) * limit
         const matchQuery = buildProfileMatchQuery(filters)
 
         const pipeline = [
             { $match: matchQuery },
-            { $project: { text_embedding: 0, image_embedding: 0 } },
-            {
-                $addFields: {
-                    posts_count: { $size: { $ifNull: ['$posts', []] } },
-                },
-            },
-            { $sort: { posts_count: -1, _id: 1 } },
+            { $sort: { 'list.post_count': -1, _id: 1 } },
         ]
 
         pipeline.push({
@@ -111,24 +103,12 @@ export const getProfiles = traceAction('getProfiles_review', async (_project, pa
             'review_profiles.getProfiles.s3_signing',
             async () => Promise.all(profiles.map(async (p) => {
                 let signedProfilePic = null
-                if (p.metadata?.s3_url) {
-                    signedProfilePic = await getSignedImageUrl(p.metadata.s3_url)
+                const picS3 = p.enrichment?.profile_pic_s3 || p.metadata?.s3_url
+                if (picS3) {
+                    signedProfilePic = await getSignedImageUrl(picS3)
                 }
 
-                return {
-                    _id: p._id.toString(),
-                    display_name: p.metadata?.display_name || p.display_name || p.username || 'Unknown',
-                    username: p.metadata?.username || p.username || null,
-                    platform: p.platform || 'unknown',
-                    is_verified: p.metadata?.is_verified ?? p.is_verified ?? false,
-                    posts: (p.posts || []).map(id => id.toString()),
-                    profile_url: p.metadata?.profile_url || p.profile_url || null,
-                    review_details: p.review_details || {},
-                    metadata: p.metadata ? {
-                        ...p.metadata,
-                        profile_pic: signedProfilePic
-                    } : null
-                }
+                return buildNormalizedProfileForUi(p, { signedProfilePic })
             })),
             { 'app.span_type': 's3_signing' }
         )
@@ -150,33 +130,26 @@ export const getProfiles = traceAction('getProfiles_review', async (_project, pa
     }
 })
 
-export const getProfileCases = traceAction('getProfileCases_review', async (_project, postIds = []) => {
+export const getProfileCases = traceAction('getProfileCases_review', async (_project, profileId) => {
     try {
-        if (postIds.length === 0) return []
+        if (!profileId) return []
         const { dbName } = await requireRole(['reviewer'])
 
         const client = await clientPromise
         const db = client.db(dbName)
-        const collection = db.collection('Posts')
+        const collection = postsCollection(db)
 
-        const objectIds = postIds.map(id => {
-            try { return new ObjectId(id) } catch { return null }
-        }).filter(Boolean)
-
-        if (objectIds.length === 0) return []
+        const query = { profile_id: new ObjectId(profileId) }
 
         const posts = await runInSpan(
             'review_profiles.getProfileCases.mongo_query',
-            async () =>
-                collection
-                    .find({ _id: { $in: objectIds } }, { projection: { text_embedding: 0, image_embedding: 0 } })
-                    .toArray(),
+            async () => collection.find(query).toArray(),
             { 'app.span_type': 'mongo_query' }
         )
 
         return runInSpan(
             'review_profiles.getProfileCases.s3_signing',
-            async () => Promise.all(posts.map((p) => normalized_S3_post(p))),
+            async () => Promise.all(posts.map((p) => normalized_S3_post(p, db))),
             { 'app.span_type': 's3_signing' }
         )
     } catch (e) {
@@ -199,7 +172,7 @@ export const submitProfileReview = traceAction('submitProfileReview', async (_pr
 
         const client = await clientPromise
         const db = client.db(dbName)
-        const collection = db.collection('Profiles')
+        const collection = profilesCollection(db)
 
         const { risk, violations, reasoning, reviewer_comments, action } = reviewData
 
@@ -214,8 +187,25 @@ export const submitProfileReview = traceAction('submitProfileReview', async (_pr
 
         await collection.updateOne(
             { _id: new ObjectId(profileId) },
-            { $set: { review_details } }
+            {
+                $set: {
+                    review_details,
+                    'workflow.review_status': 'reviewed',
+                    'workflow.reviewed_at': new Date(),
+                    'list.risk': risk,
+                    'list.risk_rank': risk,
+                    'system.updated_at': new Date(),
+                },
+            }
         )
+
+        await insertCaseEvent(db, {
+            entityType: 'profile',
+            entityId: profileId,
+            eventType: 'Profile Review Submitted',
+            summary: `Profile review submitted with risk ${risk}`,
+            payload: { review_details },
+        })
 
         return { success: true, review_details }
     } catch (e) {

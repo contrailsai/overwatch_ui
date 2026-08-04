@@ -1,18 +1,20 @@
 import { getClientandProjectDetails } from '@/app/(dashboard)/actions'
+import { fetch_clients_in_project } from '@/app/(dashboard)/cases/feature_actions'
 import PageHeader from '@/components/PageHeader'
-import { listFeedsForClient } from './actions'
-import { FeedsIndexClient } from './FeedsIndexClient'
+import { getPoiTopicsGraph, countFeeds } from './actions'
+import { FeedsGraphClient } from './FeedsGraphClient'
+import { FeedsSubNav } from './FeedsSubNav'
 
 export const metadata = {
   title: 'Feeds',
-  description: 'Browse curated content collections for your project.',
+  description: 'Explore topics and POIs across your project.',
 }
 
 export default async function FeedsPage() {
   const result = await getClientandProjectDetails()
   if (!result) return null
 
-  const { clientDetails } = result
+  const { clientDetails, project } = result
 
   if (!clientDetails?.project_name) {
     return (
@@ -28,14 +30,26 @@ export default async function FeedsPage() {
     )
   }
 
-  const feeds = await listFeedsForClient()
+  const [graphData, feedCount, projectEmails] = await Promise.all([
+    getPoiTopicsGraph(),
+    countFeeds(),
+    fetch_clients_in_project(clientDetails.project_name),
+  ])
 
   return (
-    <main className="flex-1 flex flex-col h-full overflow-hidden bg-slate-50">
-      <PageHeader title="Feeds" description="Curated collections of related content" />
-      <div className="flex-1 overflow-y-auto">
-        <FeedsIndexClient feeds={feeds} />
-      </div>
+    <main className="flex flex-1 flex-col h-full min-h-0 overflow-hidden bg-slate-50">
+      <PageHeader
+        title="Feeds"
+        description="Topic and POI relationships across your project"
+      />
+      <FeedsSubNav feedCount={feedCount} />
+      <FeedsGraphClient
+        graphData={graphData}
+        feedCount={feedCount}
+        project={project}
+        clientDetails={clientDetails}
+        projectEmails={projectEmails}
+      />
     </main>
   )
 }

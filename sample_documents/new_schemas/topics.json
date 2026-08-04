@@ -1,0 +1,62 @@
+{
+  "_id": {
+    "$oid": "6a5000010000000000000001"
+  },
+  "topic_id": "T00001",
+  "title": "Ambani lottery scam impersonation",
+  "narrative": "Fake lottery and giveaway scams impersonating Mukesh and Nita Ambani on social media",
+  "category": "gossip",
+  "type": "active",
+  "parent_topic_id": null,
+  "pois": [
+    {
+      "$oid": "6a5000020000000000000001"
+    },
+    {
+      "$oid": "6a5000020000000000000002"
+    }
+  ],
+  "poi_names": [
+    "Mukesh Ambani",
+    "Nita Ambani"
+  ],
+  "keywords": [
+    "lottery",
+    "scam",
+    "impersonation",
+    "giveaway"
+  ],
+  "posts": [
+    {
+      "$oid": "69810f0b3c24564a2cb28467"
+    }
+  ],
+  "post_count": 1,
+  "first_posted_at": {
+    "$date": "2026-02-02T20:54:34.920Z"
+  },
+  "last_posted_at": {
+    "$date": "2026-02-02T20:54:34.920Z"
+  },
+  "created_at": {
+    "$date": "2026-07-03T10:00:00.000Z"
+  },
+  "updated_at": {
+    "$date": "2026-07-03T10:00:00.000Z"
+  },
+  "created_by": "topic_creation_service",
+  "embedding_synced_at": {
+    "$date": "2026-07-04T12:00:00.000Z"
+  },
+  "embedding_model": "nomic-embed-text-v2-moe",
+  "embedding_text_hash": "sha256hex...",
+  "reconciled_at": {
+    "$date": "2026-07-04T12:00:00.000Z"
+  },
+  "reconcile_action": "kept",
+  "reconcile_reason": "sim=0.812 >= good=0.72",
+  "status": "active",
+  "merged_into_topic_id": null,
+  "merged_at": null,
+  "merge_reason": null
+}

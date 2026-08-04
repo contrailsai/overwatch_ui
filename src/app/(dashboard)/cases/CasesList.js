@@ -308,7 +308,10 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
 
   const handleSortChange = (field) => {
     const direction = (initialSort.field === field && initialSort.direction === 'desc') ? 'asc' : 'desc'
-    updateQueryParams({ sortField: field, sortDirection: direction })
+    updateQueryParams({
+      sortField: field,
+      sortDirection: direction,
+    })
   }
 
   const handlePageChange = (newPage) => {
@@ -624,10 +627,10 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
     initialFilters.client_status !== 'all' ||
     (initialFilters.visibility_status && initialFilters.visibility_status !== 'all') ||
     (initialFilters.violations && initialFilters.violations !== 'all') ||
-    initialFilters.original_date_from ||
-    initialFilters.original_date_to ||
-    initialFilters.processed_from ||
-    initialFilters.processed_to ||
+    initialFilters.published_from ||
+    initialFilters.published_to ||
+    initialFilters.alert_from ||
+    initialFilters.alert_to ||
     searchParams.get('similar_to') ||
     searchParams.get('semantic_search')
 
@@ -966,7 +969,7 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                   <div className="divide-y divide-slate-100">
                     {mergedPosts.map((post) => {
                       const currentPost = { ...post, client_status: updatedCases[post._id] || post.client_status }
-                      const riskScore = currentPost.review_details?.threat_score
+                      const riskScore = currentPost.score ?? currentPost.review_details?.threat_score
                       const risk = getRiskLabel(riskScore)
                       const statusConfig = getStatusConfig(currentPost)
                       const StatusIcon = statusConfig.icon
@@ -1098,22 +1101,22 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                         <th
                           scope="col"
                           className="w-30 px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100/50 transition-colors group select-none hidden lg:table-cell border-b border-slate-100"
-                          onClick={() => handleSortChange('processed_date')}
+                          onClick={() => handleSortChange('alert_date')}
                         >
                           <div className="flex items-center">
                             Alert Date
-                            <SortIcon field="processed_date" />
+                            <SortIcon field="alert_date" />
                           </div>
                         </th>
 
                         <th
                           scope="col"
                           className="w-30 px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100/50 transition-colors group select-none hidden xl:table-cell border-b border-slate-100"
-                          onClick={() => handleSortChange('original_date')}
+                          onClick={() => handleSortChange('published_date')}
                         >
                           <div className="flex items-center">
                             Publish Date
-                            <SortIcon field="original_date" />
+                            <SortIcon field="published_date" />
                           </div>
                         </th>
                         <th scope="col" className="w-16 sm:w-27.5 px-2 sm:px-4 py-3 text-right text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-100"></th>
@@ -1123,7 +1126,7 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                     <tbody className="bg-white">
                       {mergedPosts.map((post, index) => {
                         const currentPost = { ...post, client_status: updatedCases[post._id] || post.client_status };
-                        const riskScore = currentPost.review_details?.threat_score;
+                        const riskScore = currentPost.score ?? currentPost.review_details?.threat_score;
                         const risk = getRiskLabel(riskScore);
 
                         const review = currentPost.review_details || {};
@@ -1172,24 +1175,15 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                         // const isPanelOpen = selectedPost?._id === currentPost._id
 
                         let posted_date = ""
-                        let sourced_date = ""
                         let processed_date = ""
 
                         // POSTED AT ---> ORIGINAL DATE FILTER ( WHEN IT WAS POSTED ON THE SOCIAL MEDIA PLATFORM)
                         if (post.posted_date)
                           posted_date = format(new Date(post.posted_date), "dd/MM/yyyy hh:mm a");
-                        else if (post.metadata?.posted_date)
-                          posted_date = format(new Date(post.metadata.posted_date), "dd/MM/yyyy hh:mm a");
                         else if (post.timestamp)
                           posted_date = format(new Date(post.timestamp), "dd/MM/yyyy hh:mm a");
                         else if (post.sourcing_date)
                           posted_date = format(new Date(post.sourcing_date), "dd/MM/yyyy hh:mm a");
-
-                        // SOURCED AT ---> (NOT BEING USED WELL BUT ITS WHEN WE GOT THE POST)
-                        if (post.metadata?.created_at)
-                          sourced_date = format(new Date(post.metadata.created_at), "dd/MM/yyyy hh:mm a");
-                        else if (post.created_at)
-                          sourced_date = format(new Date(post.created_at), "dd/MM/yyyy hh:mm a");
 
                         // REVIEWED AT. --> PROCESSED DATE FILTER
                         if (post?.reviewed_at)
