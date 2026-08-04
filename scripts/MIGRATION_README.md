@@ -277,3 +277,49 @@ node scripts/ensure_indexes_v3.js --db Ambani-Data-v2
 ### Rollback
 
 Keep using the **source** DB name — nothing was written in-place. Delete or ignore the target DB if the migration is discarded.
+
+## Schema V3 — In-Place Migration
+
+Rewrites `Posts` / `Profiles` **inside the same DB** into lowercase v3 collections (no full DB clone). Other collections stay put. Prefer this when cloning the whole tenant DB would be too slow/large.
+
+### What it does
+
+1. Transform `Profiles` → upsert `profiles` (drops `posts[]`)
+2. Transform `Posts` → upsert `posts` + `post_embeddings` + `case_events`
+3. Rename `Topics` → `topics` when needed
+4. Reconcile profile `list.*` counts; create v3 indexes
+5. After count checks, **drop** legacy `Posts` / `Profiles` (and leftover `Topics` if `topics` exists)
+
+Use `--keep-legacy` to skip the drop (dual collections until you cut over).
+
+### Usage
+
+```bash
+# Preview one DB
+node scripts/migrate_v3_inplace.js --db Red-Chillies-Data --dry-run
+
+# Live one DB
+node scripts/migrate_v3_inplace.js --db Red-Chillies-Data
+
+# Several DBs
+node scripts/migrate_v3_inplace.js --dbs Delta-Exchange-Data,Giotuss-Data-Search,ICICI-Data-Search
+
+# Resume / rewrite after a partial run
+node scripts/migrate_v3_inplace.js --db PMO-Data-Search --force
+
+# Keep Posts/Profiles after writing posts/profiles
+node scripts/migrate_v3_inplace.js --db PMO-Data-Search --keep-legacy
+
+# Verify
+node scripts/verify_v3.js --db Red-Chillies-Data
+```
+
+### After in-place migration
+
+1. No `mongo_db_map` rename needed (same DB name).
+2. Create/point Atlas **`vector_index`** on **`post_embeddings`** for that DB.
+3. Run `verify_v3.js` and spot-check the UI.
+
+### Rollback
+
+In-place has no separate target DB. Before the legacy drop, `--keep-legacy` leaves `Posts`/`Profiles` intact. After drop, restore from Atlas backup.
