@@ -18,7 +18,7 @@ import {
 } from '@/utils/analysis/correctionRequestUtils'
 import { removePostFromAllTopics } from '@/lib/feeds/topic-membership'
 import { normalizeS3Post } from '@/lib/posts/pipeline-helpers'
-import { postsCollection, postEmbeddingsCollection } from '@/utils/mongodb/collections'
+import { COLLECTIONS, postsCollection, postEmbeddingsCollection } from '@/utils/mongodb/collections'
 import {
   buildTakedownInfoForUi,
   buildEffectiveThreatScoreRange,
@@ -452,7 +452,7 @@ export const getReviewSemanticSearchPosts = traceAction(
           },
           {
             $lookup: {
-              from: 'posts',
+              from: COLLECTIONS.posts,
               localField: 'post_id',
               foreignField: '_id',
               as: 'post_doc',
@@ -1301,7 +1301,7 @@ export const runAIAnalysis = traceAction('runAIAnalysis', async (postId, _projec
       return { success: false, error: 'An AI correction is in progress. Check correction status or cancel it first.' }
     }
 
-    const response = await sendContentModerationSqsMessage(dbName, 'posts', postId);
+    const response = await sendContentModerationSqsMessage(dbName, COLLECTIONS.posts, postId);
     
     if (!response) {
       return { success: false, error: 'AI analysis queue not configured' }
@@ -1392,7 +1392,7 @@ async function queueCorrectionRevision({
 
   let sqsResponse
   try {
-    sqsResponse = await sendContentModerationSqsMessage(dbName, 'posts', postId, {
+    sqsResponse = await sendContentModerationSqsMessage(dbName, COLLECTIONS.posts, postId, {
       mode: 'revision',
       correction_request_id: correctionRequestId,
     })
@@ -1535,7 +1535,7 @@ export const requestAIAnalysisCorrection = traceAction(
 
       let sqsResponse
       try {
-        sqsResponse = await sendContentModerationSqsMessage(dbName, 'posts', postId, {
+        sqsResponse = await sendContentModerationSqsMessage(dbName, COLLECTIONS.posts, postId, {
           mode: 'revision',
           correction_request_id: correctionRequestId,
         })

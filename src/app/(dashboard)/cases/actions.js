@@ -20,7 +20,7 @@ import {
   buildCasesDateFilterStage,
   buildUniqueClustersStage,
 } from '@/lib/posts/pipeline-helpers'
-import { postsCollection, postEmbeddingsCollection } from '@/utils/mongodb/collections'
+import { COLLECTIONS, postsCollection, postEmbeddingsCollection } from '@/utils/mongodb/collections'
 import { insertCaseEvent, mapUiClientStatusToV3 } from '@/utils/mongodb/v3-schema'
 
 const CASES_TRACE_OPTS = { loki_stream: LOKI_STREAMS.cases }
@@ -346,7 +346,7 @@ export const getSimilarPosts = traceAction('getSimilarPosts', async (_project, s
       },
       {
         $lookup: {
-          from: 'posts',
+          from: COLLECTIONS.posts,
           localField: 'post_id',
           foreignField: '_id',
           as: 'post_doc',
@@ -465,7 +465,7 @@ export const getSemanticSearchPosts = traceAction('getSemanticSearchPosts', asyn
         },
         {
           $lookup: {
-            from: 'posts',
+            from: COLLECTIONS.posts,
             localField: 'post_id',
             foreignField: '_id',
             as: 'post_doc',
