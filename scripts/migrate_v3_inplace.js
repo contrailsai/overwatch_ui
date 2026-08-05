@@ -91,6 +91,16 @@ async function upsertBatch(collection, docs, dryRun) {
   return { success: docs.length, failed: 0 }
 }
 
+async function dropIndexSafe(collection, indexName) {
+  try {
+    await collection.dropIndex(indexName)
+    return true
+  } catch (err) {
+    if (err.code === 27 || /index not found/i.test(err.message || '')) return false
+    throw err
+  }
+}
+
 async function insertEventsBatch(collection, events, dryRun) {
   if (events.length === 0) return 0
   if (dryRun) return events.length
@@ -181,12 +191,19 @@ async function migrateProfiles(db, dryRun) {
       }
     } catch (err) {
       failed++
+      batch.length = 0
       log(`  Profile transform error ${old._id}: ${err.message}`, 'red')
     }
   }
   if (batch.length > 0) {
-    const r = await upsertBatch(targetCol, batch, dryRun)
-    success += r.success
+    try {
+      const r = await upsertBatch(targetCol, batch, dryRun)
+      success += r.success
+    } catch (err) {
+      failed += batch.length
+      log(`  Profile batch upsert error: ${err.message}`, 'red')
+    }
+    batch.length = 0
   }
 
   log(`  Profiles migrated: ${success} ok, ${failed} failed`, failed ? 'yellow' : 'green')
@@ -416,14 +433,87 @@ async function migrateOneDb(client, dbName, opts) {
     return { db: dbName, skipped: true, ok: true }
   }
 
-  if (!dryRun && (await collectionExists(db, 'posts')) && (await collectionExists(db, 'Posts')) && !force) {
-    const postsCount = await db.collection('posts').estimatedDocumentCount()
+  // Dual collections: if lowercase side is already fully v3, just finish by
+  // dropping legacy (no full rewrite). Otherwise require --force.
+  if (
+    !dryRun &&
+    (await collectionExists(db, 'posts')) &&
+    (await collectionExists(db, 'Posts')) &&
+    !force
+  ) {
+    const postsCount = await db.collection('posts').countDocuments({})
+    const v3Count = await db.collection('posts').countDocuments({ schema_version: 3 })
+    const legacyCount = await db.collection('Posts').countDocuments({})
+    if (postsCount > 0 && v3Count === postsCount && postsCount >= legacyCount) {
+      log(
+        `Both Posts and posts exist, but posts is already v3 (${postsCount}). Finishing by dropping legacy…`,
+        'yellow'
+      )
+      if (await collectionExists(db, 'Profiles')) {
+        const profilesV3 = await db.collection('profiles').countDocuments({ schema_version: 3 })
+        const profilesTotal = await db.collection('profiles').countDocuments({})
+        if (profilesTotal > 0 && profilesV3 !== profilesTotal) {
+          log(
+            'profiles is not fully v3 — refusing legacy drop. Re-run with --force.',
+            'red'
+          )
+          return {
+            db: dbName,
+            skipped: false,
+            ok: false,
+            error: 'partial dual collections; profiles not fully v3; need --force',
+          }
+        }
+      }
+      await reconcileProfileCounts(db, false)
+      await ensureIndexesV3(db, (msg) => log(msg, 'cyan'))
+      const { dropped } = await dropLegacyCollections(db, false, keepLegacy)
+      log(`Done. Dropped: ${dropped.join(', ') || '(none)'}`, 'green')
+      return {
+        db: dbName,
+        skipped: false,
+        ok: true,
+        posts: postsCount,
+        profiles: await db.collection('profiles').countDocuments({}),
+        embeddings: await db.collection('post_embeddings').countDocuments({}),
+        events: await db.collection('case_events').countDocuments({}),
+      }
+    }
     if (postsCount > 0) {
       log(
         'Both Posts and posts exist (partial prior run). Re-run with --force to resume upserts.',
         'red'
       )
-      return { db: dbName, skipped: false, ok: false, error: 'partial dual collections; need --force' }
+      return {
+        db: dbName,
+        skipped: false,
+        ok: false,
+        error: 'partial dual collections; need --force',
+      }
+    }
+  }
+
+  // --force rewrites from legacy; unique indexes from a prior partial run would block
+  // re-upserting colliding platform_*_id values that ensureIndexesV3 later dedupes.
+  if (force && !dryRun) {
+    const droppedPostIdx = await dropIndexSafe(
+      db.collection('posts'),
+      'platform_platform_post_id_unique'
+    )
+    const droppedProfileIdx = await dropIndexSafe(
+      db.collection('profiles'),
+      'platform_platform_user_id_unique'
+    )
+    if (droppedPostIdx || droppedProfileIdx) {
+      log(
+        `  Dropped unique indexes for --force rewrite (${[
+          droppedPostIdx && 'posts',
+          droppedProfileIdx && 'profiles',
+        ]
+          .filter(Boolean)
+          .join(', ')})`,
+        'yellow'
+      )
     }
   }
 
@@ -458,10 +548,19 @@ async function migrateOneDb(client, dbName, opts) {
     const targetProfiles = await db.collection('profiles').countDocuments({})
     if (
       postResult.sourceName === 'Posts' &&
-      postResult.sourceCount !== targetPosts
+      targetPosts > postResult.sourceCount
     ) {
       throw new Error(
         `Post count mismatch before drop: source Posts=${postResult.sourceCount} vs posts=${targetPosts}`
+      )
+    }
+    if (
+      postResult.sourceName === 'Posts' &&
+      targetPosts < postResult.sourceCount
+    ) {
+      log(
+        `  Post count: source Posts=${postResult.sourceCount} → posts=${targetPosts} (dupes pruned for unique index)`,
+        'yellow'
       )
     }
     if (

@@ -1,6 +1,6 @@
 /** MongoDB collection names for schema v3 tenant databases. */
 export const COLLECTIONS = {
-  posts: 'posts',
+  posts: 'Posts',
   profiles: 'profiles',
   case_events: 'case_events',
   post_embeddings: 'post_embeddings',

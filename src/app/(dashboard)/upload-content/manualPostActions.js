@@ -13,7 +13,7 @@ import { sendContentModerationSqsMessage } from '@/utils/aws/sqs'
 import { traceAction, runInSpan } from '@/utils/tracing'
 import { requireRole } from '@/utils/auth-context'
 import { buildStrictPostDocument } from '@/utils/manual-post/buildStrictPostDocument'
-import { postsCollection } from '@/utils/mongodb/collections'
+import { COLLECTIONS, postsCollection } from '@/utils/mongodb/collections'
 import { triggerContrailsPostProcess } from '@/utils/embeddings/triggerContrailsPostProcess'
 import { logActionError, LOKI_STREAMS } from '@/utils/otel-logger'
 
@@ -486,7 +486,7 @@ export const submitManualReviewerPost = traceAction('submitManualReviewerPost', 
   if (form.queueAiAnalysis && process.env.AWS_CONTENT_MODERATION_SQS_QUEUE_URL) {
     const sqs = await runInSpan(
       'upload_content.manual_post.moderation_sqs',
-      async () => sendContentModerationSqsMessage(dbName, 'posts', insertedId),
+      async () => sendContentModerationSqsMessage(dbName, COLLECTIONS.posts, insertedId),
       { 'app.span_type': 'sqs_send' }
     )
     if (!sqs) {

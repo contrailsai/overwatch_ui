@@ -83,19 +83,106 @@ async function resolveDuplicatePlatformUserIds(profiles, log = console.log) {
   return { groups: dups.length, cleared }
 }
 
+/**
+ * Legacy tenants can have multiple post docs sharing the same
+ * (platform, platform_post_id) — e.g. re-ingested posts kept under new _ids.
+ *
+ * Keep the doc with the highest effective_threat_score (then engagement,
+ * then newest updated_at), and delete the extras plus their embeddings /
+ * case_events so the unique index can build.
+ */
+async function resolveDuplicatePlatformPostIds(
+  posts,
+  postEmbeddings,
+  caseEvents,
+  log = console.log
+) {
+  const dups = await posts
+    .aggregate([
+      { $match: { platform_post_id: { $type: 'string', $gt: '' } } },
+      {
+        $group: {
+          _id: { platform: '$platform', platform_post_id: '$platform_post_id' },
+          count: { $sum: 1 },
+          docs: {
+            $push: {
+              _id: '$_id',
+              threat: '$list.effective_threat_score',
+              engagement: '$list.engagement_score',
+              updated_at: '$system.updated_at',
+            },
+          },
+        },
+      },
+      { $match: { count: { $gt: 1 } } },
+    ])
+    .toArray()
+
+  if (dups.length === 0) return { groups: 0, deleted: 0 }
+
+  let deleted = 0
+  for (const group of dups) {
+    const sorted = [...group.docs].sort((a, b) => {
+      const t = (Number(b.threat) || 0) - (Number(a.threat) || 0)
+      if (t !== 0) return t
+      const e = (Number(b.engagement) || 0) - (Number(a.engagement) || 0)
+      if (e !== 0) return e
+      const at = a.updated_at ? new Date(a.updated_at).getTime() : 0
+      const bt = b.updated_at ? new Date(b.updated_at).getTime() : 0
+      return bt - at
+    })
+    const keep = sorted[0]
+    const dropIds = sorted.slice(1).map((d) => d._id)
+    await posts.deleteMany({ _id: { $in: dropIds } })
+    if (postEmbeddings) {
+      await postEmbeddings.deleteMany({ post_id: { $in: dropIds } })
+    }
+    if (caseEvents) {
+      await caseEvents.deleteMany({
+        entity_type: 'post',
+        entity_id: { $in: dropIds },
+      })
+    }
+    deleted += dropIds.length
+    log(
+      `  dedupe post ${group._id.platform}/${group._id.platform_post_id}: keep ${keep._id}, deleted ${dropIds.length}`
+    )
+  }
+
+  log(
+    `  Resolved ${dups.length} duplicate platform_post_id group(s); deleted ${deleted} post(s)`
+  )
+  return { groups: dups.length, deleted }
+}
+
 async function createIndexSafe(collection, keys, options, label, log) {
   try {
     await collection.createIndex(keys, options)
     log(`  ${label}`)
     return true
   } catch (err) {
+    // Same key pattern already exists under a different name (e.g. Topics → topics rename)
+    const nameMatch = /already exists with a different name:\s*(\S+)/i.exec(
+      err.message || ''
+    )
+    if (nameMatch) {
+      try {
+        await collection.dropIndex(nameMatch[1])
+        await collection.createIndex(keys, options)
+        log(`  ${label} (replaced ${nameMatch[1]})`)
+        return true
+      } catch (retryErr) {
+        log(`  FAILED ${label}: ${retryErr.message}`)
+        return false
+      }
+    }
     log(`  FAILED ${label}: ${err.message}`)
     return false
   }
 }
 
 async function ensureIndexesV3(db, log = console.log) {
-  const posts = db.collection('posts')
+  const posts = db.collection('Posts')
   const profiles = db.collection('profiles')
   const caseEvents = db.collection('case_events')
   const postEmbeddings = db.collection('post_embeddings')
@@ -109,11 +196,15 @@ async function ensureIndexesV3(db, log = console.log) {
     if (!success) failed++
   }
 
+  // Clear colliding platform_post_id values before unique index
+  log('Checking duplicate post platform_post_id values…')
+  await resolveDuplicatePlatformPostIds(posts, postEmbeddings, caseEvents, log)
+
   await ok(
     posts,
     { platform: 1, platform_post_id: 1 },
     { unique: true, name: 'platform_platform_post_id_unique' },
-    'posts: { platform, platform_post_id } unique'
+    'Posts: { platform, platform_post_id } unique'
   )
 
   await ok(
@@ -125,28 +216,28 @@ async function ensureIndexesV3(db, log = console.log) {
       'list.engagement_score': -1,
     },
     { name: 'review_status_risk_alert_engagement' },
-    'posts: review_status + risk_rank + alert_hour + engagement'
+    'Posts: review_status + risk_rank + alert_hour + engagement'
   )
 
   await ok(
     posts,
     { platform: 1, 'workflow.client_status': 1, 'list.reviewed_at': -1 },
     { name: 'platform_client_status_reviewed_at' },
-    'posts: platform + client_status + reviewed_at'
+    'Posts: platform + client_status + reviewed_at'
   )
 
   await ok(
     posts,
     { 'list.effective_threat_score': -1, 'list.reviewed_at': -1 },
     { name: 'effective_threat_score_reviewed_at' },
-    'posts: effective_threat_score + reviewed_at'
+    'Posts: effective_threat_score + reviewed_at'
   )
 
   await ok(
     posts,
     { 'list.violation_flags': 1, 'list.reviewed_at': -1 },
     { name: 'violation_flags_reviewed_at' },
-    'posts: violation_flags + reviewed_at'
+    'Posts: violation_flags + reviewed_at'
   )
 
   await ok(
@@ -157,14 +248,14 @@ async function ensureIndexesV3(db, log = console.log) {
       'list.sourced_at': -1,
     },
     { name: 'review_ai_status_sourced_at' },
-    'posts: review_status + ai_status + sourced_at'
+    'Posts: review_status + ai_status + sourced_at'
   )
 
   await ok(
     posts,
     { profile_id: 1, 'list.posted_at': -1 },
     { name: 'profile_id_posted_at' },
-    'posts: profile_id + posted_at'
+    'Posts: profile_id + posted_at'
   )
 
   await ok(
@@ -175,14 +266,14 @@ async function ensureIndexesV3(db, log = console.log) {
       'list.risk_rank': -1,
     },
     { name: 'cluster_representative_risk' },
-    'posts: cluster_id + is_cluster_representative + risk_rank'
+    'Posts: cluster_id + is_cluster_representative + risk_rank'
   )
 
   await ok(
     posts,
     { 'workflow.takedown_status': 1, 'takedown.initiated_at': -1 },
     { name: 'takedown_status_initiated_at' },
-    'posts: takedown_status + initiated_at'
+    'Posts: takedown_status + initiated_at'
   )
 
   // Clear colliding platform_user_id values before unique index
@@ -290,4 +381,8 @@ if (require.main === module) {
   main()
 }
 
-module.exports = { ensureIndexesV3, resolveDuplicatePlatformUserIds }
+module.exports = {
+  ensureIndexesV3,
+  resolveDuplicatePlatformUserIds,
+  resolveDuplicatePlatformPostIds,
+}
