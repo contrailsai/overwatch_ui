@@ -21,24 +21,81 @@ import {
     getClientRequestedLinkCaseHref,
 } from '@/utils/clientRequestedLinks'
 
+
 function RequestLinksTabContent({ isReviewer = false }) {
     const [submissionResult, setSubmissionResult] = useState(null)
     const [requestedLinks, setRequestedLinks] = useState([])
+    const [offset, setOffset] = useState(0)
+    const [hasMore, setHasMore] = useState(true)
+    const [totalRequests, setTotalRequests] = useState(0)
 
     const [isLoadingLinks, setIsLoadingLinks] = useState(true)
+    const [isLoadingMore, setIsLoadingMore] = useState(false)
     const [bulkInput, setBulkInput] = useState('')
     const [parsedLinks, setParsedLinks] = useState([])
     const [isSubmittingBulk, setIsSubmittingBulk] = useState(false)
     const fileInputRef = useRef(null)
+    const loadMoreRef = useRef(null)
+    const isLoadingMoreRef = useRef(false)
+    const loadMoreLinksRef = useRef(null)
 
-    const fetchLinks = useCallback(async () => {
-        setIsLoadingLinks(true)
-        const result = await getRequestedLinks()
-        if (result.data) {
-            setRequestedLinks(result.data)
-        }
-        setIsLoadingLinks(false)
+   const fetchLinks = useCallback(async () => {
+    setIsLoadingLinks(true)
+
+    const result = await getRequestedLinks({
+        offset: 0,
+        limit: 50,
+    })
+
+
+    if (result.data) {
+        setRequestedLinks(result.data)
+        setOffset(result.data.length)
+        setTotalRequests(result.count ?? 0)
+        setHasMore(result.data.length >= 50)
+
+    }
+
+    setIsLoadingLinks(false)
     }, [])
+
+        const loadMoreLinks = useCallback(async () => {
+
+            if (!hasMore || isLoadingLinks || isLoadingMoreRef.current) return
+
+            isLoadingMoreRef.current = true
+            setIsLoadingMore(true)
+
+        try {
+            const result = await getRequestedLinks({
+                offset,
+                limit: 30,
+            })
+            
+
+            if (result.error) {
+            console.error('Failed to load more request links:', result.error)
+            return
+            }
+
+            if (result.data) {
+                setRequestedLinks(prev => [...prev, ...result.data])
+
+                setOffset(prev => prev + result.data.length)
+
+                if (result.data.length < 30) {
+                    setHasMore(false)
+                    }
+                }
+            } catch (error) {
+                console.error('Unexpected error loading more request links:', error)
+            } finally {
+                isLoadingMoreRef.current = false
+                setIsLoadingMore(false)
+            }
+        }, [offset, hasMore, isLoadingLinks])
+
+        loadMoreLinksRef.current = loadMoreLinks
 
     useEffect(() => {
         fetchLinks()
@@ -53,6 +110,33 @@ function RequestLinksTabContent({ isReviewer = false }) {
         }
     }, [submissionResult?.success, fetchLinks])
 
+    useEffect(() => {
+
+        const root = document.getElementById('request-history-scroll')
+        
+
+    const observer = new IntersectionObserver(
+        (entries) => {
+            if (
+                entries[0].isIntersecting &&
+                hasMore &&
+                !isLoadingLinks
+                ) {
+                    loadMoreLinksRef.current?.()
+                }  
+        },
+        {
+        root,
+        threshold: 0.1,
+        }
+    )
+
+    if (loadMoreRef.current) {
+        observer.observe(loadMoreRef.current)
+    }
+
+    return () => observer.disconnect()
+    }, [hasMore, isLoadingLinks])
 
     // Effect to update parsed links in real-time
     useEffect(() => {
@@ -287,9 +371,13 @@ function RequestLinksTabContent({ isReviewer = false }) {
                                         <p className="text-sm">Start by submitting a content link above.</p>
                                     </div>
                                 ) : (
-                                    <div className="overflow-x-auto">
+                                    <>
+                                    <div
+                                    id="request-history-scroll"
+                                    className="overflow-x-auto max-h-[600px] overflow-y-auto"
+                                    >
                                         <table className="w-full text-left border-collapse">
-                                            <thead>
+                                            <thead className="sticky top-0 z-10 bg-white">
                                                 <tr className="bg-slate-50/50 border-b border-slate-100">
                                                     <th className="px-4 sm:px-8 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Link Source</th>
                                                     <th className="px-4 sm:px-8 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest whitespace-nowrap">Ingestion Status</th>
@@ -298,7 +386,7 @@ function RequestLinksTabContent({ isReviewer = false }) {
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-slate-50">
-                                                {requestedLinks.map((item) => {
+                                                {requestedLinks.map((item,index) => {
                                                     const statusLabel = formatIngestionStatusLabel(item.ingested)
                                                     const caseHref = getClientRequestedLinkCaseHref({
                                                         ingested: item.ingested,
@@ -354,7 +442,22 @@ function RequestLinksTabContent({ isReviewer = false }) {
                                                 })}
                                             </tbody>
                                         </table>
-                                    </div>
+                                        <div
+                                        ref={loadMoreRef}
+                                        className="py-4 flex flex-col items-center gap-2"
+                                        >
+                                        <span className="text-xs text-slate-500">
+                                            Showing {requestedLinks.length} of {totalRequests} requests
+                                        </span>
+
+                                        {hasMore && (
+                                            <span className="text-sm text-slate-500">
+                                            Loading more...
+                                            </span>
+                                        )}
+                                        </div>
+                                    </div>    
+                            </>
                                 )}
                             </CardContent>
                         </Card>
