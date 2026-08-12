@@ -1,4 +1,5 @@
 import { computeEngagementScore } from '@/app/(dashboard)/cases/riskBuckets'
+import { extractPlatformUserIdFromUrls } from '@/utils/manual-post/ensureProfileForManualPost'
 
 /**
  * Maps simplified manual-ingest input to the strict posts v3 collection shape.
@@ -91,6 +92,7 @@ export function buildStrictPostDocument(data, s3Stored, updatedBy) {
     else if (u.includes('x.com') || u.includes('twitter.com')) platform = 'x'
   }
   if (!platform) platform = 'facebook'
+  platform = String(platform).toLowerCase().trim()
 
   const content = String(getFlexible(data, ['content', 'caption', 'post_content.caption'], '') ?? '')
 
@@ -141,7 +143,10 @@ export function buildStrictPostDocument(data, s3Stored, updatedBy) {
     ) ?? ''
   )
 
-  const platformUserId = getFlexible(data, ['platform_user_id', 'profile.platform_user_id'])
+  const platformUserId =
+    getFlexible(data, ['platform_user_id', 'profile.platform_user_id']) ||
+    extractPlatformUserIdFromUrls(platform, profileLink, postUrl) ||
+    null
 
   const likes = Number.parseInt(String(getFlexible(data, ['engagement.likes', 'likes', 'stats.likes'], 0) ?? 0), 10) || 0
   const comments =
@@ -169,12 +174,18 @@ export function buildStrictPostDocument(data, s3Stored, updatedBy) {
 
   const engagementScore = computeEngagementScore(views, likes, comments, shares)
 
+  const profileIdRaw = getFlexible(data, ['profile_id'])
+  let profileId = null
+  if (profileIdRaw != null && profileIdRaw !== '') {
+    profileId = profileIdRaw
+  }
+
   return {
     schema_version: 3,
     platform,
     platform_post_id: postId,
     original_url: postUrl,
-    profile_id: null,
+    profile_id: profileId,
     workflow: {
       ai_status: 'pending',
       review_status: 'pending',

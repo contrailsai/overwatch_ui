@@ -62,7 +62,13 @@ function PostPlatformBadge({ platform, size = 'md' }) {
 
 function getPostDates(post) {
   const rawPostedDate = post.posted_date || post.metadata?.posted_date || post.timestamp || post.sourcing_date
-  const rawSourcedDate = post.metadata?.created_at || post.created_at
+  // Must match sourcing date filter field: list.sourced_at → sourcing_date (not system.created_at)
+  const rawSourcedDate =
+    post.sourcing_date ||
+    post.list?.sourced_at ||
+    post.metadata?.sourcing_date ||
+    post.metadata?.created_at ||
+    post.created_at
   return {
     posted: rawPostedDate ? format(new Date(rawPostedDate), "dd/MM/yyyy HH:mm a") : "N/A",
     sourced: rawSourcedDate ? format(new Date(rawSourcedDate), "dd/MM/yyyy HH:mm a") : "N/A",

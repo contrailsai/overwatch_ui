@@ -517,7 +517,7 @@ const TableRow = ({ post, project, compressedImage }) => {
   // Correctly prioritize image sources
   const imageUrl = compressedImage || post.compressedImage || post.signedImageUrl || post.image_url || null;
   const postedDate = formatCompleteDate(post.posted_date || post.metadata?.posted_date || post.timestamp || post.created_at);
-  const sourcedDate = formatCompleteDate(post.metadata?.created_at || post.created_at);
+  const sourcedDate = formatCompleteDate(post.sourcing_date || post.list?.sourced_at || post.metadata?.sourcing_date || post.metadata?.created_at || post.created_at);
   const reviewedDate = formatCompleteDate(post.updated_at || review.reviewed_at || post.created_at);
 
   return (

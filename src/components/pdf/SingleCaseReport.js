@@ -429,7 +429,7 @@ export const SingleCasePage = ({ post, project, compressedImage }) => {
 
     // Dates & Metrics
     const posted_date = formatCompleteDate(post.posted_date || post.metadata?.posted_date || post.timestamp || post.sourcing_date);
-    const sourced_date = formatCompleteDate(post.metadata?.created_at || post.created_at);
+    const sourced_date = formatCompleteDate(post.sourcing_date || post.list?.sourced_at || post.metadata?.sourcing_date || post.metadata?.created_at || post.created_at);
     const reviewedDate = formatCompleteDate(post.updated_at || review.reviewed_at || post.created_at);
 
 
