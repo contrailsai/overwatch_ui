@@ -13,6 +13,7 @@ import { sendContentModerationSqsMessage } from '@/utils/aws/sqs'
 import { traceAction, runInSpan } from '@/utils/tracing'
 import { requireRole } from '@/utils/auth-context'
 import { buildStrictPostDocument } from '@/utils/manual-post/buildStrictPostDocument'
+import { ensureProfileForManualPost } from '@/utils/manual-post/ensureProfileForManualPost'
 import { COLLECTIONS, postsCollection } from '@/utils/mongodb/collections'
 import { triggerContrailsPostProcess } from '@/utils/embeddings/triggerContrailsPostProcess'
 import { logActionError, LOKI_STREAMS } from '@/utils/otel-logger'
@@ -464,6 +465,15 @@ export const submitManualReviewerPost = traceAction('submitManualReviewerPost', 
   }
 
   const doc = buildStrictPostDocument(mergedInput, s3Stored, updatedBy)
+
+  const profileId = await runInSpan(
+    'upload_content.manual_post.ensure_profile',
+    async () => ensureProfileForManualPost(db, doc),
+    { 'app.span_type': 'mongo_query' }
+  )
+  if (profileId) {
+    doc.profile_id = profileId
+  }
 
   const insertResult = await runInSpan(
     'upload_content.manual_post.insert',

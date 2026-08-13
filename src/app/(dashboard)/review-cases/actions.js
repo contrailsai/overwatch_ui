@@ -117,7 +117,11 @@ function buildReviewPostsPipelineStages(filters = {}) {
 /** Shared $match query for review-cases list + export (keep filters in sync). */
 function buildReviewPostsMatchQuery(filters = {}) {
   const query = { _id: { $ne: null } }
-  const andConditions = []
+  const andConditions = [
+    // Ingest sometimes wrote image-embedding sidecar docs into Posts — never show as cases
+    { _is_embedding_stub: { $ne: true } },
+    { 'ingestion.type': { $ne: 'embedding_stub' } },
+  ]
 
   if (filters.status === 'pending') {
     andConditions.push({

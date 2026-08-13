@@ -97,7 +97,10 @@ export function buildUniqueClustersStage(filters, { clusterSort = 'list' } = {})
 
 export function buildCasesMatchQuery(filters = {}) {
   const query = withReviewedThreatScoreFilter({})
-  const andConditions = []
+  const andConditions = [
+    { _is_embedding_stub: { $ne: true } },
+    { 'ingestion.type': { $ne: 'embedding_stub' } },
+  ]
 
   if (filters.platform && filters.platform !== 'all') {
     const escapedPlatform = escapeRegex(filters.platform)

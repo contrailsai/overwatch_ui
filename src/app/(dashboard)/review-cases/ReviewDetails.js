@@ -211,7 +211,13 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
     const review = localPost.review_details || {}
     const analysis = localPost.analysis_results || {}
     const rawPostedDate = localPost.posted_date || localPost.metadata?.posted_date || localPost.timestamp || localPost.sourcing_date
-    const rawSourcedDate = localPost.metadata?.created_at || localPost.created_at
+    // Must match sourcing date filter field: list.sourced_at → sourcing_date (not system.created_at)
+    const rawSourcedDate =
+      localPost.sourcing_date ||
+      localPost.list?.sourced_at ||
+      localPost.metadata?.sourcing_date ||
+      localPost.metadata?.created_at ||
+      localPost.created_at
     const posted_date = rawPostedDate ? format(new Date(rawPostedDate), "dd/MM/yyyy") : "N/A"
     const sourced_date = rawSourcedDate ? format(new Date(rawSourcedDate), "dd/MM/yyyy") : "N/A"
 
