@@ -43,6 +43,7 @@ export const LOKI_STREAMS = {
   cases: 'cases',
   review_cases: 'review_cases',
   review_profiles: 'review_profiles',
+  review_ads: 'review_ads',
   profiles: 'profiles',
   takedowns: 'takedowns',
   reports: 'reports',
@@ -100,6 +101,9 @@ export function inferLokiStream(actionName) {
     return LOKI_STREAMS.takedowns
   }
   if (n.includes('profile') && n.includes('review')) return LOKI_STREAMS.review_profiles
+  if (n.includes('ad') && (n.includes('review') || n.includes('getads') || n.includes('updatead'))) {
+    return LOKI_STREAMS.review_ads
+  }
   if (
     n.endsWith('_review') ||
     n.includes('submitcasereview') ||

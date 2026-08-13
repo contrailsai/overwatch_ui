@@ -1,0 +1,12 @@
+{
+    _id: ObjectId('6a1543bc2b9e2f9411c8410b'),
+    centroid_img_embedding: [...],
+    centroid_text_embedding: [...],
+    representative_post_id: '69810f0b3c24564a2cb28467',
+    max_engagement_score: NumberInt('2883'),
+    member_count: NumberInt('2'),
+    member_ids: [
+      '69810f093c24564a2cb28465',
+      '69810f0b3c24564a2cb28467'
+    ]
+  }

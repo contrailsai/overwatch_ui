@@ -1,0 +1,8 @@
+{
+    _id: ObjectId('6a71c5af532d2a3308a748fd'),
+    post_id: ObjectId('69810f0b3c24564a2cb28467'),
+    effective_threat_score: NumberInt('96'),
+    image_embedding: [...],
+    platform: 'facebook',
+    text_embedding: [...]
+  }

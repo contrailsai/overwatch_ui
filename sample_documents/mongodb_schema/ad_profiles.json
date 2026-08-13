@@ -1,0 +1,40 @@
+{
+  "_id": { "$oid": "6b0000000000000000000010" },
+  "schema_version": 3,
+  "platform": "meta",
+  "platform_page_id": "1274871532371846",
+  "page_name": "Sarah Richardson",
+  "display_name": "Sarah Richardson",
+  "profile_url": "https://www.facebook.com/61588715172557/",
+  "is_verified": false,
+  "workflow": {
+    "review_status": "pending",
+    "client_status": "open",
+    "reviewed_at": null
+  },
+  "list": {
+    "risk": null,
+    "risk_rank": null,
+    "ad_count": 1,
+    "reviewed_ad_count": 0,
+    "max_threat_score": null,
+    "last_active_at": { "$date": "2026-08-12T07:00:00.000Z" },
+    "follower_count": 0,
+    "location": null
+  },
+  "enrichment": {
+    "biography": null,
+    "profile_pic_s3": "https://example-bucket.s3.ap-south-1.amazonaws.com/meta_ads/pages/1274871532371846/profile.jpg",
+    "profile_pic": "https://scontent.fdel27-4.fna.fbcdn.net/v/t39.35426-6/768667762_1762747301843931_3318618879659459468_n.jpg",
+    "page_categories": ["Business"],
+    "page_like_count": 0,
+    "page_is_deleted": false
+  },
+  "review_details": {},
+  "client_notes": [],
+  "system": {
+    "created_at": { "$date": "2026-08-13T06:30:00.000Z" },
+    "updated_at": { "$date": "2026-08-13T06:30:00.000Z" },
+    "last_synced_from_ad_at": { "$date": "2026-08-13T06:30:00.000Z" }
+  }
+}
