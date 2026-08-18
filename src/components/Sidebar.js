@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation'
 import {
   List, FileText, ShieldAlert, Settings, UserStar, LogOut, LayoutDashboard,
   ShieldCheck, GitPullRequestCreateArrow, Users, Menu, X, ScanEye, UserRoundPen,
-  Rss, Library, ChevronDown, FileStack, Megaphone,
+  Rss, Library, ChevronDown, FileStack, Megaphone, Globe,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -189,6 +189,18 @@ export function Sidebar({ user, clientDetails, project }) {
         icon: Megaphone,
         children: [
           { name: 'Review Ads', href: '/review-ads', icon: ScanEye, show: isReviewer },
+          { name: 'Review Ad Profiles', href: '/review-ad-profiles', icon: UserRoundPen, show: isReviewer },
+          { name: 'Ad Profile List', href: '/ad-profiles', icon: Users, show: true },
+        ],
+      },
+      {
+        type: 'group',
+        id: 'domains',
+        name: 'Domains',
+        icon: Globe,
+        children: [
+          { name: 'Review Domains', href: '/review-domains', icon: ScanEye, show: isReviewer },
+          { name: 'Domains', href: '/domains', icon: List, show: true },
         ],
       },
       { type: 'item', name: 'Feeds', href: '/feeds', icon: Library, show: true },

@@ -3,7 +3,8 @@ export const COLLECTIONS = {
   posts: 'Posts',
   profiles: 'profiles',
   ads: 'Ads',
-  ad_profiles: 'ad_profiles',
+  ad_profiles: 'Ad_profiles',
+  domains: 'Domains',
   case_events: 'case_events',
   post_embeddings: 'post_embeddings',
   profile_embeddings: 'profile_embeddings',
@@ -26,6 +27,10 @@ export function adsCollection(db) {
 
 export function adProfilesCollection(db) {
   return db.collection(COLLECTIONS.ad_profiles)
+}
+
+export function domainsCollection(db) {
+  return db.collection(COLLECTIONS.domains)
 }
 
 export function caseEventsCollection(db) {

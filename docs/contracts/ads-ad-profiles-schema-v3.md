@@ -2,7 +2,7 @@
 
 **Audience:** ingest (Meta Ads Library and other ad platforms), content-moderation worker, and `overwatch_client`.  
 **Status:** Client Review Ads surface lands with this contract. Downstream ingest/worker must write the same shapes.  
-**Reference samples:** [`sample_documents/mongodb_schema/Ads.json`](../../sample_documents/mongodb_schema/Ads.json), [`sample_documents/mongodb_schema/ad_profiles.json`](../../sample_documents/mongodb_schema/ad_profiles.json)  
+**Reference samples:** [`sample_documents/mongodb_schema/Ads.json`](../../sample_documents/mongodb_schema/Ads.json), [`sample_documents/mongodb_schema/Ad_profiles.json`](../../sample_documents/mongodb_schema/Ad_profiles.json)  
 **Related:** [`posts-profiles-schema-v3.md`](./posts-profiles-schema-v3.md) (shared formulas, `case_events`, AI/review field shapes)
 
 ---
@@ -14,7 +14,7 @@ Ads are **not** Posts. They have different identity (`ad_archive_id`), carousel/
 | Collection | Role |
 |------------|------|
 | `Ads` | Canonical ad document (`schema_version: 3`) — client queries this name |
-| `ad_profiles` | Advertiser / page document; no embedded `ads[]` |
+| `Ad_profiles` | Advertiser / page document; no embedded `ads[]` |
 | `case_events` | Reused; `entity_type: "ad"` \| `"ad_profile"` |
 
 Do **not** write ads into `Posts` / `profiles`.
@@ -32,7 +32,7 @@ Do **not** write ads into `Posts` / `profiles`.
 | `source` | e.g. `meta_ads_library` |
 | `platform_ad_id` | Meta `ad_archive_id` (stable ID) |
 | `original_url` | Ads Library permalink |
-| `ad_profile_id` | Resolve/create `ad_profiles`, then set FK |
+| `ad_profile_id` | Resolve/create `Ad_profiles`, then set FK |
 | `advertiser_snapshot.*` | Page snapshot at ingest |
 | `content.*` | Creative after S3 media copy (see below) |
 | `ad_delivery.*` | Delivery / compliance metadata from the source |
@@ -92,7 +92,7 @@ Reuse from posts contract:
   source,                      // "meta_ads_library" | …
   platform_ad_id,              // Meta ad_archive_id
   original_url,
-  ad_profile_id,               // ObjectId → ad_profiles
+  ad_profile_id,               // ObjectId → Ad_profiles
 
   workflow: {
     ai_status, review_status, client_status,
@@ -195,7 +195,7 @@ ad-images/{tenantDbName}/{adId}/{timestamp}-{filename}
 
 Set `system.s3_stored: true` when ingest persisted media.
 
-### `ad_profiles` (v3)
+### `Ad_profiles` (v3)
 
 ```js
 {
@@ -251,7 +251,7 @@ Creative edits from Review Ads should insert `event_type: "content_updated"`.
 - Filter: `{ platform: 1, "list.is_active": 1, "list.start_date": -1 }`
 - FK: `{ ad_profile_id: 1 }`
 
-**ad_profiles**
+**Ad_profiles**
 
 - Unique: `{ platform: 1, platform_page_id: 1 }`
 - Review: `{ "workflow.review_status": 1, "list.max_threat_score": -1 }`
@@ -263,8 +263,8 @@ Creative edits from Review Ads should insert `event_type: "content_updated"`.
 | Route | Status |
 |-------|--------|
 | `/review-ads` | Implemented — reviewer queue + content edit |
+| `/review-ad-profiles` | Implemented — reviewer queue + associated ads |
+| `/ad-profiles` | Implemented — client list (reviewed advertisers) |
 | `/ads` | Deferred |
-| `/review-ad-profiles` | Deferred (schema ready for ingest) |
-| `/ad-profiles` | Deferred |
 
 AI run/correction against `collection_name: "ads"` requires worker support; until then the client may omit or disable Run AI for ads.

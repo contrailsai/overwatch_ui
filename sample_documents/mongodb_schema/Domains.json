@@ -1,0 +1,72 @@
+{
+  "_id": { "$oid": "6c0000000000000000000001" },
+  "schema_version": 1,
+  "domain_name": "iknroling.com",
+  "discovery": {
+    "first_entity_type": "ad",
+    "first_entity_id": { "$oid": "6b0000000000000000000001" },
+    "first_seen_url": "http://iknroling.com/?content_id=3",
+    "occurrences": [
+      {
+        "entity_type": "ad",
+        "entity_id": { "$oid": "6b0000000000000000000001" },
+        "url": "http://iknroling.com/?content_id=3",
+        "seen_at": { "$date": "2026-08-13T06:30:00.000Z" }
+      },
+      {
+        "entity_type": "ad",
+        "entity_id": { "$oid": "6b0000000000000000000001" },
+        "url": "http://iknroling.com/?content_id=5",
+        "seen_at": { "$date": "2026-08-13T06:30:00.000Z" }
+      }
+    ]
+  },
+  "workflow": {
+    "analysis_status": "pending",
+    "review_status": "pending",
+    "client_status": "open",
+    "visibility_status": "unknown",
+    "takedown_status": "none",
+    "alerted_at": null
+  },
+  "list": {
+    "ai_threat_score": null,
+    "review_threat_score": null,
+    "effective_threat_score": null,
+    "risk_rank": null,
+    "threat_types": [],
+    "violation_flags": [],
+    "category": null,
+    "registrar": null,
+    "hosting_provider": null,
+    "hosting_country": null,
+    "is_reachable": null,
+    "ssl_valid": null,
+    "first_seen_at": { "$date": "2026-08-13T06:30:00.000Z" },
+    "last_seen_at": { "$date": "2026-08-13T06:30:00.000Z" },
+    "last_analyzed_at": null,
+    "reviewed_at": null,
+    "occurrence_count": 2
+  },
+  "analysis_results": {},
+  "review_details": {},
+  "analysis_correction_request": {},
+  "takedown": {
+    "status": "none",
+    "initiated_at": null,
+    "completed_at": null,
+    "notes": [],
+    "documents": []
+  },
+  "client_notes": [],
+  "ingestion": {
+    "type": "ad_link_extraction",
+    "source_url": "http://iknroling.com/?content_id=3",
+    "ingested_at": { "$date": "2026-08-13T06:30:00.000Z" }
+  },
+  "system": {
+    "created_at": { "$date": "2026-08-13T06:30:00.000Z" },
+    "updated_at": { "$date": "2026-08-13T06:30:00.000Z" }
+  },
+  "content_reviewed_by": null
+}

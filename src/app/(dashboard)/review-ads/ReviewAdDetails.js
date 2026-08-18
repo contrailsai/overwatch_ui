@@ -1,8 +1,8 @@
 'use client'
 
 import * as React from 'react'
+import Link from 'next/link'
 import { useState, useEffect, useActionState, useRef } from 'react'
-import { format } from 'date-fns'
 import {
   submitAdReview,
   updateAdContent,
@@ -17,7 +17,8 @@ import { REVIEW_IMAGE_MAX_BYTES, formatUploadSizeLimit } from '@/utils/aws/uploa
 import { buildReviewFormDefaults } from '@/utils/analysis/correctionRequestUtils'
 import {
   Loader2, X, CheckCircle, ExternalLink, ChevronLeft, ChevronRight,
-  Plus, Trash2, Upload, Pencil, Save, Eye, EyeOff, Megaphone,
+  Plus, Trash2, Upload, Pencil, Save, Eye, Megaphone, CalendarDays,
+  ChevronDown, ChevronUp, Bot, Globe, AlertCircle,
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -28,15 +29,35 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { cn } from '@/lib/utils'
-import { getRiskLabel } from '@/app/(dashboard)/cases/riskBuckets'
+import {
+  formatDisplayFormat,
+  formatAdDate,
+  getAdCreativeFields,
+  getAdImpressions,
+  isTemplatePlaceholder,
+} from '@/lib/ads/ad-display'
+
+function InfoRow({ label, children, multiline = false }) {
+  if (children == null || children === '') return null
+  return (
+    <div className={cn('grid gap-1', multiline ? 'sm:grid-cols-1' : 'sm:grid-cols-[110px_1fr] sm:gap-3')}>
+      <dt className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400 pt-0.5">
+        {label}
+      </dt>
+      <dd className={cn('text-sm text-slate-800', multiline && 'whitespace-pre-wrap leading-relaxed')}>
+        {children}
+      </dd>
+    </div>
+  )
+}
 
 const initialState = { success: false, error: null }
 
-const RISK_PRESETS = [
-  { label: 'Safe', score: 20 },
-  { label: 'Low', score: 55 },
-  { label: 'Medium', score: 85 },
-  { label: 'High', score: 98 },
+const RISK_LEVELS = [
+  { label: 'Safe', val: 0, active: (score) => score < 41, color: 'bg-emerald-500 border-emerald-600 shadow-emerald-200' },
+  { label: 'Low Risk', val: 41, active: (score) => score > 40 && score < 76, color: 'bg-amber-400 border-amber-500 shadow-amber-200' },
+  { label: 'Medium Risk', val: 76, active: (score) => score > 75 && score < 96, color: 'bg-orange-400 border-orange-500 shadow-orange-200' },
+  { label: 'High Risk', val: 96, active: (score) => score > 95, color: 'bg-rose-500 border-rose-600 shadow-rose-200' },
 ]
 
 function emptyCard() {
@@ -82,6 +103,8 @@ export default function ReviewAdForm({
   const [toast, setToast] = useState(null)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [showViolations, setShowViolations] = useState(true)
+  const [showPOI, setShowPOI] = useState(true)
   const fileInputRef = useRef(null)
 
   // Verdict form state
@@ -162,7 +185,13 @@ export default function ReviewAdForm({
     localAd?.signedImageUrl ||
     localAd?.content?.media?.[0]?.signedUrl
 
-  const risk = getRiskLabel(threatScore)
+  const creative = getAdCreativeFields(localAd, currentCard)
+  const impressions = getAdImpressions(localAd)
+  const formatLabel = formatDisplayFormat(localAd?.list?.display_format || localAd?.content?.display_format)
+  const startDateLabel = formatAdDate(localAd.start_date || localAd.list?.start_date)
+  const endDateLabel = formatAdDate(localAd.end_date || localAd.list?.end_date)
+  const sourcedLabel = formatAdDate(localAd.sourcing_date)
+  const platforms = localAd.list?.publisher_platforms || localAd.ad_delivery?.publisher_platforms || []
 
   const startEditContent = () => {
     setContentDraft({
@@ -350,13 +379,13 @@ export default function ReviewAdForm({
     onClose?.()
   }
 
-  const toggleLabel = (name) => {
+  const toggleThreatType = (name) => {
     setThreatTypes((prev) =>
       prev.includes(name) ? prev.filter((x) => x !== name) : [...prev, name],
     )
   }
 
-  const toggleLegal = (code) => {
+  const toggleLegalCode = (code) => {
     setSelectedLegalCodes((prev) => {
       const exists = prev.find((c) => c.code === code)
       if (exists) return prev.filter((c) => c.code !== code)
@@ -364,8 +393,32 @@ export default function ReviewAdForm({
     })
   }
 
+  const updateLegalCodeReasoning = (code, reasoning) => {
+    setSelectedLegalCodes((prev) =>
+      prev.map((c) => (c.code === code ? { ...c, reasoning } : c)),
+    )
+  }
+
+  const handleAddPoi = () => {
+    const v = poiInput.trim()
+    if (!v) return
+    if (!poiNames.includes(v)) setPoiNames([...poiNames, v])
+    setPoiInput('')
+  }
+
+  const labelNames = projectLabels
+    .map((label) => (typeof label === 'string' ? label : label?.name))
+    .filter(Boolean)
+
+  const legalCodeNames = projectLegalCodes
+    .map((item) => (typeof item === 'string' ? item : item?.name || item?.code))
+    .filter(Boolean)
+
+  const hasReview = localAd?.workflow?.review_status === 'reviewed'
+    || localAd?.review_details?.threat_score != null
+
   return (
-    <div className="flex flex-col h-full overflow-hidden relative">
+    <div className="flex flex-col flex-1 min-h-0 h-full overflow-hidden relative">
       {toast && (
         <div
           className={cn(
@@ -388,21 +441,33 @@ export default function ReviewAdForm({
           </Button>
         </div>
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <h2 className="text-base font-semibold text-slate-900 truncate">
-              {localAd.page_name || 'Advertiser'}
-            </h2>
-            <Badge variant="outline" className="text-[10px] shrink-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            {localAd.ad_profile_id ? (
+              <Link
+                href={`/review-ad-profiles?profile_id=${localAd.ad_profile_id}`}
+                className="text-base font-semibold text-slate-900 truncate hover:text-blue-700 hover:underline"
+              >
+                {localAd.page_name || 'Advertiser'}
+              </Link>
+            ) : (
+              <h2 className="text-base font-semibold text-slate-900 truncate">
+                {localAd.page_name || 'Advertiser'}
+              </h2>
+            )}
+            <Badge variant="outline" className="text-[10px] shrink-0 capitalize">
               {localAd.platform}
             </Badge>
-            {localAd.list?.display_format && (
-              <Badge variant="outline" className="text-[10px] shrink-0">
-                {localAd.list.display_format}
-              </Badge>
+            {formatLabel && (
+              <span
+                className="text-[11px] text-slate-500 shrink-0"
+                title={localAd.list?.display_format || undefined}
+              >
+                {formatLabel}
+              </span>
             )}
           </div>
           <p className="text-xs text-slate-500 truncate">
-            ID {localAd.platform_ad_id}
+            Ad ID {localAd.platform_ad_id}
             {localAd.original_url && (
               <>
                 {' · '}
@@ -423,10 +488,9 @@ export default function ReviewAdForm({
         </Button>
       </div>
 
-      <div className="flex-1 overflow-y-auto">
-        <div className="grid lg:grid-cols-2 gap-0 min-h-full">
+      <div className="flex-1 min-h-0 overflow-y-auto lg:overflow-hidden flex flex-col lg:flex-row lg:divide-x divide-slate-200">
           {/* Preview + content */}
-          <div className="p-4 space-y-4 border-b lg:border-b-0 lg:border-r border-slate-200 bg-white">
+          <div className="shrink-0 lg:flex-1 lg:min-h-0 lg:overflow-y-auto p-4 space-y-4 bg-white">
             <div className="rounded-xl overflow-hidden border border-slate-200 bg-slate-50 aspect-square max-h-[420px] flex items-center justify-center relative">
               {previewUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -479,14 +543,17 @@ export default function ReviewAdForm({
               </div>
             )}
 
-            <div className="space-y-2 text-sm">
-              <div className="flex items-start justify-between gap-2">
+            <div className="rounded-2xl border border-slate-200 bg-[#fbfcfd] p-4 space-y-4">
+              <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="font-semibold text-slate-900">
-                    {currentCard?.title || localAd.content?.title || '—'}
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+                    Ad creative
                   </p>
-                  <p className="text-slate-600 mt-1 whitespace-pre-wrap">
-                    {currentCard?.body || localAd.content?.body || localAd.content?.caption || '—'}
+                  <p className="text-xs text-slate-500 mt-1">
+                    {cards.length > 1
+                      ? `Card ${Math.min(activeCard, cards.length - 1) + 1} of ${cards.length}`
+                      : 'Single creative'}
+                    {formatLabel ? ` · ${formatLabel}` : ''}
                   </p>
                 </div>
                 {!editingContent && (
@@ -496,32 +563,103 @@ export default function ReviewAdForm({
                 )}
               </div>
 
-              <div className="flex flex-wrap gap-1.5">
-                {(localAd.list?.publisher_platforms || localAd.ad_delivery?.publisher_platforms || []).map((p) => (
-                  <Badge key={p} variant="outline" className="text-[10px]">{p}</Badge>
-                ))}
-                {localAd.list?.impressions_text && (
-                  <Badge variant="outline" className="text-[10px]">
-                    Impressions {localAd.list.impressions_text}
-                  </Badge>
-                )}
-                {localAd.start_date && (
-                  <Badge variant="outline" className="text-[10px]">
-                    Start {format(new Date(localAd.start_date), 'dd MMM yyyy')}
-                  </Badge>
-                )}
+              <dl className="space-y-3.5">
+                <InfoRow label="Title">
+                  {creative.title || (
+                    <span className="text-slate-400 italic">
+                      {isTemplatePlaceholder(currentCard?.title || localAd.content?.title)
+                        ? 'Dynamic product placeholder (no fixed title)'
+                        : 'No title'}
+                    </span>
+                  )}
+                </InfoRow>
+                <InfoRow label="Content text" multiline>
+                  {creative.body}
+                </InfoRow>
+                <InfoRow label="Caption / display">
+                  {creative.caption}
+                </InfoRow>
+                <InfoRow label="Link description" multiline>
+                  {creative.linkDescription}
+                </InfoRow>
+                <InfoRow label="Call to action">
+                  {creative.cta
+                    ? (
+                      <span>
+                        {creative.cta}
+                        {creative.ctaType ? (
+                          <span className="text-slate-400"> · {String(creative.ctaType).replace(/_/g, ' ')}</span>
+                        ) : null}
+                      </span>
+                    )
+                    : null}
+                </InfoRow>
+                <InfoRow label="Destination">
+                  {creative.linkUrl ? (
+                    <a
+                      href={creative.linkUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-blue-600 break-all inline-flex items-start gap-1 hover:underline"
+                    >
+                      <span>{creative.linkUrl}</span>
+                      <ExternalLink className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                    </a>
+                  ) : null}
+                </InfoRow>
+              </dl>
+
+              <Separator />
+
+              <div className="grid sm:grid-cols-2 gap-3">
+                <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400 flex items-center gap-1.5">
+                    <Eye className="h-3.5 w-3.5" /> Impressions
+                  </p>
+                  <p className="text-lg font-semibold text-slate-900 tabular-nums mt-1">
+                    {impressions.text || '—'}
+                  </p>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    Estimated reach from Ads Library
+                    {impressions.index != null ? ` · band ${impressions.index}` : ''}
+                  </p>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400 flex items-center gap-1.5">
+                    <CalendarDays className="h-3.5 w-3.5" /> Schedule
+                  </p>
+                  <div className="mt-1.5 space-y-1 text-sm text-slate-800">
+                    <p>
+                      <span className="text-slate-400 text-xs mr-2">Started</span>
+                      {startDateLabel || '—'}
+                    </p>
+                    <p>
+                      <span className="text-slate-400 text-xs mr-2">Ends</span>
+                      {endDateLabel || '—'}
+                    </p>
+                    {sourcedLabel && (
+                      <p>
+                        <span className="text-slate-400 text-xs mr-2">Sourced</span>
+                        {sourcedLabel}
+                      </p>
+                    )}
+                  </div>
+                </div>
               </div>
 
-              {(currentCard?.link_url || localAd.content?.link_url) && (
-                <a
-                  href={currentCard?.link_url || localAd.content?.link_url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-xs text-blue-600 break-all inline-flex items-center gap-1"
-                >
-                  {currentCard?.link_url || localAd.content?.link_url}
-                  <ExternalLink className="h-3 w-3 shrink-0" />
-                </a>
+              {platforms.length > 0 && (
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400 mb-2">
+                    Publisher platforms
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {platforms.map((p) => (
+                      <Badge key={p} variant="outline" className="text-[10px] font-medium">
+                        {p}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
               )}
             </div>
 
@@ -695,8 +833,27 @@ export default function ReviewAdForm({
             )}
           </div>
 
-          {/* Verdict form */}
-          <form action={formAction} className="p-4 space-y-5 bg-slate-50/80">
+          {/* Review form — aligned with /review-cases ReviewDetails */}
+          <form action={formAction} className="shrink-0 w-full lg:flex-1 lg:min-h-0 lg:overflow-y-auto p-5 md:p-6 space-y-6 bg-white border-t lg:border-t-0">
+            {Array.from(new Set([...labelNames, ...threatTypes])).map((labelName, index) => (
+              <input
+                key={`flag_${index}`}
+                type="hidden"
+                name={`flag_${labelName}`}
+                value={threatTypes.includes(labelName) ? 'on' : 'off'}
+              />
+            ))}
+            {Array.from(new Set([...legalCodeNames, ...selectedLegalCodes.map((c) => c.code)])).map((codeName, index) => {
+              const selected = selectedLegalCodes.find((c) => c.code === codeName)
+              return (
+                <React.Fragment key={`legal_${index}`}>
+                  <input type="hidden" name={`legal_code_${codeName}`} value={selected ? 'on' : 'off'} />
+                  {selected && (
+                    <input type="hidden" name={`legal_reasoning_${codeName}`} value={selected.reasoning || ''} />
+                  )}
+                </React.Fragment>
+              )
+            })}
             <input type="hidden" name="mongo_id" value={localAd._id} />
             <input type="hidden" name="threat_score" value={threatScore} />
             <input type="hidden" name="reasoning" value={reasoningText} />
@@ -706,205 +863,340 @@ export default function ReviewAdForm({
             <input type="hidden" name="face_present" value={facePresent ? 'on' : 'off'} />
             <input type="hidden" name="name_present" value={namePresent ? 'on' : 'off'} />
             <input type="hidden" name="is_aigc" value={isAIGC ? 'on' : 'off'} />
-            {threatTypes.map((t) => (
-              <input key={t} type="hidden" name={`flag_${t}`} value="on" />
-            ))}
-            {selectedLegalCodes.map((c) => (
-              <React.Fragment key={c.code}>
-                <input type="hidden" name={`legal_code_${c.code}`} value="on" />
-                <input type="hidden" name={`legal_reasoning_${c.code}`} value={c.reasoning || ''} />
-              </React.Fragment>
-            ))}
 
-            <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2">
-              <div className="flex items-center gap-2 text-sm">
-                {visibilityOnline ? <Eye className="h-4 w-4 text-emerald-600" /> : <EyeOff className="h-4 w-4 text-slate-400" />}
-                <span className="font-medium">{visibilityOnline ? 'Online / available' : 'Taken down'}</span>
-              </div>
-              <Switch checked={visibilityOnline} onCheckedChange={handleVisibilityToggle} />
-            </div>
-
-            <div className="rounded-lg border border-slate-200 bg-white p-3 space-y-3">
-              <div className="flex items-center justify-between">
-                <Label className="text-sm font-semibold">Risk verdict</Label>
-                <Badge className={cn('border', risk.color)}>{risk.label} · {threatScore}</Badge>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {RISK_PRESETS.map((p) => (
-                  <Button
-                    key={p.label}
-                    type="button"
-                    size="sm"
-                    variant={threatScore === p.score ? 'default' : 'outline'}
-                    onClick={() => setThreatScore(p.score)}
-                  >
-                    {p.label}
-                  </Button>
-                ))}
-              </div>
-              <Input
-                type="number"
-                min={0}
-                max={100}
-                value={threatScore}
-                onChange={(e) => setThreatScore(Number(e.target.value) || 0)}
-              />
-            </div>
-
-            <div className="rounded-lg border border-slate-200 bg-white p-3 space-y-3">
-              <Label className="text-sm font-semibold">Violations</Label>
-              <div className="flex flex-wrap gap-2">
-                {projectLabels.map((label) => {
-                  const name = typeof label === 'string' ? label : label?.name
-                  if (!name) return null
-                  const active = threatTypes.includes(name)
-                  return (
-                    <button
-                      key={name}
-                      type="button"
-                      onClick={() => toggleLabel(name)}
-                      className={cn(
-                        'text-xs px-2.5 py-1 rounded-full border transition-colors',
-                        active
-                          ? 'bg-blue-600 text-white border-blue-600'
-                          : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300',
-                      )}
-                    >
-                      {name}
-                    </button>
-                  )
-                })}
-                {projectLabels.length === 0 && (
-                  <p className="text-xs text-slate-500">No project labels configured.</p>
+            {/* 1. Visibility */}
+            <section className="space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-bold">1</span>
+                  <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Visibility Status</h3>
+                </div>
+                {hasReview && (
+                  <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 gap-1.5">
+                    <CheckCircle className="w-3.5 h-3.5" /> Reviewed
+                  </Badge>
                 )}
               </div>
-              <div className="flex items-center gap-2">
-                <Checkbox id="is_aigc" checked={isAIGC} onCheckedChange={(v) => setIsAIGC(Boolean(v))} />
-                <Label htmlFor="is_aigc" className="text-sm">AI-generated content</Label>
-              </div>
-            </div>
-
-            {projectLegalCodes.length > 0 && (
-              <div className="rounded-lg border border-slate-200 bg-white p-3 space-y-3">
-                <Label className="text-sm font-semibold">Legal codes</Label>
-                {projectLegalCodes.map((item) => {
-                  const code = typeof item === 'string' ? item : item.code || item.name
-                  if (!code) return null
-                  const selected = selectedLegalCodes.find((c) => c.code === code)
-                  return (
-                    <div key={code} className="space-y-1.5">
-                      <div className="flex items-center gap-2">
-                        <Checkbox
-                          id={`legal_${code}`}
-                          checked={Boolean(selected)}
-                          onCheckedChange={() => toggleLegal(code)}
-                        />
-                        <Label htmlFor={`legal_${code}`} className="text-sm">{code}</Label>
-                      </div>
-                      {selected && (
-                        <Textarea
-                          rows={2}
-                          placeholder="Reasoning"
-                          value={selected.reasoning || ''}
-                          onChange={(e) =>
-                            setSelectedLegalCodes((prev) =>
-                              prev.map((c) =>
-                                c.code === code ? { ...c, reasoning: e.target.value } : c,
-                              ),
-                            )
-                          }
-                        />
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-
-            <div className="rounded-lg border border-slate-200 bg-white p-3 space-y-3">
-              <Label className="text-sm font-semibold">POI context</Label>
-              <div className="flex gap-4">
-                <div className="flex items-center gap-2">
-                  <Checkbox checked={facePresent} onCheckedChange={(v) => setFacePresent(Boolean(v))} id="face" />
-                  <Label htmlFor="face" className="text-sm">Face present</Label>
+              <div className="bg-slate-50 rounded-xl p-4 border border-slate-200 shadow-sm flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className={cn(
+                    'w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all shadow-inner',
+                    visibilityOnline
+                      ? 'bg-emerald-50 border-emerald-100 text-emerald-600'
+                      : 'bg-slate-100 border-slate-200 text-slate-400',
+                  )}>
+                    {visibilityOnline ? <Globe className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-slate-900">
+                      {visibilityOnline ? 'Online' : 'Taken Down'}
+                    </p>
+                    <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">
+                      Current status on source
+                    </p>
+                  </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Checkbox checked={namePresent} onCheckedChange={(v) => setNamePresent(Boolean(v))} id="name" />
-                  <Label htmlFor="name" className="text-sm">Name present</Label>
+                  <span className={cn('text-[10px] font-bold uppercase tracking-widest', !visibilityOnline ? 'text-slate-900' : 'text-slate-400')}>
+                    Down
+                  </span>
+                  <Switch checked={visibilityOnline} onCheckedChange={handleVisibilityToggle} />
+                  <span className={cn('text-[10px] font-bold uppercase tracking-widest', visibilityOnline ? 'text-slate-900' : 'text-slate-400')}>
+                    Online
+                  </span>
                 </div>
               </div>
-              <div className="flex gap-2">
-                <Input
-                  placeholder="Add POI name"
-                  value={poiInput}
-                  onChange={(e) => setPoiInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault()
-                      const v = poiInput.trim()
-                      if (v && !poiNames.includes(v)) setPoiNames([...poiNames, v])
-                      setPoiInput('')
-                    }
-                  }}
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    const v = poiInput.trim()
-                    if (v && !poiNames.includes(v)) setPoiNames([...poiNames, v])
-                    setPoiInput('')
-                  }}
-                >
-                  Add
+            </section>
+
+            {/* 2. Verdict & Risk Level — buckets only */}
+            <section className="space-y-3">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-bold">2</span>
+                <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Verdict & Risk Level</h3>
+              </div>
+              <div className="bg-slate-50 rounded-xl p-4 border border-slate-200 shadow-sm">
+                <div className="flex gap-2">
+                  {RISK_LEVELS.map((level) => {
+                    const isActive = level.active(Number(threatScore) || 0)
+                    return (
+                      <button
+                        key={level.label}
+                        type="button"
+                        onClick={() => setThreatScore(level.val)}
+                        className={cn(
+                          'flex-1 py-2.5 px-2 sm:px-3 rounded-lg border cursor-pointer text-xs sm:text-sm font-bold transition-all',
+                          isActive
+                            ? `${level.color} text-white border-b-0 translate-y-[1px]`
+                            : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300',
+                        )}
+                      >
+                        {level.label}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            </section>
+
+            {/* 3. Violations — checkboxes */}
+            <section className="space-y-3">
+              <div
+                className="flex items-center justify-between mb-1 cursor-pointer group"
+                onClick={() => setShowViolations(!showViolations)}
+              >
+                <div className="flex items-center gap-2">
+                  <span className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-bold">3</span>
+                  <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider group-hover:text-blue-600 transition-colors">
+                    Violations
+                  </h3>
+                </div>
+                <Button type="button" variant="ghost" size="icon" className="h-6 w-6 text-slate-400 group-hover:text-blue-600">
+                  {showViolations ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                 </Button>
               </div>
-              <div className="flex flex-wrap gap-1.5">
-                {poiNames.map((name) => (
-                  <Badge key={name} variant="secondary" className="gap-1">
-                    {name}
-                    <button
-                      type="button"
-                      onClick={() => setPoiNames(poiNames.filter((n) => n !== name))}
-                      className="ml-0.5"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </Badge>
-                ))}
-              </div>
-            </div>
 
-            <div className="rounded-lg border border-slate-200 bg-white p-3 space-y-3">
-              <Label className="text-sm font-semibold">Analysis & notes</Label>
-              <Textarea
-                rows={4}
-                placeholder="Reasoning"
-                value={reasoningText}
-                onChange={(e) => setReasoningText(e.target.value)}
-              />
-              <Textarea
-                rows={2}
-                placeholder="Simple report description"
-                value={simpleReportText}
-                onChange={(e) => setSimpleReportText(e.target.value)}
-              />
-              <Textarea
-                rows={2}
-                placeholder="Internal reviewer comments"
-                value={reviewerComments}
-                onChange={(e) => setReviewerComments(e.target.value)}
-              />
-            </div>
+              {showViolations && (
+                <div className="animate-in slide-in-from-top-2 fade-in duration-200">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <label
+                      className={cn(
+                        'col-span-1 sm:col-span-2 flex items-center justify-between p-3.5 rounded-xl border-2 cursor-pointer transition-all duration-200 group',
+                        isAIGC
+                          ? 'bg-blue-50/50 border-blue-200 shadow-sm ring-1 ring-blue-100'
+                          : 'bg-slate-50/30 border-slate-200 hover:border-blue-200 hover:bg-white',
+                      )}
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className={cn(
+                          'w-9 h-9 rounded-lg flex items-center justify-center transition-colors',
+                          isAIGC ? 'bg-blue-100 text-blue-600' : 'bg-slate-100 text-slate-400',
+                        )}>
+                          <Bot className="w-5 h-5" />
+                        </div>
+                        <span className={cn('text-xs font-bold uppercase tracking-wider', isAIGC ? 'text-blue-900' : 'text-slate-500')}>
+                          AI Generated Content
+                        </span>
+                      </div>
+                      <Checkbox
+                        checked={isAIGC}
+                        onCheckedChange={(checked) => setIsAIGC(Boolean(checked))}
+                        className={cn('w-5 h-5 border-2', isAIGC ? 'bg-blue-600 border-blue-600' : 'border-slate-300')}
+                      />
+                    </label>
+
+                    {labelNames.map((name) => (
+                      <label
+                        key={name}
+                        className={cn(
+                          'flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all hover:shadow-sm',
+                          threatTypes.includes(name)
+                            ? 'bg-blue-50 border-blue-200 ring-1 ring-blue-200'
+                            : 'bg-white border-slate-200 hover:border-blue-200',
+                        )}
+                      >
+                        <Checkbox
+                          checked={threatTypes.includes(name)}
+                          onCheckedChange={() => toggleThreatType(name)}
+                          className="border-slate-300 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
+                        />
+                        <span className={cn(
+                          'text-xs font-bold uppercase',
+                          threatTypes.includes(name) ? 'text-blue-700' : 'text-slate-600',
+                        )}>
+                          {name}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+
+                  {labelNames.length === 0 && (
+                    <p className="text-xs text-slate-500 mt-2">No project labels configured.</p>
+                  )}
+
+                  {legalCodeNames.length > 0 && (
+                    <div className="pt-4">
+                      <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">
+                        Legal Framework Codes
+                      </h4>
+                      <div className="grid grid-cols-1 gap-3">
+                        {legalCodeNames.map((code) => {
+                          const selected = selectedLegalCodes.find((c) => c.code === code)
+                          const isSelected = Boolean(selected)
+                          return (
+                            <div
+                              key={code}
+                              className={cn(
+                                'flex flex-col gap-2 p-3 rounded-lg border transition-all hover:shadow-sm',
+                                isSelected
+                                  ? 'bg-purple-50 border-purple-200 ring-1 ring-purple-200'
+                                  : 'bg-white border-slate-200 hover:border-purple-200',
+                              )}
+                            >
+                              <label className="flex items-center gap-3 cursor-pointer">
+                                <Checkbox
+                                  checked={isSelected}
+                                  onCheckedChange={() => toggleLegalCode(code)}
+                                  className="border-slate-300 data-[state=checked]:bg-purple-600 data-[state=checked]:border-purple-600"
+                                />
+                                <span className={cn(
+                                  'text-xs font-bold uppercase',
+                                  isSelected ? 'text-purple-700' : 'text-slate-600',
+                                )}>
+                                  {code}
+                                </span>
+                              </label>
+                              {isSelected && (
+                                <Textarea
+                                  value={selected.reasoning || ''}
+                                  onChange={(e) => updateLegalCodeReasoning(code, e.target.value)}
+                                  placeholder={`Provide reasoning for selecting ${code}...`}
+                                  className="mt-1 text-sm bg-white border-purple-200 min-h-[60px]"
+                                />
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </section>
+
+            {/* 4. POI Context */}
+            <section className="space-y-3">
+              <div
+                className="flex items-center justify-between mb-1 cursor-pointer group"
+                onClick={() => setShowPOI(!showPOI)}
+              >
+                <div className="flex items-center gap-2">
+                  <span className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-bold">4</span>
+                  <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider group-hover:text-blue-600 transition-colors">
+                    POI Context
+                  </h3>
+                </div>
+                <Button type="button" variant="ghost" size="icon" className="h-6 w-6 text-slate-400 group-hover:text-blue-600">
+                  {showPOI ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                </Button>
+              </div>
+
+              {showPOI && (
+                <div className="bg-slate-50 rounded-xl p-4 border border-slate-200 space-y-4 animate-in slide-in-from-top-2 fade-in duration-200">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="flex items-center justify-between bg-white p-3 rounded-lg border border-slate-200">
+                      <Label htmlFor="face-present" className="text-sm font-semibold text-slate-700 cursor-pointer">
+                        Face Detected
+                      </Label>
+                      <Switch id="face-present" checked={facePresent} onCheckedChange={setFacePresent} />
+                    </div>
+                    <div className="flex items-center justify-between bg-white p-3 rounded-lg border border-slate-200">
+                      <Label htmlFor="name-present" className="text-sm font-semibold text-slate-700 cursor-pointer">
+                        Name Mentioned
+                      </Label>
+                      <Switch id="name-present" checked={namePresent} onCheckedChange={setNamePresent} />
+                    </div>
+                  </div>
+
+                  <Separator className="bg-slate-200" />
+
+                  <div className="space-y-3">
+                    <Label className="text-xs font-bold text-slate-500 uppercase">Tagged Subjects</Label>
+                    <div className="flex flex-wrap gap-2 min-h-[32px] items-center">
+                      {poiNames.map((name) => (
+                        <Badge
+                          key={name}
+                          variant="secondary"
+                          className="pl-2.5 pr-1 py-1 h-7 bg-white border border-blue-200 text-blue-700 shadow-sm flex items-center gap-1"
+                        >
+                          {name}
+                          <button
+                            type="button"
+                            onClick={() => setPoiNames(poiNames.filter((n) => n !== name))}
+                            className="hover:bg-red-50 hover:text-red-600 rounded-full p-0.5 transition-colors"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </Badge>
+                      ))}
+                      {poiNames.length === 0 && (
+                        <span className="text-xs text-slate-400 italic">No tags added</span>
+                      )}
+                    </div>
+                    <div className="flex gap-2">
+                      <Input
+                        value={poiInput}
+                        onChange={(e) => setPoiInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault()
+                            handleAddPoi()
+                          }
+                        }}
+                        placeholder="Add subject name..."
+                        className="h-9 bg-white text-sm"
+                      />
+                      <Button
+                        type="button"
+                        onClick={handleAddPoi}
+                        size="sm"
+                        className="h-9 px-4 bg-white border border-slate-300 text-slate-700 hover:bg-slate-50"
+                      >
+                        <Plus className="w-4 h-4 mr-1" /> Add
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </section>
+
+            {/* 5. Analysis & notes */}
+            <section className="space-y-4 pt-2">
+              <div className="space-y-2">
+                <Label className="text-xs font-bold text-slate-500 uppercase">Reasoning</Label>
+                <Textarea
+                  value={reasoningText}
+                  onChange={(e) => setReasoningText(e.target.value)}
+                  placeholder="Enter your analysis reasoning here..."
+                  className="min-h-[100px] bg-slate-50 border-slate-200 text-sm focus:bg-white transition-colors resize-y"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs font-bold text-slate-500 uppercase">Simple Reasoning</Label>
+                <Textarea
+                  value={simpleReportText}
+                  onChange={(e) => setSimpleReportText(e.target.value)}
+                  placeholder="Concise summary for reports..."
+                  className="min-h-[80px] bg-slate-50 border-slate-200 text-sm focus:bg-white transition-colors resize-y"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs font-bold text-slate-500 uppercase">
+                  Reviewer Comments
+                  <span className="ml-2 text-[10px] font-medium normal-case tracking-normal text-slate-400">
+                    (internal only)
+                  </span>
+                </Label>
+                <Textarea
+                  value={reviewerComments}
+                  onChange={(e) => setReviewerComments(e.target.value)}
+                  placeholder="Internal notes..."
+                  className="min-h-[70px] bg-slate-50 border-slate-200 text-sm focus:bg-white transition-colors resize-y"
+                />
+              </div>
+            </section>
 
             {state?.error && (
               <p className="text-sm text-rose-600">{state.error}</p>
             )}
 
-            <div className="flex flex-wrap gap-2 pb-6">
-              <Button type="submit" disabled={isPending} className="gap-1.5">
-                {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : showSuccess ? <CheckCircle className="h-4 w-4" /> : null}
-                {localAd.workflow?.review_status === 'reviewed' ? 'Update Review' : 'Submit Review'}
+            <div className="flex flex-wrap gap-2 pb-4 pt-2 border-t border-slate-100">
+              <Button type="submit" disabled={isPending} className="gap-1.5 min-w-[140px]">
+                {isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : showSuccess ? (
+                  <CheckCircle className="h-4 w-4" />
+                ) : null}
+                {hasReview ? 'Update Review' : 'Submit Review'}
               </Button>
               <Button
                 type="button"
@@ -916,7 +1208,6 @@ export default function ReviewAdForm({
               </Button>
             </div>
           </form>
-        </div>
       </div>
 
       {showDeleteModal && (

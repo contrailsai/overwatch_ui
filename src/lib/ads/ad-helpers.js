@@ -10,6 +10,7 @@ import {
   toIsoDate,
   ONLINE_VISIBILITY_VALUES,
   insertCaseEvent,
+  mapV3ClientStatusToUi,
 } from '@/utils/mongodb/v3-schema'
 import { RISK_THRESHOLDS } from '@/app/(dashboard)/cases/riskBuckets'
 
@@ -71,6 +72,67 @@ async function fetchAdCaseEvents(db, adId) {
     event_type: event.event_type,
     payload: serializeForClient(event.payload) ?? null,
   }))
+}
+
+export function buildNormalizedAdProfileForUi(profile, { signedProfilePic = null } = {}) {
+  const enrichment = profile?.enrichment || {}
+  const profileRisk =
+    profile?.list?.risk_rank ?? profile?.list?.risk ?? profile?.review_details?.risk ?? null
+  const pageName =
+    profile?.page_name || profile?.display_name || profile?.platform_page_id || 'Unknown advertiser'
+
+  return {
+    _id: profile._id.toString(),
+    schema_version: profile.schema_version ?? 3,
+    platform: profile?.platform ? String(profile.platform).toLowerCase() : 'meta',
+    platform_page_id: profile?.platform_page_id || null,
+    page_name: pageName,
+    display_name: pageName,
+    profile_url: profile?.profile_url || null,
+    is_verified: profile?.is_verified ?? false,
+    review_details: serializeForClient({
+      ...(profile?.review_details || {}),
+      risk: profileRisk,
+    }),
+    client_status: mapV3ClientStatusToUi(profile?.workflow?.client_status),
+    client_notes: serializeForClient(profile?.client_notes) ?? [],
+    last_relevant_publish_date: toIsoDate(profile?.list?.last_active_at),
+    ads_count: profile?.list?.ad_count ?? 0,
+    cases_count: profile?.list?.ad_count ?? 0,
+    list: serializeForClient(profile?.list) ?? null,
+    workflow: serializeForClient(profile?.workflow) ?? null,
+    enrichment: serializeForClient(enrichment) ?? null,
+    metadata: serializeForClient({
+      display_name: pageName,
+      username: profile?.platform_page_id || null,
+      profile_url: profile?.profile_url || null,
+      follower_count: profile?.list?.follower_count ?? enrichment.page_like_count ?? null,
+      location: profile?.list?.location ?? null,
+      s3_url: enrichment.profile_pic_s3 || null,
+      profile_pic: signedProfilePic,
+      biography: enrichment.biography ?? null,
+      page_categories: enrichment.page_categories || [],
+      page_like_count: enrichment.page_like_count ?? null,
+      page_is_deleted: enrichment.page_is_deleted ?? false,
+      category: Array.isArray(enrichment.page_categories)
+        ? enrichment.page_categories.join(', ')
+        : enrichment.page_categories || null,
+      media_count: profile?.list?.ad_count ?? 0,
+      full_name: pageName,
+    }),
+  }
+}
+
+export async function normalizeAdProfileForUi(profile) {
+  if (!profile) return null
+
+  let signedProfilePic = null
+  const picS3 = profile?.enrichment?.profile_pic_s3
+  if (picS3) {
+    signedProfilePic = await getSignedImageUrl(picS3)
+  }
+
+  return buildNormalizedAdProfileForUi(profile, { signedProfilePic })
 }
 
 export async function normalizeAdForUi(ad, db = null) {

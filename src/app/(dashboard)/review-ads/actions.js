@@ -28,6 +28,10 @@ import {
 } from '@/lib/ads/ad-helpers'
 import { buildEffectiveThreatScoreRange } from '@/utils/mongodb/v3-schema'
 
+function escapeRegex(text) {
+  return String(text).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
 function analysisResultsKeyCountExpr() {
   return { $size: { $objectToArray: { $ifNull: ['$analysis_results', {}] } } }
 }
@@ -46,8 +50,8 @@ function buildReviewAdsMatchQuery(filters = {}) {
     andConditions.push({
       $or: [
         { 'workflow.review_status': 'pending' },
-        { 'list.review_threat_score': { $exists: false } },
-        { 'list.review_threat_score': null },
+        { 'workflow.review_status': { $exists: false } },
+        { 'workflow.review_status': null },
       ],
     })
   } else if (filters.status === 'reviewed') {
@@ -56,9 +60,25 @@ function buildReviewAdsMatchQuery(filters = {}) {
 
   const aiMode = normalizeAiAnalyzedFilter(filters.aiAnalyzed)
   if (aiMode === 'analyzed') {
-    andConditions.push({ $expr: { $gt: [analysisResultsKeyCountExpr(), 0] } })
+    andConditions.push({
+      $or: [
+        { 'workflow.ai_status': 'completed' },
+        { $expr: { $gt: [analysisResultsKeyCountExpr(), 0] } },
+      ],
+    })
   } else if (aiMode === 'not_analyzed') {
-    andConditions.push({ $expr: { $eq: [analysisResultsKeyCountExpr(), 0] } })
+    andConditions.push({
+      $and: [
+        {
+          $or: [
+            { 'workflow.ai_status': 'pending' },
+            { 'workflow.ai_status': { $exists: false } },
+            { 'workflow.ai_status': null },
+          ],
+        },
+        { $expr: { $eq: [analysisResultsKeyCountExpr(), 0] } },
+      ],
+    })
   }
 
   if (filters.platform && filters.platform !== 'all') {
@@ -69,7 +89,10 @@ function buildReviewAdsMatchQuery(filters = {}) {
     const visibilityLower = String(filters.visibility_status).toLowerCase()
     if (visibilityLower === 'down') {
       query['workflow.visibility_status'] = 'down'
-    } else if (ONLINE_VISIBILITY_VALUES.includes(visibilityLower)) {
+    } else if (
+      visibilityLower === 'available' ||
+      ONLINE_VISIBILITY_VALUES.includes(visibilityLower)
+    ) {
       andConditions.push({
         $or: [
           { 'workflow.visibility_status': { $in: ONLINE_VISIBILITY_VALUES } },
@@ -78,6 +101,54 @@ function buildReviewAdsMatchQuery(filters = {}) {
         ],
       })
     }
+  }
+
+  if (filters.is_active === 'true' || filters.is_active === true) {
+    andConditions.push({
+      $or: [
+        { 'list.is_active': true },
+        { 'ad_delivery.is_active': true },
+      ],
+    })
+  } else if (filters.is_active === 'false' || filters.is_active === false) {
+    andConditions.push({
+      $and: [
+        { 'list.is_active': { $ne: true } },
+        { 'ad_delivery.is_active': { $ne: true } },
+      ],
+    })
+  }
+
+  if (filters.display_format && filters.display_format !== 'all') {
+    const format = String(filters.display_format).toUpperCase()
+    andConditions.push({
+      $or: [
+        { 'list.display_format': { $regex: new RegExp(`^${format}$`, 'i') } },
+        { 'content.display_format': { $regex: new RegExp(`^${format}$`, 'i') } },
+      ],
+    })
+  }
+
+  const searchText = String(filters.search || '').trim()
+  if (searchText) {
+    const searchRegex = new RegExp(escapeRegex(searchText), 'i')
+    andConditions.push({
+      $or: [
+        { 'advertiser_snapshot.page_name': { $regex: searchRegex } },
+        { 'content.title': { $regex: searchRegex } },
+        { 'content.body': { $regex: searchRegex } },
+        { 'content.caption': { $regex: searchRegex } },
+        { 'content.link_url': { $regex: searchRegex } },
+        { 'content.link_description': { $regex: searchRegex } },
+        { 'content.cta_text': { $regex: searchRegex } },
+        { 'content.cards.title': { $regex: searchRegex } },
+        { 'content.cards.body': { $regex: searchRegex } },
+        { 'content.cards.caption': { $regex: searchRegex } },
+        { 'content.cards.link_url': { $regex: searchRegex } },
+        { original_url: { $regex: searchRegex } },
+        { platform_ad_id: { $regex: searchRegex } },
+      ],
+    })
   }
 
   if (andConditions.length > 0) {
@@ -118,10 +189,19 @@ function buildReviewAdsDateFilterStage(filters = {}) {
 
 function buildReviewAdsPipelineStages(filters = {}) {
   const { dateFilterStage, hasDateFilters } = buildReviewAdsDateFilterStage(filters)
-  const range = buildEffectiveThreatScoreRange(
-    filters.aiRisk && filters.aiRisk !== 'all' ? String(filters.aiRisk).toLowerCase() : null,
-  )
-  const riskMatch = range ? { $match: { 'list.effective_threat_score': range } } : null
+  const riskKey =
+    filters.aiRisk && filters.aiRisk !== 'all' ? String(filters.aiRisk).toLowerCase() : null
+  const range = buildEffectiveThreatScoreRange(riskKey)
+  const riskMatch = riskKey
+    ? {
+        $match: {
+          $or: [
+            { 'list.risk_rank': riskKey },
+            ...(range ? [{ 'list.effective_threat_score': range }] : []),
+          ],
+        },
+      }
+    : null
 
   return [
     { $match: buildReviewAdsMatchQuery(filters) },

@@ -56,10 +56,13 @@ export default async function ReviewAdsPage({ searchParams }) {
     })(),
     visibility_status: resolvedParams?.visibility_status || 'all',
     aiRisk: resolvedParams?.aiRisk || 'all',
+    is_active: resolvedParams?.is_active || 'all',
+    display_format: resolvedParams?.display_format || 'all',
     sourcingDateStart: resolvedParams?.sourcingDateStart || undefined,
     sourcingDateEnd: resolvedParams?.sourcingDateEnd || undefined,
     startDateStart: resolvedParams?.startDateStart || undefined,
     startDateEnd: resolvedParams?.startDateEnd || undefined,
+    search: resolvedParams?.search || '',
   }
 
   const itemsPerPage = 50
@@ -88,6 +91,7 @@ export default async function ReviewAdsPage({ searchParams }) {
           initialFilters={initialFilters}
           totalCount={totalCount}
           initialAd={initialAd}
+          itemsPerPage={itemsPerPage}
         />
       </div>
     </main>
