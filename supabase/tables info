@@ -7,6 +7,16 @@ create table public.project (
   constraint Project_pkey primary key (project_name)
 ) TABLESPACE pg_default;
 
+-- project.project_details is a JSON bag (no extra columns needed). Known keys:
+--   description     text
+--   labels          [{ name, description, severity }]
+--   legal_codes     [{ actName, codeName, name, description, severity, referenceLink }]
+--   do_takedowns    boolean (omit/true = enabled; false greys out Takedowns)
+--   sections        { posts, ads, domains, feeds } booleans
+--                   omit or true = show that sidebar group + its routes
+--                   false = gray out in sidebar (non-clickable) and 404 the routes
+--                   missing sections object defaults all four to true
+
 create table public.client_details (
   id uuid not null default auth.uid (),
   created_at timestamp with time zone not null default now(),

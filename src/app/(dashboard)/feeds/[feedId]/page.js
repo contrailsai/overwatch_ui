@@ -1,9 +1,11 @@
 import { notFound, redirect } from 'next/navigation'
 import { getClientandProjectDetails } from '@/app/(dashboard)/actions'
 import PageHeader from '@/components/PageHeader'
+import { DisabledSectionFallback } from '@/components/DisabledSectionFallback'
 import { fetch_clients_in_project } from '@/app/(dashboard)/cases/feature_actions'
 import { getPostById } from '@/app/(dashboard)/cases/actions'
 import { buildFeedSlug } from '@/lib/feeds/feed-slug'
+import { isSectionEnabled } from '@/lib/project-sections'
 import { parseCasesListFilters, parseCasesListSort } from '@/lib/posts/pipeline-helpers'
 import { countFeeds, getFeedById, getFeedPosts, getFeedPublishingHistogram } from '../actions'
 import { FeedContentList } from '../FeedContentList'
@@ -23,6 +25,10 @@ export default async function FeedDetailPage({ params, searchParams }) {
   if (!result) return null
 
   const { clientDetails, project } = result
+
+  if (!isSectionEnabled(project, 'feeds')) {
+    return <DisabledSectionFallback />
+  }
 
   if (!clientDetails?.project_name) {
     return (

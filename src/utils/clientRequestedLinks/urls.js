@@ -20,6 +20,21 @@ export function parseUrlsFromText(text) {
 }
 
 /**
+ * Meta Ads ingest is Facebook-only in v1. Used to skip / warn on non-Facebook URLs
+ * when the uploader has selected Ads rather than Posts.
+ */
+export function isMetaAdUrl(raw) {
+  try {
+    const u = new URL(typeof raw === 'string' ? raw.trim() : '')
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return false
+    const host = u.hostname.toLowerCase()
+    return host === 'facebook.com' || host === 'fb.com' || host.endsWith('.facebook.com') || host.endsWith('.fb.com')
+  } catch {
+    return false
+  }
+}
+
+/**
  * Partition an array of raw link strings into valid URLs and invalid entries.
  */
 export function partitionUrls(rawLinks) {

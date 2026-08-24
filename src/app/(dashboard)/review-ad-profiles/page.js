@@ -3,6 +3,8 @@ import { getAdProfiles } from './actions'
 import { getClientandProjectDetails } from '@/app/(dashboard)/actions'
 import { runInSpan } from '@/utils/tracing'
 import PageHeader from '@/components/PageHeader'
+import { isSectionEnabled } from '@/lib/project-sections'
+import { DisabledSectionFallback } from '@/components/DisabledSectionFallback'
 
 export const metadata = {
   title: 'Review Ad Profiles',
@@ -14,6 +16,10 @@ export default async function ReviewAdProfilesPage({ searchParams }) {
     getClientandProjectDetails(),
     searchParams,
   ])
+
+  if (!isSectionEnabled(project, 'ads')) {
+    return <DisabledSectionFallback />
+  }
 
   if (!clientDetails || !clientDetails.project_name || clientDetails.permission !== 'reviewer') {
     return (

@@ -8,6 +8,7 @@ export {
   isValidHttpUrl,
   parseUrlsFromText,
   partitionUrls,
+  isMetaAdUrl,
 } from './urls'
 
 export {

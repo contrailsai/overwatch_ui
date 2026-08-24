@@ -44,19 +44,22 @@ export function getFirstAdMediaS3Url(ad) {
   return media[0]?.s3_url || null
 }
 
-async function signMediaList(media = []) {
-  return Promise.all(
-    media.map(async (m) => {
-      const signed = m?.s3_url ? await getSignedImageUrl(m.s3_url) : null
-      return {
-        ...serializeForClient(m),
-        signedUrl: signed,
-      }
-    }),
+async function signUniqueS3Urls(urls = []) {
+  const unique = [...new Set(urls.filter(Boolean))]
+  const entries = await Promise.all(
+    unique.map(async (url) => [url, await getSignedImageUrl(url)]),
   )
+  return new Map(entries)
 }
 
-async function fetchAdCaseEvents(db, adId) {
+function applySignedMedia(media = [], signedByUrl) {
+  return media.map((m) => ({
+    ...serializeForClient(m),
+    signedUrl: m?.s3_url ? signedByUrl.get(m.s3_url) || null : null,
+  }))
+}
+
+export async function fetchAdUpdateHistory(db, adId) {
   const events = await caseEventsCollection(db)
     .find({
       entity_type: 'ad',
@@ -135,39 +138,38 @@ export async function normalizeAdProfileForUi(profile) {
   return buildNormalizedAdProfileForUi(profile, { signedProfilePic })
 }
 
-export async function normalizeAdForUi(ad, db = null) {
+/** @param {object} ad @param {object} [_db] Unused; kept for call-site compat. History is loaded on demand. */
+export async function normalizeAdForUi(ad, _db = null) {
   if (!ad) return null
 
   const media = getAdMedia(ad)
-  const signedMedia = await signMediaList(media)
+  const cardsRaw = ad.content?.cards || []
+  const advertiser = ad.advertiser_snapshot || {}
+
+  const urlsToSign = [
+    ...media.map((m) => m?.s3_url),
+    ...cardsRaw.flatMap((card) => (card?.media || []).map((m) => m?.s3_url)),
+    advertiser.profile_pic_s3,
+  ]
+  const signedByUrl = await signUniqueS3Urls(urlsToSign)
+
+  const signedMedia = applySignedMedia(media, signedByUrl)
   const firstSigned = signedMedia.find((m) => m.signedUrl)?.signedUrl || null
 
-  const cards = await Promise.all(
-    (ad.content?.cards || []).map(async (card, cardIndex) => {
-      const cardMedia = await signMediaList(
-        (card.media || []).map((m) => ({ ...m, card_index: m.card_index ?? cardIndex })),
-      )
-      return {
-        ...serializeForClient(card),
-        media: cardMedia,
-      }
-    }),
-  )
-
-  let updateHistory = []
-  if (db && ad._id) {
-    try {
-      updateHistory = await fetchAdCaseEvents(db, ad._id.toString())
-    } catch {
-      updateHistory = []
+  const cards = cardsRaw.map((card, cardIndex) => {
+    const cardMedia = applySignedMedia(
+      (card.media || []).map((m) => ({ ...m, card_index: m.card_index ?? cardIndex })),
+      signedByUrl,
+    )
+    return {
+      ...serializeForClient(card),
+      media: cardMedia,
     }
-  }
+  })
 
-  const advertiser = ad.advertiser_snapshot || {}
-  let signedProfilePic = null
-  if (advertiser.profile_pic_s3) {
-    signedProfilePic = await getSignedImageUrl(advertiser.profile_pic_s3)
-  }
+  const signedProfilePic = advertiser.profile_pic_s3
+    ? signedByUrl.get(advertiser.profile_pic_s3) || null
+    : null
 
   return {
     _id: ad._id.toString(),
@@ -196,7 +198,7 @@ export async function normalizeAdForUi(ad, db = null) {
     system: serializeForClient(ad.system) ?? null,
     content_reviewed_by: ad.content_reviewed_by || null,
     signedImageUrl: firstSigned,
-    update_history: updateHistory,
+    update_history: [],
     // convenience aliases for list UI
     sourcing_date: toIsoDate(ad?.list?.sourced_at ?? ad?.ingestion?.ingested_at),
     posted_date: toIsoDate(ad?.list?.posted_at ?? ad?.list?.start_date),
@@ -207,5 +209,7 @@ export async function normalizeAdForUi(ad, db = null) {
     caption: ad?.content?.caption || null,
     score: ad?.list?.effective_threat_score ?? ad?.review_details?.threat_score ?? null,
     visibility_status: ad?.workflow?.visibility_status ?? 'available',
+    client_status: mapV3ClientStatusToUi(ad?.workflow?.client_status),
+    client_notes: serializeForClient(ad?.client_notes) ?? [],
   }
 }

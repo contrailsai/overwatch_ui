@@ -1,0 +1,150 @@
+{
+  "_id": { "$oid": "6c0000000000000000000004" },
+  "schema_version": 1,
+  "domain_name": "mezaxs.com",
+  "discovery": {
+    "first_entity_type": "ad",
+    "first_entity_id": { "$oid": "6b0000000000000000000004" },
+    "first_seen_url": "https://mezaxs.com/?pEl8X=szvnknir",
+    "occurrences": [
+      {
+        "entity_type": "ad",
+        "entity_id": { "$oid": "6b0000000000000000000004" },
+        "url": "https://mezaxs.com/?pEl8X=szvnknir",
+        "seen_at": { "$date": "2026-08-19T05:51:00.000Z" }
+      }
+    ]
+  },
+  "workflow": {
+    "analysis_status": "completed",
+    "review_status": "pending",
+    "client_status": "open",
+    "visibility_status": "up",
+    "takedown_status": "none",
+    "alerted_at": null
+  },
+  "list": {
+    "ai_threat_score": 94,
+    "review_threat_score": null,
+    "effective_threat_score": 94,
+    "risk_rank": "medium",
+    "threat_types": ["impersonation", "financial_scam", "poi_misuse"],
+    "violation_flags": ["impersonation", "financial_scam", "poi_misuse"],
+    "category": "scam",
+    "registrar": "NameCheap, Inc.",
+    "hosting_provider": "Cloudflare, Inc.",
+    "hosting_country": "US",
+    "is_reachable": true,
+    "ssl_valid": true,
+    "first_seen_at": { "$date": "2026-08-19T05:51:00.000Z" },
+    "last_seen_at": { "$date": "2026-08-19T05:51:00.000Z" },
+    "last_analyzed_at": { "$date": "2026-08-19T05:51:20.000Z" },
+    "reviewed_at": null,
+    "occurrence_count": 1
+  },
+  "analysis_results": {
+    "whois": {
+      "registrar": "NameCheap, Inc.",
+      "registrar_iana_id": 1068,
+      "created_at": "2026-04-28T21:30:38.000Z",
+      "updated_at": "2026-04-28T21:31:28.000Z",
+      "expires_at": "2027-04-28T21:30:38.000Z",
+      "registrant_country": "IS",
+      "privacy_protected": true,
+      "privacy_provider": "Withheld for Privacy ehf",
+      "name_servers": ["marjory.ns.cloudflare.com", "ray.ns.cloudflare.com"],
+      "dnssec": false,
+      "age_days_at_analysis": 113
+    },
+    "dns": {
+      "a": ["104.21.79.100", "172.67.169.236"],
+      "aaaa": [],
+      "mx": [],
+      "ns": ["marjory.ns.cloudflare.com", "ray.ns.cloudflare.com"],
+      "txt": [],
+      "nameservers": ["marjory.ns.cloudflare.com", "ray.ns.cloudflare.com"]
+    },
+    "ssl": {
+      "issuer": "Let's Encrypt, CN=YE2",
+      "subject": "CN=mezaxs.com",
+      "valid_from": "2026-06-27T00:39:41.000Z",
+      "valid_to": "2026-09-25T00:39:40.000Z",
+      "is_valid": true,
+      "san": ["mezaxs.com", "*.mezaxs.com"]
+    },
+    "hosting": {
+      "ip": "104.21.79.100",
+      "asn": "AS13335",
+      "provider": "Cloudflare, Inc.",
+      "country": "US",
+      "city": "San Francisco",
+      "is_cdn": true,
+      "anycast": true
+    },
+    "reputation": {
+      "hits": [],
+      "sources": [],
+      "notes": "No public blocklist hits at analysis time. Page is a Quantum AI investment scam served when pEl8X=szvnknir is present."
+    },
+    "content_classification": {
+      "url": "https://mezaxs.com/?pEl8X=szvnknir",
+      "http_status": 200,
+      "title": "Thrive Even in a Crisis! How Revolutionary Technology Will Allow You to Earn Over Rs 1,950,000 a Month with Government Support!",
+      "language": "en",
+      "category": "scam",
+      "labels": [
+        "poi_impersonation",
+        "news_spoof",
+        "investment_scam",
+        "lead_gen",
+        "lander_farm"
+      ],
+      "poi_names": ["Narayana Murthy", "Nirmala Sitharaman", "Sudha Murty"],
+      "spoofed_brands": ["Times of India", "Infosys", "State Bank of India", "TATA", "HDFC Bank", "Reliance"],
+      "lander_path": "/lander/saw-drill-hammer-axe-chisel-plane-file-rasp/index.php",
+      "ad_content_id": null,
+      "cloak_param": "pEl8X=szvnknir",
+      "summary": "Cloudflare-fronted Namecheap domain (registered 28 Apr 2026). Query pEl8X=szvnknir serves a Times of India spoof promoting Quantum AI: fake government-backed returns of Rs 1,950,000/month from a Rs 21,000 deposit, daily 10:00 AM payouts via SBI, and fabricated quotes/photos of Narayana Murthy, Nirmala Sitharaman, and Sudha Murty. Lead form collects name/email/phone. Facebook Pixel 1531053744504599. Same lander family as other pEl8X destinations.",
+      "excerpt": "Nirmala Sitharaman has developed an innovative platform in collaboration with Narayana Murthy. The idea of the Quantum AI model was born. Starting with an investment of just 21,000 rupees. Payouts made daily at 10:00 AM thanks to the secure financial network of the State Bank of India."
+    },
+    "tech_stack": ["cloudflare", "php_7.4", "facebook_pixel"],
+    "redirect_chain": [
+      {
+        "url": "https://mezaxs.com/?pEl8X=szvnknir",
+        "status_code": 200
+      }
+    ],
+    "screenshot": {
+      "s3_url": "/fixtures/domains/mezaxs.com-full.png",
+      "captured_at": "2026-08-19T05:51:20.000Z",
+      "source_url": "https://mezaxs.com/?pEl8X=szvnknir"
+    },
+    "raw": {
+      "captured_at": "2026-08-19T05:51:20.000Z",
+      "server": "cloudflare",
+      "x_powered_by": "PHP/7.4.33",
+      "facebook_pixel_id": "1531053744504599",
+      "base_href": "/lander/saw-drill-hammer-axe-chisel-plane-file-rasp/index.php"
+    }
+  },
+  "review_details": {},
+  "analysis_correction_request": {},
+  "takedown": {
+    "status": "none",
+    "initiated_at": null,
+    "completed_at": null,
+    "notes": [],
+    "documents": []
+  },
+  "client_notes": [],
+  "ingestion": {
+    "type": "manual_fixture",
+    "source_url": "https://mezaxs.com/?pEl8X=szvnknir",
+    "ingested_at": { "$date": "2026-08-19T05:51:20.000Z" }
+  },
+  "system": {
+    "created_at": { "$date": "2026-08-19T05:51:20.000Z" },
+    "updated_at": { "$date": "2026-08-19T05:51:20.000Z" }
+  },
+  "content_reviewed_by": null
+}

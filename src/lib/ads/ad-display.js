@@ -86,6 +86,19 @@ export function getAdImpressions(ad) {
   return { text, index }
 }
 
+/** Online vs taken-down badge for list rows. */
+export function getAdVisibilityLabel(ad) {
+  const status = String(
+    ad?.visibility_status ?? ad?.workflow?.visibility_status ?? 'available',
+  ).toLowerCase()
+  const down = status === 'down'
+  return {
+    down,
+    label: down ? 'Taken Down' : 'Online',
+    status,
+  }
+}
+
 export function formatAdDate(value) {
   if (!value) return null
   const d = value instanceof Date ? value : new Date(value)
@@ -101,6 +114,67 @@ export function formatAdDate(value) {
     hour12: false,
   })
   return `${datePart} ${timePart}`
+}
+
+/** Parse host + compact path/query display from an absolute URL. */
+function parseDestinationUrl(url) {
+  try {
+    const parsed = new URL(url)
+    const host = parsed.hostname.replace(/^www\./i, '')
+    const pathQuery = `${parsed.pathname === '/' ? '' : parsed.pathname}${parsed.search}${parsed.hash}`
+    return {
+      host,
+      display: pathQuery ? `${host}${pathQuery}` : host,
+    }
+  } catch {
+    return { host: url, display: url }
+  }
+}
+
+/**
+ * All destination link_urls for an ad (per-card + top-level), deduped by exact URL.
+ * @returns {{ cardIndex: number|null, cardIndexes: number[], label: string|null, url: string, host: string, display: string }[]}
+ */
+export function getAdDestinationLinks(ad) {
+  const content = ad?.content || {}
+  const cards = Array.isArray(content.cards) ? content.cards : []
+  const byUrl = new Map()
+
+  cards.forEach((card, cardIndex) => {
+    const url = firstRealText(card?.link_url)
+    if (!url) return
+    const existing = byUrl.get(url)
+    if (existing) {
+      existing.cardIndexes.push(cardIndex)
+      return
+    }
+    const { host, display } = parseDestinationUrl(url)
+    byUrl.set(url, { url, host, display, cardIndexes: [cardIndex] })
+  })
+
+  const topUrl = firstRealText(content.link_url)
+  if (topUrl && !byUrl.has(topUrl)) {
+    const { host, display } = parseDestinationUrl(topUrl)
+    byUrl.set(topUrl, { url: topUrl, host, display, cardIndexes: [] })
+  }
+
+  const multiCard = cards.length > 1
+  return Array.from(byUrl.values()).map((entry) => {
+    let label = null
+    if (entry.cardIndexes.length > 1) {
+      label = `Cards ${entry.cardIndexes.map((i) => i + 1).join(', ')}`
+    } else if (entry.cardIndexes.length === 1 && multiCard) {
+      label = `Card ${entry.cardIndexes[0] + 1}`
+    }
+    return {
+      cardIndex: entry.cardIndexes[0] ?? null,
+      cardIndexes: entry.cardIndexes,
+      label,
+      url: entry.url,
+      host: entry.host,
+      display: entry.display,
+    }
+  })
 }
 
 /** Labeled creative fields for the detail info panel. */

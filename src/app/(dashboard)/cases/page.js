@@ -4,6 +4,8 @@ import { fetch_clients_in_project } from './feature_actions'
 import { requireAuthContext } from '@/utils/auth-context'
 import { runInSpan } from '@/utils/tracing'
 import PageHeader from '@/components/PageHeader'
+import { isSectionEnabled } from '@/lib/project-sections'
+import { DisabledSectionFallback } from '@/components/DisabledSectionFallback'
 
 export const metadata = {
   title: 'Case List',
@@ -15,6 +17,10 @@ export default async function CasesPage({ searchParams }) {
     requireAuthContext(),
     searchParams,
   ])
+
+  if (!isSectionEnabled(project, 'posts')) {
+    return <DisabledSectionFallback />
+  }
 
   const parsedPage = Number.parseInt(resolvedParams.page, 10)
   const parsedLimit = Number.parseInt(resolvedParams.limit, 10)

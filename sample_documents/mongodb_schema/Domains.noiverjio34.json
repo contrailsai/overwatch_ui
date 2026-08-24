@@ -1,0 +1,159 @@
+{
+  "_id": { "$oid": "6c0000000000000000000003" },
+  "schema_version": 1,
+  "domain_name": "noiverjio34.com",
+  "discovery": {
+    "first_entity_type": "ad",
+    "first_entity_id": { "$oid": "6b0000000000000000000003" },
+    "first_seen_url": "http://noiverjio34.com/?content_id=callofd_newP&pEl8X=szvnknir",
+    "occurrences": [
+      {
+        "entity_type": "ad",
+        "entity_id": { "$oid": "6b0000000000000000000003" },
+        "url": "http://noiverjio34.com/?content_id=callofd_newP&pEl8X=szvnknir",
+        "seen_at": { "$date": "2026-08-19T05:42:42.000Z" }
+      }
+    ]
+  },
+  "workflow": {
+    "analysis_status": "completed",
+    "review_status": "pending",
+    "client_status": "open",
+    "visibility_status": "up",
+    "takedown_status": "none",
+    "alerted_at": null
+  },
+  "list": {
+    "ai_threat_score": 84,
+    "review_threat_score": null,
+    "effective_threat_score": 84,
+    "risk_rank": "medium",
+    "threat_types": ["cloaking", "ad_fraud", "brand_impersonation"],
+    "violation_flags": ["cloaking", "ad_fraud", "brand_impersonation"],
+    "category": "scam",
+    "registrar": "NameCheap, Inc.",
+    "hosting_provider": "Cloudflare, Inc.",
+    "hosting_country": "US",
+    "is_reachable": true,
+    "ssl_valid": true,
+    "first_seen_at": { "$date": "2026-08-19T05:42:42.000Z" },
+    "last_seen_at": { "$date": "2026-08-19T05:42:42.000Z" },
+    "last_analyzed_at": { "$date": "2026-08-19T05:43:10.000Z" },
+    "reviewed_at": null,
+    "occurrence_count": 1
+  },
+  "analysis_results": {
+    "whois": {
+      "registrar": "NameCheap, Inc.",
+      "registrar_iana_id": 1068,
+      "created_at": "2026-07-22T10:31:03.000Z",
+      "updated_at": "2026-07-22T17:29:49.000Z",
+      "expires_at": "2027-07-22T10:31:03.000Z",
+      "registrant_country": "IS",
+      "privacy_protected": true,
+      "privacy_provider": "Withheld for Privacy ehf",
+      "name_servers": ["marjory.ns.cloudflare.com", "ray.ns.cloudflare.com"],
+      "dnssec": false,
+      "age_days_at_analysis": 28
+    },
+    "dns": {
+      "a": ["172.67.197.42", "104.21.76.154"],
+      "aaaa": ["2606:4700:3032::6815:4c9a", "2606:4700:3031::ac43:c52a"],
+      "mx": [],
+      "ns": ["marjory.ns.cloudflare.com", "ray.ns.cloudflare.com"],
+      "txt": [],
+      "nameservers": ["marjory.ns.cloudflare.com", "ray.ns.cloudflare.com"]
+    },
+    "ssl": {
+      "issuer": "Google Trust Services, CN=WE1",
+      "subject": "CN=noiverjio34.com",
+      "valid_from": "2026-07-22T16:38:29.000Z",
+      "valid_to": "2026-10-20T17:37:10.000Z",
+      "is_valid": true,
+      "san": ["noiverjio34.com", "*.noiverjio34.com"]
+    },
+    "hosting": {
+      "ip": "172.67.197.42",
+      "asn": "AS13335",
+      "provider": "Cloudflare, Inc.",
+      "country": "US",
+      "city": "San Francisco",
+      "is_cdn": true,
+      "anycast": true
+    },
+    "reputation": {
+      "hits": [],
+      "sources": [],
+      "notes": "No public blocklist hits at analysis time. High-risk signals are a 28-day-old privacy-protected domain, Cloudflare lander farm path, and a content_id that does not match the rendered page."
+    },
+    "content_classification": {
+      "url": "https://noiverjio34.com/?content_id=callofd_newP&pEl8X=szvnknir",
+      "http_status": 200,
+      "title": "RagaHorology – India's Ultimate Watch Guide 2026",
+      "language": "en",
+      "category": "scam",
+      "labels": [
+        "lander_farm",
+        "content_mismatch",
+        "lead_gen",
+        "luxury_goods",
+        "cloaking"
+      ],
+      "poi_names": [],
+      "spoofed_brands": ["Rolex", "Omega", "Patek Philippe", "TAG Heuer", "Longines", "Rado", "Seiko", "Citizen", "Titan"],
+      "lander_path": "/lander/fast_supersonic_cruise_missile_strong/index.html",
+      "ad_content_id": "callofd_newP",
+      "summary": "Newly registered random-looking domain (noiverjio34.com, 22 Jul 2026) behind Cloudflare. HTTP 301 to HTTPS. Pre-JS title is 'loading'; rendered page is a RagaHorology India watch-consultancy lead-gen template. Ad query content_id=callofd_newP (Call of Duty-style creative) and HTML base href /lander/fast_supersonic_cruise_missile_strong/ do not match the watch page. Collects name/phone/email via 'Request Expert Advice'. Claims BKC Mumbai address and hello@ragahorology.in.",
+      "excerpt": "How to Choose the Perfect Watch – India's 2026 Guide. Free Personal Styling. Haute Horlogerie ₹5L+ Rolex, Omega, Patek Philippe. Request Expert Advice. BKC, Bandra East, Mumbai – 400051."
+    },
+    "tech_stack": ["cloudflare", "php_7.4", "google_fonts", "font_awesome"],
+    "redirect_chain": [
+      {
+        "url": "http://noiverjio34.com/?content_id=callofd_newP&pEl8X=szvnknir",
+        "status_code": 301
+      },
+      {
+        "url": "https://noiverjio34.com/?content_id=callofd_newP&pEl8X=szvnknir",
+        "status_code": 200
+      }
+    ],
+    "screenshot": {
+      "s3_url": "/fixtures/domains/noiverjio34.com-full.png",
+      "captured_at": "2026-08-19T05:43:10.000Z",
+      "source_url": "https://noiverjio34.com/?content_id=callofd_newP&pEl8X=szvnknir"
+    },
+    "raw": {
+      "captured_at": "2026-08-19T05:43:10.000Z",
+      "server": "cloudflare",
+      "x_powered_by": "PHP/7.4.33",
+      "pre_js_title": "loading",
+      "base_href": "/lander/fast_supersonic_cruise_missile_strong/index.html",
+      "contact": {
+        "email": "hello@ragahorology.in",
+        "phone": "+91 22 3417 8901",
+        "whatsapp": "+91 98765 52310",
+        "address": "BKC, Bandra East, Mumbai – 400051"
+      }
+    }
+  },
+  "review_details": {},
+  "analysis_correction_request": {},
+  "takedown": {
+    "status": "none",
+    "initiated_at": null,
+    "completed_at": null,
+    "notes": [],
+    "documents": []
+  },
+  "client_notes": [],
+  "ingestion": {
+    "type": "manual_fixture",
+    "source_url": "http://noiverjio34.com/?content_id=callofd_newP&pEl8X=szvnknir",
+    "ingested_at": { "$date": "2026-08-19T05:43:10.000Z" }
+  },
+  "system": {
+    "created_at": { "$date": "2026-08-19T05:43:10.000Z" },
+    "updated_at": { "$date": "2026-08-19T05:43:10.000Z" }
+  },
+  "content_reviewed_by": null
+}

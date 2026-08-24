@@ -1,6 +1,8 @@
 import { ProfilesList } from './ProfilesList'
 import { getProfiles } from './actions'
 import { getClientandProjectDetails } from '@/app/(dashboard)/actions'
+import { isSectionEnabled } from '@/lib/project-sections'
+import { DisabledSectionFallback } from '@/components/DisabledSectionFallback'
 import { runInSpan } from '@/utils/tracing'
 import PageHeader from '@/components/PageHeader'
 
@@ -14,6 +16,10 @@ export default async function ProfilesPage({ searchParams }) {
         getClientandProjectDetails(),
         searchParams,
     ])
+
+    if (!isSectionEnabled(project, 'posts')) {
+        return <DisabledSectionFallback />
+    }
 
     if (!clientDetails || !clientDetails.project_name || clientDetails.permission !== "reviewer") {
         return (

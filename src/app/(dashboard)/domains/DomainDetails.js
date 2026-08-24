@@ -12,6 +12,9 @@ import { Badge } from '@/components/ui/badge'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import { format } from 'date-fns'
+import { DomainAnalysisResults } from '@/components/domains/DomainAnalysisResults'
+import { DomainCloakVariants } from '@/components/domains/DomainCloakVariants'
+import { domainVisitUrl, domainScreenshotUrl } from '@/lib/domains/domain-display'
 
 const getRiskBadge = (risk) => {
     const v = typeof risk === 'string' ? risk.toLowerCase() : risk
@@ -102,8 +105,8 @@ export default function DomainDetailPanel({ domain, project, isOpen, onClose, on
     const risk = getRiskBadge(list.risk_rank || review.category)
     const RiskIcon = risk.icon
     const analysisStatusCfg = getAnalysisStatusConfig(domain.analysis_status)
-    const analysisResultsKeys = Object.keys(domain.analysis_results || {})
-    const hasAnalysisResults = analysisResultsKeys.length > 0
+    const visitUrl = domainVisitUrl(domain)
+    const screenshotUrl = domainScreenshotUrl(domain)
     const statusCfg = getStatusConfig(clientStatus)
     const StatusIcon = statusCfg.icon
 
@@ -134,14 +137,16 @@ export default function DomainDetailPanel({ domain, project, isOpen, onClose, on
                         </div>
                         <div className="flex flex-col min-w-0 pt-0.5">
                             <h2 className="text-base font-bold text-slate-900 truncate tracking-tight font-mono">{domain.domain_name}</h2>
-                            <a
-                                href={`https://${domain.domain_name}`}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-600 hover:text-blue-800 hover:underline mt-0.5"
-                            >
-                                Visit site <ExternalLink className="w-2.5 h-2.5" />
-                            </a>
+                            {visitUrl && (
+                                <a
+                                    href={visitUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-600 hover:text-blue-800 hover:underline mt-0.5"
+                                >
+                                    Visit captured URL <ExternalLink className="w-2.5 h-2.5" />
+                                </a>
+                            )}
                         </div>
                     </div>
 
@@ -162,6 +167,22 @@ export default function DomainDetailPanel({ domain, project, isOpen, onClose, on
                 </div>
 
                 <div className="flex-1 overflow-y-auto custom-scrollbar">
+                    {(domain.cloakVariants?.length > 0) ? (
+                        <div className="px-5 md:px-6 py-4 border-b border-slate-100">
+                            <DomainCloakVariants
+                                variants={domain.cloakVariants}
+                                primaryScreenshotUrl={screenshotUrl}
+                            />
+                        </div>
+                    ) : screenshotUrl ? (
+                        <div className="px-5 md:px-6 py-4 border-b border-slate-100">
+                            <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2">Page capture</h4>
+                            <div className="rounded-xl overflow-hidden border border-slate-200 bg-slate-100 max-h-[360px] overflow-y-auto">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img src={screenshotUrl} alt={`Capture of ${domain.domain_name}`} className="w-full h-auto block" />
+                            </div>
+                        </div>
+                    ) : null}
                     {/* Discovery */}
                     <div className="px-5 md:px-6 py-4 border-b border-slate-100">
                         <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2">Discovery</h4>
@@ -184,7 +205,7 @@ export default function DomainDetailPanel({ domain, project, isOpen, onClose, on
                     {/* Analyzer findings */}
                     <div className="px-5 md:px-6 py-4 border-b border-slate-100">
                         <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-1.5">
-                            <Server className="w-3.5 h-3.5" /> Analyzer Findings
+                            <Server className="w-3.5 h-3.5" /> Site facts
                         </h4>
                         <InfoRow label="Category" value={domain.category} />
                         <InfoRow label="Registrar" value={list.registrar} />
@@ -194,15 +215,9 @@ export default function DomainDetailPanel({ domain, project, isOpen, onClose, on
                         <InfoRow label="SSL Valid" value={list.ssl_valid == null ? null : (list.ssl_valid ? 'Yes' : 'No')} />
                         <InfoRow label="Last analyzed" value={domain.last_analyzed_at ? <SafeDate date={domain.last_analyzed_at} /> : null} />
 
-                        {hasAnalysisResults ? (
-                            <pre className="mt-3 bg-slate-50 border border-slate-100 rounded-lg p-3 text-[10px] text-slate-600 overflow-x-auto max-h-52 custom-scrollbar">
-                                {JSON.stringify(domain.analysis_results, null, 2)}
-                            </pre>
-                        ) : (
-                            <p className="text-xs text-slate-400 italic mt-2">
-                                No analyzer results yet — this domain is awaiting analysis.
-                            </p>
-                        )}
+                        <div className="mt-3">
+                            <DomainAnalysisResults analysisResults={domain.analysis_results} />
+                        </div>
                     </div>
 
                     {/* Review details */}

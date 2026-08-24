@@ -1,8 +1,8 @@
 # Domains Schema V1 — Service Contract
 
 **Audience:** domain-analyzer service (internal team), and `overwatch_client`.
-**Status:** Draft — client shell surfaces (`/domains`, `/review-domains`) land with this contract. `analysis_results` internals are intentionally open-ended pending the analyzer's first cut; everything else here is stable.
-**Reference sample:** [`sample_documents/mongodb_schema/Domains.json`](../../sample_documents/mongodb_schema/Domains.json)
+**Status:** Draft — client surfaces (`/domains`, `/review-domains`) land with this contract. Analyzer module PRD: [`docs/prd/domain-analyzer-module.md`](../prd/domain-analyzer-module.md). `analysis_results` module keys below are now the shipped set; additive keys are allowed and must not break the client.
+**Reference samples:** [`sample_documents/mongodb_schema/Domains.json`](../../sample_documents/mongodb_schema/Domains.json) (`newzonic.com`), [`sample_documents/mongodb_schema/Domains.noiverjio34.json`](../../sample_documents/mongodb_schema/Domains.noiverjio34.json) (`noiverjio34.com`), [`sample_documents/mongodb_schema/Domains.mezaxs.json`](../../sample_documents/mongodb_schema/Domains.mezaxs.json) (`mezaxs.com`)
 **Related:** [`ads-ad-profiles-schema-v3.md`](./ads-ad-profiles-schema-v3.md), [`posts-profiles-schema-v3.md`](./posts-profiles-schema-v3.md) (shared conventions this doc reuses on purpose)
 
 ---
@@ -129,20 +129,36 @@ discovery: {
     occurrence_count
   },
 
-  // Open, module-keyed bag — analyzer owns internals; treat unknown keys as
-  // pass-through/display-as-JSON in the client until a module ships a UI.
+  // Module-keyed bag — analyzer owns internals; unknown keys display-as-JSON.
   // Full-replace per module on each analyzer run; do not rename/remove a
   // shipped module key without bumping schema_version.
+  // Shipped keys (see domain-analyzer PRD): whois, dns, ssl, hosting,
+  // reputation, content_classification, page_text, tech_stack, redirect_chain,
+  // screenshot, capture, media, raw.
   analysis_results: {
     whois: { … },                 // registrar, created_at, expires_at, registrant_country, privacy_protected
     dns: { … },                   // a/aaaa/mx/ns/txt records, nameservers
     ssl: { … },                   // issuer, valid_from, valid_to, is_valid, san[]
-    hosting: { … },               // ip, asn, provider, country, is_cdn
+    hosting: { … },               // ip, asn, provider, country, city, is_cdn, anycast
     reputation: { … },            // blocklist/threat-intel hits, sources[]
-    content_classification: { … },// scraped page category/labels, language
+    content_classification: { … },// title, summary, excerpt, category, labels, poi_names, spoofed_brands, lander_path, cloak_param
+    page_text: {                  // rendered DOM extract
+      title, meta_description, og_title, og_description, canonical_url,
+      headings: [{ tag, text }],  // h1–h3
+      paragraphs: [],             // visible <p>
+      language
+    },
     tech_stack: [ … ],            // detected frameworks/CMS/analytics
     redirect_chain: [ … ],        // [{ url, status_code }]
-    screenshot: { s3_url, captured_at },
+    screenshot: {                 // full-page capture; s3_url must be HTTPS amazonaws.com in prod
+      s3_url, captured_at, source_url, width, height, content_type, sha256
+    },
+    capture: { run_id, user_agent, pre_js_title, post_js_title, variants: [], error },
+    media: {                      // on-page images/videos archived to S3
+      images: [{ source_url, s3_url, content_type, bytes, width, height, sha256, alt }],
+      videos: [{ source_url, s3_url, content_type, bytes, sha256 }],
+      skipped: [{ source_url, reason }]
+    },
     raw: { … }                    // optional trimmed raw analyzer payload
   },
 
@@ -180,10 +196,18 @@ discovery: {
 
 ## Indexes (recommended)
 
+ESR (equality → sort → range). Created by `scripts/ensure_indexes_v3.js`.
+
 - Unique: `{ domain_name: 1 }`
-- Review queue: `{ "workflow.review_status": 1, "list.last_analyzed_at": -1 }`
-- Risk filter: `{ "list.risk_rank": 1, "list.last_seen_at": -1 }`
-- Discovery lookup (find domains from a given post/ad): `{ "discovery.occurrences.entity_id": 1 }`
+- Reviewer queue: `{ "workflow.review_status": 1, "list.last_analyzed_at": -1, "list.last_seen_at": -1, _id: -1 }`
+- Client list: `{ "workflow.review_status": 1, "list.last_seen_at": -1, _id: 1 }`
+- Client status: `{ "workflow.review_status": 1, "workflow.client_status": 1, "list.last_seen_at": -1 }`
+- Sort by score: `{ "workflow.review_status": 1, "list.effective_threat_score": -1, _id: 1 }`
+- Sort by occurrences: `{ "workflow.review_status": 1, "list.occurrence_count": -1, _id: 1 }`
+- Analysis filter: `{ "workflow.review_status": 1, "workflow.analysis_status": 1, "list.last_analyzed_at": -1 }`
+- Risk filter: `{ "list.risk_rank": 1, "list.last_seen_at": -1 }` (equality on `risk_rank`; regex filters cannot use this prefix)
+- Discovery lookup: `{ "discovery.occurrences.entity_id": 1 }`
+- Ad join: `{ linked_ad_ids: 1 }`
 
 ---
 
@@ -194,4 +218,6 @@ discovery: {
 | `/domains` | Shell — client list (reviewed domains), minimal columns, detail panel dumps `analysis_results` as-is |
 | `/review-domains` | Shell — reviewer queue (pending analysis/review), minimal review action (category + threat score + notes) |
 
-No AI/correction run flow yet — analyzer integration (writing `analysis_results` + `workflow.analysis_status`) is a follow-up once the domain-analyzer service exists. Until then, `/domains` and `/review-domains` will mostly show empty/pending states, which is expected for this cut.
+Analyzer integration (writing `analysis_results` + `workflow.analysis_status`) is specified in [`docs/prd/domain-analyzer-module.md`](../prd/domain-analyzer-module.md). Until that service ships, seed fixtures (`scripts/seed_newzonic_domain.js`) so `/review-domains` has pages to review. `/domains` only lists documents with `workflow.review_status: "reviewed"`.
+
+Production `screenshot.s3_url` / `media.*.s3_url` must be full `amazonaws.com` HTTPS URLs so `getSignedImageUrl` can sign them. Leading `/` paths are fixture-only.

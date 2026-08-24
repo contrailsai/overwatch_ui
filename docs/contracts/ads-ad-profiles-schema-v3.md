@@ -244,17 +244,30 @@ Creative edits from Review Ads should insert `event_type: "content_updated"`.
 
 ## Indexes (recommended)
 
+ESR (equality → sort → range). Created by `scripts/ensure_indexes_v3.js`.
+
 **Ads**
 
-- Unique: `{ platform: 1, platform_ad_id: 1 }`
-- Review queue: `{ "workflow.review_status": 1, "list.sourced_at": -1 }`
-- Filter: `{ platform: 1, "list.is_active": 1, "list.start_date": -1 }`
-- FK: `{ ad_profile_id: 1 }`
+- Unique: `{ platform: 1, platform_ad_id: 1 }` (`uniq_platform_ad_id`)
+- Reviewer queue sort: `{ "workflow.review_status": 1, "list.sourced_at": -1, _id: -1 }`
+- Client list default: `{ "workflow.review_status": 1, "list.effective_threat_score": -1, "list.sourced_at": -1, _id: 1 }`
+- Reports / start-date sort: `{ "workflow.review_status": 1, "list.effective_threat_score": -1, "list.start_date": -1, _id: 1 }`
+- Client status filter: `{ "workflow.review_status": 1, "workflow.client_status": 1, "list.effective_threat_score": -1, "list.sourced_at": -1 }`
+- AI filter: `{ "workflow.ai_status": 1, "workflow.review_status": 1, "list.sourced_at": -1 }`
+- Profile panel: `{ ad_profile_id: 1, "list.sourced_at": -1 }`
+- Active filter: `{ platform: 1, "list.is_active": 1, "list.start_date": -1 }`
+- Sparse compat: `{ "list.review_threat_score": 1 }` (sparse; client `$or` arm)
+- Domain join: `{ linked_domain_ids: 1 }`
 
 **Ad_profiles**
 
 - Unique: `{ platform: 1, platform_page_id: 1 }`
-- Review: `{ "workflow.review_status": 1, "list.max_threat_score": -1 }`
+- Manual ingest: `{ platform: 1, profile_url: 1 }`
+- Reviewer default sort: `{ "list.ad_count": -1, "list.max_threat_score": -1, _id: 1 }`
+- Reviewer + status: `{ "workflow.review_status": 1, "list.ad_count": -1, "list.max_threat_score": -1, _id: 1 }`
+- Client list: `{ "workflow.review_status": 1, "workflow.reviewed_at": -1, "list.last_active_at": -1, _id: 1 }`
+- Client status: `{ "workflow.review_status": 1, "workflow.client_status": 1, "workflow.reviewed_at": -1 }`
+- Review threat: `{ "workflow.review_status": 1, "list.max_threat_score": -1 }`
 
 ---
 
@@ -265,6 +278,6 @@ Creative edits from Review Ads should insert `event_type: "content_updated"`.
 | `/review-ads` | Implemented — reviewer queue + content edit |
 | `/review-ad-profiles` | Implemented — reviewer queue + associated ads |
 | `/ad-profiles` | Implemented — client list (reviewed advertisers) |
-| `/ads` | Deferred |
+| `/ads` | Implemented — client list of reviewed ads |
 
 AI run/correction against `collection_name: "ads"` requires worker support; until then the client may omit or disable Run AI for ads.

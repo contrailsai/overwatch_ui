@@ -11,6 +11,7 @@ import {
   deleteAdImage,
   updateAdVisibility,
   deleteAd,
+  getAdUpdateHistory,
 } from './actions'
 import { uploadFileViaPresignedUrl } from '@/utils/aws/upload-via-presigned-url'
 import { REVIEW_IMAGE_MAX_BYTES, formatUploadSizeLimit } from '@/utils/aws/upload-validation'
@@ -18,7 +19,7 @@ import { buildReviewFormDefaults } from '@/utils/analysis/correctionRequestUtils
 import {
   Loader2, X, CheckCircle, ExternalLink, ChevronLeft, ChevronRight,
   Plus, Trash2, Upload, Pencil, Save, Eye, Megaphone, CalendarDays,
-  ChevronDown, ChevronUp, Bot, Globe, AlertCircle,
+  ChevronDown, ChevronUp, Bot, Globe, AlertCircle, User, History,
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -29,13 +30,22 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { cn } from '@/lib/utils'
+import SafeDate from '@/components/SafeDate'
 import {
   formatDisplayFormat,
   formatAdDate,
   getAdCreativeFields,
+  getAdDestinationLinks,
   getAdImpressions,
   isTemplatePlaceholder,
 } from '@/lib/ads/ad-display'
+import {
+  AdDestinationLinks,
+  AdTargetUrlsInfo,
+  adDestinationLabel,
+} from '@/lib/ads/AdDestinationLinks'
+import { getDomainsByNames } from '@/app/(dashboard)/domains/actions'
+import { isSectionEnabled } from '@/lib/project-sections'
 
 function InfoRow({ label, children, multiline = false }) {
   if (children == null || children === '') return null
@@ -105,6 +115,12 @@ export default function ReviewAdForm({
   const [isDeleting, setIsDeleting] = useState(false)
   const [showViolations, setShowViolations] = useState(true)
   const [showPOI, setShowPOI] = useState(true)
+  const [showActionLogs, setShowActionLogs] = useState(false)
+  const [actionHistory, setActionHistory] = useState([])
+  const [actionHistoryLoading, setActionHistoryLoading] = useState(false)
+  const [actionHistoryError, setActionHistoryError] = useState(null)
+  const [actionHistoryLoadedForId, setActionHistoryLoadedForId] = useState(null)
+  const [domainsByHost, setDomainsByHost] = useState(null)
   const fileInputRef = useRef(null)
 
   // Verdict form state
@@ -128,6 +144,11 @@ export default function ReviewAdForm({
     setActiveCard(0)
     setEditingContent(false)
     setContentDraft(null)
+    setDomainsByHost(null)
+    setShowActionLogs(false)
+    setActionHistory([])
+    setActionHistoryError(null)
+    setActionHistoryLoadedForId(null)
     const d = buildReviewFormDefaults(ad, project_details)
     setThreatScore(d.threatScore)
     setThreatTypes(d.threatTypes)
@@ -142,7 +163,20 @@ export default function ReviewAdForm({
     setVisibilityOnline(
       String(ad?.workflow?.visibility_status || ad?.visibility_status || 'available').toLowerCase() !== 'down',
     )
-  }, [ad, project_details])
+
+    if (!ad || !isSectionEnabled(project, 'domains')) return undefined
+
+    const hosts = getAdDestinationLinks(ad)
+      .map((l) => l.host)
+      .filter(Boolean)
+    if (hosts.length === 0) return undefined
+
+    let cancelled = false
+    getDomainsByNames(hosts, { includeUnreviewed: true }).then((map) => {
+      if (!cancelled) setDomainsByHost(map || {})
+    })
+    return () => { cancelled = true }
+  }, [ad, project_details, project])
 
   useEffect(() => {
     if (state?.success) {
@@ -406,6 +440,25 @@ export default function ReviewAdForm({
     setPoiInput('')
   }
 
+  const toggleActionLogs = async () => {
+    const next = !showActionLogs
+    setShowActionLogs(next)
+    if (!next || !localAd?._id || actionHistoryLoading) return
+    if (actionHistoryLoadedForId === localAd._id) return
+
+    setActionHistoryLoading(true)
+    setActionHistoryError(null)
+    const result = await getAdUpdateHistory(localAd._id)
+    setActionHistoryLoading(false)
+    if (!result?.success) {
+      setActionHistoryError(result?.error || 'Failed to load action logs')
+      setActionHistory([])
+      return
+    }
+    setActionHistory(result.history || [])
+    setActionHistoryLoadedForId(localAd._id)
+  }
+
   const labelNames = projectLabels
     .map((label) => (typeof label === 'string' ? label : label?.name))
     .filter(Boolean)
@@ -594,20 +647,19 @@ export default function ReviewAdForm({
                     )
                     : null}
                 </InfoRow>
-                <InfoRow label="Destination">
-                  {creative.linkUrl ? (
-                    <a
-                      href={creative.linkUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-blue-600 break-all inline-flex items-start gap-1 hover:underline"
-                    >
-                      <span>{creative.linkUrl}</span>
-                      <ExternalLink className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-                    </a>
-                  ) : null}
+                <InfoRow label={adDestinationLabel(localAd)}>
+                  <AdDestinationLinks
+                    ad={localAd}
+                    activeCard={activeCard}
+                  />
                 </InfoRow>
               </dl>
+
+              <AdTargetUrlsInfo
+                ad={localAd}
+                domainsByHost={domainsByHost}
+                domainsHrefBase={isSectionEnabled(project, 'domains') ? '/review-domains' : null}
+              />
 
               <Separator />
 
@@ -834,7 +886,7 @@ export default function ReviewAdForm({
           </div>
 
           {/* Review form — aligned with /review-cases ReviewDetails */}
-          <form action={formAction} className="shrink-0 w-full lg:flex-1 lg:min-h-0 lg:overflow-y-auto p-5 md:p-6 space-y-6 bg-white border-t lg:border-t-0">
+          <form action={formAction} className="shrink-0 w-full lg:w-[min(360px,38%)] xl:w-[380px] lg:min-h-0 lg:overflow-y-auto p-5 md:p-6 space-y-6 bg-white border-t lg:border-t-0">
             {Array.from(new Set([...labelNames, ...threatTypes])).map((labelName, index) => (
               <input
                 key={`flag_${index}`}
@@ -1183,6 +1235,76 @@ export default function ReviewAdForm({
                   className="min-h-[70px] bg-slate-50 border-slate-200 text-sm focus:bg-white transition-colors resize-y"
                 />
               </div>
+            </section>
+
+            {/* Action Logs — loaded on demand */}
+            <section className="space-y-3 pt-2 border-t border-slate-100">
+              <div
+                className="flex items-center justify-between mb-1 cursor-pointer group"
+                onClick={() => toggleActionLogs()}
+              >
+                <div className="flex items-center gap-2">
+                  <History className="w-4 h-4 text-slate-400" />
+                  <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider group-hover:text-blue-600 transition-colors">
+                    Action Logs
+                  </h3>
+                </div>
+                <Button type="button" variant="ghost" size="icon" className="h-6 w-6 text-slate-400 group-hover:text-blue-600">
+                  {showActionLogs ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                </Button>
+              </div>
+
+              {showActionLogs && (
+                <div className="animate-in slide-in-from-top-2 fade-in duration-200">
+                  {actionHistoryLoading ? (
+                    <div className="flex items-center gap-2 text-sm text-slate-500 py-3">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Loading action logs…
+                    </div>
+                  ) : actionHistoryError ? (
+                    <p className="text-sm text-rose-600 py-2">{actionHistoryError}</p>
+                  ) : actionHistory.length > 0 ? (
+                    <div className="space-y-5 relative before:absolute before:left-[15px] before:top-2 before:bottom-2 before:w-px before:bg-slate-100">
+                      {actionHistory.map((entry, idx) => (
+                        <div key={`${entry.updated_at}-${idx}`} className="relative pl-12">
+                          <div className="absolute left-0 top-0 h-8 w-8 rounded-full bg-slate-50 border border-slate-200 flex items-center justify-center z-10">
+                            <User className="w-4 h-4 text-slate-400" />
+                          </div>
+                          <div className="flex flex-col gap-0.5 pt-1.5">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-sm font-bold text-slate-900">
+                                {entry.updated_by || 'System'}
+                              </span>
+                              {entry.updated_at && (
+                                <span className="text-[11px] text-slate-400">
+                                  <SafeDate date={entry.updated_at} formatStr="dd/MM/yyyy HH:mm" />
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-sm text-slate-600">
+                              {entry.changes_summary || entry.event_type || 'Update'}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : localAd?.content_reviewed_by ? (
+                    <div className="relative pl-12 py-1">
+                      <div className="absolute left-0 top-0 h-8 w-8 rounded-full bg-slate-50 border border-slate-200 flex items-center justify-center">
+                        <User className="w-4 h-4 text-slate-400" />
+                      </div>
+                      <div className="flex flex-col gap-0.5 pt-1.5">
+                        <span className="text-sm font-bold text-slate-900">
+                          {localAd.content_reviewed_by}
+                        </span>
+                        <p className="text-sm text-slate-600">Ad reviewed and finalized.</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-slate-500 py-2">No action logs yet.</p>
+                  )}
+                </div>
+              )}
             </section>
 
             {state?.error && (

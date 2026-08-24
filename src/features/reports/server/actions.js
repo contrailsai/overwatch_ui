@@ -12,8 +12,10 @@ import { resolveExistingReportJob } from '@/features/reports/lib/resolve-job'
 import { REPORT_FORMATS, REPORT_TYPES } from '@/features/reports/constants'
 import { logActionError, LOKI_STREAMS } from '@/utils/otel-logger'
 import { orderPostIdsForReport } from '@/app/(dashboard)/cases/actions'
+import { orderAdIdsForReport } from '@/app/(dashboard)/ads/actions'
 import { REVIEWED_THREAT_SCORE_FILTER } from '@/lib/posts/reviewed-post-filter'
-import { postsCollection as getPostsCollection } from '@/utils/mongodb/collections'
+import { REVIEWED_ADS_FILTER } from '@/lib/ads/reviewed-ad-filter'
+import { adsCollection, postsCollection as getPostsCollection } from '@/utils/mongodb/collections'
 
 const OBJECT_ID_HEX = /^[a-fA-F0-9]{24}$/
 
@@ -59,7 +61,7 @@ export const getReportDownloadUrl = traceAction('getReportDownloadUrl', async (j
 
 /**
  * Create or reuse a report generation job and dispatch Lambda via SQS.
- * @param {{ posts: Array<{_id: string}>, project?: object, profile?: object, reportType: string, reportFormat?: 'pdf'|'docx' }} input
+ * @param {{ posts: Array<{_id: string}>, project?: object, profile?: object, reportType: string, reportFormat?: 'pdf'|'docx', entityType?: 'posts'|'ads' }} input
  */
 export const getOrCreateReportJob = traceAction('getOrCreateReportJob', async ({
   posts,
@@ -67,7 +69,11 @@ export const getOrCreateReportJob = traceAction('getOrCreateReportJob', async ({
   profile,
   reportType,
   reportFormat = REPORT_FORMATS.PDF,
+  entityType = 'posts',
 }) => {
+  const isAdsReport = entityType === 'ads'
+  const entityNoun = isAdsReport ? 'ad' : 'post'
+
   if (reportFormat === REPORT_FORMATS.DOCX && reportType === REPORT_TYPES.SUMMARY) {
     throw new Error('DOCX reports do not support Summary report type')
   }
@@ -76,19 +82,23 @@ export const getOrCreateReportJob = traceAction('getOrCreateReportJob', async ({
     throw new Error('SimpleProfile is only supported with reportFormat docx')
   }
 
+  if (isAdsReport && (reportType === REPORT_TYPES.PROFILE || reportType === REPORT_TYPES.SIMPLE_PROFILE)) {
+    throw new Error('Profile reports are not supported for ads')
+  }
+
   const supabase = await createClient()
   const { user, project: resolvedProject, dbName } = await requireAuthContext()
 
-  const postIds = posts.map((p) => p._id)
-  const profileId = String(profile?._id ?? profile?.id ?? '')
+  const entityIds = posts.map((p) => p._id)
+  const profileId = isAdsReport ? '' : String(profile?._id ?? profile?.id ?? '')
 
   if (reportType === REPORT_TYPES.SIMPLE_PROFILE && !profileId) {
     throw new Error('Profile is required for SimpleProfile report generation')
   }
 
-  for (const id of postIds) {
+  for (const id of entityIds) {
     if (id != null && String(id) !== '' && !OBJECT_ID_HEX.test(String(id))) {
-      throw new Error('Invalid post ID format (expected 24-character hex)')
+      throw new Error(`Invalid ${entityNoun} ID format (expected 24-character hex)`)
     }
   }
 
@@ -96,7 +106,7 @@ export const getOrCreateReportJob = traceAction('getOrCreateReportJob', async ({
   const db = client.db(dbName)
   const objectIds = [
     ...new Map(
-      postIds
+      entityIds
         .filter(Boolean)
         .map((id) => {
           try {
@@ -110,58 +120,84 @@ export const getOrCreateReportJob = traceAction('getOrCreateReportJob', async ({
   ]
 
   if (objectIds.length === 0) {
-    throw new Error('No valid post IDs for report generation')
+    throw new Error(`No valid ${entityNoun} IDs for report generation`)
   }
 
-  const postsCol = getPostsCollection(db)
   let reportObjectIds = objectIds
 
-  const isProfileFamily =
-    reportType === REPORT_TYPES.PROFILE || reportType === REPORT_TYPES.SIMPLE_PROFILE
-
-  if (isProfileFamily) {
-    const reviewedPosts = await postsCol
-      .find({ _id: { $in: objectIds }, ...REVIEWED_THREAT_SCORE_FILTER }, { projection: { _id: 1 } })
-      .toArray()
-
-    if (reviewedPosts.length === 0) {
-      throw new Error('No reviewed posts available for profile report generation')
-    }
-    reportObjectIds = reviewedPosts.map((p) => p._id)
-  } else {
-    const validatedPosts = await postsCol
+  if (isAdsReport) {
+    const adsCol = adsCollection(db)
+    const validatedAds = await adsCol
       .find({ _id: { $in: objectIds } }, { projection: { _id: 1 } })
       .toArray()
 
-    if (validatedPosts.length !== objectIds.length) {
-      throw new Error('Some requested posts do not belong to your project scope')
+    if (validatedAds.length !== objectIds.length) {
+      throw new Error('Some requested ads do not belong to your project scope')
     }
 
-    const reviewedPosts = await postsCol
-      .find({ _id: { $in: objectIds }, ...REVIEWED_THREAT_SCORE_FILTER }, { projection: { _id: 1 } })
+    const reviewedAds = await adsCol
+      .find({ _id: { $in: objectIds }, ...REVIEWED_ADS_FILTER }, { projection: { _id: 1 } })
       .toArray()
 
-    if (reviewedPosts.length !== objectIds.length) {
-      const unreviewedCount = objectIds.length - reviewedPosts.length
+    if (reviewedAds.length !== objectIds.length) {
+      const unreviewedCount = objectIds.length - reviewedAds.length
       throw new Error(
-        `${unreviewedCount} post(s) are not reviewed and cannot be included in report generation`
+        `${unreviewedCount} ad(s) are not reviewed and cannot be included in report generation`
       )
+    }
+    reportObjectIds = reviewedAds.map((a) => a._id)
+  } else {
+    const postsCol = getPostsCollection(db)
+    const isProfileFamily =
+      reportType === REPORT_TYPES.PROFILE || reportType === REPORT_TYPES.SIMPLE_PROFILE
+
+    if (isProfileFamily) {
+      const reviewedPosts = await postsCol
+        .find({ _id: { $in: objectIds }, ...REVIEWED_THREAT_SCORE_FILTER }, { projection: { _id: 1 } })
+        .toArray()
+
+      if (reviewedPosts.length === 0) {
+        throw new Error('No reviewed posts available for profile report generation')
+      }
+      reportObjectIds = reviewedPosts.map((p) => p._id)
+    } else {
+      const validatedPosts = await postsCol
+        .find({ _id: { $in: objectIds } }, { projection: { _id: 1 } })
+        .toArray()
+
+      if (validatedPosts.length !== objectIds.length) {
+        throw new Error('Some requested posts do not belong to your project scope')
+      }
+
+      const reviewedPosts = await postsCol
+        .find({ _id: { $in: objectIds }, ...REVIEWED_THREAT_SCORE_FILTER }, { projection: { _id: 1 } })
+        .toArray()
+
+      if (reviewedPosts.length !== objectIds.length) {
+        const unreviewedCount = objectIds.length - reviewedPosts.length
+        throw new Error(
+          `${unreviewedCount} post(s) are not reviewed and cannot be included in report generation`
+        )
+      }
     }
   }
 
-  const reportPostIds = reportObjectIds.map((id) => id.toString())
+  const reportEntityIds = reportObjectIds.map((id) => id.toString())
 
-  const orderedPostIds = await orderPostIdsForReport(reportPostIds)
-  if (orderedPostIds.length !== reportPostIds.length) {
-    throw new Error('Some requested posts could not be ordered for report generation')
+  const orderedEntityIds = isAdsReport
+    ? await orderAdIdsForReport(reportEntityIds)
+    : await orderPostIdsForReport(reportEntityIds)
+  if (orderedEntityIds.length !== reportEntityIds.length) {
+    throw new Error(`Some requested ${entityNoun}s could not be ordered for report generation`)
   }
 
   const hash = generateReportHash(
     resolvedProject?.project_name || 'unknown',
-    reportPostIds,
+    reportEntityIds,
     reportType,
     profileId,
-    reportFormat
+    reportFormat,
+    isAdsReport ? 'ads' : 'posts'
   )
 
   const resolved = await resolveExistingReportJob(supabase, hash, user.id)
@@ -201,16 +237,28 @@ export const getOrCreateReportJob = traceAction('getOrCreateReportJob', async ({
     throw new Error('Failed to create report job record: ' + insertError.message)
   }
 
-  const sqsPayload = {
-    projectId: resolvedProject?.project_name || 'unknown',
-    postIds: orderedPostIds,
-    database_name: dbName,
-    reportType,
-    reportFormat,
-    project: resolvedProject,
-    profile: profile || null,
-    jobId: newJob.id,
-  }
+  const sqsPayload = isAdsReport
+    ? {
+        projectId: resolvedProject?.project_name || 'unknown',
+        entityType: 'ads',
+        adIds: orderedEntityIds,
+        database_name: dbName,
+        reportType,
+        reportFormat,
+        project: resolvedProject,
+        profile: null,
+        jobId: newJob.id,
+      }
+    : {
+        projectId: resolvedProject?.project_name || 'unknown',
+        postIds: orderedEntityIds,
+        database_name: dbName,
+        reportType,
+        reportFormat,
+        project: resolvedProject,
+        profile: profile || null,
+        jobId: newJob.id,
+      }
 
   try {
     await sendReportSqsMessage(sqsPayload)

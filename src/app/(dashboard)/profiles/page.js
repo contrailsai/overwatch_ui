@@ -1,6 +1,8 @@
 import { ProfilesList } from './ProfilesList'
 import { getProfiles } from './actions'
 import { getClientandProjectDetails } from '@/app/(dashboard)/actions'
+import { isSectionEnabled } from '@/lib/project-sections'
+import { DisabledSectionFallback } from '@/components/DisabledSectionFallback'
 
 import PageHeader from '@/components/PageHeader'
 
@@ -11,6 +13,10 @@ export const metadata = {
 
 export default async function ProfilesPage({ searchParams }) {
     const { project } = await getClientandProjectDetails()
+
+    if (!isSectionEnabled(project, 'posts')) {
+        return <DisabledSectionFallback />
+    }
 
     const resolvedParams = await searchParams
     const currentPage = resolvedParams.page ? parseInt(resolvedParams.page, 10) : 1

@@ -1,7 +1,9 @@
 import { DomainsList } from './DomainsList'
-import { getDomains } from './actions'
+import { getDomains, getDomainById } from './actions'
 import { getClientandProjectDetails } from '@/app/(dashboard)/actions'
 import PageHeader from '@/components/PageHeader'
+import { isSectionEnabled } from '@/lib/project-sections'
+import { DisabledSectionFallback } from '@/components/DisabledSectionFallback'
 
 export const metadata = {
     title: 'Domains',
@@ -10,6 +12,10 @@ export const metadata = {
 
 export default async function DomainsPage({ searchParams }) {
     const { project } = await getClientandProjectDetails()
+
+    if (!isSectionEnabled(project, 'domains')) {
+        return <DisabledSectionFallback />
+    }
 
     const resolvedParams = await searchParams
     const currentPage = resolvedParams.page ? parseInt(resolvedParams.page, 10) : 1
@@ -26,7 +32,12 @@ export default async function DomainsPage({ searchParams }) {
         direction: resolvedParams.sortDirection || 'desc',
     }
 
-    const domains = await getDomains(currentPage, itemsPerPage, filters, sort)
+    const [domains, initialDomain] = await Promise.all([
+        getDomains(currentPage, itemsPerPage, filters, sort),
+        resolvedParams.domain_id
+            ? getDomainById(resolvedParams.domain_id)
+            : Promise.resolve(null),
+    ])
 
     return (
         <main className="flex-1 flex flex-col h-full overflow-hidden bg-slate-50">
@@ -40,6 +51,7 @@ export default async function DomainsPage({ searchParams }) {
                     initialSort={sort}
                     currentPage={currentPage}
                     itemsPerPage={itemsPerPage}
+                    initialDomain={initialDomain}
                 />
             </div>
         </main>

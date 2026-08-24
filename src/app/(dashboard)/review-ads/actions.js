@@ -21,6 +21,7 @@ import { logActionError, LOKI_STREAMS } from '@/utils/otel-logger'
 import { adsCollection } from '@/utils/mongodb/collections'
 import {
   normalizeAdForUi,
+  fetchAdUpdateHistory,
   getAdMedia,
   riskRankFromScore,
   ONLINE_VISIBILITY_VALUES,
@@ -47,13 +48,7 @@ function buildReviewAdsMatchQuery(filters = {}) {
   const andConditions = []
 
   if (filters.status === 'pending') {
-    andConditions.push({
-      $or: [
-        { 'workflow.review_status': 'pending' },
-        { 'workflow.review_status': { $exists: false } },
-        { 'workflow.review_status': null },
-      ],
-    })
+    andConditions.push({ 'workflow.review_status': 'pending' })
   } else if (filters.status === 'reviewed') {
     andConditions.push({ 'workflow.review_status': 'reviewed' })
   }
@@ -231,7 +226,7 @@ export const getAds = traceAction('getAds_review', async (_project_mongo_db_map,
 
     const [result] = await collection.aggregate(pipeline).toArray()
     const totalCount = result?.metadata?.[0]?.total || 0
-    const ads = await Promise.all((result?.data || []).map((ad) => normalizeAdForUi(ad, db)))
+    const ads = await Promise.all((result?.data || []).map((ad) => normalizeAdForUi(ad)))
 
     return {
       ads,
@@ -255,7 +250,7 @@ export const getAdById = traceAction('getAdById', async (_project, adId) => {
     const client = await clientPromise
     const db = client.db(dbName)
     const ad = await adsCollection(db).findOne({ _id: new ObjectId(adId) })
-    return normalizeAdForUi(ad, db)
+    return normalizeAdForUi(ad)
   } catch (e) {
     logActionError({
       loki_stream: LOKI_STREAMS.review_ads,
@@ -264,6 +259,27 @@ export const getAdById = traceAction('getAdById', async (_project, adId) => {
     }, e)
     console.error('getAdById Error:', e)
     return null
+  }
+})
+
+export const getAdUpdateHistory = traceAction('getAdUpdateHistory', async (adId) => {
+  try {
+    const { dbName } = await requireRole(['reviewer'])
+    if (!adId || !ObjectId.isValid(adId)) {
+      return { success: false, history: [], error: 'Invalid Ad ID' }
+    }
+    const client = await clientPromise
+    const db = client.db(dbName)
+    const history = await fetchAdUpdateHistory(db, adId)
+    return { success: true, history }
+  } catch (e) {
+    logActionError({
+      loki_stream: LOKI_STREAMS.review_ads,
+      app_action: 'getAdUpdateHistory',
+      message: 'review_ads.getAdUpdateHistory failed',
+    }, e)
+    console.error('getAdUpdateHistory Error:', e)
+    return { success: false, history: [], error: e.message }
   }
 })
 
@@ -465,7 +481,7 @@ export const updateAdContent = traceAction('updateAdContent', async (adId, conte
     })
 
     const updated = await collection.findOne({ _id: new ObjectId(adId) })
-    return { success: true, ad: await normalizeAdForUi(updated, db) }
+    return { success: true, ad: await normalizeAdForUi(updated) }
   } catch (error) {
     logActionError({
       loki_stream: LOKI_STREAMS.review_ads,
@@ -570,7 +586,7 @@ export const confirmAdImageUpload = traceAction('confirmAdImageUpload', async (a
 
     const signedUrl = await getSignedImageUrl(resolvedS3Url)
     const updated = await collection.findOne({ _id: new ObjectId(adId) })
-    return { success: true, signedUrl, ad: await normalizeAdForUi(updated, db) }
+    return { success: true, signedUrl, ad: await normalizeAdForUi(updated) }
   } catch (error) {
     logActionError({
       loki_stream: LOKI_STREAMS.review_ads,
@@ -637,7 +653,7 @@ export const deleteAdImage = traceAction('deleteAdImage', async (adId, s3Url) =>
     })
 
     const updated = await collection.findOne({ _id: new ObjectId(adId) })
-    return { success: true, ad: await normalizeAdForUi(updated, db) }
+    return { success: true, ad: await normalizeAdForUi(updated) }
   } catch (error) {
     logActionError({
       loki_stream: LOKI_STREAMS.review_ads,

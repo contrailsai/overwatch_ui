@@ -9,6 +9,7 @@ import {
   Rss, Library, ChevronDown, FileStack, Megaphone, Globe,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { getEnabledSections } from '@/lib/project-sections'
 
 const SIDEBAR_GROUPS_STORAGE_KEY = 'overwatch.sidebar.groups.open'
 
@@ -31,7 +32,7 @@ function saveOpenGroups(map) {
 }
 
 function itemIsActive(pathname, href) {
-  return pathname === href || (href !== '/' && pathname.startsWith(href))
+  return pathname === href || (href !== '/' && pathname.startsWith(`${href}/`))
 }
 
 function NavLinkItem({ item, pathname }) {
@@ -84,6 +85,26 @@ function NavLinkItem({ item, pathname }) {
 }
 
 function NavGroup({ group, pathname, open, onToggle }) {
+  if (group.disabled) {
+    return (
+      <div
+        className={cn(
+          'flex items-center px-3 py-2.5 text-sm font-semibold rounded-lg transition-all duration-200 overflow-hidden',
+          'text-slate-400 cursor-not-allowed',
+        )}
+        aria-disabled="true"
+      >
+        <group.icon
+          className="h-5 w-5 shrink-0 mr-3 text-slate-400"
+          strokeWidth={2}
+        />
+        <span className="flex-1 text-left truncate whitespace-nowrap transition-all duration-300 md:opacity-0 md:group-hover:opacity-100">
+          {group.name}
+        </span>
+      </div>
+    )
+  }
+
   const visibleChildren = group.children.filter((c) => c.show)
   if (visibleChildren.length === 0) return null
 
@@ -159,6 +180,7 @@ export function Sidebar({ user, clientDetails, project }) {
   const isReviewer = clientDetails?.permission === 'reviewer'
   const isAdminOrReviewer =
     clientDetails?.permission === 'client-admin' || clientDetails?.permission === 'reviewer'
+  const sections = getEnabledSections(project?.project_details)
 
   const navigation = useMemo(() => {
     const withTakedownStatus = (item) => {
@@ -168,6 +190,8 @@ export function Sidebar({ user, clientDetails, project }) {
       return { ...item, show: status }
     }
 
+    const feedsShow = sections.feeds ? true : 'grayed_out'
+
     return [
       { type: 'item', name: 'Analytics', href: '/', icon: LayoutDashboard, show: true },
       {
@@ -175,20 +199,23 @@ export function Sidebar({ user, clientDetails, project }) {
         id: 'posts',
         name: 'Posts',
         icon: FileStack,
+        disabled: !sections.posts,
         children: [
           { name: 'Review Cases', href: '/review-cases', icon: ScanEye, show: isReviewer },
           { name: 'Content List', href: '/cases', icon: List, show: true },
           { name: 'Review Profiles', href: '/review-profiles', icon: UserRoundPen, show: isReviewer },
           { name: 'Profile List', href: '/profiles', icon: Users, show: true },
-        ].map(withTakedownStatus),
+        ],
       },
       {
         type: 'group',
         id: 'ads',
         name: 'Ads',
         icon: Megaphone,
+        disabled: !sections.ads,
         children: [
           { name: 'Review Ads', href: '/review-ads', icon: ScanEye, show: isReviewer },
+          { name: 'Ad List', href: '/ads', icon: List, show: true },
           { name: 'Review Ad Profiles', href: '/review-ad-profiles', icon: UserRoundPen, show: isReviewer },
           { name: 'Ad Profile List', href: '/ad-profiles', icon: Users, show: true },
         ],
@@ -198,20 +225,21 @@ export function Sidebar({ user, clientDetails, project }) {
         id: 'domains',
         name: 'Domains',
         icon: Globe,
+        disabled: !sections.domains,
         children: [
           { name: 'Review Domains', href: '/review-domains', icon: ScanEye, show: isReviewer },
           { name: 'Domains', href: '/domains', icon: List, show: true },
         ],
       },
-      { type: 'item', name: 'Feeds', href: '/feeds', icon: Library, show: true },
-      { type: 'item', name: 'Manage Feeds', href: '/manage-feeds', icon: Rss, show: isReviewer },
+      { type: 'item', name: 'Feeds', href: '/feeds', icon: Library, show: feedsShow },
+      { type: 'item', name: 'Manage Feeds', href: '/manage-feeds', icon: Rss, show: isReviewer ? feedsShow : false },
       withTakedownStatus({ name: 'Takedowns', href: '/takedowns', icon: ShieldAlert, show: true, type: 'item' }),
       { type: 'item', name: 'Upload Content', href: '/upload-content', icon: GitPullRequestCreateArrow, show: true },
       { type: 'item', name: 'Configurations', href: '/configurations', icon: Settings, show: true },
       { type: 'item', name: 'Admin', href: '/admin', icon: UserStar, show: isAdminOrReviewer },
       { type: 'item', name: 'Reports', href: '/reports', icon: FileText, show: true },
     ]
-  }, [isReviewer, isAdminOrReviewer, project?.project_details?.do_takedowns])
+  }, [isReviewer, isAdminOrReviewer, project?.project_details?.do_takedowns, sections.posts, sections.ads, sections.domains, sections.feeds])
 
   const toggleGroup = (id) => {
     setOpenGroups((prev) => {
@@ -247,9 +275,10 @@ export function Sidebar({ user, clientDetails, project }) {
       <nav className="flex-1 overflow-y-auto overflow-x-hidden px-3 py-6 space-y-1">
         {navigation.map((entry) => {
           if (entry.type === 'group') {
-            const defaultOpen =
-              openGroups[entry.id] ??
-              entry.children.some((c) => itemIsActive(pathname, c.href))
+            const defaultOpen = entry.disabled
+              ? false
+              : openGroups[entry.id] ??
+                entry.children.some((c) => itemIsActive(pathname, c.href))
             return (
               <NavGroup
                 key={entry.id}

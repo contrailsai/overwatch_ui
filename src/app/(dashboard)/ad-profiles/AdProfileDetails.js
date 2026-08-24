@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Link from 'next/link'
 import { getAdProfileAds, addAdProfileClientNote, updateAdProfileClientStatus } from './actions'
 import {
     ExternalLink, X, Facebook, Instagram, Youtube, CheckCircle,
@@ -437,12 +438,20 @@ export default function AdProfileDetailPanel({ profile, project, isOpen, onClose
                                                             <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black bg-emerald-100 text-emerald-700 uppercase tracking-tighter shadow-sm">Online</span>
                                                         ) : null}
                                                     </div>
-                                                    {c.original_url && (
-                                                        <a href={c.original_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-[10px] font-bold text-slate-600 hover:text-blue-600 px-2 py-1 rounded-md border border-slate-100 group/link">
-                                                            Open in Ads Library
-                                                            <ExternalLink className="w-2.5 h-2.5 opacity-40 group-hover/link:opacity-100 transition-all" />
-                                                        </a>
-                                                    )}
+                                                    <div className="flex items-center gap-2">
+                                                        <Link
+                                                            href={`/ads?ad_id=${c._id}`}
+                                                            className="inline-flex items-center gap-1.5 text-[10px] font-bold text-slate-600 hover:text-blue-600 px-2 py-1 rounded-md border border-slate-100"
+                                                        >
+                                                            View ad
+                                                        </Link>
+                                                        {c.original_url && (
+                                                            <a href={c.original_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-[10px] font-bold text-slate-600 hover:text-blue-600 px-2 py-1 rounded-md border border-slate-100 group/link">
+                                                                Ads Library
+                                                                <ExternalLink className="w-2.5 h-2.5 opacity-40 group-hover/link:opacity-100 transition-all" />
+                                                            </a>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             </div>
                                         )

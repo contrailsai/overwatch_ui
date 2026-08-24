@@ -97,3 +97,11 @@ export async function requireRole(allowedRoles = []) {
   }
   return context
 }
+
+export async function invalidateTenantContext(userId) {
+  if (userId) {
+    tenantContextCache.delete(userId)
+    return
+  }
+  tenantContextCache.clear()
+}

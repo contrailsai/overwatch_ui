@@ -40,7 +40,15 @@ const getAnalysisStatusLabel = (status) => {
     return 'Pending'
 }
 
-export function DomainsList({ domains, project, initialFilters, initialSort = { field: null, direction: 'desc' }, currentPage, itemsPerPage }) {
+export function DomainsList({
+    domains,
+    project,
+    initialFilters,
+    initialSort = { field: null, direction: 'desc' },
+    currentPage,
+    itemsPerPage,
+    initialDomain = null,
+}) {
     const router = useRouter()
     const pathname = usePathname()
     const searchParams = useSearchParams()
@@ -50,7 +58,7 @@ export function DomainsList({ domains, project, initialFilters, initialSort = { 
     const domainList = domains?.domains || []
 
     const [localDomains, setLocalDomains] = useState(domainList)
-    const [selectedDomain, setSelectedDomain] = useState(null)
+    const [selectedDomain, setSelectedDomain] = useState(initialDomain || null)
     const [searchInput, setSearchInput] = useState(initialFilters.searchText || '')
 
     useEffect(() => {
@@ -60,6 +68,30 @@ export function DomainsList({ domains, project, initialFilters, initialSort = { 
     useEffect(() => {
         setSearchInput(initialFilters.searchText || '')
     }, [initialFilters.searchText])
+
+    useEffect(() => {
+        if (initialDomain) setSelectedDomain(initialDomain)
+    }, [initialDomain])
+
+    const updateQueryParams = useCallback((newParams) => {
+        const params = new URLSearchParams(searchParams.toString())
+        Object.entries(newParams).forEach(([key, value]) => {
+            if (value === null || value === undefined || value === 'all') params.delete(key)
+            else params.set(key, value)
+        })
+        if (!newParams.page) params.delete('page')
+        router.push(`${pathname}?${params.toString()}`)
+    }, [router, pathname, searchParams])
+
+    const openDomain = useCallback((domain) => {
+        setSelectedDomain(domain)
+        updateQueryParams({ domain_id: domain._id })
+    }, [updateQueryParams])
+
+    const closeDomain = useCallback(() => {
+        setSelectedDomain(null)
+        updateQueryParams({ domain_id: null })
+    }, [updateQueryParams])
 
     const handleDomainUpdate = (domainId, updates) => {
         setLocalDomains((prev) => prev.map((d) => (d._id === domainId ? { ...d, ...updates } : d)))
@@ -77,9 +109,9 @@ export function DomainsList({ domains, project, initialFilters, initialSort = { 
         if (currentIndex === -1) return
         const nextIndex = direction === 'next' ? currentIndex + 1 : currentIndex - 1
         if (nextIndex >= 0 && nextIndex < localDomains.length) {
-            setSelectedDomain(localDomains[nextIndex])
+            openDomain(localDomains[nextIndex])
         }
-    }, [selectedDomain, localDomains])
+    }, [selectedDomain, localDomains, openDomain])
 
     useEffect(() => {
         const handleKeyDown = (e) => {
@@ -91,16 +123,6 @@ export function DomainsList({ domains, project, initialFilters, initialSort = { 
         window.addEventListener('keydown', handleKeyDown)
         return () => window.removeEventListener('keydown', handleKeyDown)
     }, [selectedDomain, navigateDomain])
-
-    const updateQueryParams = useCallback((newParams) => {
-        const params = new URLSearchParams(searchParams.toString())
-        Object.entries(newParams).forEach(([key, value]) => {
-            if (value === null || value === undefined || value === 'all') params.delete(key)
-            else params.set(key, value)
-        })
-        if (!newParams.page) params.delete('page')
-        router.push(`${pathname}?${params.toString()}`)
-    }, [router, pathname, searchParams])
 
     const handleFilterChange = (key, value) => updateQueryParams({ [key]: value })
     const handlePageChange = (newPage) => newPage >= 1 && newPage <= totalPages && updateQueryParams({ page: newPage })
@@ -269,7 +291,7 @@ export function DomainsList({ domains, project, initialFilters, initialSort = { 
                                         const statusCfg = getStatusConfig(domain.client_status)
                                         const StatusIcon = statusCfg.icon
                                         return (
-                                            <tr key={domain._id} onClick={() => setSelectedDomain(domain)} className={cn('transition-all cursor-pointer group hover:bg-slate-50/80', isSelected && 'bg-blue-50/50')}>
+                                            <tr key={domain._id} onClick={() => openDomain(domain)} className={cn('transition-all cursor-pointer group hover:bg-slate-50/80', isSelected && 'bg-blue-50/50')}>
                                                 <td className="px-4 py-3 whitespace-nowrap align-middle border-b border-slate-50">
                                                     <span className={cn('inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold border shadow-sm', risk.className)}>
                                                         <RiskIcon className="w-3.5 h-3.5 mr-1.5" />
@@ -357,7 +379,7 @@ export function DomainsList({ domains, project, initialFilters, initialSort = { 
                             const statusCfg = getStatusConfig(domain.client_status)
                             const StatusIcon = statusCfg.icon
                             return (
-                                <div key={domain._id} onClick={() => setSelectedDomain(domain)} className="bg-white rounded-2xl border border-slate-200 p-4 flex flex-col gap-3 shadow-sm transition-all cursor-pointer hover:border-slate-300 hover:shadow-md">
+                                <div key={domain._id} onClick={() => openDomain(domain)} className="bg-white rounded-2xl border border-slate-200 p-4 flex flex-col gap-3 shadow-sm transition-all cursor-pointer hover:border-slate-300 hover:shadow-md">
                                     <div className="flex justify-between items-start">
                                         <div className="flex items-center gap-2">
                                             <Badge variant="outline" className={cn('rounded-md capitalize font-bold border gap-1 pl-1.5 pr-2 h-6 text-[10px]', statusCfg.color)}>
@@ -451,7 +473,7 @@ export function DomainsList({ domains, project, initialFilters, initialSort = { 
                 domain={selectedDomain}
                 project={project}
                 isOpen={!!selectedDomain}
-                onClose={() => setSelectedDomain(null)}
+                onClose={closeDomain}
                 onUpdate={handleDomainUpdate}
                 onNext={() => navigateDomain('next')}
                 onPrev={() => navigateDomain('prev')}

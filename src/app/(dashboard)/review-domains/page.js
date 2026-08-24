@@ -2,6 +2,8 @@ import { getDomains, getDomainById } from './actions'
 import { getClientandProjectDetails } from '@/app/(dashboard)/actions'
 import { ReviewDomainsInterface } from './ReviewDomainsInterface'
 import PageHeader from '@/components/PageHeader'
+import { isSectionEnabled } from '@/lib/project-sections'
+import { DisabledSectionFallback } from '@/components/DisabledSectionFallback'
 
 export const metadata = {
   title: 'Review Domains',
@@ -12,7 +14,11 @@ export default async function ReviewDomainsPage({ searchParams }) {
   const result = await getClientandProjectDetails()
   if (!result) return null
 
-  const { clientDetails } = result
+  const { clientDetails, project } = result
+
+  if (!isSectionEnabled(project, 'domains')) {
+    return <DisabledSectionFallback />
+  }
 
   if (clientDetails.permission !== 'reviewer') {
     return (
@@ -32,9 +38,10 @@ export default async function ReviewDomainsPage({ searchParams }) {
     status: resolvedParams?.status || 'pending',
     analysisStatus: resolvedParams?.analysisStatus || 'all',
     search: resolvedParams?.search || '',
+    visibility_status: resolvedParams?.visibility_status || 'all',
   }
 
-  const itemsPerPage = 50
+  const itemsPerPage = 25
   const { domains, totalPages, totalCount } = await getDomains(page, itemsPerPage, initialFilters)
 
   let initialDomain = null
@@ -54,6 +61,8 @@ export default async function ReviewDomainsPage({ searchParams }) {
           totalCount={totalCount}
           initialDomain={initialDomain}
           itemsPerPage={itemsPerPage}
+          project={project}
+          clientDetails={clientDetails}
         />
       </div>
     </main>

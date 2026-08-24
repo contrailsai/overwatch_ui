@@ -319,6 +319,220 @@ async function ensureIndexesV3(db, log = console.log) {
     'profiles: post_count'
   )
 
+  const ads = db.collection('Ads')
+  await ok(
+    ads,
+    { platform: 1, platform_ad_id: 1 },
+    { unique: true, name: 'uniq_platform_ad_id' },
+    'Ads: { platform, platform_ad_id } unique'
+  )
+  await ok(
+    ads,
+    { 'workflow.review_status': 1, 'list.sourced_at': -1, _id: -1 },
+    { name: 'review_status_sourced_at_id' },
+    'Ads: review_status + sourced_at + _id (reviewer queue sort)'
+  )
+  await ok(
+    ads,
+    {
+      'workflow.review_status': 1,
+      'list.effective_threat_score': -1,
+      'list.sourced_at': -1,
+      _id: 1,
+    },
+    { name: 'review_status_threat_sourced' },
+    'Ads: review_status + threat + sourced_at (client list default)'
+  )
+  await ok(
+    ads,
+    {
+      'workflow.review_status': 1,
+      'list.effective_threat_score': -1,
+      'list.start_date': -1,
+      _id: 1,
+    },
+    { name: 'review_status_threat_start_date' },
+    'Ads: review_status + threat + start_date (reports / date sort)'
+  )
+  await ok(
+    ads,
+    {
+      'workflow.review_status': 1,
+      'workflow.client_status': 1,
+      'list.effective_threat_score': -1,
+      'list.sourced_at': -1,
+    },
+    { name: 'review_client_status_threat_sourced' },
+    'Ads: review_status + client_status + threat + sourced_at'
+  )
+  await ok(
+    ads,
+    {
+      'workflow.ai_status': 1,
+      'workflow.review_status': 1,
+      'list.sourced_at': -1,
+    },
+    { name: 'ai_status_review_sourced' },
+    'Ads: ai_status + review_status + sourced_at'
+  )
+  await ok(
+    ads,
+    { ad_profile_id: 1, 'list.sourced_at': -1 },
+    { name: 'ad_profile_id_sourced_at' },
+    'Ads: ad_profile_id + sourced_at'
+  )
+  await ok(
+    ads,
+    { platform: 1, 'list.is_active': 1, 'list.start_date': -1 },
+    { name: 'filter_active_start' },
+    'Ads: platform + is_active + start_date'
+  )
+  await ok(
+    ads,
+    { 'list.review_threat_score': 1 },
+    { name: 'review_threat_score_sparse', sparse: true },
+    'Ads: review_threat_score sparse (client reviewed $or compat arm)'
+  )
+  await ok(
+    ads,
+    { linked_domain_ids: 1 },
+    { name: 'linked_domain_ids' },
+    'Ads: linked_domain_ids'
+  )
+
+  const adProfiles = db.collection('Ad_profiles')
+  await ok(
+    adProfiles,
+    { platform: 1, platform_page_id: 1 },
+    { unique: true, name: 'uniq_platform_page_id' },
+    'Ad_profiles: { platform, platform_page_id } unique'
+  )
+  await ok(
+    adProfiles,
+    { platform: 1, profile_url: 1 },
+    { name: 'platform_profile_url' },
+    'Ad_profiles: platform + profile_url'
+  )
+  await ok(
+    adProfiles,
+    { 'list.ad_count': -1, 'list.max_threat_score': -1, _id: 1 },
+    { name: 'ad_count_threat_id' },
+    'Ad_profiles: ad_count + max_threat + _id (reviewer default sort)'
+  )
+  await ok(
+    adProfiles,
+    {
+      'workflow.review_status': 1,
+      'list.ad_count': -1,
+      'list.max_threat_score': -1,
+      _id: 1,
+    },
+    { name: 'review_status_ad_count_threat' },
+    'Ad_profiles: review_status + ad_count + max_threat'
+  )
+  await ok(
+    adProfiles,
+    {
+      'workflow.review_status': 1,
+      'workflow.reviewed_at': -1,
+      'list.last_active_at': -1,
+      _id: 1,
+    },
+    { name: 'review_status_reviewed_last_active' },
+    'Ad_profiles: review_status + reviewed_at + last_active (client list)'
+  )
+  await ok(
+    adProfiles,
+    {
+      'workflow.review_status': 1,
+      'workflow.client_status': 1,
+      'workflow.reviewed_at': -1,
+    },
+    { name: 'review_status_client_reviewed' },
+    'Ad_profiles: review_status + client_status + reviewed_at'
+  )
+  await ok(
+    adProfiles,
+    { 'workflow.review_status': 1, 'list.max_threat_score': -1 },
+    { name: 'ad_profile_review' },
+    'Ad_profiles: review_status + max_threat_score'
+  )
+
+  const domains = db.collection('Domains')
+  await ok(
+    domains,
+    { domain_name: 1 },
+    { unique: true, name: 'domain_name_unique' },
+    'Domains: { domain_name } unique'
+  )
+  await ok(
+    domains,
+    {
+      'workflow.review_status': 1,
+      'list.last_analyzed_at': -1,
+      'list.last_seen_at': -1,
+      _id: -1,
+    },
+    { name: 'review_status_analyzed_seen_id' },
+    'Domains: review_status + last_analyzed + last_seen + _id (reviewer queue)'
+  )
+  await ok(
+    domains,
+    { 'workflow.review_status': 1, 'list.last_seen_at': -1, _id: 1 },
+    { name: 'review_status_last_seen' },
+    'Domains: review_status + last_seen (client list default)'
+  )
+  await ok(
+    domains,
+    {
+      'workflow.review_status': 1,
+      'workflow.client_status': 1,
+      'list.last_seen_at': -1,
+    },
+    { name: 'review_status_client_last_seen' },
+    'Domains: review_status + client_status + last_seen'
+  )
+  await ok(
+    domains,
+    { 'workflow.review_status': 1, 'list.effective_threat_score': -1, _id: 1 },
+    { name: 'review_status_threat' },
+    'Domains: review_status + effective_threat_score'
+  )
+  await ok(
+    domains,
+    { 'workflow.review_status': 1, 'list.occurrence_count': -1, _id: 1 },
+    { name: 'review_status_occurrence' },
+    'Domains: review_status + occurrence_count'
+  )
+  await ok(
+    domains,
+    {
+      'workflow.review_status': 1,
+      'workflow.analysis_status': 1,
+      'list.last_analyzed_at': -1,
+    },
+    { name: 'review_status_analysis_analyzed' },
+    'Domains: review_status + analysis_status + last_analyzed'
+  )
+  await ok(
+    domains,
+    { 'list.risk_rank': 1, 'list.last_seen_at': -1 },
+    { name: 'risk_rank_last_seen' },
+    'Domains: risk_rank + last_seen'
+  )
+  await ok(
+    domains,
+    { 'discovery.occurrences.entity_id': 1 },
+    { name: 'occurrence_entity' },
+    'Domains: discovery.occurrences.entity_id'
+  )
+  await ok(
+    domains,
+    { linked_ad_ids: 1 },
+    { name: 'linked_ad_ids' },
+    'Domains: linked_ad_ids'
+  )
+
   await ok(
     caseEvents,
     { entity_type: 1, entity_id: 1, occurred_at: -1 },

@@ -1,6 +1,8 @@
 import { AdProfilesList } from './AdProfilesList'
 import { getAdProfiles } from './actions'
 import { getClientandProjectDetails } from '@/app/(dashboard)/actions'
+import { isSectionEnabled } from '@/lib/project-sections'
+import { DisabledSectionFallback } from '@/components/DisabledSectionFallback'
 
 import PageHeader from '@/components/PageHeader'
 
@@ -11,6 +13,10 @@ export const metadata = {
 
 export default async function AdProfilesPage({ searchParams }) {
     const { project } = await getClientandProjectDetails()
+
+    if (!isSectionEnabled(project, 'ads')) {
+        return <DisabledSectionFallback />
+    }
 
     const resolvedParams = await searchParams
     const currentPage = resolvedParams.page ? parseInt(resolvedParams.page, 10) : 1

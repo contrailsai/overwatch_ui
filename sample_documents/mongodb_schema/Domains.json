@@ -1,54 +1,128 @@
 {
-  "_id": { "$oid": "6c0000000000000000000001" },
+  "_id": { "$oid": "6c0000000000000000000002" },
   "schema_version": 1,
-  "domain_name": "iknroling.com",
+  "domain_name": "newzonic.com",
   "discovery": {
     "first_entity_type": "ad",
-    "first_entity_id": { "$oid": "6b0000000000000000000001" },
-    "first_seen_url": "http://iknroling.com/?content_id=3",
+    "first_entity_id": { "$oid": "6b0000000000000000000002" },
+    "first_seen_url": "https://newzonic.com/?content_id=in01-2017/03-3&utm_creative=shah-potuzhna01--4x5",
     "occurrences": [
       {
         "entity_type": "ad",
-        "entity_id": { "$oid": "6b0000000000000000000001" },
-        "url": "http://iknroling.com/?content_id=3",
-        "seen_at": { "$date": "2026-08-13T06:30:00.000Z" }
-      },
-      {
-        "entity_type": "ad",
-        "entity_id": { "$oid": "6b0000000000000000000001" },
-        "url": "http://iknroling.com/?content_id=5",
-        "seen_at": { "$date": "2026-08-13T06:30:00.000Z" }
+        "entity_id": { "$oid": "6b0000000000000000000002" },
+        "url": "https://newzonic.com/?content_id=in01-2017/03-3&utm_creative=shah-potuzhna01--4x5",
+        "seen_at": { "$date": "2026-08-19T05:08:06.000Z" }
       }
     ]
   },
   "workflow": {
-    "analysis_status": "pending",
+    "analysis_status": "completed",
     "review_status": "pending",
     "client_status": "open",
-    "visibility_status": "unknown",
+    "visibility_status": "up",
     "takedown_status": "none",
     "alerted_at": null
   },
   "list": {
-    "ai_threat_score": null,
+    "ai_threat_score": 91,
     "review_threat_score": null,
-    "effective_threat_score": null,
-    "risk_rank": null,
-    "threat_types": [],
-    "violation_flags": [],
-    "category": null,
-    "registrar": null,
-    "hosting_provider": null,
-    "hosting_country": null,
-    "is_reachable": null,
-    "ssl_valid": null,
-    "first_seen_at": { "$date": "2026-08-13T06:30:00.000Z" },
-    "last_seen_at": { "$date": "2026-08-13T06:30:00.000Z" },
-    "last_analyzed_at": null,
+    "effective_threat_score": 91,
+    "risk_rank": "medium",
+    "threat_types": ["impersonation", "financial_scam", "poi_misuse"],
+    "violation_flags": ["impersonation", "financial_scam", "poi_misuse"],
+    "category": "scam",
+    "registrar": "NameCheap, Inc.",
+    "hosting_provider": "Cloudflare, Inc.",
+    "hosting_country": "US",
+    "is_reachable": true,
+    "ssl_valid": true,
+    "first_seen_at": { "$date": "2026-08-19T05:08:06.000Z" },
+    "last_seen_at": { "$date": "2026-08-19T05:08:06.000Z" },
+    "last_analyzed_at": { "$date": "2026-08-19T05:10:00.000Z" },
     "reviewed_at": null,
-    "occurrence_count": 2
+    "occurrence_count": 1
   },
-  "analysis_results": {},
+  "analysis_results": {
+    "whois": {
+      "registrar": "NameCheap, Inc.",
+      "registrar_iana_id": 1068,
+      "created_at": "2026-07-27T11:20:36.000Z",
+      "updated_at": "2026-08-10T16:28:39.000Z",
+      "expires_at": "2027-07-27T11:20:36.000Z",
+      "registrant_country": "IS",
+      "privacy_protected": true,
+      "privacy_provider": "Withheld for Privacy ehf",
+      "name_servers": ["dara.ns.cloudflare.com", "rudy.ns.cloudflare.com"],
+      "dnssec": false,
+      "age_days_at_analysis": 23
+    },
+    "dns": {
+      "a": ["104.21.20.229", "172.67.194.189"],
+      "aaaa": ["2606:4700:3030::ac43:c2bd", "2606:4700:3030::6815:14e5"],
+      "mx": [],
+      "ns": ["dara.ns.cloudflare.com", "rudy.ns.cloudflare.com"],
+      "txt": [],
+      "nameservers": ["dara.ns.cloudflare.com", "rudy.ns.cloudflare.com"]
+    },
+    "ssl": {
+      "issuer": "Google Trust Services, CN=WE1",
+      "subject": "CN=newzonic.com",
+      "valid_from": "2026-08-10T15:31:03.000Z",
+      "valid_to": "2026-11-08T16:29:38.000Z",
+      "is_valid": true,
+      "san": ["newzonic.com", "*.newzonic.com"]
+    },
+    "hosting": {
+      "ip": "104.21.20.229",
+      "asn": "AS13335",
+      "provider": "Cloudflare, Inc.",
+      "country": "US",
+      "city": "San Francisco",
+      "is_cdn": true,
+      "anycast": true
+    },
+    "reputation": {
+      "hits": [],
+      "sources": [],
+      "notes": "No public blocklist hits at analysis time. High-risk signals are registration age, privacy WHOIS, and page content rather than reputation feeds."
+    },
+    "content_classification": {
+      "url": "https://newzonic.com/?content_id=in01-2017/03-3&utm_creative=shah-potuzhna01--4x5",
+      "http_status": 200,
+      "title": "Amit Shah HAS DECLARED FINANCIAL WAR ON THE CURRENT GOVERNMENT!",
+      "language": "en",
+      "category": "scam",
+      "labels": [
+        "poi_impersonation",
+        "news_spoof",
+        "investment_scam",
+        "political",
+        "click_tracking"
+      ],
+      "poi_names": ["Amit Shah", "Droupadi Murmu", "Nirmala Sitharaman", "Madhabi Buch"],
+      "spoofed_brands": ["India Today", "Aaj Tak"],
+      "summary": "Newly registered Cloudflare-fronted landing page. Parameterized ad URL (content_id, utm_creative=shah-potuzhna01--4x5) serves a spoofed India Today layout attributing a fabricated quote to Amit Shah and promoting a QuantumAI investment scheme. Tracking cookies store click IDs and the inbound referrer.",
+      "excerpt": "Draupadi Murmu and Nirmal Sitharaman have been enriching themselves at the expense of ordinary Indians for years. I am here to put an end to this. — Amit Shah. QuantumAI is the opportunity that must not be missed."
+    },
+    "tech_stack": ["cloudflare", "caddy", "facebook_pixel"],
+    "redirect_chain": [
+      {
+        "url": "https://newzonic.com/?content_id=in01-2017/03-3&utm_creative=shah-potuzhna01--4x5",
+        "status_code": 200
+      }
+    ],
+    "screenshot": {
+      "s3_url": "/fixtures/domains/newzonic.com-full.png",
+      "captured_at": "2026-08-19T05:26:00.000Z",
+      "source_url": "https://newzonic.com/?content_id=in01-2017/03-3&utm_creative=shah-potuzhna01--4x5"
+    },
+    "raw": {
+      "captured_at": "2026-08-19T05:10:00.000Z",
+      "server": "cloudflare",
+      "via": "1.1 Caddy",
+      "cookies_observed": ["bc115", "rc115", "uclick", "bcid"]
+    }
+  },
   "review_details": {},
   "analysis_correction_request": {},
   "takedown": {
@@ -60,13 +134,13 @@
   },
   "client_notes": [],
   "ingestion": {
-    "type": "ad_link_extraction",
-    "source_url": "http://iknroling.com/?content_id=3",
-    "ingested_at": { "$date": "2026-08-13T06:30:00.000Z" }
+    "type": "manual_fixture",
+    "source_url": "https://newzonic.com/?content_id=in01-2017/03-3&utm_creative=shah-potuzhna01--4x5",
+    "ingested_at": { "$date": "2026-08-19T05:10:00.000Z" }
   },
   "system": {
-    "created_at": { "$date": "2026-08-13T06:30:00.000Z" },
-    "updated_at": { "$date": "2026-08-13T06:30:00.000Z" }
+    "created_at": { "$date": "2026-08-19T05:10:00.000Z" },
+    "updated_at": { "$date": "2026-08-19T05:10:00.000Z" }
   },
   "content_reviewed_by": null
 }

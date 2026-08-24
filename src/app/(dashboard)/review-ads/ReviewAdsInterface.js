@@ -235,7 +235,7 @@ export function ReviewAdsInterface({
   initialFilters,
   totalCount,
   initialAd,
-  itemsPerPage = 50,
+  itemsPerPage = 25,
 }) {
   const router = useRouter()
   const pathname = usePathname()

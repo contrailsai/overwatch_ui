@@ -2,6 +2,8 @@ import { getAds, getAdById } from './actions'
 import { getClientandProjectDetails } from '@/app/(dashboard)/actions'
 import { ReviewAdsInterface } from './ReviewAdsInterface'
 import PageHeader from '@/components/PageHeader'
+import { isSectionEnabled } from '@/lib/project-sections'
+import { DisabledSectionFallback } from '@/components/DisabledSectionFallback'
 
 export const metadata = {
   title: 'Review Ads',
@@ -13,6 +15,10 @@ export default async function ReviewAdsPage({ searchParams }) {
   if (!result) return null
 
   const { user, clientDetails, project } = result
+
+  if (!isSectionEnabled(project, 'ads')) {
+    return <DisabledSectionFallback />
+  }
 
   if (clientDetails.permission !== 'reviewer') {
     return (
@@ -65,7 +71,7 @@ export default async function ReviewAdsPage({ searchParams }) {
     search: resolvedParams?.search || '',
   }
 
-  const itemsPerPage = 50
+  const itemsPerPage = 25
   const { ads, totalPages, totalCount } = await getAds(
     project.mongo_db_map,
     page,
