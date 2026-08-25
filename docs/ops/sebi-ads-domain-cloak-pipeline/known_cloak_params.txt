@@ -1,0 +1,17 @@
+# Known SEBI cloak identifiers (dummy site without; scam with).
+# Used later for Playwright param trial-and-error.
+
+ad_name=ind37
+pEl8X=tupkapday
+pEl8X=nirpokcode
+pEl8X=ajtan_Haq
+pEl8X=origtupcls
+adset_name=ind37
+pEl8X=MI1_HT2
+pEl8X=tupmz4el
+pEl8X=MI2_HT2
+pEl8X=tups111
+pEl8X=MI2_Haq
+pEl8X=tup5min
+pEl8X=tupscdn
+pEl8X=clstup

@@ -1,6 +1,7 @@
 import RequestContentPage from './RequestContentPage'
 import { getClientandProjectDetails } from '@/app/(dashboard)/actions'
 import { runInSpan } from '@/utils/tracing'
+import { isSectionEnabled } from '@/lib/project-sections'
 
 export const metadata = {
   title: 'Upload Content',
@@ -17,11 +18,13 @@ export default async function Page() {
   const clientDetails = data?.clientDetails
   const isReviewer = clientDetails?.permission === 'reviewer'
   const moderationQueueConfigured = Boolean(process.env.AWS_CONTENT_MODERATION_SQS_QUEUE_URL)
+  const adsEnabled = isSectionEnabled(data?.project, 'ads')
 
   return (
     <RequestContentPage
       isReviewer={isReviewer}
       moderationQueueConfigured={moderationQueueConfigured}
+      adsEnabled={adsEnabled}
     />
   )
 }

@@ -43,6 +43,12 @@ export const LOKI_STREAMS = {
   cases: 'cases',
   review_cases: 'review_cases',
   review_profiles: 'review_profiles',
+  review_ads: 'review_ads',
+  ads: 'ads',
+  review_ad_profiles: 'review_ad_profiles',
+  ad_profiles: 'ad_profiles',
+  domains: 'domains',
+  review_domains: 'review_domains',
   profiles: 'profiles',
   takedowns: 'takedowns',
   reports: 'reports',
@@ -99,7 +105,24 @@ export function inferLokiStream(actionName) {
   if (n.includes('takedown') || n.includes('raisedcount') || n.includes('prioritytakedown')) {
     return LOKI_STREAMS.takedowns
   }
+  if (n.includes('adprofile') || n.includes('ad_profile') || (n.includes('ad') && n.includes('profile'))) {
+    if (n.includes('review') || n.endsWith('_review')) return LOKI_STREAMS.review_ad_profiles
+    return LOKI_STREAMS.ad_profiles
+  }
+  if (n.includes('domain')) {
+    if (n.includes('review')) return LOKI_STREAMS.review_domains
+    return LOKI_STREAMS.domains
+  }
   if (n.includes('profile') && n.includes('review')) return LOKI_STREAMS.review_profiles
+  if (n.includes('ad') && n.includes('review')) {
+    return LOKI_STREAMS.review_ads
+  }
+  if (n.includes('updateadclient') || n.includes('addadclientnote')) {
+    return LOKI_STREAMS.ads
+  }
+  if (n.includes('ad') && (n.includes('getads') || n.includes('updatead'))) {
+    return LOKI_STREAMS.review_ads
+  }
   if (
     n.endsWith('_review') ||
     n.includes('submitcasereview') ||

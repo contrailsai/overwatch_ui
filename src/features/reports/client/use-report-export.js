@@ -35,7 +35,7 @@ export function useReportExport(reportFormat = REPORT_FORMATS.PDF) {
   }, [statusText, loading])
 
   const exportReport = useCallback(
-    async ({ posts, project, profile, reportType, fileNamePrefix, gaEventName }) => {
+    async ({ posts, project, profile, reportType, fileNamePrefix, gaEventName, entityType }) => {
       if (!posts?.length) return
 
       const errorFallback = `An error occurred while creating the ${formatLabel}`
@@ -50,6 +50,7 @@ export function useReportExport(reportFormat = REPORT_FORMATS.PDF) {
           profile,
           reportType,
           reportFormat,
+          entityType,
         })
 
         if (!jobData?.jobId) {

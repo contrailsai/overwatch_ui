@@ -1,5 +1,7 @@
 import { getClientandProjectDetails } from '@/app/(dashboard)/actions'
 import PageHeader from '@/components/PageHeader'
+import { DisabledSectionFallback } from '@/components/DisabledSectionFallback'
+import { isSectionEnabled } from '@/lib/project-sections'
 import { listFeedsForClient } from '../actions'
 import { FeedsIndexClient } from '../FeedsIndexClient'
 import { FeedsSubNav } from '../FeedsSubNav'
@@ -13,7 +15,11 @@ export default async function FeedCollectionsPage() {
   const result = await getClientandProjectDetails()
   if (!result) return null
 
-  const { clientDetails } = result
+  const { clientDetails, project } = result
+
+  if (!isSectionEnabled(project, 'feeds')) {
+    return <DisabledSectionFallback />
+  }
 
   if (!clientDetails?.project_name) {
     return (

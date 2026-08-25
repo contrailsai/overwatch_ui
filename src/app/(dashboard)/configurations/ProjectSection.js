@@ -1,8 +1,11 @@
 'use client'
 
 import { useState, useActionState, useEffect, useTransition, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import {
     updateLabels,
+    updateProjectSections,
+    updateDoTakedowns,
     get_cron_jobs,
     create_cron_job,
     update_cron_job,
@@ -19,12 +22,21 @@ import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
 import {
     Loader2, Globe, Calendar, FileText, Tag, Plus, Trash2, CheckCircle2, AlertCircle,
-    Clock, Pencil, X, MessageCircle, Terminal,
+    Clock, Pencil, X, MessageCircle, Terminal, FileStack, Megaphone, Layers, Library,
+    ShieldAlert,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { format } from 'date-fns'
+import { SECTION_META, getEnabledSections } from '@/lib/project-sections'
 
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+
+const SECTION_ICONS = {
+    posts: FileStack,
+    ads: Megaphone,
+    domains: Globe,
+    feeds: Library,
+}
 
 const REPORT_PRESETS = {
     summary: {
@@ -176,6 +188,7 @@ const defaultCronForm = () => ({
 })
 
 export default function ProjectSection({ project, isEditable }) {
+    const router = useRouter()
     const [labelState, labelAction, labelPending] = useActionState(updateLabels, null)
 
     const [cronJobs, setCronJobs] = useState([])
@@ -183,9 +196,13 @@ export default function ProjectSection({ project, isEditable }) {
     const [cronLoading, setCronLoading] = useState(false)
     const [cronFeedback, setCronFeedback] = useState(null)
     const [cronPending, startCronTransition] = useTransition()
+    const [sectionPending, startSectionTransition] = useTransition()
     const [editingJobId, setEditingJobId] = useState(null)
     const [showCronForm, setShowCronForm] = useState(false)
     const [cronForm, setCronForm] = useState(defaultCronForm)
+    const [sections, setSections] = useState(() => getEnabledSections(project?.project_details))
+    const [doTakedowns, setDoTakedowns] = useState(() => project?.project_details?.do_takedowns !== false)
+    const [sectionFeedback, setSectionFeedback] = useState(null)
 
     const [projectDescription, setProjectDescription] = useState(project?.project_details?.description || '')
     const [projectLabels, setProjectLabels] = useState(() => {
@@ -211,6 +228,46 @@ export default function ProjectSection({ project, isEditable }) {
             originalName: c.name || (`${c.actName || ''} - ${c.codeName || ''}`.trim().replace(/^-|-$/g, '').trim())
         }))
     })
+
+    useEffect(() => {
+        setSections(getEnabledSections(project?.project_details))
+        setDoTakedowns(project?.project_details?.do_takedowns !== false)
+    }, [project?.project_details?.sections, project?.project_details?.do_takedowns])
+
+    const handleSectionToggle = (key, enabled) => {
+        const previous = sections
+        const next = { ...sections, [key]: enabled }
+        setSections(next)
+        startSectionTransition(async () => {
+            const res = await updateProjectSections(next)
+            if (res?.error) {
+                setSections(previous)
+                setSectionFeedback({ type: 'error', message: res.error })
+                setTimeout(() => setSectionFeedback(null), 4000)
+                return
+            }
+            setSectionFeedback({ type: 'success', message: 'Monitoring sections updated' })
+            setTimeout(() => setSectionFeedback(null), 3000)
+            router.refresh()
+        })
+    }
+
+    const handleDoTakedownsToggle = (enabled) => {
+        const previous = doTakedowns
+        setDoTakedowns(enabled)
+        startSectionTransition(async () => {
+            const res = await updateDoTakedowns(enabled)
+            if (res?.error) {
+                setDoTakedowns(previous)
+                setSectionFeedback({ type: 'error', message: res.error })
+                setTimeout(() => setSectionFeedback(null), 4000)
+                return
+            }
+            setSectionFeedback({ type: 'success', message: 'Takedowns setting updated' })
+            setTimeout(() => setSectionFeedback(null), 3000)
+            router.refresh()
+        })
+    }
 
     const handleAddLabel = () => setProjectLabels([{ name: '', description: '', severity: 'low', originalName: '' }, ...projectLabels])
 
@@ -632,6 +689,82 @@ export default function ProjectSection({ project, isEditable }) {
                         </CardContent>
                     </Card>
                 </div>
+            </section>
+
+            <section className="space-y-4 w-full">
+                <div className="flex items-center gap-2 px-1">
+                    <Layers className="w-4 h-4 text-slate-400" />
+                    <h2 className="text-sm font-bold text-slate-500 uppercase tracking-widest">Monitoring Sections</h2>
+                </div>
+                <Card className="border-slate-200 shadow-sm rounded-xl overflow-hidden p-0">
+                    <CardHeader className="bg-slate-50/50 border-b border-slate-100 pt-8 pb-5">
+                        <CardTitle className="text-lg font-bold text-slate-800">Sidebar surfaces</CardTitle>
+                        <CardDescription className="text-slate-500">
+                            Show or gray out Posts, Ads, Domains, Feeds, and Takedowns for this project. Disabled monitoring sections also return 404 if opened directly.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent className="p-0 divide-y divide-slate-100">
+                        {Object.entries(SECTION_META).map(([key, meta]) => {
+                            const Icon = SECTION_ICONS[key]
+                            const enabled = sections[key] !== false
+                            return (
+                                <div key={key} className="flex items-center gap-4 px-6 py-5">
+                                    <div className="p-2.5 bg-slate-50 text-slate-600 rounded-lg shrink-0 ring-1 ring-slate-200/80">
+                                        <Icon className="w-5 h-5" />
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                        <p className="text-sm font-bold text-slate-800">{meta.label}</p>
+                                        <p className="text-sm text-slate-500 mt-0.5 leading-relaxed">{meta.description}</p>
+                                    </div>
+                                    <Switch
+                                        checked={enabled}
+                                        onCheckedChange={(checked) => handleSectionToggle(key, checked)}
+                                        disabled={!isEditable || sectionPending}
+                                        aria-label={`Show ${meta.label} in sidebar`}
+                                        className="touch-manipulation"
+                                    />
+                                </div>
+                            )
+                        })}
+                        <div className="flex items-center gap-4 px-6 py-5">
+                            <div className="p-2.5 bg-slate-50 text-slate-600 rounded-lg shrink-0 ring-1 ring-slate-200/80">
+                                <ShieldAlert className="w-5 h-5" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                                <p className="text-sm font-bold text-slate-800">Takedowns</p>
+                                <p className="text-sm text-slate-500 mt-0.5 leading-relaxed">
+                                    Takedowns workflow and related actions across cases and profiles
+                                </p>
+                            </div>
+                            <Switch
+                                checked={doTakedowns}
+                                onCheckedChange={handleDoTakedownsToggle}
+                                disabled={!isEditable || sectionPending}
+                                aria-label="Show Takedowns in sidebar"
+                                className="touch-manipulation"
+                            />
+                        </div>
+                    </CardContent>
+                    {sectionFeedback && (
+                        <div className="px-6 py-4 border-t border-slate-100">
+                            <div
+                                className={cn(
+                                    'flex items-center gap-3 p-4 rounded-xl border animate-in zoom-in-95 duration-200',
+                                    sectionFeedback.type === 'error'
+                                        ? 'bg-rose-50 text-rose-700 border-rose-100'
+                                        : 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                                )}
+                            >
+                                {sectionFeedback.type === 'error' ? (
+                                    <AlertCircle className="w-5 h-5 shrink-0" />
+                                ) : (
+                                    <CheckCircle2 className="w-5 h-5 shrink-0" />
+                                )}
+                                <p className="text-sm font-bold">{sectionFeedback.message}</p>
+                            </div>
+                        </div>
+                    )}
+                </Card>
             </section>
 
             <section className="space-y-4 w-full">

@@ -1,6 +1,8 @@
 import { getClientandProjectDetails } from '@/app/(dashboard)/actions'
 import { fetch_clients_in_project } from '@/app/(dashboard)/cases/feature_actions'
 import PageHeader from '@/components/PageHeader'
+import { DisabledSectionFallback } from '@/components/DisabledSectionFallback'
+import { isSectionEnabled } from '@/lib/project-sections'
 import { getPoiTopicsGraph, countFeeds } from './actions'
 import { FeedsGraphClient } from './FeedsGraphClient'
 import { FeedsSubNav } from './FeedsSubNav'
@@ -15,6 +17,10 @@ export default async function FeedsPage() {
   if (!result) return null
 
   const { clientDetails, project } = result
+
+  if (!isSectionEnabled(project, 'feeds')) {
+    return <DisabledSectionFallback />
+  }
 
   if (!clientDetails?.project_name) {
     return (

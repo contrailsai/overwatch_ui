@@ -1,0 +1,169 @@
+{
+    _id: ObjectId('6a72f703fa1435f3992923a0'),
+    schema_version: NumberInt('3'),
+    platform: 'x',
+    platform_post_id: '2083943752524321166',
+    original_url: 'https://x.com/windglide/status/2083943752524321166',
+    workflow: {
+      ai_status: 'pending',
+      review_status: 'reviewed',
+      client_status: 'open',
+      visibility_status: 'available',
+      takedown_status: null,
+      alerted_at: ISODate('2026-08-05T08:40:33.522Z')
+    },
+    list: {
+      ai_threat_score: null,
+      review_threat_score: NumberInt('76'),
+      effective_threat_score: NumberInt('76'),
+      risk_rank: null,
+      threat_types: [
+        'Defamation',
+        'Misinformation'
+      ],
+      violation_flags: [
+        'Defamation',
+        'Misinformation'
+      ],
+      posted_at: ISODate('2026-08-02T15:51:23.000Z'),
+      sourced_at: ISODate('2026-08-04T10:48:30.960Z'),
+      reviewed_at: ISODate('2026-08-05T08:40:33.521Z'),
+      alert_hour_ist: null,
+      engagement_score: NumberInt('45'),
+      poi_detected: false
+    },
+    content: {
+      caption: '@BabaBihari_007 @peeleraja 90% indians earn &lt;3lak. No social Security for them think  that sal&gt;30lac by politicking. Many competent more than u may be available.  Ambani won get a, job gis money from father earned by cheating gov. @Erdos a gr8 math kept only a briefca \nI earned 50 lac but spent only  lac',
+      media: [],
+      language: 'en',
+      post_type: 'post'
+    },
+    author_snapshot: {
+      platform_user_id: '77748842',
+      username: 'windglide',
+      display_name: 'wind',
+      profile_url: 'https://x.com/windglide',
+      is_verified: false
+    },
+    analysis_results: {
+      reviewed_at: '2026-08-05T08:13:00Z',
+      profile_summary: 'The content is from an unverified user on the X platform, with no specific profile information or posting patterns available beyond the provided text.',
+      reasoning: 'Description: The content makes a broad, unsubstantiated claim about the earnings of 90% of Indians and alleges that Ambani earned money by cheating the government. These claims are presented as facts without any supporting evidence and are likely to cause public alarm or distrust in government and prominent individuals.\nTake Down: Standard.',
+      misinformation_explanation: 'The claim that \'90% indians earn <3lak\' is a broad generalization that lacks specific data or context to verify its accuracy and is likely false. The allegation that \'Ambani won get a, job gis money from father earned by cheating gov\' is a serious, unsubstantiated accusation of financial fraud and corruption against a specific individual and entity.',
+      anti_india_reasoning: null,
+      aigc_forensic_summary: 'No image was provided, so no AIGC forensic analysis could be performed. is_aigc is set to false.',
+      threat_score: NumberInt('90'),
+      threat_types: [
+        'Misinformation',
+        'Defamation'
+      ],
+      takedown_timeline: 'Standard',
+      is_aigc: false,
+      flags: {
+        'AI-Generated-Content': false,
+        Defamation: true,
+        'Anti-India-Propaganda': false,
+        'Hate-speech': false,
+        Misinformation: true,
+        Obscene: false,
+        Fraud: false,
+        'asset-misuse': false,
+        Terrorism: false,
+        Violence: false
+      },
+      violation_reasoning: {
+        'AI-Generated-Content': null,
+        Defamation: 'The content makes a direct, unsubstantiated accusation of cheating the government against a specific individual (Ambani).',
+        'Anti-India-Propaganda': null,
+        'Hate-speech': null,
+        Misinformation: 'The content makes a broad, unsubstantiated claim about the earnings of 90% of Indians and an unverified accusation of financial fraud.',
+        Obscene: null,
+        Fraud: null,
+        'asset-misuse': null,
+        Terrorism: null,
+        Violence: null
+      },
+      dependency_checklist: {
+        requires_bns_code: true,
+        is_misinformation_true: true,
+        is_aigc_true: false,
+        is_hate_speech_true: false
+      },
+      legal_codes: [
+        {
+          code: 'BNS - Sec 353',
+          reasoning: 'The content circulates a false statement about the earnings of a large percentage of the Indian population and an unsubstantiated accusation of financial misconduct against a prominent individual, which has the likelihood to cause public fear or alarm and disturb public tranquility.'
+        },
+        {
+          code: 'BNS - Sec 356(2)',
+          reasoning: 'The content publishes a defamatory statement against a specific person (Ambani) by alleging that he earned money by cheating the government.'
+        },
+        {
+          code: 'IT Rules - 3(1)(b)(v)',
+          reasoning: 'The content contains knowingly false or misleading information regarding the earnings of Indians and the financial dealings of a specific individual.'
+        }
+      ],
+      poi_names: [
+        'Ambani',
+        'Erdos'
+      ],
+      face_present: false,
+      name_present: true,
+      urls: []
+    },
+    review_details: {
+      threat_score: NumberInt('76'),
+      threat_types: [
+        'Defamation',
+        'Misinformation'
+      ],
+      legal_codes: [
+        {
+          code: 'BNS - Sec 353',
+          reasoning: 'The content circulates a false statement about the earnings of a large percentage of the Indian population and an unsubstantiated accusation of financial misconduct against a prominent individual, which has the likelihood to cause public fear or alarm and disturb public tranquility.'
+        },
+        {
+          code: 'BNS - Sec 356(2)',
+          reasoning: 'The content publishes a defamatory statement against a specific person (Ambani) by alleging that he earned money by cheating the government.'
+        },
+        {
+          code: 'IT Rules - 3(1)(b)(v)',
+          reasoning: 'The content contains knowingly false or misleading information regarding the earnings of Indians and the financial dealings of a specific individual.'
+        }
+      ],
+      is_aigc: false,
+      flags: {
+        'AI-Generated-Content': false,
+        'Anti-India-Propaganda': false,
+        'asset-misuse': false,
+        Defamation: true,
+        Fraud: false,
+        'Hate-speech': false,
+        Misinformation: true,
+        Obscene: false,
+        Terrorism: false,
+        Violence: false
+      },
+      poi_names: [
+        'Ambani',
+        'Erdos'
+      ],
+      reasoning: 'Description: The content makes a broad, unsubstantiated claim about the earnings of 90% of Indians and alleges that Ambani earned money by cheating the government. These claims are presented as facts without any supporting evidence and are likely to cause public alarm or distrust in government and prominent individuals.\nTake Down: Standard.',
+      simple_report_description: null,
+      reviewer_comments: '',
+      face_present: false,
+      name_present: true,
+      reviewed_at: '2026-08-05T08:40:33.521Z'
+    },
+    ingestion: {
+      type: 'x_search',
+      source_url: null,
+      ingested_at: ISODate('2026-08-04T10:48:30.960Z')
+    },
+    system: {
+      created_at: ISODate('2026-08-04T10:48:30.960Z'),
+      updated_at: ISODate('2026-08-05T08:40:33.522Z'),
+      s3_stored: false
+    },
+    content_reviewed_by: 'kalpit@contrails.ai'
+  }

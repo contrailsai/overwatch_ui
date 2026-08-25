@@ -1,0 +1,32 @@
+{
+    _id: ObjectId('6a3bccbb95beabff422fb81a'),
+    title: 'anant ambani gossip',
+    description: 'gossip about information on anant ambani and his personal life',
+    topic_ids: [
+      'T00022',
+      'T00033',
+      'T00051'
+    ],
+    manual_post_ids: [],
+    cover_image_url: null,
+    created_by: 'reviewer@contrails.ai',
+    created_at: ISODate('2026-06-24T12:25:31.304Z'),
+    updated_at: ISODate('2026-07-01T12:14:39.246Z'),
+    update_history: [
+      {
+        updated_at: ISODate('2026-06-24T12:25:31.304Z'),
+        updated_by: 'reviewer@contrails.ai',
+        changes_summary: 'feed created'
+      },
+      {
+        updated_at: ISODate('2026-06-24T12:32:03.615Z'),
+        updated_by: 'reviewer@contrails.ai',
+        changes_summary: 'feed updated'
+      },
+      {
+        updated_at: ISODate('2026-07-01T12:14:39.246Z'),
+        updated_by: 'reviewer@contrails.ai',
+        changes_summary: 'feed updated'
+      }
+    ]
+  }

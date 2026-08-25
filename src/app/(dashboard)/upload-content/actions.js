@@ -7,19 +7,36 @@ import {
   insertClientRequestedLinks,
   getClientRequestedLinksForUser,
 } from '@/utils/clientRequestedLinks/server'
+import { isMetaAdUrl } from '@/utils/clientRequestedLinks/urls'
+import { isSectionEnabled } from '@/lib/project-sections'
 import { logActionWarn, LOKI_STREAMS } from '@/utils/otel-logger'
 
-export const bulkRequestLinks = traceAction('bulkRequestLinks_upload', async (links) => {
+export const bulkRequestLinks = traceAction('bulkRequestLinks_upload', async (links, options = {}) => {
   const ctx = await getAuthContext()
   if (!ctx?.user?.id || !ctx.clientDetails?.project_name) {
     return { error: 'Not authenticated' }
   }
 
-  const { user, clientDetails } = ctx
+  const { user, clientDetails, project } = ctx
   const projectName = clientDetails.project_name
+  const isAd = options?.isAd === true
+
+  if (isAd && !isSectionEnabled(project, 'ads')) {
+    return { error: 'Ads ingest is not enabled for this project' }
+  }
 
   if (!links || links.length === 0) {
     return { error: 'No links provided' }
+  }
+
+  const skippedNonMeta = isAd ? links.filter((link) => !isMetaAdUrl(link)) : []
+  const linksToQueue = isAd ? links.filter((link) => isMetaAdUrl(link)) : links
+
+  if (isAd && linksToQueue.length === 0) {
+    return {
+      error:
+        'Ads ingest is Meta-only. Provide Facebook Ads Library or Facebook share URLs (facebook.com).',
+    }
   }
 
   const insertResult = await runInSpan(
@@ -28,7 +45,7 @@ export const bulkRequestLinks = traceAction('bulkRequestLinks_upload', async (li
       insertClientRequestedLinks({
         userId: user.id,
         projectName,
-        rawLinks: links,
+        rawLinks: linksToQueue,
       }),
     { 'app.span_type': 'supabase_query' }
   )
@@ -43,14 +60,16 @@ export const bulkRequestLinks = traceAction('bulkRequestLinks_upload', async (li
     'upload_content.bulkRequestLinks.sqs_send',
     async () =>
       Promise.allSettled(
-        insertedData.map((row) =>
-          sendSqsMessage({
+        insertedData.map((row) => {
+          const body = {
             id: row.id,
             link: row.link,
             project: row.project,
             requested_by: row.requested_by,
-          })
-        )
+          }
+          if (isAd) body.is_ad = true
+          return sendSqsMessage(body)
+        })
       ),
     { 'app.span_type': 'sqs_send' }
   )
@@ -77,8 +96,9 @@ export const bulkRequestLinks = traceAction('bulkRequestLinks_upload', async (li
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              text: `Bulk content ingestion request from user ${userIdentifier}: ${validLinks.length} link(s) queued.
+              text: `Bulk ${isAd ? 'ads' : 'content'} ingestion request from user ${userIdentifier}: ${validLinks.length} link(s) queued.
         ${invalidLinks.length > 0 ? `${invalidLinks.length} invalid link(s) were skipped.` : ''}
+        ${skippedNonMeta.length > 0 ? `${skippedNonMeta.length} non-Facebook URL(s) were skipped (ads ingest is Meta-only).` : ''}
         ${sqsFailures.length > 0 ? `${sqsFailures.length} link(s) failed to queue for ingestion.` : ''}
         `,
             }),
@@ -91,11 +111,19 @@ export const bulkRequestLinks = traceAction('bulkRequestLinks_upload', async (li
     }
   }
 
+  const kindLabel = isAd ? 'ad link(s)' : 'link(s)'
+  const skipParts = []
+  if (invalidLinks.length > 0) skipParts.push(`${invalidLinks.length} invalid`)
+  if (skippedNonMeta.length > 0) skipParts.push(`${skippedNonMeta.length} non-Facebook`)
+
   return {
     success: true,
     count: validLinks.length,
     invalidCount: invalidLinks.length,
-    message: `${validLinks.length} link(s) queued for ingestion successfully!`,
+    skippedNonMetaCount: skippedNonMeta.length,
+    message: `${validLinks.length} ${kindLabel} queued for ingestion successfully!${
+      skipParts.length ? ` ${skipParts.join(' and ')} skipped.` : ''
+    }`,
   }
 })
 

@@ -1,0 +1,42 @@
+{
+    _id: ObjectId('69d732ba0c0f759055c79a97'),
+    schema_version: NumberInt('3'),
+    platform: 'youtube',
+    platform_user_id: null,
+    username: '@bollywoodmuskan',
+    display_name: 'Bollywood Muskan',
+    profile_url: 'https://www.youtube.com/@bollywoodmuskan',
+    is_verified: false,
+    workflow: {
+      review_status: 'pending',
+      client_status: 'open',
+      reviewed_at: null
+    },
+    list: {
+      risk: null,
+      risk_rank: null,
+      post_count: NumberInt('1'),
+      reviewed_post_count: NumberInt('1'),
+      max_threat_score: NumberInt('96'),
+      last_active_at: null,
+      follower_count: null,
+      location: null
+    },
+    enrichment: {
+      biography: null,
+      profile_pic_s3: null,
+      profile_pic: null,
+      media_count: null,
+      account_created_at: null,
+      following_count: null,
+      is_business: null,
+      category: null
+    },
+    review_details: {},
+    client_notes: [],
+    system: {
+      created_at: null,
+      updated_at: ISODate('2026-04-27T18:58:44.538Z'),
+      last_synced_from_post_at: null
+    }
+  }

@@ -2,6 +2,8 @@ import { getPosts, getPostById, getReviewSemanticSearchPosts } from './actions'
 import { getClientandProjectDetails } from '@/app/(dashboard)/actions'
 import { ReviewInterface } from './ReviewInterface'
 import PageHeader from '@/components/PageHeader'
+import { isSectionEnabled } from '@/lib/project-sections'
+import { DisabledSectionFallback } from '@/components/DisabledSectionFallback'
 
 export const metadata = {
   title: 'Review Cases',
@@ -17,6 +19,9 @@ export default async function ReviewCasesPage({ searchParams }) {
 
   const { user, clientDetails, project } = result
 
+  if (!isSectionEnabled(project, 'posts')) {
+    return <DisabledSectionFallback />
+  }
 
   if (clientDetails.permission !== "reviewer") {
     return (

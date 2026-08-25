@@ -4,7 +4,8 @@ import { createClient } from '@/utils/supabase/server'
 import clientPromise from '@/utils/mongodb/client'
 import { postsCollection } from '@/utils/mongodb/collections'
 import { revalidatePath } from 'next/cache'
-import { getAuthContext, requireRole } from '@/utils/auth-context'
+import { getAuthContext, requireRole, invalidateTenantContext } from '@/utils/auth-context'
+import { normalizeSections } from '@/lib/project-sections'
 import { runInSpan, traceAction } from '@/utils/tracing'
 import { logActionError, LOKI_STREAMS } from '@/utils/otel-logger'
 
@@ -409,7 +410,141 @@ export const updateLabels = traceAction('configurations.updateLabels', async (pr
     }
   }
 
+  await invalidateTenantContext(ctx.user?.id)
+  revalidatePath('/', 'layout')
   revalidatePath('/configurations')
 
   return { success: true, message: 'Labels updated successfully' }
+}, { loki_stream: LOKI_STREAMS.configurations })
+
+export const updateProjectSections = traceAction('configurations.updateProjectSections', async (sectionsInput) => {
+  const ctx = await getAuthContext()
+  if (!ctx?.clientDetails?.project_name) {
+    return { error: 'Not authenticated' }
+  }
+
+  const projectData = ctx.project
+  if (!projectData?.mongo_db_map) {
+    return { error: 'Project not found' }
+  }
+
+  const allowedRoles = ['client-admin', 'reviewer']
+  if (!allowedRoles.includes(ctx.clientDetails.permission)) {
+    return { error: 'Insufficient permissions to update project settings' }
+  }
+
+  if (projectData.editable !== true) {
+    return { error: 'Project details are locked for this project' }
+  }
+
+  let projectDetails = {}
+  try {
+    projectDetails = typeof projectData?.project_details === 'string'
+      ? JSON.parse(projectData.project_details)
+      : (projectData?.project_details || {})
+  } catch (e) {
+    logActionError({
+      loki_stream: LOKI_STREAMS.configurations,
+      app_action: 'updateProjectSections',
+      message: 'Error parsing project_details',
+    }, e)
+    console.error('Error parsing project_details:', e)
+    projectDetails = {}
+  }
+
+  projectDetails.sections = normalizeSections(sectionsInput)
+
+  const supabase = await createClient()
+  const { error } = await runInSpan(
+    'configurations.updateProjectSections.supabase_update',
+    async () =>
+      supabase
+        .from('project')
+        .update({ project_details: projectDetails })
+        .eq('project_name', ctx.clientDetails.project_name),
+    { 'app.span_type': 'supabase_query' }
+  )
+
+  if (error) {
+    logActionError({
+      loki_stream: LOKI_STREAMS.configurations,
+      app_action: 'updateProjectSections',
+      message: 'Error updating project sections',
+      project_name: ctx.clientDetails.project_name,
+    }, error)
+    console.error('Error updating project sections:', error)
+    return { error: 'Failed to update monitoring sections' }
+  }
+
+  await invalidateTenantContext(ctx.user?.id)
+  revalidatePath('/', 'layout')
+  revalidatePath('/configurations')
+
+  return { success: true, sections: projectDetails.sections }
+}, { loki_stream: LOKI_STREAMS.configurations })
+
+export const updateDoTakedowns = traceAction('configurations.updateDoTakedowns', async (enabled) => {
+  const ctx = await getAuthContext()
+  if (!ctx?.clientDetails?.project_name) {
+    return { error: 'Not authenticated' }
+  }
+
+  const projectData = ctx.project
+  if (!projectData?.mongo_db_map) {
+    return { error: 'Project not found' }
+  }
+
+  const allowedRoles = ['client-admin', 'reviewer']
+  if (!allowedRoles.includes(ctx.clientDetails.permission)) {
+    return { error: 'Insufficient permissions to update project settings' }
+  }
+
+  if (projectData.editable !== true) {
+    return { error: 'Project details are locked for this project' }
+  }
+
+  let projectDetails = {}
+  try {
+    projectDetails = typeof projectData?.project_details === 'string'
+      ? JSON.parse(projectData.project_details)
+      : (projectData?.project_details || {})
+  } catch (e) {
+    logActionError({
+      loki_stream: LOKI_STREAMS.configurations,
+      app_action: 'updateDoTakedowns',
+      message: 'Error parsing project_details',
+    }, e)
+    console.error('Error parsing project_details:', e)
+    projectDetails = {}
+  }
+
+  projectDetails.do_takedowns = enabled !== false
+
+  const supabase = await createClient()
+  const { error } = await runInSpan(
+    'configurations.updateDoTakedowns.supabase_update',
+    async () =>
+      supabase
+        .from('project')
+        .update({ project_details: projectDetails })
+        .eq('project_name', ctx.clientDetails.project_name),
+    { 'app.span_type': 'supabase_query' }
+  )
+
+  if (error) {
+    logActionError({
+      loki_stream: LOKI_STREAMS.configurations,
+      app_action: 'updateDoTakedowns',
+      message: 'Error updating do_takedowns',
+      project_name: ctx.clientDetails.project_name,
+    }, error)
+    console.error('Error updating do_takedowns:', error)
+    return { error: 'Failed to update takedowns setting' }
+  }
+
+  await invalidateTenantContext(ctx.user?.id)
+  revalidatePath('/', 'layout')
+  revalidatePath('/configurations')
+
+  return { success: true, do_takedowns: projectDetails.do_takedowns }
 }, { loki_stream: LOKI_STREAMS.configurations })

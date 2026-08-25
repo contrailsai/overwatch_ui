@@ -1,5 +1,7 @@
 import { getClientandProjectDetails } from '@/app/(dashboard)/actions'
 import PageHeader from '@/components/PageHeader'
+import { DisabledSectionFallback } from '@/components/DisabledSectionFallback'
+import { isSectionEnabled } from '@/lib/project-sections'
 import { listFeeds } from './actions'
 import { ManageFeedsClient } from './ManageFeedsClient'
 
@@ -12,7 +14,11 @@ export default async function ManageFeedsPage() {
   const result = await getClientandProjectDetails()
   if (!result) return null // Layout handles the unauthenticated redirect.
 
-  const { user, clientDetails } = result
+  const { user, clientDetails, project } = result
+
+  if (!isSectionEnabled(project, 'feeds')) {
+    return <DisabledSectionFallback />
+  }
 
   // Reviewer-only: mirror the fake-404 pattern used by /review-cases.
   if (clientDetails.permission !== 'reviewer') {

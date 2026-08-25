@@ -1,0 +1,327 @@
+{
+  "extracted_at": "2026-08-24T06:17:37.674422+00:00",
+  "db_name": "SEBI-Data-Search",
+  "ads_scanned": 4590,
+  "urls_seen": 29805,
+  "unique_domain_count": 132,
+  "skipped_host_count": 8,
+  "unique_domains": [
+    {
+      "domain_name": "22000verdcsarvecsd.com",
+      "ad_count": 2,
+      "sources": [
+        "card"
+      ],
+      "sample_urls": [
+        "http://22000verdcsarvecsd.com/?pEl8X=szvnknir"
+      ]
+    },
+    {
+      "domain_name": "2vrfdcxsrvf43.com",
+      "ad_count": 26,
+      "sources": [
+        "card"
+      ],
+      "sample_urls": [
+        "http://2vrfdcxsrvf43.com/?content_id=phino2&pEl8X=szvnknir",
+        "http://2vrfdcxsrvf43.com/?content_id=phino2_re&pEl8X=szvnknir"
+      ]
+    },
+    {
+      "domain_name": "3feeeklecdws.com",
+      "ad_count": 1,
+      "sources": [
+        "card"
+      ],
+      "sample_urls": [
+        "http://3feeeklecdws.com/?content_id=mukaka&pEl8X=szvnknir"
+      ]
+    },
+    {
+      "domain_name": "4klecdmksvr.com",
+      "ad_count": 15,
+      "sources": [
+        "card"
+      ],
+      "sample_urls": [
+        "http://4klecdmksvr.com/?content_id=nericao&pEl8X=szvnknir",
+        "http://4klecdmksvr.com/?content_id=nericao"
+      ]
+    },
+    {
+      "domain_name": "782erjkcndsxzlm.com",
+      "ad_count": 16,
+      "sources": [
+        "card"
+      ],
+      "sample_urls": [
+        "http://782erjkcndsxzlm.com/?content_id=todaynirmala&pEl8X=szvnknir"
+      ]
+    },
+    {
+      "domain_name": "9ewosmc32jnkver.com",
+      "ad_count": 1,
+      "sources": [
+        "card"
+      ],
+      "sample_urls": [
+        "https://9ewosmc32jnkver.com/"
+      ]
+    },
+    {
+      "domain_name": "9jefvnrcdjskz.com",
+      "ad_count": 118,
+      "sources": [
+        "card"
+      ],
+      "sample_urls": [
+        "http://9jefvnrcdjskz.com/?content_id=nirminvite2&jkm_id=HT2",
+        "http://9jefvnrcdjskz.com/?content_id=nirminvite2&jkm_id=RK"
+      ]
+    },
+    {
+      "domain_name": "altaredbyfaith.com",
+      "ad_count": 11,
+      "sources": [
+        "card"
+      ],
+      "sample_urls": [
+        "https://altaredbyfaith.com/?content_id=in01-2017/05-1&utm_creative=shaktikanta_chat01_v3_hh",
+        "https://altaredbyfaith.com/?content_id=in01-2017/05-3&utm_creative=shaktikanta_chat01_v3_hh"
+      ]
+    },
+    {
+      "domain_name": "becjksdnlrecve.com",
+      "ad_count": 1,
+      "sources": [
+        "card"
+      ],
+      "sample_urls": [
+        "https://becjksdnlrecve.com/?pEl8X=szvnknir"
+      ]
+    },
+    {
+      "domain_name": "bhvrucedsixnki.com",
+      "ad_count": 15,
+      "sources": [
+        "card",
+        "link"
+      ],
+      "sample_urls": [
+        "http://bhvrucedsixnki.com/?pEl8X=szvnknir",
+        "http://bhvrucedsixnki.com/?content_id=phino2&pEl8X=szvnknir"
+      ]
+    },
+    {
+      "domain_name": "blackindiadigital.com",
+      "ad_count": 1,
+      "sources": [
+        "link"
+      ],
+      "sample_urls": [
+        "http://blackindiadigital.com/"
+      ]
+    },
+    {
+      "domain_name": "blackindiaenginehub.com",
+      "ad_count": 1,
+      "sources": [
+        "link"
+      ],
+      "sample_urls": [
+        "http://blackindiaenginehub.com/?pEl8X=szvnknir"
+      ]
+    },
+    {
+      "domain_name": "blackindialoop.com",
+      "ad_count": 1,
+      "sources": [
+        "link"
+      ],
+      "sample_urls": [
+        "http://blackindialoop.com/?pEl8X=szvnknir"
+      ]
+    },
+    {
+      "domain_name": "brightcloudlane.com",
+      "ad_count": 213,
+      "sources": [
+        "card"
+      ],
+      "sample_urls": [
+        "https://brightcloudlane.com/"
+      ]
+    },
+    {
+      "domain_name": "brveindjskc.com",
+      "ad_count": 83,
+      "sources": [
+        "card"
+      ],
+      "sample_urls": [
+        "http://brveindjskc.com/?content_id=ajtan&jkm_id=HT2",
+        "http://brveindjskc.com/?content_id=ajtan&jkm_id=RK"
+      ]
+    },
+    {
+      "domain_name": "brvjnkdcxoejh.com",
+      "ad_count": 4,
+      "sources": [
+        "card"
+      ],
+      "sample_urls": [
+        "http://brvjnkdcxoejh.com/?content_id=saj&jkm_id=MAnnny",
+        "http://brvjnkdcxoejh.com/?content_id=saj&jkm_id=MR"
+      ]
+    },
+    {
+      "domain_name": "bu3ceids3ecwvm.com",
+      "ad_count": 2,
+      "sources": [
+        "card"
+      ],
+      "sample_urls": [
+        "https://bu3ceids3ecwvm.com/?pEl8X=szvnknir"
+      ]
+    },
+    {
+      "domain_name": "cleanbharatspace.com",
+      "ad_count": 2,
+      "sources": [
+        "link"
+      ],
+      "sample_urls": [
+        "http://cleanbharatspace.com/?pEl8X=szvnknir"
+      ]
+    },
+    {
+      "domain_name": "cleanindiaworks.com",
+      "ad_count": 1,
+      "sources": [
+        "link"
+      ],
+      "sample_urls": [
+        "http://cleanindiaworks.com/?pEl8X=szvnknir"
+      ]
+    },
+    {
+      "domain_name": "clearindiaengine.com",
+      "ad_count": 2,
+      "sources": [
+        "link"
+      ],
+      "sample_urls": [
+        "http://clearindiaengine.com/?pEl8X=szvnknir"
+      ]
+    },
+    {
+      "domain_name": "darkindiaarchive.com",
+      "ad_count": 4,
+      "sources": [
+        "link"
+      ],
+      "sample_urls": [
+        "http://darkindiaarchive.com/?pEl8X=szvnknir"
+      ]
+    },
+    {
+      "domain_name": "darkindiaflow.com",
+      "ad_count": 1,
+      "sources": [
+        "link"
+      ],
+      "sample_urls": [
+        "http://darkindiaflow.com/?pEl8X=szvnknir"
+      ]
+    },
+    {
+      "domain_name": "darkmumbaivisual.com",
+      "ad_count": 1,
+      "sources": [
+        "link"
+      ],
+      "sample_urls": [
+        "http://darkmumbaivisual.com/?pEl8X=szvnknir"
+      ]
+    },
+    {
+      "domain_name": "darksignalindiamatrixvisualdisplayhub.com",
+      "ad_count": 5,
+      "sources": [
+        "link"
+      ],
+      "sample_urls": [
+        "http://darksignalindiamatrixvisualdisplayhub.com/?pEl8X=szvnknir",
+        "http://darksignalindiamatrixvisualdisplayhub.com/"
+      ]
+    },
+    {
+      "domain_name": "dlescheit.com",
+      "ad_count": 172,
+      "sources": [
+        "card",
+        "link"
+      ],
+      "sample_urls": [
+        "http://dlescheit.com/?content_id=3",
+        "http://dlescheit.com/?content_id=1"
+      ]
+    },
+    {
+      "domain_name": "ecdsvevtr4cdres.com",
+      "ad_count": 1,
+      "sources": [
+        "card",
+        "link"
+      ],
+      "sample_urls": [
+        "http://ecdsvevtr4cdres.com/?pEl8X=szvnknir",
+        "http://ecdsvevtr4cdres.com/?content_id=sachmod&pEl8X=szvnknir"
+      ]
+    },
+    {
+      "domain_name": "economicinsight360.com",
+      "ad_count": 1,
+      "sources": [
+        "card"
+      ],
+      "sample_urls": [
+        "https://economicinsight360.com/?creative=&fb_action=Purchase&adset_id={{adset.id}}&fb_action_f=Purchase&adset_name={{adset.name}}&placement={{placement}}&suuid=6a5acbb6-a2b5-41b6-aedf-c5d4208fe02f&launcher=e9c67ebc-4687-4a1f-8781-0268967afee5&token=EAAe4UQxmEUYBSF3NO3KEPbjUJw5sYemic99ce34ZBtQbJ34l9zYhnvMwMWEZBcMfhSWttvhMwtsCZCntiLatZB8XJPD43g1o34ulU1Mr0hpwVEwv6QiXqxsJgB3hubJVgZAAIoZBbbdlRqgJlarZBLeaHZAvmUgDpwZAf1SIUOX7TxzFq7lkD8gfpZAwZBnNMJIWR2EUQZDZD&cuuid=18651256-bb45-4b89-908c-eecbf3b6e7d7&ad_id={{ad.id}}&campaign_name={{campaign.name}}&pixel=1457401899529110&ad_name={{ad.name}}&campaign_id={{campaign.id}}&product_id={{product.id}}"
+      ]
+    },
+    {
+      "domain_name": "ecwdskndsdcsa.com",
+      "ad_count": 4,
+      "sources": [
+        "card"
+      ],
+      "sample_urls": [
+        "https://ecwdskndsdcsa.com/?pEl8X=szvnknir",
+        "https://ecwdskndsdcsa.com/"
+      ]
+    },
+    {
+      "domain_name": "eiusbvniaofno.com",
+      "ad_count": 20,
+      "sources": [
+        "card"
+      ],
+      "sample_urls": [
+        "http://eiusbvniaofno.com/?content_id=s2nirm22&jkm_id=Haq",
+        "http://eiusbvniaofno.com/?content_id=s2nirm22&jkm_id=HT2"
+      ]
+    },
+    {
+      "domain_name": "everydaybirch.com",
+      "ad_count": 201,
+      "sources": [
+        "card"
+      ],
+      "sample_urls": [
+        "https://everydaybirch.com/"
+      ]
+    }
+  ],
+  "unique_domains_total": 132,
+  "note": "first 30 of total; full list in unique_domains.csv"
+}

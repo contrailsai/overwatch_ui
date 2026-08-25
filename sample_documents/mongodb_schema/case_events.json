@@ -1,0 +1,15 @@
+{
+    _id: ObjectId('6a71c5b0532d2a3308a74961'),
+    entity_type: 'post',
+    entity_id: ObjectId('69810f0b3c24564a2cb28467'),
+    event_type: 'Initial schema migration to v1',
+    actor: 'migration_script_v1',
+    summary: 'Initial schema migration to v1',
+    payload: {
+      updated_by: 'migration_script_v1',
+      changes_summary: 'Initial schema migration to v1',
+      migrated_from: 'metadata.update_history'
+    },
+    occurred_at: ISODate('2026-02-02T15:24:34.920Z'),
+    source: 'ingest'
+  }

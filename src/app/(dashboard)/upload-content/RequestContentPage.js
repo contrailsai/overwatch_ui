@@ -14,14 +14,17 @@ import { format } from 'date-fns'
 import PageHeader from '@/components/PageHeader'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import ManualPostForm from './ManualPostForm'
+import ManualAdForm from './ManualAdForm'
+import IngestKindToggle from './IngestKindToggle'
 import {
     parseUrlsFromText,
+    isMetaAdUrl,
     formatIngestionStatusLabel,
     getIngestionStatusBadgeClass,
     getClientRequestedLinkCaseHref,
 } from '@/utils/clientRequestedLinks'
 
-function RequestLinksTabContent({ isReviewer = false }) {
+function RequestLinksTabContent({ isReviewer = false, adsEnabled = true }) {
     const [submissionResult, setSubmissionResult] = useState(null)
     const [requestedLinks, setRequestedLinks] = useState([])
 
@@ -29,7 +32,9 @@ function RequestLinksTabContent({ isReviewer = false }) {
     const [bulkInput, setBulkInput] = useState('')
     const [parsedLinks, setParsedLinks] = useState([])
     const [isSubmittingBulk, setIsSubmittingBulk] = useState(false)
+    const [ingestKind, setIngestKind] = useState('posts')
     const fileInputRef = useRef(null)
+    const isAd = adsEnabled && ingestKind === 'ads'
 
     const fetchLinks = useCallback(async () => {
         setIsLoadingLinks(true)
@@ -82,7 +87,7 @@ function RequestLinksTabContent({ isReviewer = false }) {
 
         setIsSubmittingBulk(true)
         setSubmissionResult(null)
-        const result = await bulkRequestLinks(parsedLinks)
+        const result = await bulkRequestLinks(parsedLinks, { isAd })
 
         setSubmissionResult(result)
         if (result.success) {
@@ -114,7 +119,9 @@ function RequestLinksTabContent({ isReviewer = false }) {
                                     <div>
                                         <CardTitle className="text-xl font-bold text-slate-900 tracking-tight">Ingestion Queue</CardTitle>
                                         <CardDescription className="text-slate-500 text-sm font-medium">
-                                            Submit contents to queue data for ingestion.
+                                            {isAd
+                                                ? 'Queue Meta Ads Library or Facebook share URLs for ads ingest.'
+                                                : 'Submit contents to queue data for ingestion.'}
                                         </CardDescription>
                                     </div>
                                 </div>
@@ -125,7 +132,18 @@ function RequestLinksTabContent({ isReviewer = false }) {
                                 <div className="p-4 sm:p-8 space-y-6">
                                     <div className="space-y-3">
                                         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between px-1 gap-2 sm:gap-0">
-                                            <Label htmlFor="bulk-links" className="text-sm font-bold text-slate-700">Data Source (Paste links here)</Label>
+                                            {adsEnabled ? (
+                                                <IngestKindToggle
+                                                    value={ingestKind}
+                                                    onChange={(next) => {
+                                                        setIngestKind(next)
+                                                        setSubmissionResult(null)
+                                                    }}
+                                                    adsEnabled={adsEnabled}
+                                                />
+                                            ) : (
+                                                <Label htmlFor="bulk-links" className="text-sm font-bold text-slate-700">Data Source (Paste links here)</Label>
+                                            )}
                                             <div className="flex items-center gap-2 w-full sm:w-auto">
                                                 <input
                                                     type="file"
@@ -146,13 +164,30 @@ function RequestLinksTabContent({ isReviewer = false }) {
                                             </div>
                                         </div>
 
+                                        {adsEnabled ? (
+                                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between px-1 gap-1">
+                                            <Label htmlFor="bulk-links" className="text-sm font-bold text-slate-700">
+                                                {isAd ? 'Ad source (paste Facebook ad links here)' : 'Data Source (Paste links here)'}
+                                            </Label>
+                                            {isAd ? (
+                                                <p className="text-[10px] font-medium text-slate-400">
+                                                    Meta-only. Ads Library or share URLs — not sent to moderation.
+                                                </p>
+                                            ) : null}
+                                        </div>
+                                        ) : null}
+
                                         <div className="relative group">
 
                                             <Textarea
                                                 id="bulk-links"
                                                 value={bulkInput}
                                                 onChange={(e) => setBulkInput(e.target.value)}
-                                                placeholder="Paste a comma-separated list or just drop a block of text containing URLs. Example: https://twitter.com/post/123, https://youtube.com/watch?v=xyz..."
+                                                placeholder={
+                                                    isAd
+                                                        ? 'Paste Facebook Ads Library or share URLs. Example: https://www.facebook.com/ads/library/?id=1526823775799370'
+                                                        : 'Paste a comma-separated list or just drop a block of text containing URLs. Example: https://twitter.com/post/123, https://youtube.com/watch?v=xyz...'
+                                                }
                                                 className="bg-slate-50/50 border-slate-200 min-h-[160px] p-4 focus:ring-blue-500/10 transition-all text-slate-800 rounded-xl shadow-inner-sm text-sm leading-relaxed placeholder:text-slate-400 font-medium"
                                             />
                                         </div>
@@ -184,14 +219,22 @@ function RequestLinksTabContent({ isReviewer = false }) {
 
                                             <div className="bg-slate-50/80 border border-slate-100 rounded-xl p-4 max-h-[140px] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-200">
                                                 <div className="flex flex-wrap gap-2">
-                                                    {parsedLinks.map((link, idx) => (
-                                                        <div key={idx} className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-lg text-xs font-bold shadow-sm group hover:border-blue-200 hover:bg-blue-50/30 transition-all">
-                                                            <LinkIcon className="w-3 h-3 text-slate-400 group-hover:text-blue-500" />
+                                                    {parsedLinks.map((link, idx) => {
+                                                        const unsupportedAd = isAd && !isMetaAdUrl(link)
+                                                        return (
+                                                        <div key={idx} className={`flex items-center gap-1.5 px-3 py-1.5 bg-white border text-slate-600 rounded-lg text-xs font-bold shadow-sm group transition-all ${unsupportedAd ? 'border-amber-200 hover:border-amber-300 hover:bg-amber-50/40' : 'border-slate-200 hover:border-blue-200 hover:bg-blue-50/30'}`}>
+                                                            <LinkIcon className={`w-3 h-3 ${unsupportedAd ? 'text-amber-500' : 'text-slate-400 group-hover:text-blue-500'}`} />
                                                             <span className="truncate max-w-[240px]">{link}</span>
                                                         </div>
-                                                    ))}
+                                                        )
+                                                    })}
                                                 </div>
                                             </div>
+                                            {isAd && parsedLinks.some((link) => !isMetaAdUrl(link)) ? (
+                                                <p className="text-xs font-medium text-amber-700">
+                                                    Non-Facebook URLs are highlighted and will be skipped. Ads ingest is Meta-only.
+                                                </p>
+                                            ) : null}
                                         </div>
                                     )}
 
@@ -363,7 +406,10 @@ function RequestLinksTabContent({ isReviewer = false }) {
     )
 }
 
-export default function RequestContentPage({ isReviewer = false, moderationQueueConfigured = false }) {
+export default function RequestContentPage({ isReviewer = false, moderationQueueConfigured = false, adsEnabled = true }) {
+    const [manualKind, setManualKind] = useState('posts')
+    const showManualAds = adsEnabled && manualKind === 'ads'
+
     return (
         <main className="flex-1 flex flex-col h-full overflow-hidden bg-slate-50 font-outfit">
             <PageHeader title="Request Content" description="Submit new links for data ingestion and analysis" />
@@ -385,7 +431,7 @@ export default function RequestContentPage({ isReviewer = false, moderationQueue
                                     className="flex-none shrink-0 px-4 md:px-8 py-2.5 md:py-2 text-[13px] md:text-sm whitespace-nowrap rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm flex items-center justify-center gap-2"
                                 >
                                     <FileText className="w-4 h-4 shrink-0" />
-                                    Manual post
+                                    Manual
                                 </TabsTrigger>
                             </TabsList>
                             <TabsContent
@@ -393,17 +439,28 @@ export default function RequestContentPage({ isReviewer = false, moderationQueue
                                 forceMount
                                 className="mt-0 space-y-6 sm:space-y-8 data-[state=inactive]:hidden ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2"
                             >
-                                <RequestLinksTabContent isReviewer={isReviewer} />
+                                <RequestLinksTabContent isReviewer={isReviewer} adsEnabled={adsEnabled} />
                             </TabsContent>
                             <TabsContent
                                 value="manual"
                                 className="ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2"
                             >
-                                <ManualPostForm moderationQueueConfigured={moderationQueueConfigured} />
+                                <div className="space-y-6">
+                                    <IngestKindToggle
+                                        value={manualKind}
+                                        onChange={setManualKind}
+                                        adsEnabled={adsEnabled}
+                                    />
+                                    {showManualAds ? (
+                                        <ManualAdForm />
+                                    ) : (
+                                        <ManualPostForm moderationQueueConfigured={moderationQueueConfigured} />
+                                    )}
+                                </div>
                             </TabsContent>
                         </Tabs>
                     ) : (
-                        <RequestLinksTabContent isReviewer={isReviewer} />
+                        <RequestLinksTabContent isReviewer={isReviewer} adsEnabled={adsEnabled} />
                     )}
                 </div>
             </div>

@@ -1,0 +1,162 @@
+{
+  "_id": { "$oid": "6b0000000000000000000001" },
+  "schema_version": 3,
+  "platform": "meta",
+  "source": "meta_ads_library",
+  "platform_ad_id": "1526823775799370",
+  "original_url": "https://www.facebook.com/ads/library/?id=1526823775799370",
+  "ad_profile_id": { "$oid": "6b0000000000000000000010" },
+  "workflow": {
+    "ai_status": "pending",
+    "review_status": "pending",
+    "client_status": "open",
+    "visibility_status": "available",
+    "takedown_status": "none",
+    "alerted_at": null
+  },
+  "list": {
+    "ai_threat_score": null,
+    "review_threat_score": null,
+    "effective_threat_score": null,
+    "risk_rank": null,
+    "threat_types": [],
+    "violation_flags": [],
+    "posted_at": { "$date": "2026-08-12T07:00:00.000Z" },
+    "sourced_at": { "$date": "2026-08-13T06:30:00.000Z" },
+    "reviewed_at": null,
+    "alert_hour_ist": null,
+    "poi_detected": false,
+    "start_date": { "$date": "2026-08-12T07:00:00.000Z" },
+    "end_date": { "$date": "2026-08-12T07:00:00.000Z" },
+    "is_active": true,
+    "display_format": "DPA",
+    "publisher_platforms": ["FACEBOOK", "INSTAGRAM", "MESSENGER", "THREADS"],
+    "impressions_text": "<100",
+    "impressions_index": 0,
+    "card_count": 6
+  },
+  "content": {
+    "title": "{{product.description}}",
+    "body": null,
+    "caption": "amazon.in",
+    "cta_text": "Sign up",
+    "cta_type": "SIGN_UP",
+    "display_format": "DPA",
+    "link_url": "https://www.amazon.in/",
+    "link_description": null,
+    "language": null,
+    "cards": [
+      {
+        "title": "Explore New Ways Forward",
+        "body": "",
+        "caption": "amazon.in",
+        "cta_text": "Sign Up",
+        "cta_type": "SIGN_UP",
+        "link_url": "http://iknroling.com/?content_id=3",
+        "link_description": "Amazon.in: Online Shopping India - Buy mobiles, laptops, cameras, books, watches, apparel, shoes and e-Gift Cards. Free Shipping & Cash on Delivery Available.",
+        "media": [
+          {
+            "original_url": "https://scontent.fdel27-1.fna.fbcdn.net/v/t39.35426-6/766890151_1548133562817724_8422316609103658652_n.jpg",
+            "s3_url": "https://example-bucket.s3.ap-south-1.amazonaws.com/meta_ads/1526823775799370/0/0.jpg",
+            "type": "image",
+            "role": "card_image"
+          }
+        ]
+      },
+      {
+        "title": "Explore New Ways Forward",
+        "body": "",
+        "caption": "amazon.in",
+        "cta_text": "Sign Up",
+        "cta_type": "SIGN_UP",
+        "link_url": "http://iknroling.com/?content_id=5",
+        "link_description": "Amazon.in: Online Shopping India - Buy mobiles, laptops, cameras, books, watches, apparel, shoes and e-Gift Cards. Free Shipping & Cash on Delivery Available.",
+        "media": [
+          {
+            "original_url": "https://scontent.fdel27-4.fna.fbcdn.net/v/t39.35426-6/769168781_1246306977557647_4532841038745394490_n.jpg",
+            "s3_url": "https://example-bucket.s3.ap-south-1.amazonaws.com/meta_ads/1526823775799370/1/0.jpg",
+            "type": "image",
+            "role": "card_image"
+          }
+        ]
+      }
+    ],
+    "media": [
+      {
+        "original_url": "https://scontent.fdel27-1.fna.fbcdn.net/v/t39.35426-6/766890151_1548133562817724_8422316609103658652_n.jpg",
+        "s3_url": "https://example-bucket.s3.ap-south-1.amazonaws.com/meta_ads/1526823775799370/0/0.jpg",
+        "type": "image",
+        "role": "card_image",
+        "card_index": 0
+      },
+      {
+        "original_url": "https://scontent.fdel27-4.fna.fbcdn.net/v/t39.35426-6/769168781_1246306977557647_4532841038745394490_n.jpg",
+        "s3_url": "https://example-bucket.s3.ap-south-1.amazonaws.com/meta_ads/1526823775799370/1/0.jpg",
+        "type": "image",
+        "role": "card_image",
+        "card_index": 1
+      }
+    ]
+  },
+  "advertiser_snapshot": {
+    "platform_page_id": "1274871532371846",
+    "page_name": "Sarah Richardson",
+    "profile_url": "https://www.facebook.com/61588715172557/",
+    "profile_pic": "https://scontent.fdel27-4.fna.fbcdn.net/v/t39.35426-6/768667762_1762747301843931_3318618879659459468_n.jpg",
+    "profile_pic_s3": "https://example-bucket.s3.ap-south-1.amazonaws.com/meta_ads/pages/1274871532371846/profile.jpg",
+    "page_is_deleted": false,
+    "page_categories": ["Business"],
+    "page_like_count": 0
+  },
+  "ad_delivery": {
+    "is_active": true,
+    "start_date": { "$date": "2026-08-12T07:00:00.000Z" },
+    "end_date": { "$date": "2026-08-12T07:00:00.000Z" },
+    "publisher_platforms": ["FACEBOOK", "INSTAGRAM", "MESSENGER", "THREADS"],
+    "impressions_text": "<100",
+    "impressions_index": 0,
+    "spend": null,
+    "currency": "",
+    "reach_estimate": null,
+    "targeted_or_reached_countries": [],
+    "total_active_time": 34838,
+    "collation_id": null,
+    "collation_count": null,
+    "categories": ["UNKNOWN"],
+    "gated_type": "ELIGIBLE",
+    "contains_digital_created_media": false,
+    "contains_sensitive_content": false,
+    "regional_regulation_data": {
+      "finserv": {
+        "is_deemed_finserv": false,
+        "is_limited_delivery": false
+      },
+      "tw_anti_scam": {
+        "is_limited_delivery": false
+      }
+    }
+  },
+  "source_payload": {
+    "ad_archive_id": "1526823775799370",
+    "page_id": "1274871532371846",
+    "page_name": "Sarah Richardson",
+    "is_active": true,
+    "display_format": "DPA",
+    "publisher_platform": ["FACEBOOK", "INSTAGRAM", "MESSENGER", "THREADS"],
+    "start_date": 1786518000,
+    "end_date": 1786518000
+  },
+  "analysis_results": {},
+  "review_details": {},
+  "ingestion": {
+    "type": "meta_ads_library",
+    "source_url": "https://www.facebook.com/ads/library/?id=1526823775799370",
+    "ingested_at": { "$date": "2026-08-13T06:30:00.000Z" }
+  },
+  "system": {
+    "created_at": { "$date": "2026-08-13T06:30:00.000Z" },
+    "updated_at": { "$date": "2026-08-13T06:30:00.000Z" },
+    "s3_stored": true
+  },
+  "content_reviewed_by": null
+}

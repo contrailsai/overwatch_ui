@@ -1,0 +1,1175 @@
+'use client'
+
+import { useState, useCallback, useEffect, useTransition } from 'react'
+import { getAdProfileAds, submitAdProfileReview } from './actions'
+import {
+    Filter, Search, ExternalLink, X, ChevronLeft, ChevronRight,
+    ChevronsLeft, ChevronsRight,
+    Facebook, Instagram,
+    User, ArrowRight, FileText, Siren, ClockFading, Info, Globe,
+    ShieldAlert, TriangleAlert, TrendingDown, Smile,
+    Loader2, AlertCircle, UserX, UserCheck, CheckCheck, CheckCircle,
+    MapPin, Calendar, Link2, Hash
+} from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Separator } from '@/components/ui/separator'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+import { Checkbox } from '@/components/ui/checkbox'
+import { cn } from '@/lib/utils'
+import { useRouter, usePathname, useSearchParams } from 'next/navigation'
+import { format } from 'date-fns'
+import { DateFilterPopover } from '@/app/(dashboard)/cases/DateFilterPopover'
+
+const isPendingReviewAd = (ad) =>
+    ad?.workflow?.review_status === 'pending' || ad?.list?.review_threat_score == null
+
+const getAdInspectHref = (adId) => `/review-ads?ad_id=${adId}`
+
+const PlatformIcon = ({ platform, className }) => {
+    const p = platform?.toLowerCase()
+    if (p === 'instagram') return <Instagram className={cn('w-3.5 h-3.5 text-pink-500', className)} />
+    if (p === 'facebook' || p === 'meta') return <Facebook className={cn('w-3.5 h-3.5 text-blue-600', className)} />
+    return <Globe className={cn('w-3.5 h-3.5 text-slate-400', className)} />
+}
+
+const getRiskLabel = (score) => {
+    if (score === null || score === undefined) return null
+    if (score >= 96) return { label: 'High', color: 'text-rose-600 bg-rose-50 border-rose-200' }
+    if (score >= 76) return { label: 'Medium', color: 'text-orange-500 bg-orange-50 border-orange-200' }
+    if (score >= 41) return { label: 'Low', color: 'text-amber-500 bg-amber-50 border-amber-200' }
+    return { label: 'Safe', color: 'text-slate-500 bg-slate-50 border-slate-200' }
+}
+
+const RiskIcon = ({ label }) => {
+    if (label === 'High') return <Siren className="w-3 h-3" />
+    if (label === 'Medium') return <TriangleAlert className="w-3 h-3" />
+    if (label === 'Low') return <TrendingDown className="w-3 h-3" />
+    return <Smile className="w-3 h-3" />
+}
+
+const getStatusConfig = (status) => {
+    if (status === 'To Be Reviewed' || !status) return { label: 'Pending', color: 'text-slate-600 bg-slate-50 border-slate-200', icon: ClockFading }
+    if (status === 'Pass') return { label: 'Pass', color: 'text-emerald-700 bg-emerald-50 border-emerald-200', icon: CheckCircle }
+    if (status === 'Flag for Takedown') return { label: 'Takedown', color: 'text-rose-700 bg-rose-50 border-rose-200', icon: Siren }
+    return { label: status, color: 'text-slate-600 bg-slate-50 border-slate-200', icon: Info }
+}
+
+// ─── Risk levels config ──────────────────────────────────────────────────────
+const RISK_LEVELS = [
+    { value: 'safe', label: 'Safe', activeClass: 'bg-emerald-500 border-emerald-600 text-white shadow-emerald-200' },
+    { value: 'low', label: 'Low', activeClass: 'bg-amber-400 border-amber-500 text-white shadow-amber-200' },
+    { value: 'mid', label: 'Medium', activeClass: 'bg-orange-400 border-orange-500 text-white shadow-orange-200' },
+    { value: 'high', label: 'High', activeClass: 'bg-rose-500 border-rose-600 text-white shadow-rose-200' },
+]
+
+// ─── Ad Profile Review Form ──────────────────────────────────────────────────
+function AdProfileReviewForm({ profile, project, onReviewSaved }) {
+    const review = profile.review_details || {}
+    const hasReview = Object.keys(review).length > 0
+    const labels = project?.project_details?.labels || []
+    const displayName = profile.page_name || profile.display_name
+
+    const [risk, setRisk] = useState(review.risk || '')
+    const [violations, setViolations] = useState(review.violations || [])
+    const [reasoning, setReasoning] = useState(review.reasoning || '')
+    const [reviewerComments, setReviewerComments] = useState(review.reviewer_comments || '')
+    const [action, setAction] = useState(review.action || '')
+    const [isPending, startTransition] = useTransition()
+    const [result, setResult] = useState(null)
+
+    // Reset when profile changes
+    useEffect(() => {
+        const r = profile.review_details || {}
+        setRisk(r.risk || '')
+        setViolations(r.violations || [])
+        setReasoning(r.reasoning || '')
+        setReviewerComments(r.reviewer_comments || '')
+        setAction(r.action || '')
+        setResult(null)
+    }, [profile._id])
+
+    const toggleViolation = (name) => {
+        setViolations(prev =>
+            prev.includes(name) ? prev.filter(v => v !== name) : [...prev, name]
+        )
+    }
+
+    const handleSubmit = () => {
+        if (!risk || !action) return
+        startTransition(async () => {
+            const res = await submitAdProfileReview(project, profile._id, {
+                risk,
+                violations,
+                reasoning,
+                reviewer_comments: reviewerComments,
+                action,
+            })
+            setResult(res)
+            if (res.success && onReviewSaved) {
+                onReviewSaved(profile._id, res.review_details)
+            }
+        })
+    }
+
+    return (
+        <div className="h-full flex flex-col bg-white">
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-slate-100 bg-white shrink-0">
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Ad Profile Review</h3>
+                        {hasReview && (
+                            <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 gap-1.5 pl-2 text-[10px]">
+                                <CheckCircle className="w-3 h-3" /> Reviewed
+                            </Badge>
+                        )}
+                    </div>
+                </div>
+                <p className="text-xs text-slate-400 mt-1">
+                    Reviewing profile: <span className="font-semibold text-slate-600">{displayName}</span>
+                </p>
+            </div>
+
+            {/* Body */}
+            <div className="flex-1 overflow-y-auto">
+                <div className="p-6 space-y-7">
+
+                    {/* ── Section 1: Risk ── */}
+                    <section className="space-y-3">
+                        <div className="flex items-center gap-2">
+                            <span className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-bold">1</span>
+                            <h4 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Risk Level</h4>
+                        </div>
+                        <div className="flex gap-2">
+                            {RISK_LEVELS.map(level => (
+                                <button
+                                    key={level.value}
+                                    type="button"
+                                    onClick={() => setRisk(level.value)}
+                                    className={cn(
+                                        'flex-1 py-2 px-2 rounded-lg border cursor-pointer text-xs font-bold transition-all',
+                                        risk === level.value
+                                            ? `${level.activeClass} shadow-sm`
+                                            : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                                    )}
+                                >
+                                    {level.label}
+                                </button>
+                            ))}
+                        </div>
+                        {!risk && (
+                            <p className="text-[10px] text-slate-400 italic">Select a risk level to proceed.</p>
+                        )}
+                    </section>
+
+                    {/* ── Section 2: Violations ── */}
+                    <section className="space-y-3">
+                        <div className="flex items-center gap-2">
+                            <span className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-bold">2</span>
+                            <h4 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Violations</h4>
+                        </div>
+                        {labels.length === 0 ? (
+                            <p className="text-xs text-slate-400 italic">No labels configured for this project.</p>
+                        ) : (
+                            <div className="grid grid-cols-2 gap-2">
+                                {labels.map(item => (
+                                    <div
+                                        key={item.name}
+                                        onClick={() => toggleViolation(item.name)}
+                                        className={cn(
+                                            'flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all hover:shadow-sm',
+                                            violations.includes(item.name)
+                                                ? 'bg-blue-50 border-blue-200 ring-1 ring-blue-200'
+                                                : 'bg-white border-slate-200 hover:border-blue-200'
+                                        )}
+                                    >
+                                        <Checkbox
+                                            checked={violations.includes(item.name)}
+                                            onCheckedChange={() => { }}
+                                            className="border-slate-300 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
+                                        />
+                                        <span className={cn(
+                                            'text-xs font-bold uppercase',
+                                            violations.includes(item.name) ? 'text-blue-700' : 'text-slate-600'
+                                        )}>
+                                            {item.name}
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                        {violations.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5 pt-1">
+                                {violations.map(v => (
+                                    <Badge key={v} variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 text-[10px] font-bold uppercase">
+                                        {v}
+                                    </Badge>
+                                ))}
+                            </div>
+                        )}
+                    </section>
+
+                    {/* ── Section 3: Reasoning & Comments ── */}
+                    <section className="space-y-4">
+                        <div className="flex items-center gap-2">
+                            <span className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-bold">3</span>
+                            <h4 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Reasoning & Comments</h4>
+                        </div>
+                        <div className="space-y-3">
+                            <div className="space-y-1.5">
+                                <Label className="text-xs font-bold text-slate-500 uppercase">Analysis Notes</Label>
+                                <Textarea
+                                    value={reasoning}
+                                    onChange={e => setReasoning(e.target.value)}
+                                    placeholder="Describe why this ad profile is flagged or cleared..."
+                                    className="min-h-[100px] bg-slate-50 border-slate-200 text-sm focus:bg-white transition-colors resize-none"
+                                />
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label className="text-xs font-bold text-slate-500 uppercase">Client Notes</Label>
+                                <Textarea
+                                    value={reviewerComments}
+                                    onChange={e => setReviewerComments(e.target.value)}
+                                    placeholder="Add context for the client..."
+                                    className="min-h-[72px] bg-white border-slate-200 text-sm focus:border-blue-500 resize-none"
+                                />
+                            </div>
+                        </div>
+                    </section>
+
+                    {/* ── Section 4: Action ── */}
+                    <section className="space-y-3">
+                        <div className="flex items-center gap-2">
+                            <span className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-bold">4</span>
+                            <h4 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Action</h4>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                            {/* Ignore */}
+                            <div
+                                onClick={() => setAction('ignore')}
+                                className={cn(
+                                    'flex flex-col items-center gap-2 p-4 rounded-xl border-2 cursor-pointer transition-all',
+                                    action === 'ignore'
+                                        ? 'bg-slate-100 border-slate-400 ring-1 ring-slate-300'
+                                        : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                                )}
+                            >
+                                <div className={cn(
+                                    'w-9 h-9 rounded-lg flex items-center justify-center',
+                                    action === 'ignore' ? 'bg-slate-200 text-slate-700' : 'bg-slate-100 text-slate-400'
+                                )}>
+                                    <UserX className="w-5 h-5" />
+                                </div>
+                                <span className={cn(
+                                    'text-xs font-bold uppercase tracking-wide',
+                                    action === 'ignore' ? 'text-slate-800' : 'text-slate-500'
+                                )}>Ignore</span>
+                                <p className="text-[10px] text-slate-400 text-center leading-snug">No further action needed</p>
+                            </div>
+
+                            {/* Submit to Client Ad Profiles */}
+                            <div
+                                onClick={() => setAction('submit_to_client')}
+                                className={cn(
+                                    'flex flex-col items-center gap-2 p-4 rounded-xl border-2 cursor-pointer transition-all',
+                                    action === 'submit_to_client'
+                                        ? 'bg-blue-50 border-blue-400 ring-1 ring-blue-200'
+                                        : 'bg-white border-slate-200 hover:border-blue-200 hover:bg-blue-50/30'
+                                )}
+                            >
+                                <div className={cn(
+                                    'w-9 h-9 rounded-lg flex items-center justify-center',
+                                    action === 'submit_to_client' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-400'
+                                )}>
+                                    <UserCheck className="w-5 h-5" />
+                                </div>
+                                <span className={cn(
+                                    'text-xs font-bold uppercase tracking-wide',
+                                    action === 'submit_to_client' ? 'text-blue-800' : 'text-slate-500'
+                                )}>Submit to Client</span>
+                                <p className="text-[10px] text-slate-400 text-center leading-snug">Add to client ad profiles</p>
+                            </div>
+                        </div>
+                        {!action && (
+                            <p className="text-[10px] text-slate-400 italic">Select an action to submit the review.</p>
+                        )}
+                    </section>
+
+                    {/* Result feedback */}
+                    {result && (
+                        <div className={cn(
+                            'flex items-center gap-2 p-3 rounded-lg border text-sm font-semibold',
+                            result.success
+                                ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                                : 'bg-rose-50 border-rose-200 text-rose-700'
+                        )}>
+                            {result.success
+                                ? <><CheckCheck className="w-4 h-4" /> Review saved successfully.</>
+                                : <><AlertCircle className="w-4 h-4" /> {result.error || 'Failed to save.'}</>
+                            }
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 bg-white border-t border-slate-100 sticky bottom-0 flex gap-3 shrink-0">
+                <Button
+                    type="button"
+                    disabled={!risk || !action || isPending}
+                    onClick={handleSubmit}
+                    className={cn(
+                        'flex-1 font-bold text-white shadow-lg transition-all',
+                        risk && action
+                            ? 'bg-blue-600 hover:bg-blue-700 shadow-blue-600/20'
+                            : 'bg-slate-300 cursor-not-allowed'
+                    )}
+                >
+                    {isPending
+                        ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Saving...</>
+                        : hasReview ? 'Update Review' : 'Submit Review'
+                    }
+                </Button>
+            </div>
+        </div>
+    )
+}
+
+// ─── Ad Profile Detail Panel ─────────────────────────────────────────────────
+function AdProfileDetailPanel({ profile, profiles = [], project, isOpen, onClose, onReviewSaved, onSelectProfile }) {
+    const [ads, setAds] = useState(null)
+    const [loading, setLoading] = useState(false)
+    const [isBioExpanded, setIsBioExpanded] = useState(false)
+
+    const currentIndex = profiles.findIndex(p => p._id === profile?._id)
+    const hasPrev = currentIndex > 0
+    const hasNext = currentIndex < profiles.length - 1 && currentIndex !== -1
+    const adsCount = profile?.ads_count ?? profile?.cases_count ?? 0
+
+    useEffect(() => {
+        if (!isOpen || !profile) return
+        let cancelled = false
+        setAds(null)
+        setIsBioExpanded(false)
+        if (adsCount === 0) {
+            setAds([])
+            return
+        }
+        setLoading(true)
+        getAdProfileAds(project, profile._id)
+            .then(result => { if (!cancelled) setAds(result) })
+            .catch(() => { if (!cancelled) setAds([]) })
+            .finally(() => { if (!cancelled) setLoading(false) })
+        return () => { cancelled = true }
+    }, [isOpen, profile?._id, project, adsCount])
+
+    useEffect(() => {
+        const handleKeyDown = (e) => {
+            if (e.key === 'Escape') onClose()
+            if (e.key === 'ArrowLeft' && hasPrev) onSelectProfile(profiles[currentIndex - 1])
+            if (e.key === 'ArrowRight' && hasNext) onSelectProfile(profiles[currentIndex + 1])
+        }
+        window.addEventListener('keydown', handleKeyDown)
+        return () => window.removeEventListener('keydown', handleKeyDown)
+    }, [isOpen, currentIndex, hasPrev, hasNext, onClose, onSelectProfile, profiles])
+
+    if (!isOpen || !profile) return null
+
+    const handleFirst = () => profiles.length > 0 && onSelectProfile(profiles[0])
+    const handleLast = () => profiles.length > 0 && onSelectProfile(profiles[profiles.length - 1])
+    const handlePrev = () => hasPrev && onSelectProfile(profiles[currentIndex - 1])
+    const handleNext = () => hasNext && onSelectProfile(profiles[currentIndex + 1])
+
+    const highCount = ads?.filter(c => (c.score ?? c.review_details?.threat_score ?? 0) >= 96).length || 0
+    const medCount = ads?.filter(c => { const s = c.score ?? c.review_details?.threat_score ?? 0; return s >= 76 && s < 96 }).length || 0
+    const lowCount = ads?.filter(c => { const s = c.score ?? c.review_details?.threat_score ?? 0; return s >= 41 && s < 76 }).length || 0
+
+    const displayName = profile.page_name || profile.display_name
+    const pageCategories = profile.enrichment?.page_categories || profile.metadata?.page_categories || []
+    const pageLikeCount = profile.metadata?.page_like_count ?? profile.enrichment?.page_like_count ?? profile.metadata?.follower_count
+    const pageIsDeleted = profile.metadata?.page_is_deleted ?? profile.enrichment?.page_is_deleted ?? false
+    const biography = profile.metadata?.biography || profile.enrichment?.biography
+
+    return (
+        <>
+            {/* Backdrop */}
+            <div
+                className="fixed inset-0 bg-black/20 backdrop-blur-[2px] z-40"
+                onClick={onClose}
+            />
+
+            {/* Panel */}
+            <div className="fixed right-0 top-0 h-full bg-white shadow-2xl border-l border-slate-200 z-40 flex flex-row animate-in slide-in-from-right duration-300">
+
+                {/* LEFT: Profile & Ad Details */}
+                <div className='w-[540px] h-full flex flex-col overflow-hidden'>
+                    {/* Navigation Header */}
+                    <div className="px-6 py-2 bg-slate-50 border-b border-slate-200 flex items-center justify-between shrink-0">
+                        <div className="flex items-center gap-1">
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={handleFirst}
+                                disabled={currentIndex <= 0}
+                                className="h-8 w-8 p-0 text-slate-400 hover:text-slate-900"
+                                title="First Profile"
+                            >
+                                <ChevronsLeft className="w-4 h-4" />
+                            </Button>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={handlePrev}
+                                disabled={!hasPrev}
+                                className="h-8 gap-1 px-2 text-slate-500 hover:text-slate-900 font-bold text-[10px] uppercase tracking-wider"
+                            >
+                                <ChevronLeft className="w-3.5 h-3.5" />
+                                Prev
+                            </Button>
+                        </div>
+
+                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                            Profile <span className="text-slate-900">{currentIndex + 1}</span> of <span className="text-slate-900">{profiles.length}</span>
+                        </div>
+
+                        <div className="flex items-center gap-1">
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={handleNext}
+                                disabled={!hasNext}
+                                className="h-8 gap-1 px-2 text-slate-500 hover:text-slate-900 font-bold text-[10px] uppercase tracking-wider"
+                            >
+                                Next
+                                <ChevronRight className="w-3.5 h-3.5" />
+                            </Button>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={handleLast}
+                                disabled={currentIndex >= profiles.length - 1}
+                                className="h-8 w-8 p-0 text-slate-400 hover:text-slate-900"
+                                title="Last Profile"
+                            >
+                                <ChevronsRight className="w-4 h-4" />
+                            </Button>
+                        </div>
+                    </div>
+                    <div className="flex-1 overflow-y-auto flex flex-col">
+                        {/* Profile & Metadata Section */}
+                        <div className="px-6 py-6 border-b border-slate-100 bg-linear-to-b from-slate-50/80 to-white shrink-0 relative">
+                            {/* Close Button */}
+                            <div className="absolute top-4 right-4">
+                                <button
+                                    onClick={onClose}
+                                    className="p-1.5 rounded-lg hover:bg-slate-200/50 text-slate-400 hover:text-slate-700 transition-colors bg-white/50 backdrop-blur-sm"
+                                >
+                                    <X className="w-4 h-4" />
+                                </button>
+                            </div>
+
+                            <div className="flex flex-col gap-5">
+                                {/* Profile Info Row */}
+                                <div className="flex items-start gap-4 pr-8">
+                                    <div className="w-16 h-16 rounded-full bg-white shadow-sm ring-1 ring-slate-200/60 flex items-center justify-center shrink-0 overflow-hidden relative">
+                                        {profile.metadata?.profile_pic ? (
+                                            <img src={profile.metadata.profile_pic} alt="" className="w-full h-full object-cover" />
+                                        ) : (
+                                            <User className="w-7 h-7 text-slate-300" />
+                                        )}
+                                    </div>
+                                    <div className="flex flex-col min-w-0 pt-0.5">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                            <h2 className="text-lg font-bold text-slate-900 truncate tracking-tight">{displayName}</h2>
+                                            {pageIsDeleted && (
+                                                <Badge variant="outline" className="h-5 px-1.5 text-[9px] font-bold bg-rose-50 text-rose-700 border-rose-200 uppercase tracking-wider gap-1">
+                                                    <ShieldAlert className="w-3 h-3" /> Deleted
+                                                </Badge>
+                                            )}
+                                        </div>
+                                        <div className="flex items-center gap-2 mt-0.5 text-sm flex-wrap">
+                                            {profile.platform_page_id && (
+                                                <span className="font-medium text-slate-500 font-mono text-xs">{profile.platform_page_id}</span>
+                                            )}
+                                            {profile.platform_page_id && <span className="text-slate-300">•</span>}
+                                            <div className="flex items-center gap-1.5 text-slate-600 font-medium">
+                                                <PlatformIcon platform={profile.platform} className="w-3.5 h-3.5" />
+                                                <span className="capitalize">{profile.platform}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Biography */}
+                                {biography && (
+                                    <div className="flex flex-col gap-1 items-start">
+                                        <div className={cn(
+                                            "text-sm text-slate-700 leading-relaxed whitespace-pre-wrap font-medium transition-all",
+                                            !isBioExpanded && "line-clamp-3"
+                                        )}>
+                                            {biography}
+                                        </div>
+                                        {(biography.length > 80 || biography.includes('\n')) && (
+                                            <button
+                                                onClick={() => setIsBioExpanded(!isBioExpanded)}
+                                                className="text-[10px] font-bold text-blue-600 hover:text-blue-800 uppercase tracking-wider mt-0.5 transition-colors"
+                                            >
+                                                {isBioExpanded ? 'Show less' : 'Show more'}
+                                            </button>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* Badges/Tags */}
+                                <div className="flex flex-wrap gap-2">
+                                    {profile.metadata?.location && (
+                                        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-100 text-slate-600 text-xs font-medium border border-slate-200/60">
+                                            <MapPin className="w-3 h-3 text-slate-400" />
+                                            {profile.metadata.location}
+                                        </div>
+                                    )}
+                                    {Array.isArray(pageCategories) && pageCategories.map((cat) => (
+                                        <div key={cat} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-100 text-slate-600 text-xs font-medium border border-slate-200/60">
+                                            <Hash className="w-3 h-3 text-slate-400" />
+                                            {cat}
+                                        </div>
+                                    ))}
+                                    {!Array.isArray(pageCategories) && pageCategories && (
+                                        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-100 text-slate-600 text-xs font-medium border border-slate-200/60">
+                                            <Hash className="w-3 h-3 text-slate-400" />
+                                            {pageCategories}
+                                        </div>
+                                    )}
+                                    {profile.metadata?.account_creation_date && (
+                                        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-100 text-slate-600 text-xs font-medium border border-slate-200/60">
+                                            <Calendar className="w-3 h-3 text-slate-400" />
+                                            Joined {format(new Date(profile.metadata.account_creation_date), 'MMM yyyy')}
+                                        </div>
+                                    )}
+                                    {profile.profile_url && (
+                                        <a href={profile.profile_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-blue-50 text-blue-700 hover:bg-blue-100 hover:text-blue-800 text-xs font-semibold transition-colors border border-blue-100">
+                                            <Link2 className="w-3 h-3 text-blue-500" />
+                                            View Profile
+                                        </a>
+                                    )}
+                                </div>
+
+                                {/* Stats Grid */}
+                                <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-100/80">
+                                    <div className="flex flex-col">
+                                        <span className="text-lg font-bold text-slate-900 tracking-tight">
+                                            {pageLikeCount?.toLocaleString?.() ?? pageLikeCount ?? 0}
+                                        </span>
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Page Likes</span>
+                                    </div>
+                                    <div className="flex flex-col">
+                                        <span className="text-lg font-bold text-slate-900 tracking-tight">
+                                            {adsCount.toLocaleString?.() ?? adsCount}
+                                        </span>
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Ads</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {/* Stats bar */}
+                        {ads && ads.length > 0 && (
+                            <div className="px-6 py-3 bg-slate-50 border-b border-slate-100 flex items-center gap-6 shrink-0">
+                                <div className="text-center">
+                                    <p className="text-lg font-bold text-slate-900">{ads.length}</p>
+                                    <p className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold">Ads</p>
+                                </div>
+                                {highCount > 0 && (
+                                    <div className="text-center">
+                                        <p className="text-lg font-bold text-rose-600">{highCount}</p>
+                                        <p className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold">High Risk</p>
+                                    </div>
+                                )}
+                                {medCount > 0 && (
+                                    <div className="text-center">
+                                        <p className="text-lg font-bold text-orange-500">{medCount}</p>
+                                        <p className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold">Medium</p>
+                                    </div>
+                                )}
+                                {lowCount > 0 && (
+                                    <div className="text-center">
+                                        <p className="text-lg font-bold text-amber-500">{lowCount}</p>
+                                        <p className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold">Low</p>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                        {/* Associated Ads */}
+                        <div className="shrink-0 pb-8">
+                            <div className="px-6 py-4">
+                                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Associated Ads</h3>
+
+                                {loading && (
+                                    <div className="space-y-3">
+                                        {Array.from({ length: 4 }).map((_, i) => (
+                                            <div key={i} className="h-16 bg-slate-50 rounded-lg animate-pulse border border-slate-100" />
+                                        ))}
+                                    </div>
+                                )}
+
+                                {!loading && ads && ads.length === 0 && (
+                                    <div className="flex flex-col items-center justify-center py-12 text-slate-400">
+                                        <div className="w-14 h-14 bg-slate-50 rounded-full flex items-center justify-center mb-3 border border-slate-100">
+                                            <FileText className="w-6 h-6 opacity-30" />
+                                        </div>
+                                        <p className="text-sm font-semibold text-slate-600">No ads found</p>
+                                        <p className="text-xs text-slate-400 mt-1">No ads are linked to this profile.</p>
+                                    </div>
+                                )}
+
+                                {!loading && ads && ads.length > 0 && (
+                                    <div className="space-y-2.5">
+                                        {ads.map(c => {
+                                            const risk = getRiskLabel(c.score ?? c.review_details?.threat_score)
+                                            const statusCfg = getStatusConfig(c.client_status)
+                                            const StatusIcon = statusCfg.icon
+                                            const pending = isPendingReviewAd(c)
+                                            const adLinkClass = 'inline-flex items-center gap-1.5 text-[10px] font-bold text-slate-600 hover:text-blue-600 hover:bg-white hover:border-blue-200 px-2 py-1 rounded-md border border-slate-100 transition-all group/link'
+                                            const adHref = getAdInspectHref(c._id)
+                                            const adText = c.title || c.caption
+
+                                            let posted_date = ""
+
+                                            if (c.posted_date)
+                                                posted_date = format(new Date(c.posted_date), "dd/MM/yyyy hh:mm a");
+                                            else if (c.start_date)
+                                                posted_date = format(new Date(c.start_date), "dd/MM/yyyy hh:mm a");
+                                            else if (c.sourcing_date)
+                                                posted_date = format(new Date(c.sourcing_date), "dd/MM/yyyy hh:mm a");
+
+                                            return (
+                                                <div
+                                                    key={c._id}
+                                                    className="group flex flex-col gap-2 bg-white border border-slate-100 rounded-xl px-4 py-3 hover:border-slate-200 hover:shadow-sm transition-all"
+                                                >
+                                                    {/* Top row: badge + status + platform + external link */}
+                                                    <div className="flex items-center gap-2 flex-wrap">
+                                                        {risk ? (
+                                                            <span className={cn('inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border', risk.color)}>
+                                                                <RiskIcon label={risk.label} />
+                                                                {risk.label}
+                                                            </span>
+                                                        ) :
+                                                            (
+                                                                <span className={cn('inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border', statusCfg.color)}>
+                                                                    <StatusIcon className="w-2.5 h-2.5" />
+                                                                    {statusCfg.label}
+                                                                </span>
+                                                            )
+                                                        }
+                                                        <Badge variant="outline" className="capitalize font-semibold text-slate-500 border-slate-200 gap-1 pl-1.5 h-5 text-[10px]">
+                                                            <PlatformIcon platform={c.platform} />
+                                                            {c.platform}
+                                                        </Badge>
+                                                        {c.page_name && (
+                                                            <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold text-slate-500 bg-slate-50 border border-slate-200 truncate max-w-[140px]">
+                                                                {c.page_name}
+                                                            </span>
+                                                        )}
+                                                        {c.review_details?.primary_threat_type && (
+                                                            <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold border uppercase tracking-wide text-slate-500 bg-slate-50 border-slate-200">
+                                                                {c.review_details.primary_threat_type.replace(/[-_]/g, ' ')}
+                                                            </span>
+                                                        )}
+                                                        <div className="ml-auto">
+                                                            {c.original_url && (
+                                                                <a
+                                                                    href={c.original_url}
+                                                                    target="_blank"
+                                                                    rel="noreferrer"
+                                                                    className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-600 hover:text-blue-800 hover:underline bg-blue-50 px-2 py-0.5 rounded-md"
+                                                                >
+                                                                    Ads Library <ExternalLink className="w-2.5 h-2.5" />
+                                                                </a>
+                                                            )}
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Image and Caption */}
+                                                    <div className="flex gap-3">
+                                                        {c.signedImageUrl && (
+                                                            <div className="shrink-0 w-16 h-16 rounded-lg overflow-hidden border border-slate-100 bg-slate-50">
+                                                                <img src={c.signedImageUrl} alt="" className="w-full h-full object-cover" />
+                                                            </div>
+                                                        )}
+                                                        {adText && (
+                                                            <p className="text-xs text-slate-600 line-clamp-3 leading-relaxed flex-1">
+                                                                {adText}
+                                                            </p>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Footer: Date + Inspect Action */}
+                                                    <div className="flex items-center justify-between mt-0.5 pt-2 border-t border-slate-50">
+                                                        <div className="flex items-center gap-2">
+                                                            {posted_date && (
+                                                                <p className="text-[10px] text-slate-400 font-medium">{posted_date}</p>
+                                                            )}
+                                                            {c.visibility_status === 'down' ? (
+                                                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black bg-slate-100 text-slate-500 uppercase tracking-tighter shadow-sm">Taken Down</span>
+                                                            ) : c.visibility_status === 'active' || c.visibility_status === 'available' ? (
+                                                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black bg-emerald-100 text-emerald-700 uppercase tracking-tighter shadow-sm">Online</span>
+                                                            ) : null}
+                                                        </div>
+                                                        <div className="flex items-center gap-2">
+                                                            {pending ? (
+                                                                <a
+                                                                    href={adHref}
+                                                                    target="_blank"
+                                                                    rel="noreferrer"
+                                                                    className={adLinkClass}
+                                                                >
+                                                                    Inspect Ad
+                                                                    <ArrowRight className="w-2.5 h-2.5 opacity-40 group-hover/link:opacity-100 group-hover/link:translate-x-0.5 transition-all" />
+                                                                </a>
+                                                            ) : (
+                                                                <>
+                                                                    <a
+                                                                        href={adHref}
+                                                                        target="_blank"
+                                                                        rel="noreferrer"
+                                                                        className={adLinkClass}
+                                                                    >
+                                                                        Inspect Ad
+                                                                        <ArrowRight className="w-2.5 h-2.5 opacity-40 group-hover/link:opacity-100 group-hover/link:translate-x-0.5 transition-all" />
+                                                                    </a>
+                                                                    <a
+                                                                        href={adHref}
+                                                                        target="_blank"
+                                                                        rel="noreferrer"
+                                                                        className={adLinkClass}
+                                                                    >
+                                                                        Review Ad
+                                                                        <ArrowRight className="w-2.5 h-2.5 opacity-40 group-hover/link:opacity-100 group-hover/link:translate-x-0.5 transition-all" />
+                                                                    </a>
+                                                                </>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* DIVIDER */}
+                <div className="w-px bg-slate-200 shrink-0" />
+
+                {/* RIGHT: Ad Profile Review */}
+                <div className='w-[420px] h-full flex flex-col overflow-hidden'>
+                    <AdProfileReviewForm
+                        profile={profile}
+                        project={project}
+                        onReviewSaved={onReviewSaved}
+                    />
+                </div>
+            </div>
+        </>
+    )
+}
+
+export function AdProfilesList({ profiles, project, initialFilters, currentPage, initialProfileId }) {
+    const router = useRouter()
+    const pathname = usePathname()
+    const searchParams = useSearchParams()
+
+    const totalCount = profiles?.totalCount || 0
+    const totalPages = profiles?.totalPages || 0
+    const profileList = profiles?.profiles || []
+
+    const [selectedProfile, setSelectedProfile] = useState(null)
+
+    useEffect(() => {
+        if (!initialProfileId || profileList.length === 0) return
+        const match = profileList.find(p => p._id === initialProfileId)
+        if (match) {
+            setSelectedProfile(prev => (prev?._id === match._id ? prev : match))
+        }
+    }, [initialProfileId, profileList])
+
+    const updateQueryParams = useCallback((newParams) => {
+        const params = new URLSearchParams(searchParams.toString())
+        Object.entries(newParams).forEach(([key, value]) => {
+            if (value === null || value === undefined || value === 'all') {
+                params.delete(key)
+            } else {
+                params.set(key, value)
+            }
+        })
+        if (!newParams.page) params.delete('page')
+        router.push(`${pathname}?${params.toString()}`)
+    }, [router, pathname, searchParams])
+
+    const handleFilterChange = (key, value) => updateQueryParams({ [key]: value })
+
+    const handlePageChange = (newPage) => {
+        if (newPage < 1 || newPage > totalPages) return
+        updateQueryParams({ page: newPage })
+    }
+
+    const clearFilters = () => router.push(pathname)
+
+    const hasActiveFilter = initialFilters.platform !== 'all' || (initialFilters.reviewStatus && initialFilters.reviewStatus !== 'all') || initialFilters.searchText || initialFilters.publish_date_from || initialFilters.publish_date_to
+
+    const [searchInput, setSearchInput] = useState(initialFilters.searchText || '')
+
+    useEffect(() => {
+        setSearchInput(initialFilters.searchText || '')
+    }, [initialFilters.searchText])
+
+    const handleSearchSubmit = (e) => {
+        if (e.key === 'Enter') {
+            updateQueryParams({ search: searchInput, page: 1 })
+        }
+    }
+
+    const handleSelectProfile = (profile) => {
+        setSelectedProfile(profile)
+    }
+
+    // Update review_details in selectedProfile after save
+    const handleReviewSaved = (profileId, review_details) => {
+        setSelectedProfile(prev =>
+            prev?._id === profileId ? { ...prev, review_details } : prev
+        )
+    }
+
+    return (
+        <div className="flex flex-col h-full bg-slate-50">
+
+            {/* Filters */}
+            <div className="px-6 py-4 shrink-0">
+                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+                    <div className="flex flex-col lg:flex-row items-center justify-between gap-6">
+
+                        <div className="flex items-center gap-6 w-full lg:w-auto">
+                            <div className="flex items-center gap-2.5 shrink-0">
+                                <div className="bg-blue-50 p-2 rounded-lg text-blue-600">
+                                    <Filter className="w-4 h-4" />
+                                </div>
+                                <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Filters</span>
+                            </div>
+
+                            <Separator orientation="vertical" className="h-8 bg-slate-100 hidden sm:block" />
+
+                            <div className="flex flex-wrap items-center gap-4 flex-1">
+                                <div className="space-y-1 flex-1 min-w-[200px] max-w-[400px]">
+                                    <Label className="text-[10px] uppercase font-bold text-slate-400">Search</Label>
+                                    <div className="relative group/search">
+                                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 group-focus-within/search:text-blue-500 transition-colors" />
+                                        <input
+                                            type="text"
+                                            value={searchInput}
+                                            onChange={(e) => setSearchInput(e.target.value)}
+                                            onKeyDown={handleSearchSubmit}
+                                            placeholder="Search by page name, URL, or page ID..."
+                                            className="w-full bg-white border border-slate-200 rounded-md h-9 pl-9 pr-3 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                                        />
+                                        {searchInput && (
+                                            <button
+                                                onClick={() => { setSearchInput(''); updateQueryParams({ search: '', page: 1 }) }}
+                                                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-slate-100 text-slate-400"
+                                            >
+                                                <X className="w-3 h-3" />
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <Separator orientation="vertical" className="h-8 bg-slate-100 hidden md:block" />
+
+                                <div className="space-y-1">
+                                    <Label className="text-[10px] uppercase font-bold text-slate-400">Platform</Label>
+                                    <Select value={initialFilters.platform} onValueChange={(val) => handleFilterChange('platform', val)}>
+                                        <SelectTrigger className="w-[140px] bg-white border-slate-200 h-9 text-xs font-semibold">
+                                            <SelectValue placeholder="All Platforms" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">All Platforms</SelectItem>
+                                            <SelectItem value="meta">Meta</SelectItem>
+                                            <SelectItem value="facebook">Facebook</SelectItem>
+                                            <SelectItem value="instagram">Instagram</SelectItem>
+                                            <SelectItem value="google">Google</SelectItem>
+                                            <SelectItem value="tiktok">TikTok</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                <div className="space-y-1">
+                                    <Label className="text-[10px] uppercase font-bold text-slate-400">Review Status</Label>
+                                    <Select value={initialFilters.reviewStatus || 'all'} onValueChange={(val) => handleFilterChange('reviewStatus', val)}>
+                                        <SelectTrigger className="w-[150px] bg-white border-slate-200 h-9 text-xs font-semibold">
+                                            <SelectValue placeholder="All" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">All Profiles</SelectItem>
+                                            <SelectItem value="pending">Not Reviewed</SelectItem>
+                                            <SelectItem value="reviewed">Reviewed</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                <div className="space-y-1">
+                                    <Label className="text-[10px] uppercase font-bold text-slate-400">Publish Date</Label>
+                                    <div className="w-[190px]">
+                                        <DateFilterPopover
+                                            title="Last active date"
+                                            initialFrom={initialFilters.publish_date_from}
+                                            initialTo={initialFilters.publish_date_to}
+                                            onApply={(range) => updateQueryParams({
+                                                publish_date_from: range?.from ? range.from.toISOString() : null,
+                                                publish_date_to: range?.to ? range.to.toISOString() : null,
+                                                page: 1
+                                            })}
+                                        />
+                                    </div>
+                                </div>
+
+                                {hasActiveFilter && (
+                                    <div className="pt-4">
+                                        <Button variant="ghost" size="sm" onClick={clearFilters} className="h-9 px-2 text-rose-600 hover:text-rose-700 hover:bg-rose-50 font-bold text-xs">
+                                            <X className="w-3.5 h-3.5 mr-1" /> Clear
+                                        </Button>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="flex items-center gap-5 w-full lg:w-auto justify-end">
+                            <Separator orientation="vertical" className="h-8 bg-slate-100 hidden sm:block" />
+                            <div className="text-xs font-medium text-slate-500 whitespace-nowrap">
+                                <span className="font-bold text-slate-900 text-sm">{totalCount}</span> profiles found
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Table */}
+            <div className="flex-1 overflow-y-auto px-6 pb-4">
+                <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                    <table className="min-w-full table-fixed divide-y divide-slate-100">
+                        <thead className="bg-slate-50/80 sticky top-0 z-10 backdrop-blur-sm">
+                            <tr>
+                                <th scope="col" className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider w-[240px]">Page Name</th>
+                                <th scope="col" className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider w-[140px]">Platform</th>
+                                <th scope="col" className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider w-[100px]">Ads</th>
+                                <th scope="col" className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Profile URL</th>
+                                <th scope="col" className="px-4 py-3 text-right text-xs font-bold text-slate-500 uppercase tracking-wider w-[110px]">Actions</th>
+                            </tr>
+                        </thead>
+
+                        <tbody className="bg-white divide-y divide-slate-100">
+                            {profileList.map((profile) => {
+                                const isSelected = selectedProfile?._id === profile._id
+                                const hasReview = Object.keys(profile.review_details || {}).length > 0
+                                const rowName = profile.page_name || profile.display_name
+                                return (
+                                    <tr
+                                        key={profile._id}
+                                        onClick={() => handleSelectProfile(profile)}
+                                        className={cn(
+                                            'transition-all cursor-pointer group',
+                                            isSelected ? 'bg-blue-50/60 ring-1 ring-inset ring-blue-200 z-10 relative' : 'hover:bg-slate-50'
+                                        )}
+                                    >
+                                        {/* Page Name */}
+                                        <td className="px-4 py-3 whitespace-nowrap align-middle">
+                                            <div className="flex items-center gap-2.5">
+                                                <div className="w-8 h-8 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center shrink-0 overflow-hidden">
+                                                    {profile.metadata?.profile_pic ? (
+                                                        <img src={profile.metadata.profile_pic} alt="" className="w-full h-full object-cover" />
+                                                    ) : (
+                                                        <User className="w-4 h-4 text-slate-400" />
+                                                    )}
+                                                </div>
+                                                <div className="flex flex-col gap-0.5">
+                                                    <span className="font-semibold text-slate-900 text-sm truncate max-w-[160px]">
+                                                        {rowName}
+                                                    </span>
+                                                    {profile.platform_page_id && (
+                                                        <span className="text-[10px] text-slate-400 truncate max-w-[160px] font-mono">
+                                                            {profile.platform_page_id}
+                                                        </span>
+                                                    )}
+                                                    {hasReview && (
+                                                        <span className="text-[10px] text-emerald-600 font-bold flex items-center gap-1">
+                                                            <CheckCircle className="w-2.5 h-2.5" /> Reviewed
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </td>
+
+                                        {/* Platform */}
+                                        <td className="px-4 py-3 whitespace-nowrap align-middle">
+                                            <Badge variant="outline" className="capitalize font-semibold text-slate-600 border-slate-300 gap-1.5 pl-2 h-7">
+                                                <PlatformIcon platform={profile.platform} />
+                                                {profile.platform}
+                                            </Badge>
+                                        </td>
+
+                                        {/* Ads count */}
+                                        <td className="px-4 py-3 whitespace-nowrap align-middle">
+                                            <span className="inline-flex items-center gap-1.5 text-sm font-bold text-slate-700">
+                                                <FileText className="w-3.5 h-3.5 text-slate-400" />
+                                                {profile.ads_count ?? profile.cases_count ?? 0}
+                                            </span>
+                                        </td>
+
+                                        {/* Profile URL */}
+                                        <td className="px-4 py-3 align-middle overflow-hidden">
+                                            {profile.profile_url ? (
+                                                <a
+                                                    href={profile.profile_url}
+                                                    target="_blank"
+                                                    rel="noreferrer"
+                                                    onClick={(e) => e.stopPropagation()}
+                                                    className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 hover:underline font-medium truncate max-w-[280px]"
+                                                >
+                                                    <ExternalLink className="w-3 h-3 shrink-0" />
+                                                    <span className="truncate">{profile.profile_url}</span>
+                                                </a>
+                                            ) : (
+                                                <span className="text-xs text-slate-400 italic">—</span>
+                                            )}
+                                        </td>
+
+                                        {/* Actions */}
+                                        <td className="px-4 py-3 whitespace-nowrap text-right align-middle">
+                                            <Button
+                                                size="sm"
+                                                variant={isSelected ? 'default' : 'secondary'}
+                                                className={cn(
+                                                    'h-8 text-xs font-bold transition-all shadow-sm',
+                                                    isSelected
+                                                        ? 'bg-blue-600 hover:bg-blue-700 shadow-blue-200'
+                                                        : 'bg-white border border-slate-200 hover:bg-slate-50 text-slate-600'
+                                                )}
+                                            >
+                                                {isSelected ? 'Inspect' : 'View'}
+                                                <ArrowRight className="w-3 h-3 ml-1.5 opacity-50" />
+                                            </Button>
+                                        </td>
+                                    </tr>
+                                )
+                            })}
+                        </tbody>
+                    </table>
+
+                    {profileList.length === 0 && (
+                        <div className="flex flex-col items-center justify-center py-24 text-slate-400">
+                            <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mb-6 border border-slate-100">
+                                <Search className="w-8 h-8 opacity-20 text-slate-500" />
+                            </div>
+                            <h3 className="text-lg font-bold text-slate-700 mb-1">No profiles found</h3>
+                            <p className="text-sm text-slate-500 max-w-xs text-center">Try adjusting your filters or check back later.</p>
+                            <Button variant="outline" onClick={clearFilters} className="mt-6 border-slate-200">
+                                Clear all filters
+                            </Button>
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+                <div className="px-6 pb-2 pt-2">
+                    <div className="bg-white rounded-xl shadow-sm border border-slate-200 px-4 py-3 flex items-center justify-between">
+                        <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                            Page <span className="text-slate-900">{currentPage}</span> of <span className="text-slate-900">{totalPages}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handlePageChange(1)}
+                                disabled={currentPage === 1}
+                                className="h-9 px-2 text-xs font-bold border-slate-200 hover:bg-slate-50 disabled:opacity-50"
+                            >
+                                &lt;&lt;
+                            </Button>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handlePageChange(currentPage - 1)}
+                                disabled={currentPage === 1}
+                                className="h-9 px-3 text-xs font-bold border-slate-200 hover:bg-slate-50 disabled:opacity-50"
+                            >
+                                <ChevronLeft className="w-4 h-4 mr-1" /> Previous
+                            </Button>
+
+                            <div className="flex items-center gap-1 mx-1">
+                                {(() => {
+                                    const pages = []
+                                    let start = Math.max(1, currentPage - 2)
+                                    let end = Math.min(totalPages, currentPage + 2)
+                                    if (currentPage <= 2) end = Math.min(totalPages, 5)
+                                    if (currentPage >= totalPages - 1) start = Math.max(1, totalPages - 4)
+                                    for (let i = start; i <= end; i++) pages.push(i)
+                                    return pages.map(pageNum => (
+                                        <Button
+                                            key={pageNum}
+                                            variant={currentPage === pageNum ? 'default' : 'outline'}
+                                            size="sm"
+                                            onClick={() => handlePageChange(pageNum)}
+                                            className={cn(
+                                                'h-9 w-9 p-0 text-xs font-bold',
+                                                currentPage === pageNum
+                                                    ? 'bg-slate-800 hover:bg-slate-900 text-white shadow-sm'
+                                                    : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                                            )}
+                                        >
+                                            {pageNum}
+                                        </Button>
+                                    ))
+                                })()}
+                            </div>
+
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handlePageChange(currentPage + 1)}
+                                disabled={currentPage === totalPages}
+                                className="h-9 px-3 text-xs font-bold border-slate-200 hover:bg-slate-50 disabled:opacity-50"
+                            >
+                                Next <ChevronRight className="w-4 h-4 ml-1" />
+                            </Button>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handlePageChange(totalPages)}
+                                disabled={currentPage === totalPages}
+                                className="h-9 px-2 text-xs font-bold border-slate-200 hover:bg-slate-50 disabled:opacity-50"
+                            >
+                                &gt;&gt;
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Detail Panel */}
+            <AdProfileDetailPanel
+                profile={selectedProfile}
+                profiles={profileList}
+                project={project}
+                isOpen={!!selectedProfile}
+                onClose={() => setSelectedProfile(null)}
+                onReviewSaved={handleReviewSaved}
+                onSelectProfile={handleSelectProfile}
+            />
+        </div>
+    )
+}
