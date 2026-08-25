@@ -1,0 +1,90 @@
+[
+  {
+    "domain_name": "amazon.in",
+    "reason": "major_brand",
+    "count": 2112,
+    "sample_urls": [
+      "https://www.amazon.in/?pEl8X=szvnknir",
+      "https://www.amazon.in/?pEl8X=szvnknir",
+      "https://www.amazon.in/?pEl8X=szvnknir"
+    ],
+    "ad_count": 2112
+  },
+  {
+    "domain_name": "amazon.com",
+    "reason": "major_brand",
+    "count": 258,
+    "sample_urls": [
+      "https://www.amazon.com/?pEl8X=szvnknir",
+      "https://www.amazon.com/?pEl8X=szvnknir",
+      "https://www.amazon.com/?pEl8X=szvnknir"
+    ],
+    "ad_count": 258
+  },
+  {
+    "domain_name": "sapnaonline.com",
+    "reason": "major_brand",
+    "count": 240,
+    "sample_urls": [
+      "http://sapnaonline.com/",
+      "http://sapnaonline.com/",
+      "http://sapnaonline.com/"
+    ],
+    "ad_count": 240
+  },
+  {
+    "domain_name": "fb.me",
+    "reason": "social_or_tracker",
+    "count": 229,
+    "sample_urls": [
+      "http://fb.me/",
+      "http://fb.me/",
+      "http://fb.me/"
+    ],
+    "ad_count": 181
+  },
+  {
+    "domain_name": "amazon.com.au",
+    "reason": "major_brand",
+    "count": 219,
+    "sample_urls": [
+      "https://www.amazon.com.au/",
+      "https://www.amazon.com.au/",
+      "https://www.amazon.com.au/"
+    ],
+    "ad_count": 219
+  },
+  {
+    "domain_name": "facebook.com",
+    "reason": "social_or_tracker",
+    "count": 39,
+    "sample_urls": [
+      "https://www.facebook.com/permalink.php?story_fbid=pfbid02WKtqMdoFFBMUoQXhq3SJd7XRBrHAcXPiEAs8cFpMVhZWU62kyAzBnKTejeWypApzl&id=100011254351695&rdid=g1wUbl8qwhRjZBuP&share_url=https%3A%2F%2Fwww.facebook.com%2Fshare%2Fp%2F1FKdKepTd8%2F",
+      "https://www.facebook.com/61564595814798/posts/28026026257054686/?rdid=N6oEp9rMFCrjeWYi&share_url=https%3A%2F%2Fwww.facebook.com%2Fshare%2F1LRp5T5Cx3%2F",
+      "https://www.facebook.com/61572088367410/posts/27592109220485668/?rdid=DT9ksK0drjB7HbEM&share_url=https%3A%2F%2Fwww.facebook.com%2Fshare%2F1971kHDfcS%2F"
+    ],
+    "ad_count": 39
+  },
+  {
+    "domain_name": "google.com",
+    "reason": "social_or_tracker",
+    "count": 9,
+    "sample_urls": [
+      "http://play.google.com/store/apps/details?id=app.smart.trusted.callerid.smsblocker",
+      "http://play.google.com/store/apps/details?id=app.smart.trusted.callerid.smsblocker",
+      "http://play.google.com/store/apps/details?id=com.sneakly.unseen.chat.app"
+    ],
+    "ad_count": 9
+  },
+  {
+    "domain_name": "myntra.com",
+    "reason": "major_brand",
+    "count": 8,
+    "sample_urls": [
+      "https://www.myntra.com/",
+      "https://www.myntra.com/",
+      "https://www.myntra.com/"
+    ],
+    "ad_count": 8
+  }
+]

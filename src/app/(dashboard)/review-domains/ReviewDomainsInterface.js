@@ -4,14 +4,48 @@ import { useState, useCallback, useEffect, useTransition, useRef } from 'react'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { format } from 'date-fns'
 import {
-  Globe, Search, X, ChevronLeft, ChevronRight, Calendar, Loader2,
+  Globe, Search, X, ChevronLeft, ChevronRight, Calendar, Loader2, Filter,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { getRiskLabel } from '@/app/(dashboard)/cases/riskBuckets'
 import { domainScreenshotUrl, isDomainOnline } from '@/lib/domains/domain-display'
 import { getDomainById } from './actions'
 import ReviewDomainForm from './ReviewDomainDetails'
+
+const REVIEW_STATUS_OPTIONS = [
+  { value: 'pending', label: 'Pending review' },
+  { value: 'reviewed', label: 'Reviewed' },
+  { value: 'all', label: 'All' },
+]
+
+const RISK_OPTIONS = [
+  { value: 'all', label: 'All risk' },
+  { value: 'high', label: 'High' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'low', label: 'Low' },
+  { value: 'safe', label: 'Safe' },
+]
+
+const VISIBILITY_OPTIONS = [
+  { value: 'all', label: 'All visibility' },
+  { value: 'online', label: 'Active only' },
+]
+
+const FILTER_LABEL = 'text-[10px] font-bold text-slate-500 uppercase tracking-wide'
+const FILTER_TRIGGER =
+  'w-full h-8 text-xs bg-slate-50 border-slate-200 hover:border-slate-300 focus:ring-blue-500/20 px-2.5'
+
+function FilterField({ label, children, className }) {
+  return (
+    <div className={cn('space-y-0.5 min-w-0', className)}>
+      <Label className={FILTER_LABEL}>{label}</Label>
+      {children}
+    </div>
+  )
+}
 
 function DomainListRow({ domain, isActive, onOpen }) {
   const risk = getRiskLabel(domain.score)
@@ -96,6 +130,7 @@ export function ReviewDomainsInterface({
   const [detailLoading, setDetailLoading] = useState(false)
   const [detailError, setDetailError] = useState(null)
   const [listCollapsed, setListCollapsed] = useState(false)
+  const [showFilters, setShowFilters] = useState(false)
   const detailRequestId = useRef(0)
   const [, startTransition] = useTransition()
 
@@ -131,10 +166,17 @@ export function ReviewDomainsInterface({
   }, [router, pathname, searchParams])
 
   const activeOnly = initialFilters.visibility_status === 'online'
-  const toggleActiveOnly = () => {
-    updateQueryParams({
-      visibility_status: activeOnly ? 'all' : 'online',
-      page: 1,
+  const hasActiveFilter = (
+    (initialFilters.status && initialFilters.status !== 'pending')
+    || Boolean(initialFilters.search)
+    || activeOnly
+    || (initialFilters.risk && initialFilters.risk !== 'all')
+  )
+
+  const clearFilters = () => {
+    setSearchInput('')
+    startTransition(() => {
+      router.push(pathname)
     })
   }
 
@@ -229,9 +271,9 @@ export function ReviewDomainsInterface({
           <>
               <div className={cn(
                 'shrink-0 border-b border-slate-100',
-                selectedDomain ? 'px-3 py-3 space-y-2' : 'px-5 py-4 space-y-3',
+                selectedDomain ? 'px-3 py-3 space-y-3' : 'px-5 py-4 space-y-3',
               )}>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <div className="min-w-0 mr-auto">
                   <p className={cn(
                     'font-bold text-slate-900 tabular-nums tracking-tight leading-none',
@@ -282,6 +324,31 @@ export function ReviewDomainsInterface({
                     )}
                   </div>
                 )}
+                <div className="flex items-center gap-2 shrink-0">
+                  {hasActiveFilter && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={clearFilters}
+                      className="h-8 text-xs text-slate-500 hover:text-slate-800 px-2"
+                    >
+                      Clear
+                    </Button>
+                  )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowFilters((v) => !v)}
+                    className={cn(
+                      'gap-1.5 h-8',
+                      (showFilters || hasActiveFilter) && 'border-blue-300 bg-blue-50 text-blue-700',
+                    )}
+                  >
+                    <Filter className="h-3.5 w-3.5" />
+                    Filters
+                    {hasActiveFilter && <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />}
+                  </Button>
+                </div>
               </div>
               {selectedDomain && (
                 <div className="relative w-full">
@@ -306,34 +373,60 @@ export function ReviewDomainsInterface({
                   )}
                 </div>
               )}
-              <div className="flex flex-wrap items-center gap-1.5">
-                {['pending', 'reviewed', 'all'].map((s) => (
-                  <button
-                    key={s}
-                    type="button"
-                    onClick={() => updateQueryParams({ status: s, page: 1 })}
-                    className={cn(
-                      'px-2 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wider transition-colors',
-                      initialFilters.status === s ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200',
-                    )}
-                  >
-                    {s}
-                  </button>
-                ))}
-                <button
-                  type="button"
-                  onClick={toggleActiveOnly}
-                  className={cn(
-                    'ml-auto px-2 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wider transition-colors',
-                    activeOnly
-                      ? 'bg-emerald-600 text-white'
-                      : 'bg-slate-100 text-slate-500 hover:bg-slate-200',
-                  )}
-                  title="Show only domains that are still online"
-                >
-                  Active only
-                </button>
-              </div>
+              {showFilters && (
+                <div className={cn(
+                  'grid gap-x-2.5 gap-y-2.5 pt-1',
+                  selectedDomain ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4',
+                )}>
+                  <FilterField label="Review status">
+                    <Select
+                      value={initialFilters.status || 'pending'}
+                      onValueChange={(val) => updateQueryParams({ status: val, page: 1 })}
+                    >
+                      <SelectTrigger size="sm" className={FILTER_TRIGGER}>
+                        <SelectValue placeholder="Pending review" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {REVIEW_STATUS_OPTIONS.map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </FilterField>
+
+                  <FilterField label="Threat risk">
+                    <Select
+                      value={initialFilters.risk || 'all'}
+                      onValueChange={(val) => updateQueryParams({ risk: val, page: 1 })}
+                    >
+                      <SelectTrigger size="sm" className={FILTER_TRIGGER}>
+                        <SelectValue placeholder="All risk" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {RISK_OPTIONS.map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </FilterField>
+
+                  <FilterField label="Visibility">
+                    <Select
+                      value={activeOnly ? 'online' : 'all'}
+                      onValueChange={(val) => updateQueryParams({ visibility_status: val, page: 1 })}
+                    >
+                      <SelectTrigger size="sm" className={FILTER_TRIGGER}>
+                        <SelectValue placeholder="All visibility" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {VISIBILITY_OPTIONS.map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </FilterField>
+                </div>
+              )}
             </div>
 
             <div className="flex-1 overflow-y-auto custom-scrollbar">

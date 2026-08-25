@@ -25,6 +25,7 @@ export default async function DomainsPage({ searchParams }) {
         status: resolvedParams.status || 'all',
         risk: resolvedParams.risk || 'all',
         searchText: resolvedParams.search || '',
+        visibility_status: resolvedParams.visibility_status || 'all',
     }
 
     const sort = {
@@ -40,7 +41,7 @@ export default async function DomainsPage({ searchParams }) {
     ])
 
     return (
-        <main className="flex-1 flex flex-col h-full overflow-hidden bg-slate-50">
+        <main className="flex-1 flex flex-col h-full overflow-hidden bg-[#f4f6f8]">
             <PageHeader title="Domains" description="Domains discovered across posts, ads, and profiles" />
 
             <div className="flex-1 overflow-hidden relative">

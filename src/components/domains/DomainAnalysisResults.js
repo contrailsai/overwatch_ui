@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { format } from 'date-fns'
 import { ChevronDown, ChevronUp } from 'lucide-react'
-import { uniqueCloakVariants } from '@/lib/domains/domain-display'
+import { isScamDisplayLabel, uniqueCloakVariants } from '@/lib/domains/domain-display'
 
 function formatMaybeDate(value) {
   if (!value) return null
@@ -64,6 +64,18 @@ export function DomainAnalysisResults({ analysisResults }) {
     || redirectChain.length > 0
     || Boolean(reputation.notes)
 
+  const displayCategory = content.category && !isScamDisplayLabel(content.category)
+    ? content.category
+    : null
+  const displayLabels = (content.labels || []).filter((label) => !isScamDisplayLabel(label))
+  const hasPageSignals = Boolean(
+    content.title
+    || content.summary
+    || displayCategory
+    || displayLabels.length > 0
+    || content.spoofed_brands,
+  )
+
   return (
     <div className="space-y-3">
       <ModuleCard title="Cloak probe">
@@ -83,7 +95,7 @@ export function DomainAnalysisResults({ analysisResults }) {
         </p>
       </ModuleCard>
 
-      {(content.title || content.summary || content.category) && (
+      {hasPageSignals && (
         <ModuleCard title="Page signals">
           {content.title && (
             <p className="text-sm font-bold text-slate-800 leading-snug mb-1">{content.title}</p>
@@ -92,12 +104,12 @@ export function DomainAnalysisResults({ analysisResults }) {
             <p className="text-xs text-slate-600 leading-relaxed line-clamp-3">{content.summary}</p>
           )}
           <div className="mt-2">
-            <InfoRow label="Category" value={content.category} />
+            <InfoRow label="Category" value={displayCategory} />
             <InfoRow label="Spoofed brands" value={content.spoofed_brands} />
           </div>
-          {(content.labels || []).length > 0 && (
+          {displayLabels.length > 0 && (
             <div className="flex flex-wrap gap-1.5 mt-2">
-              {content.labels.slice(0, 6).map((label) => (
+              {displayLabels.slice(0, 6).map((label) => (
                 <Badge
                   key={label}
                   variant="outline"

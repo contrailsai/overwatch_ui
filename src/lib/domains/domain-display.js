@@ -100,6 +100,17 @@ export function isDomainOnline(domain) {
   return status === 'up' || status === 'available' || status === 'online' || status === 'active'
 }
 
+/** Deep-link into client surfaces for a discovery occurrence, or null if unknown. */
+export function hrefForDomainOccurrence(entityType, entityId) {
+  if (!entityId) return null
+  const type = String(entityType || '').toLowerCase()
+  if (type === 'ad') return `/ads?ad_id=${entityId}`
+  if (type === 'post') return `/cases/${entityId}`
+  if (type === 'ad_profile') return `/ad-profiles`
+  if (type === 'profile') return `/profiles`
+  return null
+}
+
 const SCAM_HIGH_RISK_SCORE = 96
 const SCAM_VIOLATION_CANDIDATES = ['fraud', 'FRAUD']
 const SCAM_LEGAL_CODE_CANDIDATES = [
@@ -133,12 +144,28 @@ export function resolveProjectItemName(desired, projectItems = []) {
   return partial ? projectItemName(partial) : null
 }
 
+/** True when category or unlocked cloak lander signals scam (for review autofill only). */
 export function isDomainScamCategory(domain) {
   const category = domain?.category
     || domain?.list?.category
     || domain?.analysis_results?.content_classification?.category
     || domain?.review_details?.category
-  return normalizeKey(category) === 'scam'
+  if (normalizeKey(category) === 'scam') return true
+
+  const variants = domain?.cloakVariants
+    || domain?.analysis_results?.cloak_probe?.variants
+    || []
+  if (uniqueCloakVariants(variants).some((v) => normalizeKey(v?.kind) === 'scam' && v?.differs_from_bare)) {
+    return true
+  }
+
+  const variantUrls = domain?.discovery?.variant_urls || []
+  return variantUrls.some((v) => normalizeKey(v?.kind) === 'scam' && v?.url)
+}
+
+/** Hide analyzer "scam" category/labels from content UI (use for review presets instead). */
+export function isScamDisplayLabel(value) {
+  return normalizeKey(value) === 'scam'
 }
 
 /** High risk + Fraud + IT Act 66D + BNS 318(4), matched to project config names. */

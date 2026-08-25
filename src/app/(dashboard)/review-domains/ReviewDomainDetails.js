@@ -24,6 +24,7 @@ import {
   domainScreenshotUrl,
   domainVisitUrl,
   isDomainOnline,
+  isScamDisplayLabel,
 } from '@/lib/domains/domain-display'
 import { submitDomainReview, updateDomainVisibility } from './actions'
 
@@ -200,7 +201,6 @@ export default function ReviewDomainForm({
   const visitUrl = domainVisitUrl(localDomain)
   const screenshotUrl = domainScreenshotUrl(localDomain)
   const analysisCfg = analysisStatusConfig(localDomain.analysis_status)
-  const content = localDomain.analysis_results?.content_classification || {}
 
   return (
     <div className="flex flex-col flex-1 min-h-0 h-full overflow-hidden relative">
@@ -225,30 +225,32 @@ export default function ReviewDomainForm({
           </Button>
         </div>
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 flex-wrap">
-            <h2 className="text-base font-semibold text-slate-900 font-mono truncate">
+          <div className="flex items-center gap-2 flex-wrap min-w-0">
+            <h2 className="text-base font-semibold text-slate-900 font-mono truncate max-w-[40%]">
               {localDomain.domain_name}
             </h2>
+            {visitUrl && (
+              <a
+                href={visitUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="text-xs text-blue-600 inline-flex items-center gap-0.5 truncate min-w-0 max-w-[min(100%,28rem)]"
+                title={visitUrl}
+              >
+                <span className="truncate">{visitUrl}</span>
+                <ExternalLink className="h-3 w-3 shrink-0" />
+              </a>
+            )}
             <Badge variant="outline" className={cn('text-[10px] shrink-0 font-bold', analysisCfg.color)}>
               <ShieldQuestion className="h-3 w-3 mr-1" />
               {analysisCfg.label}
             </Badge>
-            {localDomain.category && (
+            {localDomain.category && !isScamDisplayLabel(localDomain.category) && (
               <Badge variant="outline" className="text-[10px] shrink-0 capitalize">
                 {localDomain.category}
               </Badge>
             )}
           </div>
-          {visitUrl && (
-            <a
-              href={visitUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="text-xs text-blue-600 inline-flex items-center gap-0.5 truncate max-w-full"
-            >
-              {visitUrl} <ExternalLink className="h-3 w-3 shrink-0" />
-            </a>
-          )}
         </div>
         <Button variant="ghost" size="icon" onClick={onClose} className="hidden lg:inline-flex">
           <X className="h-4 w-4" />

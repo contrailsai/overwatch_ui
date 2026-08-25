@@ -8,6 +8,7 @@ import { logActionError, LOKI_STREAMS } from '@/utils/otel-logger'
 import { domainsCollection } from '@/utils/mongodb/collections'
 import { insertCaseEvent } from '@/utils/mongodb/v3-schema'
 import { normalizeDomainForUi, riskRankFromScore, DOMAIN_LIST_PROJECTION, DOMAIN_DETAIL_PROJECTION } from '@/lib/domains/domain-helpers'
+import { buildEffectiveThreatScoreRange } from '@/utils/mongodb/v3-schema'
 
 function escapeRegex(text) {
   return String(text).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -43,6 +44,18 @@ function buildReviewDomainsMatchQuery(filters = {}) {
   const searchText = String(filters.search || '').trim()
   if (searchText) {
     andConditions.push({ domain_name: { $regex: new RegExp(escapeRegex(searchText), 'i') } })
+  }
+
+  if (filters.risk && filters.risk !== 'all') {
+    const riskKey = String(filters.risk).toLowerCase()
+    const riskValues = riskKey === 'medium' ? ['mid', 'medium'] : [riskKey]
+    const range = buildEffectiveThreatScoreRange(riskKey)
+    andConditions.push({
+      $or: [
+        { 'list.risk_rank': { $in: riskValues.map((v) => new RegExp(`^${v}$`, 'i')) } },
+        ...(range ? [{ 'list.effective_threat_score': range }] : []),
+      ],
+    })
   }
 
   if (andConditions.length > 0) query.$and = andConditions

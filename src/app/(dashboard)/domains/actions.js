@@ -43,6 +43,19 @@ function buildDomainsMatchQuery(filters = {}) {
     })
   }
 
+  const visibility = String(filters.visibility_status || filters.visibility || 'all').toLowerCase()
+  if (visibility === 'online' || visibility === 'active' || visibility === 'up') {
+    andConditions.push({
+      $or: [
+        { 'workflow.visibility_status': { $in: ['up', 'online', 'available', 'active'] } },
+        { 'workflow.visibility_status': { $exists: false } },
+        { 'workflow.visibility_status': null },
+      ],
+    })
+  } else if (visibility === 'down') {
+    andConditions.push({ 'workflow.visibility_status': 'down' })
+  }
+
   if (andConditions.length > 0) {
     query.$and = andConditions
   }

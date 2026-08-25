@@ -210,16 +210,38 @@ export default function ReviewAdForm({
     return () => clearTimeout(t)
   }, [toast])
 
-  const cards = localAd?.content?.cards?.length
-    ? localAd.content.cards
-    : [{ title: localAd?.content?.title, media: localAd?.content?.media || [] }]
-  const currentCard = cards[Math.min(activeCard, cards.length - 1)] || cards[0]
+  const cards = (() => {
+    if (editingContent && contentDraft) {
+      if ((contentDraft.cards || []).length > 0) return contentDraft.cards
+      return [{
+        title: contentDraft.title,
+        body: contentDraft.body,
+        caption: contentDraft.caption,
+        cta_text: contentDraft.cta_text,
+        link_url: contentDraft.link_url,
+        link_description: contentDraft.link_description,
+        media: contentDraft.media || [],
+      }]
+    }
+    if (localAd?.content?.cards?.length) return localAd.content.cards
+    return [{ title: localAd?.content?.title, media: localAd?.content?.media || [] }]
+  })()
+  const hasCardArray = editingContent && contentDraft
+    ? (contentDraft.cards || []).length > 0
+    : (localAd?.content?.cards || []).length > 0
+  const currentCard = cards[Math.min(activeCard, Math.max(cards.length - 1, 0))] || cards[0]
   const previewUrl =
     currentCard?.media?.[0]?.signedUrl ||
+    currentCard?.media?.[0]?.s3_url ||
     localAd?.signedImageUrl ||
     localAd?.content?.media?.[0]?.signedUrl
 
-  const creative = getAdCreativeFields(localAd, currentCard)
+  const creative = getAdCreativeFields(
+    editingContent && contentDraft
+      ? { ...localAd, content: { ...localAd.content, ...contentDraft } }
+      : localAd,
+    currentCard,
+  )
   const impressions = getAdImpressions(localAd)
   const formatLabel = formatDisplayFormat(localAd?.list?.display_format || localAd?.content?.display_format)
   const startDateLabel = formatAdDate(localAd.start_date || localAd.list?.start_date)
@@ -249,6 +271,7 @@ export default function ReviewAdForm({
         media: (c.media || []).map((m) => ({
           original_url: m.original_url,
           s3_url: m.s3_url,
+          signedUrl: m.signedUrl,
           type: m.type || 'image',
           role: m.role,
           card_index: m.card_index,
@@ -259,6 +282,7 @@ export default function ReviewAdForm({
       media: (localAd?.content?.media || []).map((m) => ({
         original_url: m.original_url,
         s3_url: m.s3_url,
+        signedUrl: m.signedUrl,
         type: m.type || 'image',
         role: m.role,
         card_index: m.card_index,
@@ -302,10 +326,26 @@ export default function ReviewAdForm({
   }
 
   const addCard = () => {
+    const existing = contentDraft?.cards || []
+    const nextIndex = existing.length
+    const newCard =
+      existing.length === 0
+        ? {
+            ...emptyCard(),
+            title: contentDraft?.title || '',
+            body: contentDraft?.body || '',
+            caption: contentDraft?.caption || '',
+            cta_text: contentDraft?.cta_text || '',
+            link_url: contentDraft?.link_url || '',
+            link_description: contentDraft?.link_description || '',
+            media: [...(contentDraft?.media || [])],
+          }
+        : emptyCard()
     setContentDraft((prev) => ({
       ...prev,
-      cards: [...(prev.cards || []), emptyCard()],
+      cards: [...(prev.cards || []), newCard],
     }))
+    setActiveCard(nextIndex)
   }
 
   const removeCard = (index) => {
@@ -317,6 +357,13 @@ export default function ReviewAdForm({
           m.card_index != null && m.card_index > index ? m.card_index - 1 : m.card_index,
       }))
       return { ...prev, cards: cardsNext, media }
+    })
+    setActiveCard((prev) => {
+      const nextLen = Math.max(0, (contentDraft?.cards || []).length - 1)
+      if (nextLen === 0) return 0
+      if (prev > index) return prev - 1
+      if (prev >= nextLen) return nextLen - 1
+      return prev
     })
   }
 
@@ -355,6 +402,7 @@ export default function ReviewAdForm({
           media: (confirmed.ad.content?.media || []).map((m) => ({
             original_url: m.original_url,
             s3_url: m.s3_url,
+            signedUrl: m.signedUrl,
             type: m.type,
             role: m.role,
             card_index: m.card_index,
@@ -381,6 +429,23 @@ export default function ReviewAdForm({
     setLocalAd(result.ad)
     setSelectedAd?.(result.ad)
     setAds?.((prev) => prev.map((a) => (a._id === result.ad._id ? result.ad : a)))
+    if (editingContent && contentDraft) {
+      setContentDraft({
+        ...contentDraft,
+        ...(result.ad.content || {}),
+        cards: result.ad.content?.cards || contentDraft.cards,
+        media: (result.ad.content?.media || []).map((m) => ({
+          original_url: m.original_url,
+          s3_url: m.s3_url,
+          signedUrl: m.signedUrl,
+          type: m.type,
+          role: m.role,
+          card_index: m.card_index,
+          uploaded_manually: m.uploaded_manually,
+          media_type: m.media_type,
+        })),
+      })
+    }
     setToast({ type: 'success', message: 'Image removed' })
   }
 
@@ -403,14 +468,28 @@ export default function ReviewAdForm({
 
   const handleDeleteAd = async () => {
     setIsDeleting(true)
-    const result = await deleteAd(localAd._id)
-    setIsDeleting(false)
-    if (!result.success) {
-      setToast({ type: 'error', message: result.error || 'Delete failed' })
-      return
+    try {
+      const result = await deleteAd(localAd._id)
+      if (!result.success) {
+        setToast({ type: 'error', message: result.error || 'Delete failed' })
+        setShowDeleteModal(false)
+        return
+      }
+      setAds?.((prev) => prev.filter((a) => a._id !== localAd._id))
+      setShowDeleteModal(false)
+      if (hasNext) {
+        onNavigate?.(1)
+      } else if (hasPrev) {
+        onNavigate?.(-1)
+      } else {
+        onClose?.()
+      }
+    } catch {
+      setToast({ type: 'error', message: 'Failed to delete ad. Please try again.' })
+      setShowDeleteModal(false)
+    } finally {
+      setIsDeleting(false)
     }
-    setAds?.((prev) => prev.filter((a) => a._id !== localAd._id))
-    onClose?.()
   }
 
   const toggleThreatType = (name) => {
@@ -536,6 +615,15 @@ export default function ReviewAdForm({
             )}
           </p>
         </div>
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={() => setShowDeleteModal(true)}
+          className="h-9 w-9 text-red-500 hover:bg-red-50 hover:text-red-600 border-red-200 rounded-full shrink-0"
+          title="Delete ad"
+        >
+          <Trash2 className="w-4 h-4" />
+        </Button>
         <Button variant="ghost" size="icon" onClick={onClose} className="hidden lg:inline-flex">
           <X className="h-4 w-4" />
         </Button>
@@ -571,7 +659,7 @@ export default function ReviewAdForm({
             {cards.length > 1 && (
               <div className="flex gap-2 overflow-x-auto pb-1">
                 {cards.map((card, i) => {
-                  const thumb = card.media?.[0]?.signedUrl
+                  const thumb = card.media?.[0]?.signedUrl || card.media?.[0]?.s3_url
                   return (
                     <button
                       key={i}
@@ -596,7 +684,14 @@ export default function ReviewAdForm({
               </div>
             )}
 
-            <div className="rounded-2xl border border-slate-200 bg-[#fbfcfd] p-4 space-y-4">
+            <div
+              className={cn(
+                'rounded-2xl border p-4 space-y-4',
+                editingContent
+                  ? 'border-blue-200 bg-blue-50/30'
+                  : 'border-slate-200 bg-[#fbfcfd]',
+              )}
+            >
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">
@@ -607,125 +702,22 @@ export default function ReviewAdForm({
                       ? `Card ${Math.min(activeCard, cards.length - 1) + 1} of ${cards.length}`
                       : 'Single creative'}
                     {formatLabel ? ` · ${formatLabel}` : ''}
+                    {editingContent ? ' · editing' : ''}
                   </p>
                 </div>
-                {!editingContent && (
+                {!editingContent ? (
                   <Button variant="outline" size="sm" onClick={startEditContent} className="shrink-0 gap-1">
                     <Pencil className="h-3.5 w-3.5" /> Edit content
                   </Button>
-                )}
-              </div>
-
-              <dl className="space-y-3.5">
-                <InfoRow label="Title">
-                  {creative.title || (
-                    <span className="text-slate-400 italic">
-                      {isTemplatePlaceholder(currentCard?.title || localAd.content?.title)
-                        ? 'Dynamic product placeholder (no fixed title)'
-                        : 'No title'}
-                    </span>
-                  )}
-                </InfoRow>
-                <InfoRow label="Content text" multiline>
-                  {creative.body}
-                </InfoRow>
-                <InfoRow label="Caption / display">
-                  {creative.caption}
-                </InfoRow>
-                <InfoRow label="Link description" multiline>
-                  {creative.linkDescription}
-                </InfoRow>
-                <InfoRow label="Call to action">
-                  {creative.cta
-                    ? (
-                      <span>
-                        {creative.cta}
-                        {creative.ctaType ? (
-                          <span className="text-slate-400"> · {String(creative.ctaType).replace(/_/g, ' ')}</span>
-                        ) : null}
-                      </span>
-                    )
-                    : null}
-                </InfoRow>
-                <InfoRow label={adDestinationLabel(localAd)}>
-                  <AdDestinationLinks
-                    ad={localAd}
-                    activeCard={activeCard}
-                  />
-                </InfoRow>
-              </dl>
-
-              <AdTargetUrlsInfo
-                ad={localAd}
-                domainsByHost={domainsByHost}
-                domainsHrefBase={isSectionEnabled(project, 'domains') ? '/review-domains' : null}
-              />
-
-              <Separator />
-
-              <div className="grid sm:grid-cols-2 gap-3">
-                <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400 flex items-center gap-1.5">
-                    <Eye className="h-3.5 w-3.5" /> Impressions
-                  </p>
-                  <p className="text-lg font-semibold text-slate-900 tabular-nums mt-1">
-                    {impressions.text || '—'}
-                  </p>
-                  <p className="text-[11px] text-slate-500 mt-0.5">
-                    Estimated reach from Ads Library
-                    {impressions.index != null ? ` · band ${impressions.index}` : ''}
-                  </p>
-                </div>
-                <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400 flex items-center gap-1.5">
-                    <CalendarDays className="h-3.5 w-3.5" /> Schedule
-                  </p>
-                  <div className="mt-1.5 space-y-1 text-sm text-slate-800">
-                    <p>
-                      <span className="text-slate-400 text-xs mr-2">Started</span>
-                      {startDateLabel || '—'}
-                    </p>
-                    <p>
-                      <span className="text-slate-400 text-xs mr-2">Ends</span>
-                      {endDateLabel || '—'}
-                    </p>
-                    {sourcedLabel && (
-                      <p>
-                        <span className="text-slate-400 text-xs mr-2">Sourced</span>
-                        {sourcedLabel}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {platforms.length > 0 && (
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400 mb-2">
-                    Publisher platforms
-                  </p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {platforms.map((p) => (
-                      <Badge key={p} variant="outline" className="text-[10px] font-medium">
-                        {p}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {editingContent && contentDraft && (
-              <div className="rounded-xl border border-blue-200 bg-blue-50/40 p-4 space-y-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-semibold text-slate-900">Edit ad content</h3>
-                  <div className="flex gap-2">
+                ) : (
+                  <div className="flex gap-2 shrink-0">
                     <Button
                       variant="ghost"
                       size="sm"
                       onClick={() => {
                         setEditingContent(false)
                         setContentDraft(null)
+                        setContentError(null)
                       }}
                       disabled={savingContent}
                     >
@@ -736,113 +728,234 @@ export default function ReviewAdForm({
                       Save
                     </Button>
                   </div>
-                </div>
-                {contentError && <p className="text-xs text-rose-600">{contentError}</p>}
+                )}
+              </div>
 
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="col-span-2">
-                    <Label className="text-xs">Title</Label>
-                    <Input
-                      value={contentDraft.title}
-                      onChange={(e) => setContentDraft({ ...contentDraft, title: e.target.value })}
-                    />
-                  </div>
-                  <div className="col-span-2">
-                    <Label className="text-xs">Body</Label>
-                    <Textarea
-                      rows={3}
-                      value={contentDraft.body || ''}
-                      onChange={(e) => setContentDraft({ ...contentDraft, body: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-xs">Caption</Label>
-                    <Input
-                      value={contentDraft.caption || ''}
-                      onChange={(e) => setContentDraft({ ...contentDraft, caption: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-xs">CTA text</Label>
-                    <Input
-                      value={contentDraft.cta_text || ''}
-                      onChange={(e) => setContentDraft({ ...contentDraft, cta_text: e.target.value })}
-                    />
-                  </div>
-                  <div className="col-span-2">
-                    <Label className="text-xs">Link URL</Label>
-                    <Input
-                      value={contentDraft.link_url || ''}
-                      onChange={(e) => setContentDraft({ ...contentDraft, link_url: e.target.value })}
-                    />
-                  </div>
-                </div>
+              {editingContent && contentDraft ? (
+                <div className="space-y-4">
+                  {contentError && <p className="text-xs text-rose-600">{contentError}</p>}
 
-                <Separator />
-
-                <div className="flex items-center justify-between">
-                  <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Cards</h4>
-                  <Button type="button" variant="outline" size="sm" onClick={addCard} className="gap-1">
-                    <Plus className="h-3.5 w-3.5" /> Add card
-                  </Button>
-                </div>
-
-                <div className="space-y-3 max-h-72 overflow-y-auto">
-                  {(contentDraft.cards || []).map((card, idx) => (
-                    <div key={idx} className="rounded-lg border border-slate-200 bg-white p-3 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-medium text-slate-700">Card {idx + 1}</span>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-rose-500"
-                          onClick={() => removeCard(idx)}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
+                  {hasCardArray && (
+                    <div className="rounded-xl border border-slate-200 bg-white/80 p-3 space-y-2">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">
+                        Ad-level
+                      </p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="col-span-2">
+                          <Label className="text-xs">Title</Label>
+                          <Input
+                            value={contentDraft.title}
+                            onChange={(e) => setContentDraft({ ...contentDraft, title: e.target.value })}
+                          />
+                        </div>
+                        <div className="col-span-2">
+                          <Label className="text-xs">Body</Label>
+                          <Textarea
+                            rows={2}
+                            value={contentDraft.body || ''}
+                            onChange={(e) => setContentDraft({ ...contentDraft, body: e.target.value })}
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-xs">Caption</Label>
+                          <Input
+                            value={contentDraft.caption || ''}
+                            onChange={(e) => setContentDraft({ ...contentDraft, caption: e.target.value })}
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-xs">CTA text</Label>
+                          <Input
+                            value={contentDraft.cta_text || ''}
+                            onChange={(e) => setContentDraft({ ...contentDraft, cta_text: e.target.value })}
+                          />
+                        </div>
+                        <div className="col-span-2">
+                          <Label className="text-xs">Link URL</Label>
+                          <Input
+                            value={contentDraft.link_url || ''}
+                            onChange={(e) => setContentDraft({ ...contentDraft, link_url: e.target.value })}
+                          />
+                        </div>
                       </div>
-                      <Input
-                        placeholder="Title"
-                        value={card.title}
-                        onChange={(e) => updateDraftCard(idx, { title: e.target.value })}
-                      />
-                      <Textarea
-                        placeholder="Body"
-                        rows={2}
-                        value={card.body}
-                        onChange={(e) => updateDraftCard(idx, { body: e.target.value })}
-                      />
-                      <Input
-                        placeholder="Link URL"
-                        value={card.link_url}
-                        onChange={(e) => updateDraftCard(idx, { link_url: e.target.value })}
-                      />
-                      <div className="flex gap-2">
-                        <Input
-                          placeholder="CTA"
-                          value={card.cta_text}
-                          onChange={(e) => updateDraftCard(idx, { cta_text: e.target.value })}
-                        />
+                    </div>
+                  )}
+
+                  {hasCardArray ? (
+                    (() => {
+                      const cardIdx = Math.min(activeCard, Math.max((contentDraft.cards || []).length - 1, 0))
+                      const card = contentDraft.cards?.[cardIdx]
+                      if (!card) return null
+                      return (
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">
+                              Card {cardIdx + 1}
+                            </p>
+                            <div className="flex gap-2">
+                              <Button type="button" variant="outline" size="sm" onClick={addCard} className="gap-1">
+                                <Plus className="h-3.5 w-3.5" /> Add card
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="text-rose-500 hover:text-rose-600 hover:bg-rose-50 gap-1"
+                                onClick={() => removeCard(cardIdx)}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" /> Remove card
+                              </Button>
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div className="col-span-2">
+                              <Label className="text-xs">Title</Label>
+                              <Input
+                                value={card.title}
+                                onChange={(e) => updateDraftCard(cardIdx, { title: e.target.value })}
+                              />
+                            </div>
+                            <div className="col-span-2">
+                              <Label className="text-xs">Body</Label>
+                              <Textarea
+                                rows={3}
+                                value={card.body || ''}
+                                onChange={(e) => updateDraftCard(cardIdx, { body: e.target.value })}
+                              />
+                            </div>
+                            <div>
+                              <Label className="text-xs">Caption</Label>
+                              <Input
+                                value={card.caption || ''}
+                                onChange={(e) => updateDraftCard(cardIdx, { caption: e.target.value })}
+                              />
+                            </div>
+                            <div>
+                              <Label className="text-xs">CTA text</Label>
+                              <Input
+                                value={card.cta_text || ''}
+                                onChange={(e) => updateDraftCard(cardIdx, { cta_text: e.target.value })}
+                              />
+                            </div>
+                            <div className="col-span-2">
+                              <Label className="text-xs">Link URL</Label>
+                              <Input
+                                value={card.link_url || ''}
+                                onChange={(e) => updateDraftCard(cardIdx, { link_url: e.target.value })}
+                              />
+                            </div>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              disabled={uploading}
+                              onClick={() => {
+                                fileInputRef.current?.setAttribute('data-card-index', String(cardIdx))
+                                fileInputRef.current?.click()
+                              }}
+                              className="gap-1"
+                            >
+                              {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+                              Upload image
+                            </Button>
+                            <p className="text-[11px] text-slate-500">
+                              Max {formatUploadSizeLimit(REVIEW_IMAGE_MAX_BYTES)}. Manual images can be deleted.
+                            </p>
+                          </div>
+                          {(card.media || []).length > 0 && (
+                            <div className="flex flex-wrap gap-2">
+                              {card.media.map((m, mi) => (
+                                <div key={mi} className="relative h-14 w-14 rounded-lg border overflow-hidden">
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img
+                                    src={m.signedUrl || m.s3_url}
+                                    alt=""
+                                    className="h-full w-full object-cover"
+                                  />
+                                  {m.uploaded_manually && m.s3_url && (
+                                    <button
+                                      type="button"
+                                      className="absolute inset-0 bg-black/50 text-white text-[9px] opacity-0 hover:opacity-100"
+                                      onClick={() => handleDeleteImage(m.s3_url)}
+                                    >
+                                      Del
+                                    </button>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })()
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="col-span-2">
+                          <Label className="text-xs">Title</Label>
+                          <Input
+                            value={contentDraft.title}
+                            onChange={(e) => setContentDraft({ ...contentDraft, title: e.target.value })}
+                          />
+                        </div>
+                        <div className="col-span-2">
+                          <Label className="text-xs">Body</Label>
+                          <Textarea
+                            rows={3}
+                            value={contentDraft.body || ''}
+                            onChange={(e) => setContentDraft({ ...contentDraft, body: e.target.value })}
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-xs">Caption</Label>
+                          <Input
+                            value={contentDraft.caption || ''}
+                            onChange={(e) => setContentDraft({ ...contentDraft, caption: e.target.value })}
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-xs">CTA text</Label>
+                          <Input
+                            value={contentDraft.cta_text || ''}
+                            onChange={(e) => setContentDraft({ ...contentDraft, cta_text: e.target.value })}
+                          />
+                        </div>
+                        <div className="col-span-2">
+                          <Label className="text-xs">Link URL</Label>
+                          <Input
+                            value={contentDraft.link_url || ''}
+                            onChange={(e) => setContentDraft({ ...contentDraft, link_url: e.target.value })}
+                          />
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
                         <Button
                           type="button"
                           variant="outline"
                           size="sm"
                           disabled={uploading}
                           onClick={() => {
-                            fileInputRef.current?.setAttribute('data-card-index', String(idx))
+                            fileInputRef.current?.removeAttribute('data-card-index')
                             fileInputRef.current?.click()
                           }}
-                          className="gap-1 shrink-0"
+                          className="gap-1"
                         >
                           {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
-                          Image
+                          Upload image
                         </Button>
+                        <Button type="button" variant="outline" size="sm" onClick={addCard} className="gap-1">
+                          <Plus className="h-3.5 w-3.5" /> Add card
+                        </Button>
+                        <p className="text-[11px] text-slate-500">
+                          Max {formatUploadSizeLimit(REVIEW_IMAGE_MAX_BYTES)}. Manual images can be deleted.
+                        </p>
                       </div>
-                      {(card.media || []).length > 0 && (
+                      {(contentDraft.media || []).length > 0 && (
                         <div className="flex flex-wrap gap-2">
-                          {card.media.map((m, mi) => (
-                            <div key={mi} className="relative h-12 w-12 rounded border overflow-hidden">
+                          {contentDraft.media.map((m, mi) => (
+                            <div key={mi} className="relative h-14 w-14 rounded-lg border overflow-hidden">
                               {/* eslint-disable-next-line @next/next/no-img-element */}
                               <img
                                 src={m.signedUrl || m.s3_url}
@@ -863,26 +976,123 @@ export default function ReviewAdForm({
                         </div>
                       )}
                     </div>
-                  ))}
-                </div>
+                  )}
 
-                <p className="text-[11px] text-slate-500">
-                  Max upload {formatUploadSizeLimit(REVIEW_IMAGE_MAX_BYTES)}. Manual images can be deleted; ingest media is preserved.
-                </p>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0]
-                    const cardIndexAttr = e.target.getAttribute('data-card-index')
-                    const cardIndex = cardIndexAttr != null ? Number(cardIndexAttr) : null
-                    handleImageUpload(file, Number.isFinite(cardIndex) ? cardIndex : null)
-                  }}
-                />
-              </div>
-            )}
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      const cardIndexAttr = e.target.getAttribute('data-card-index')
+                      const cardIndex = cardIndexAttr != null ? Number(cardIndexAttr) : null
+                      handleImageUpload(file, Number.isFinite(cardIndex) ? cardIndex : null)
+                    }}
+                  />
+                </div>
+              ) : (
+                <>
+                  <dl className="space-y-3.5">
+                    <InfoRow label="Title">
+                      {creative.title || (
+                        <span className="text-slate-400 italic">
+                          {isTemplatePlaceholder(currentCard?.title || localAd.content?.title)
+                            ? 'Dynamic product placeholder (no fixed title)'
+                            : 'No title'}
+                        </span>
+                      )}
+                    </InfoRow>
+                    <InfoRow label="Content text" multiline>
+                      {creative.body}
+                    </InfoRow>
+                    <InfoRow label="Caption / display">
+                      {creative.caption}
+                    </InfoRow>
+                    <InfoRow label="Link description" multiline>
+                      {creative.linkDescription}
+                    </InfoRow>
+                    <InfoRow label="Call to action">
+                      {creative.cta
+                        ? (
+                          <span>
+                            {creative.cta}
+                            {creative.ctaType ? (
+                              <span className="text-slate-400"> · {String(creative.ctaType).replace(/_/g, ' ')}</span>
+                            ) : null}
+                          </span>
+                        )
+                        : null}
+                    </InfoRow>
+                    <InfoRow label={adDestinationLabel(localAd)}>
+                      <AdDestinationLinks
+                        ad={localAd}
+                        activeCard={activeCard}
+                      />
+                    </InfoRow>
+                  </dl>
+
+                  <AdTargetUrlsInfo
+                    ad={localAd}
+                    domainsByHost={domainsByHost}
+                    domainsHrefBase={isSectionEnabled(project, 'domains') ? '/review-domains' : null}
+                  />
+
+                  <Separator />
+
+                  <div className="grid sm:grid-cols-2 gap-3">
+                    <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400 flex items-center gap-1.5">
+                        <Eye className="h-3.5 w-3.5" /> Impressions
+                      </p>
+                      <p className="text-lg font-semibold text-slate-900 tabular-nums mt-1">
+                        {impressions.text || '—'}
+                      </p>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        Estimated reach from Ads Library
+                        {impressions.index != null ? ` · band ${impressions.index}` : ''}
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400 flex items-center gap-1.5">
+                        <CalendarDays className="h-3.5 w-3.5" /> Schedule
+                      </p>
+                      <div className="mt-1.5 space-y-1 text-sm text-slate-800">
+                        <p>
+                          <span className="text-slate-400 text-xs mr-2">Started</span>
+                          {startDateLabel || '—'}
+                        </p>
+                        <p>
+                          <span className="text-slate-400 text-xs mr-2">Ends</span>
+                          {endDateLabel || '—'}
+                        </p>
+                        {sourcedLabel && (
+                          <p>
+                            <span className="text-slate-400 text-xs mr-2">Sourced</span>
+                            {sourcedLabel}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {platforms.length > 0 && (
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400 mb-2">
+                        Publisher platforms
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {platforms.map((p) => (
+                          <Badge key={p} variant="outline" className="text-[10px] font-medium">
+                            {p}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
           </div>
 
           {/* Review form — aligned with /review-cases ReviewDetails */}
@@ -1320,14 +1530,6 @@ export default function ReviewAdForm({
                 ) : null}
                 {hasReview ? 'Update Review' : 'Submit Review'}
               </Button>
-              <Button
-                type="button"
-                variant="outline"
-                className="text-rose-600 border-rose-200 hover:bg-rose-50"
-                onClick={() => setShowDeleteModal(true)}
-              >
-                <Trash2 className="h-4 w-4 mr-1" /> Delete ad
-              </Button>
             </div>
           </form>
       </div>
@@ -1336,8 +1538,9 @@ export default function ReviewAdForm({
         <div className="absolute inset-0 z-50 bg-slate-900/40 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl p-6 max-w-sm w-full shadow-xl space-y-4">
             <h3 className="font-semibold text-slate-900">Delete this ad?</h3>
-            <p className="text-sm text-slate-600">
-              This permanently removes the Ads document. This cannot be undone.
+            <p className="text-sm text-slate-500 leading-relaxed">
+              This action is <span className="font-semibold text-rose-600">permanent and irreversible</span>.
+              The ad will be permanently deleted.
             </p>
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setShowDeleteModal(false)} disabled={isDeleting}>

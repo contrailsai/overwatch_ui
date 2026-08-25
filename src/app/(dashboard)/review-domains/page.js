@@ -39,6 +39,7 @@ export default async function ReviewDomainsPage({ searchParams }) {
     analysisStatus: resolvedParams?.analysisStatus || 'all',
     search: resolvedParams?.search || '',
     visibility_status: resolvedParams?.visibility_status || 'all',
+    risk: resolvedParams?.risk || 'all',
   }
 
   const itemsPerPage = 25

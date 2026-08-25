@@ -17,23 +17,6 @@ import {
 import { cn } from '@/lib/utils'
 import { uniqueCloakVariants } from '@/lib/domains/domain-display'
 
-function kindBadge(kind) {
-  const k = String(kind || 'unknown').toLowerCase()
-  if (k === 'scam') return 'bg-rose-50 text-rose-700 border-rose-200'
-  if (k === 'dummy') return 'bg-amber-50 text-amber-800 border-amber-200'
-  if (k === 'mixed') return 'bg-orange-50 text-orange-700 border-orange-200'
-  if (k === 'error') return 'bg-slate-100 text-slate-500 border-slate-200'
-  return 'bg-slate-50 text-slate-600 border-slate-200'
-}
-
-function kindRing(kind) {
-  const k = String(kind || 'unknown').toLowerCase()
-  if (k === 'scam') return 'ring-rose-300'
-  if (k === 'dummy') return 'ring-amber-300'
-  if (k === 'mixed') return 'ring-orange-300'
-  return 'ring-slate-200'
-}
-
 function tabLabel(v) {
   if (v.label === 'bare') return 'Bare'
   return v.param || v.label || 'Variant'
@@ -169,7 +152,7 @@ export function DomainCloakVariants({
               className={cn(
                 'shrink-0 w-[104px] rounded-lg border overflow-hidden text-left transition-all',
                 isActive
-                  ? cn('border-slate-900 ring-2 ring-offset-1', kindRing(v.kind))
+                  ? 'border-slate-900 ring-2 ring-offset-1 ring-slate-300'
                   : 'border-slate-200 hover:border-slate-300 bg-white',
               )}
               title={v.url || tabLabel(v)}
@@ -198,12 +181,6 @@ export function DomainCloakVariants({
                 )}>
                   {tabLabel(v)}
                 </p>
-                <p className={cn(
-                  'text-[8px] font-semibold uppercase tracking-wide truncate',
-                  isActive ? 'text-slate-300' : 'text-slate-400',
-                )}>
-                  {v.kind || 'unknown'}
-                </p>
               </div>
             </button>
           )
@@ -212,9 +189,6 @@ export function DomainCloakVariants({
 
       <div className="sticky top-0 z-10 rounded-lg border border-slate-200 bg-white/95 backdrop-blur-sm px-3 py-2 space-y-1.5 shadow-sm">
         <div className="flex items-center gap-2 min-w-0 flex-wrap">
-          <Badge variant="outline" className={cn('text-[10px] font-bold capitalize shrink-0', kindBadge(current.kind))}>
-            {current.kind || 'unknown'}
-          </Badge>
           {current.label === 'bare' ? (
             <Badge variant="outline" className="text-[10px] font-semibold border-slate-200 text-slate-600 shrink-0">
               Default URL
