@@ -59,7 +59,7 @@ const RiskIcon = ({ label }) => {
 }
 
 const getStatusConfig = (status) => {
-    if (status === 'To Be Reviewed' || !status) return { label: 'Pending', color: 'text-slate-600 bg-slate-50 border-slate-200', icon: ClockFading }
+    if (status === 'To Be Reviewed' || !status) return { label: 'Pending', color: 'text-slate-700 bg-slate-100 border-slate-200', icon: ClockFading }
     if (status === 'Pass') return { label: 'Pass', color: 'text-emerald-700 bg-emerald-50 border-emerald-200', icon: CheckCircle }
     if (status === 'Flag for Takedown') return { label: 'Takedown', color: 'text-rose-700 bg-rose-50 border-rose-200', icon: Siren }
     return { label: status, color: 'text-slate-600 bg-slate-50 border-slate-200', icon: Info }

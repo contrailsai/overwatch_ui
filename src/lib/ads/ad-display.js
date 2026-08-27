@@ -42,9 +42,145 @@ function firstRealText(...values) {
   return null
 }
 
+/** Card creatives have cards[]; everything else is single top-level content. */
+export function getAdCreativeMode(ad) {
+  const cards = ad?.content?.cards
+  return Array.isArray(cards) && cards.length > 0 ? 'card' : 'single'
+}
+
+function mediaTypeOf(item) {
+  const raw = String(item?.type || '').toLowerCase()
+  if (raw === 'video') return 'video'
+  if (raw === 'image') return 'image'
+  const url = String(item?.signedUrl || item?.s3_url || item?.original_url || '')
+  if (/\.(mp4|webm|mov)(\?|$)/i.test(url)) return 'video'
+  if (url) return 'image'
+  return null
+}
+
+function mediaPlayableUrl(item, { allowS3 = false } = {}) {
+  return item?.signedUrl || (allowS3 ? item?.s3_url : null) || null
+}
+
+/** Normalize body which may be a string or `{ text }` from Meta ingest. */
+function resolveBodyText(body) {
+  if (body == null) return null
+  if (typeof body === 'string') return body
+  if (typeof body === 'object' && typeof body.text === 'string') return body.text
+  return null
+}
+
+function flattenAdMedia(ad) {
+  const content = ad?.content || {}
+  if (Array.isArray(content.media) && content.media.length > 0) {
+    return content.media
+  }
+  const fromCards = []
+  for (const [idx, card] of (content.cards || []).entries()) {
+    for (const m of card?.media || []) {
+      fromCards.push({ ...m, card_index: m.card_index ?? idx })
+    }
+  }
+  return fromCards
+}
+
+/**
+ * List thumb: prefer first image signed URL; if only video exists, kind=video (no url for <img>).
+ * @returns {{ kind: 'image' | 'video' | 'none', url?: string }}
+ */
+export function getAdListThumb(ad) {
+  const media = flattenAdMedia(ad)
+  const firstImage = media.find((m) => mediaTypeOf(m) === 'image' && mediaPlayableUrl(m))
+  if (firstImage) {
+    return { kind: 'image', url: mediaPlayableUrl(firstImage) }
+  }
+  const hasVideo = media.some((m) => mediaTypeOf(m) === 'video')
+  if (hasVideo) return { kind: 'video' }
+  // Legacy: signedImageUrl may be an image; never treat unknown video-like as image
+  if (ad?.signedImageUrl) {
+    const legacyLooksVideo = /\.(mp4|webm|mov)(\?|$)/i.test(String(ad.signedImageUrl))
+    if (!legacyLooksVideo) return { kind: 'image', url: ad.signedImageUrl }
+    return { kind: 'video' }
+  }
+  return { kind: 'none' }
+}
+
+/**
+ * Primary media for detail stage (active card or top-level).
+ * @returns {{ type: 'image' | 'video' | null, url?: string }}
+ */
+export function getAdPrimaryMedia(ad, card = null) {
+  const content = ad?.content || {}
+  const mode = getAdCreativeMode(ad)
+  let candidates = []
+
+  if (mode === 'card') {
+    const active = card || content.cards?.[0] || null
+    candidates = Array.isArray(active?.media) ? active.media : []
+  } else {
+    candidates = Array.isArray(content.media) ? content.media : []
+  }
+
+  // allowS3: review edit drafts may only have s3_url before re-sign
+  const withUrl = candidates.find((m) => mediaPlayableUrl(m, { allowS3: true }))
+  if (withUrl) {
+    return {
+      type: mediaTypeOf(withUrl) || 'image',
+      url: mediaPlayableUrl(withUrl, { allowS3: true }),
+    }
+  }
+
+  // Fallbacks used by older list aliases
+  if (ad?.signedImageUrl) {
+    const looksVideo = /\.(mp4|webm|mov)(\?|$)/i.test(String(ad.signedImageUrl))
+    return {
+      type: looksVideo ? 'video' : 'image',
+      url: ad.signedImageUrl,
+    }
+  }
+  return { type: null }
+}
+
+/** Thumb kind for a single media item (e.g. card filmstrip). */
+export function getMediaItemThumb(item) {
+  if (!item) return { kind: 'none' }
+  const type = mediaTypeOf(item)
+  const url = mediaPlayableUrl(item, { allowS3: true })
+  if (type === 'image' && url) return { kind: 'image', url }
+  if (type === 'video') return { kind: 'video' }
+  if (url && !/\.(mp4|webm|mov)(\?|$)/i.test(String(url))) {
+    return { kind: 'image', url }
+  }
+  if (type === 'video' || /\.(mp4|webm|mov)(\?|$)/i.test(String(url || ''))) {
+    return { kind: 'video' }
+  }
+  return { kind: 'none' }
+}
+
+/** First line / short snippet of body for list titles. */
+function bodySnippet(body, maxLen = 120) {
+  if (!body) return null
+  const firstLine = String(body).split(/\r?\n/).map((l) => l.trim()).find(Boolean)
+  if (!firstLine) return null
+  if (firstLine.length <= maxLen) return firstLine
+  return `${firstLine.slice(0, maxLen - 1).trimEnd()}…`
+}
+
 /** Best human-readable title for list + detail headers. */
 export function getAdDisplayTitle(ad) {
   const content = ad?.content || {}
+  const mode = getAdCreativeMode(ad)
+
+  if (mode === 'single') {
+    return (
+      firstRealText(
+        content.title,
+        bodySnippet(resolveBodyText(content.body)),
+        content.cta_text,
+      ) || 'Untitled ad'
+    )
+  }
+
   const firstCard = content.cards?.[0] || {}
   return (
     firstRealText(
@@ -52,8 +188,8 @@ export function getAdDisplayTitle(ad) {
       firstCard.title,
       content.caption,
       firstCard.caption,
-      content.body,
-      firstCard.body,
+      resolveBodyText(content.body),
+      resolveBodyText(firstCard.body),
     ) || 'Untitled ad'
   )
 }
@@ -61,10 +197,29 @@ export function getAdDisplayTitle(ad) {
 /** Best body/preview line for list rows. */
 export function getAdDisplayPreview(ad) {
   const content = ad?.content || {}
+  const mode = getAdCreativeMode(ad)
+  const title = getAdDisplayTitle(ad)
+
+  if (mode === 'single') {
+    const bodyText = firstRealText(resolveBodyText(content.body))
+    // If title already took the first body line, use remaining body or CTA
+    if (bodyText) {
+      const snippet = bodySnippet(bodyText)
+      if (snippet && snippet !== title && bodyText !== title) {
+        // Prefer a later line when title is the first line
+        const lines = String(bodyText).split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
+        const rest = lines.slice(1).join(' ')
+        if (rest) return rest.length > 160 ? `${rest.slice(0, 159).trimEnd()}…` : rest
+      }
+      if (bodyText !== title && snippet !== title) return bodyText
+    }
+    return firstRealText(content.cta_text, content.link_description)
+  }
+
   const firstCard = content.cards?.[0] || {}
   return firstRealText(
-    content.body,
-    firstCard.body,
+    resolveBodyText(content.body),
+    resolveBodyText(firstCard.body),
     content.caption,
     firstCard.caption,
     content.link_description,
@@ -72,6 +227,28 @@ export function getAdDisplayPreview(ad) {
     content.cta_text,
     firstCard.cta_text,
   )
+}
+
+const BODY_URL_RE = /https?:\/\/[^\s<>"')\]]+/gi
+const BODY_PHONE_RE = /(?:\+?\d[\d\s\-()]{7,}\d)/g
+
+/**
+ * URLs and phone numbers already present in body text (no invented fields).
+ * @returns {{ urls: string[], phones: string[] }}
+ */
+export function extractBodyContacts(body) {
+  const text = resolveBodyText(body) || ''
+  if (!text.trim()) return { urls: [], phones: [] }
+
+  const urls = [...new Set((text.match(BODY_URL_RE) || []).map((u) => u.replace(/[.,;:]+$/, '')))]
+  const phones = [
+    ...new Set(
+      (text.match(BODY_PHONE_RE) || [])
+        .map((p) => p.trim())
+        .filter((p) => p.replace(/\D/g, '').length >= 8),
+    ),
+  ]
+  return { urls, phones }
 }
 
 export function getAdImpressions(ad) {
@@ -183,7 +360,7 @@ export function getAdCreativeFields(ad, card = null) {
   const active = card || content.cards?.[0] || {}
 
   const title = firstRealText(active.title, content.title)
-  const body = firstRealText(active.body, content.body)
+  const body = firstRealText(resolveBodyText(active.body), resolveBodyText(content.body))
   const caption = firstRealText(active.caption, content.caption)
   const linkDescription = firstRealText(active.link_description, content.link_description)
   const cta = firstRealText(active.cta_text, content.cta_text)

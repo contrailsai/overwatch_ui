@@ -22,19 +22,20 @@ import {
   domainScreenshotUrl,
   hrefForDomainOccurrence,
   isScamDisplayLabel,
+  collectDomainViolations,
 } from '@/lib/domains/domain-display'
 
 const getRiskBadge = (risk) => {
   const v = typeof risk === 'string' ? risk.toLowerCase() : risk
-  if (v === 'high') return { label: 'High', className: 'bg-rose-50 text-rose-700 border-rose-200', icon: Siren }
-  if (v === 'mid' || v === 'medium') return { label: 'Medium', className: 'bg-orange-50 text-orange-700 border-orange-200', icon: TriangleAlert }
-  if (v === 'low') return { label: 'Low', className: 'bg-amber-50 text-amber-700 border-amber-200', icon: TrendingDown }
+  if (v === 'high') return { label: 'High', className: 'bg-rose-50 text-rose-700 border-rose-300', icon: Siren }
+  if (v === 'mid' || v === 'medium') return { label: 'Medium', className: 'bg-orange-100 text-orange-800 border-orange-300', icon: TriangleAlert }
+  if (v === 'low') return { label: 'Low', className: 'bg-amber-100 text-amber-800 border-amber-300', icon: TrendingDown }
   return { label: 'Safe', className: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: Smile }
 }
 
 const getStatusConfig = (status) => {
   if (status === 'To Be Reviewed' || !status) {
-    return { label: 'To Be Reviewed', color: 'text-slate-600 bg-slate-50 border-slate-200', icon: ClockFading }
+    return { label: 'To Be Reviewed', color: 'text-slate-700 bg-slate-100 border-slate-200', icon: ClockFading }
   }
   if (status === 'No Action' || status === 'Pass') {
     return { label: 'No Action', color: 'text-emerald-700 bg-emerald-50 border-emerald-200', icon: CheckCircle }
@@ -100,14 +101,7 @@ function InfoRow({ label, value }) {
 }
 
 function collectViolations(domain) {
-  const fromReview = domain?.review_details?.threat_types || domain?.review_details?.flags || []
-  const fromList = domain?.list?.threat_types || domain?.list?.violation_flags || []
-  const flagObj = domain?.review_details?.flags
-  const fromFlagObj = flagObj && !Array.isArray(flagObj)
-    ? Object.entries(flagObj).filter(([, v]) => v).map(([k]) => k)
-    : []
-  const reviewFlags = Array.isArray(fromReview) ? fromReview : fromFlagObj
-  return [...new Set([...reviewFlags, ...fromList].filter(Boolean).map(String))]
+  return collectDomainViolations(domain)
 }
 
 export default function DomainDetailPanel({

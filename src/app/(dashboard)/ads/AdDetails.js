@@ -6,7 +6,7 @@ import { addAdClientNote, updateAdClientStatus } from './actions'
 import {
   ExternalLink, X, Facebook, Instagram, Youtube, CheckCircle, ClockFading, Info,
   Globe, Siren, TriangleAlert, TrendingDown, Smile, Send, Loader2, CheckCircle2,
-  AlertTriangle, ChevronLeft, ChevronRight, Megaphone, Eye, CalendarDays,
+  AlertTriangle, ChevronLeft, ChevronRight, Eye, CalendarDays,
   Fingerprint, MessageSquareWarning, Laugh, EyeOff, ShieldX,
   FishingHook, UserRoundX, AlertCircle, TrendingUp, Copy, Check,
 } from 'lucide-react'
@@ -21,9 +21,12 @@ import {
   formatDisplayFormat,
   formatAdDate,
   getAdCreativeFields,
+  getAdCreativeMode,
   getAdDestinationLinks,
   getAdImpressions,
+  getAdPrimaryMedia,
   getAdVisibilityLabel,
+  getMediaItemThumb,
   isTemplatePlaceholder,
 } from '@/lib/ads/ad-display'
 import {
@@ -32,6 +35,10 @@ import {
   AdLinkedDomainsAnalysis,
   adDestinationLabel,
 } from '@/lib/ads/AdDestinationLinks'
+import { AdMediaStage } from '@/components/ads/AdMediaStage'
+import { AdMediaThumb } from '@/components/ads/AdMediaThumb'
+import { AdAdvertiserAvatar } from '@/components/ads/AdAdvertiserAvatar'
+import { AdBodyContacts } from '@/components/ads/AdBodyContacts'
 import { getDomainsByNames } from '@/app/(dashboard)/domains/actions'
 import { isSectionEnabled } from '@/lib/project-sections'
 
@@ -61,7 +68,7 @@ const RiskIcon = ({ label }) => {
 }
 
 const getStatusConfig = (status) => {
-  if (status === 'To Be Reviewed' || !status) return { label: 'To Be Reviewed', color: 'text-slate-600 bg-slate-50 border-slate-200', icon: ClockFading }
+  if (status === 'To Be Reviewed' || !status) return { label: 'To Be Reviewed', color: 'text-slate-700 bg-slate-100 border-slate-200', icon: ClockFading }
   if (status === 'No Action' || status === 'Pass') return { label: 'No Action', color: 'text-emerald-700 bg-emerald-50 border-emerald-200', icon: CheckCircle }
   if (status === 'Flag for Takedown') return { label: 'Flag for Takedown', color: 'text-rose-700 bg-rose-50 border-rose-200', icon: Siren }
   return { label: status, color: 'text-slate-600 bg-slate-50 border-slate-200', icon: Info }
@@ -210,10 +217,11 @@ export default function AdDetailPanel({
     ? ad.content.cards
     : [{ title: ad?.content?.title, media: ad?.content?.media || [] }]
   const currentCard = cards[Math.min(activeCard, cards.length - 1)] || cards[0]
-  const previewUrl =
-    currentCard?.media?.[0]?.signedUrl ||
-    ad?.signedImageUrl ||
-    ad?.content?.media?.[0]?.signedUrl
+  const creativeMode = getAdCreativeMode(ad)
+  const primaryMedia = getAdPrimaryMedia(
+    ad,
+    creativeMode === 'card' ? currentCard : null,
+  )
   const creative = getAdCreativeFields(ad, currentCard)
   const impressions = getAdImpressions(ad)
   const formatLabel = formatDisplayFormat(ad?.list?.display_format || ad?.content?.display_format)
@@ -237,6 +245,10 @@ export default function AdDetailPanel({
   const domainsEnabled = isSectionEnabled(project, 'domains')
   const visibility = getAdVisibilityLabel(ad)
   const advertiserPic = ad.advertiser_snapshot?.signed_profile_pic
+  const pageName = ad.page_name || 'Advertiser'
+  const showTitleRow =
+    Boolean(creative.title) ||
+    (creativeMode === 'card' && isTemplatePlaceholder(currentCard?.title || ad.content?.title))
 
   return (
     <div className="flex-1 flex flex-col min-h-0 min-w-0 bg-white font-sans overflow-hidden">
@@ -256,14 +268,11 @@ export default function AdDetailPanel({
                 </Button>
               </div>
 
-              <div className="w-8 h-8 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center shrink-0 overflow-hidden">
-                {advertiserPic ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={advertiserPic} alt="" className="w-full h-full object-cover" />
-                ) : (
-                  <Megaphone className="w-3.5 h-3.5 text-slate-400" />
-                )}
-              </div>
+              <AdAdvertiserAvatar
+                src={advertiserPic}
+                name={pageName}
+                className="w-8 h-8"
+              />
 
               <div className="min-w-0 flex-1 flex items-center gap-2 flex-wrap">
                 {ad.ad_profile_id ? (
@@ -271,11 +280,11 @@ export default function AdDetailPanel({
                     href={`/ad-profiles?profile_id=${ad.ad_profile_id}`}
                     className="text-[15px] font-semibold text-slate-900 truncate max-w-full hover:text-blue-700 hover:underline"
                   >
-                    {ad.page_name || 'Advertiser'}
+                    {pageName}
                   </Link>
                 ) : (
                   <h2 className="text-[15px] font-semibold text-slate-900 truncate">
-                    {ad.page_name || 'Advertiser'}
+                    {pageName}
                   </h2>
                 )}
                 <Badge variant="outline" className="text-[10px] shrink-0 capitalize gap-1 h-5">
@@ -356,19 +365,14 @@ export default function AdDetailPanel({
           <div className="p-3 sm:p-4 space-y-3">
             {/* Full-width square stage + filmstrip */}
             <div className="flex gap-2 w-full items-stretch">
-              <div className="relative aspect-square flex-1 min-w-0 rounded-xl border border-slate-200 bg-[#0f1419] overflow-hidden flex items-center justify-center bg-[radial-gradient(ellipse_at_center,_#1a222c_0%,_#0f1419_70%)]">
-                {previewUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={previewUrl}
-                    alt=""
-                    className="max-h-full max-w-full object-contain"
-                  />
-                ) : (
-                  <Megaphone className="h-12 w-12 text-slate-600" />
-                )}
+              <div className="relative aspect-square flex-1 min-w-0 rounded-xl border border-slate-200 bg-[#0f1419] overflow-hidden bg-[radial-gradient(ellipse_at_center,_#1a222c_0%,_#0f1419_70%)]">
+                <AdMediaStage
+                  media={primaryMedia}
+                  className="absolute inset-0"
+                  emptyIconClassName="h-12 w-12 text-slate-600"
+                />
                 {cards.length > 1 && (
-                  <div className="absolute top-2.5 left-2.5 rounded-md bg-black/55 backdrop-blur-sm px-2 py-0.5 text-[10px] font-semibold tabular-nums text-white/90 tracking-wide">
+                  <div className="absolute top-2.5 left-2.5 rounded-md bg-black/55 backdrop-blur-sm px-2 py-0.5 text-[10px] font-semibold tabular-nums text-white/90 tracking-wide z-10">
                     {Math.min(activeCard, cards.length - 1) + 1} / {cards.length}
                   </div>
                 )}
@@ -381,7 +385,7 @@ export default function AdDetailPanel({
                   aria-label="Ad cards"
                 >
                   {cards.map((card, i) => {
-                    const thumb = card.media?.[0]?.signedUrl
+                    const thumb = getMediaItemThumb(card.media?.[0])
                     const isActive = i === activeCard
                     return (
                       <button
@@ -397,14 +401,12 @@ export default function AdDetailPanel({
                             : 'border-white/15 opacity-70 hover:opacity-100 hover:border-white/35',
                         )}
                       >
-                        {thumb ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={thumb} alt="" className="h-full w-full object-cover" />
-                        ) : (
-                          <div className="h-full w-full bg-slate-800 flex items-center justify-center text-[10px] text-slate-400 font-semibold tabular-nums">
-                            {i + 1}
-                          </div>
-                        )}
+                        <AdMediaThumb
+                          kind={thumb.kind}
+                          src={thumb.url}
+                          className="h-full w-full bg-slate-800"
+                          iconClassName="h-3.5 w-3.5"
+                        />
                         <span className="absolute bottom-0 inset-x-0 bg-black/55 text-[9px] font-bold tabular-nums text-white/90 text-center leading-4">
                           {i + 1}
                         </span>
@@ -429,17 +431,24 @@ export default function AdDetailPanel({
               </div>
 
               <dl className="space-y-2.5">
-                <InfoRow label="Title">
-                  {creative.title || (
-                    <span className="text-slate-400 italic">
-                      {isTemplatePlaceholder(currentCard?.title || ad.content?.title)
-                        ? 'Dynamic product placeholder (no fixed title)'
-                        : 'No title'}
-                    </span>
-                  )}
-                </InfoRow>
+                {showTitleRow && (
+                  <InfoRow label="Title">
+                    {creative.title || (
+                      <span className="text-slate-400 italic">
+                        {isTemplatePlaceholder(currentCard?.title || ad.content?.title)
+                          ? 'Dynamic product placeholder (no fixed title)'
+                          : 'No title'}
+                      </span>
+                    )}
+                  </InfoRow>
+                )}
                 <InfoRow label="Content text" multiline>
-                  {creative.body}
+                  {creative.body ? (
+                    <>
+                      {creative.body}
+                      <AdBodyContacts body={creative.body} />
+                    </>
+                  ) : null}
                 </InfoRow>
                 <InfoRow label="Caption / display">
                   {creative.caption}

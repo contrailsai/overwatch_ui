@@ -168,6 +168,33 @@ export function isScamDisplayLabel(value) {
   return normalizeKey(value) === 'scam'
 }
 
+/**
+ * Violation labels for list/detail UI.
+ * Prefers reviewed / list threat types; if empty and domain is scam-tagged, assumes Fraud.
+ */
+export function collectDomainViolations(domain) {
+  const fromReview = domain?.review_details?.threat_types || []
+  const fromList = domain?.list?.threat_types || domain?.list?.violation_flags || []
+  const flagObj = domain?.review_details?.flags
+  const fromFlagObj = flagObj && !Array.isArray(flagObj) && typeof flagObj === 'object'
+    ? Object.entries(flagObj).filter(([, v]) => v).map(([k]) => k)
+    : []
+  const reviewFlags = Array.isArray(fromReview) ? fromReview : fromFlagObj
+  const listFlags = Array.isArray(fromList) ? fromList : []
+
+  const labels = [...new Set([...reviewFlags, ...listFlags]
+    .filter(Boolean)
+    .map(String)
+    .filter((v) => {
+      const key = normalizeKey(v)
+      return key && key !== 'safe'
+    }))]
+
+  if (labels.length > 0) return labels
+  if (isDomainScamCategory(domain)) return ['Fraud']
+  return []
+}
+
 /** High risk + Fraud + IT Act 66D + BNS 318(4), matched to project config names. */
 export function applyDomainScamReviewPresets(defaults, projectDetails) {
   const projectLabels = projectDetails?.labels || []

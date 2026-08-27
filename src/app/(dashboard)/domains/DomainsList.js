@@ -2,8 +2,9 @@
 
 import { useState, useCallback, useEffect, useTransition, useRef } from 'react'
 import {
-  Globe, Search, X, ChevronLeft, ChevronRight, Calendar, Loader2,
-  CheckCircle, ClockFading, Info, Siren, ArrowUpDown, Filter,
+  Globe, Search, X, ChevronLeft, ChevronRight, Loader2,
+  CheckCircle, ClockFading, Info, Siren, ArrowUpDown, ArrowUp, ArrowDown, ArrowRight, Filter,
+  TriangleAlert, TrendingDown, Smile,
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { cn } from '@/lib/utils'
@@ -15,6 +16,7 @@ import {
   domainScreenshotUrl,
   isDomainOnline,
   domainHasCloaking,
+  collectDomainViolations,
 } from '@/lib/domains/domain-display'
 import { getDomainById } from './actions'
 import DomainDetailPanel from './DomainDetails'
@@ -32,12 +34,6 @@ const RISK_OPTIONS = [
   { value: 'medium', label: 'Medium' },
   { value: 'low', label: 'Low' },
   { value: 'safe', label: 'Safe' },
-]
-
-const SORT_OPTIONS = [
-  { field: 'last_seen', label: 'Last seen' },
-  { field: 'risk', label: 'Risk' },
-  { field: 'occurrences', label: 'Seen' },
 ]
 
 const VISIBILITY_OPTIONS = [
@@ -60,15 +56,15 @@ function FilterField({ label, children, className }) {
 
 const getRiskBadge = (risk) => {
   const v = typeof risk === 'string' ? risk.toLowerCase() : risk
-  if (v === 'high') return { label: 'High', className: 'text-rose-600 bg-rose-50 border-rose-200' }
-  if (v === 'mid' || v === 'medium') return { label: 'Medium', className: 'text-orange-600 bg-orange-50 border-orange-200' }
-  if (v === 'low') return { label: 'Low', className: 'text-amber-600 bg-amber-50 border-amber-200' }
-  return { label: 'Safe', className: 'text-emerald-600 bg-emerald-50 border-emerald-200' }
+  if (v === 'high') return { label: 'High', className: 'text-rose-700 bg-rose-50 border-rose-300' }
+  if (v === 'mid' || v === 'medium') return { label: 'Medium', className: 'text-orange-800 bg-orange-100 border-orange-300' }
+  if (v === 'low') return { label: 'Low', className: 'text-amber-800 bg-amber-100 border-amber-300' }
+  return { label: 'Safe', className: 'text-emerald-700 bg-emerald-50 border-emerald-200' }
 }
 
 const getStatusConfig = (status) => {
   if (status === 'To Be Reviewed' || !status) {
-    return { label: 'To Review', color: 'text-slate-600 bg-slate-50 border-slate-200', icon: ClockFading }
+    return { label: 'To Review', color: 'text-slate-700 bg-slate-100 border-slate-200', icon: ClockFading }
   }
   if (status === 'No Action' || status === 'Pass') {
     return { label: 'No Action', color: 'text-emerald-700 bg-emerald-50 border-emerald-200', icon: CheckCircle }
@@ -87,6 +83,7 @@ function DomainListRow({ domain, isActive, onOpen, compact }) {
   const adCount = domain.occurrence_count ?? 0
   const statusCfg = getStatusConfig(domain.client_status)
   const StatusIcon = statusCfg.icon
+  const alertDate = domain.reviewed_at || domain.list?.reviewed_at
 
   return (
     <li>
@@ -150,18 +147,135 @@ function DomainListRow({ domain, isActive, onOpen, compact }) {
               <StatusIcon className="w-2.5 h-2.5" />
               {statusCfg.label}
             </span>
+            {collectDomainViolations(domain).slice(0, 2).map((v) => (
+              <span
+                key={v}
+                className="font-medium px-1 py-0.5 rounded border shrink-0 text-slate-600 bg-slate-50 border-slate-200 uppercase"
+              >
+                {v.replace(/[-_]/g, ' ')}
+              </span>
+            ))}
             <span className="tabular-nums font-semibold text-slate-600 shrink-0">
               {adCount.toLocaleString()} {adCount === 1 ? 'ad' : 'ads'}
             </span>
-            {domain.last_seen_at && (
-              <span className="ml-auto flex items-center gap-0.5 text-slate-400 tabular-nums shrink-0">
-                <Calendar className="w-2.5 h-2.5" /> {format(new Date(domain.last_seen_at), 'dd MMM')}
+            {alertDate && (
+              <span className="ml-auto text-slate-400 tabular-nums shrink-0">
+                {format(new Date(alertDate), 'dd MMM')}
               </span>
             )}
           </div>
         </div>
       </button>
     </li>
+  )
+}
+
+function DomainRiskCell({ risk }) {
+  return (
+    <div className={cn('flex flex-col items-center justify-center p-1.5 rounded-lg text-[10px] font-black tracking-wide border shadow-sm mx-auto w-12', risk.className)}>
+      {risk.label === 'High' ? (
+        <Siren className="w-4 h-4 mb-1" />
+      ) : risk.label === 'Medium' ? (
+        <TriangleAlert className="w-4 h-4 mb-1" />
+      ) : risk.label === 'Low' ? (
+        <TrendingDown className="w-4 h-4 mb-1" />
+      ) : (
+        <Smile className="w-4 h-4 mb-1" />
+      )}
+      <span className="uppercase text-[8px] leading-none">{risk.label}</span>
+    </div>
+  )
+}
+
+function DomainTableRow({ domain, onOpen }) {
+  const risk = getRiskBadge(domain.risk_rank || domain.list?.risk_rank)
+  const thumb = domainScreenshotUrl(domain)
+  const online = isDomainOnline(domain)
+  const cloaked = domain.isCloaked || domainHasCloaking(domain) || domain.discovery?.cloak_unlocked
+  const adCount = domain.occurrence_count ?? 0
+  const statusCfg = getStatusConfig(domain.client_status)
+  const StatusIcon = statusCfg.icon
+  const alertDate = domain.reviewed_at || domain.list?.reviewed_at
+  const violations = collectDomainViolations(domain)
+
+  return (
+    <tr onClick={() => onOpen(domain)} className="transition-all cursor-pointer group hover:bg-slate-50">
+      <td className="px-2 sm:px-3 whitespace-nowrap align-middle hidden sm:table-cell border-b border-slate-50">
+        <DomainRiskCell risk={risk} />
+      </td>
+      <td className="px-2 sm:px-3 whitespace-nowrap align-middle hidden md:table-cell text-center border-b border-slate-50">
+        <div
+          className={cn('inline-flex items-center justify-center w-8 h-8 rounded-full border shadow-sm mx-auto', statusCfg.color)}
+          title={statusCfg.label}
+        >
+          <StatusIcon className="w-4 h-4" />
+        </div>
+      </td>
+      <td className="px-2 sm:px-4 py-2.5 align-middle border-b border-slate-50 min-w-0">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="h-12 w-12 rounded-lg border border-slate-200/80 bg-slate-100 overflow-hidden shrink-0">
+            {thumb ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={thumb} alt="" className="h-full w-full object-cover object-top" />
+            ) : (
+              <div className="h-full w-full flex items-center justify-center">
+                <Globe className="h-4 w-4 text-slate-300" />
+              </div>
+            )}
+          </div>
+          <span className="font-mono text-[13px] font-bold text-slate-800 truncate">{domain.domain_name}</span>
+        </div>
+      </td>
+      <td className="px-2 py-2.5 align-middle hidden lg:table-cell border-b border-slate-50">
+        <div className="flex flex-wrap gap-1 max-w-[180px]">
+          {violations.length > 0 ? (
+            violations.slice(0, 3).map((v) => (
+              <span
+                key={v}
+                className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-bold border uppercase tracking-wider text-slate-700 bg-slate-50 border-slate-200"
+              >
+                {v.replace(/[-_]/g, ' ')}
+              </span>
+            ))
+          ) : (
+            <span className="text-[11px] text-slate-300">—</span>
+          )}
+          {violations.length > 3 && (
+            <span className="text-[10px] font-semibold text-slate-400">+{violations.length - 3}</span>
+          )}
+        </div>
+      </td>
+      <td className="px-2 py-2.5 whitespace-nowrap align-middle hidden lg:table-cell border-b border-slate-50">
+        {cloaked ? (
+          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded border bg-violet-50 text-violet-700 border-violet-200">Cloak</span>
+        ) : (
+          <span className="text-[11px] text-slate-300">—</span>
+        )}
+      </td>
+      <td className="px-2 py-2.5 whitespace-nowrap align-middle hidden lg:table-cell border-b border-slate-50">
+        <span className={cn(
+          'text-[10px] font-bold px-1.5 py-0.5 rounded border uppercase',
+          online
+            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+            : 'bg-slate-100 text-slate-500 border-slate-200',
+        )}>
+          {online ? 'Online' : 'Down'}
+        </span>
+      </td>
+      <td className="px-2 py-2.5 whitespace-nowrap align-middle hidden xl:table-cell border-b border-slate-50">
+        <span className="text-[11px] text-slate-600 tabular-nums font-semibold">
+          {adCount.toLocaleString()}
+        </span>
+      </td>
+      <td className="px-2 py-2.5 whitespace-nowrap align-middle hidden lg:table-cell border-b border-slate-50">
+        <span className="text-[11px] text-slate-600 tabular-nums">
+          {alertDate ? format(new Date(alertDate), 'dd MMM yyyy') : '—'}
+        </span>
+      </td>
+      <td className="px-2 sm:px-4 py-2.5 whitespace-nowrap align-middle border-b border-slate-50 text-right">
+        <ArrowRight className="w-4 h-4 text-slate-300 group-hover:text-blue-600 inline-block" />
+      </td>
+    </tr>
   )
 }
 
@@ -324,19 +438,11 @@ export function DomainsList({
     newPage >= 1 && newPage <= totalPages && updateQueryParams({ page: newPage })
   )
 
-  const handleSortFieldChange = (field) => {
+  const handleSortChange = (field) => {
+    const direction = (initialSort.field === field && initialSort.direction === 'desc') ? 'asc' : 'desc'
     updateQueryParams({
       sortField: field,
-      sortDirection: initialSort.field === field ? initialSort.direction : 'desc',
-      page: 1,
-    })
-  }
-
-  const toggleSortDirection = () => {
-    const next = initialSort.direction === 'asc' ? 'desc' : 'asc'
-    updateQueryParams({
-      sortField: initialSort.field || 'last_seen',
-      sortDirection: next,
+      sortDirection: direction,
       page: 1,
     })
   }
@@ -346,6 +452,12 @@ export function DomainsList({
     startTransition(() => {
       router.push(pathname)
     })
+  }
+
+  const SortIcon = ({ field }) => {
+    if (initialSort.field !== field) return <ArrowUpDown className="w-3.5 h-3.5 text-slate-300 ml-1.5" />
+    if (initialSort.direction === 'asc') return <ArrowUp className="w-3.5 h-3.5 text-blue-600 ml-1.5" />
+    return <ArrowDown className="w-3.5 h-3.5 text-blue-600 ml-1.5" />
   }
 
   const hasActiveFilter = (
@@ -473,7 +585,7 @@ export function DomainsList({
               {showFilters && (
                 <div className={cn(
                   'grid gap-x-2.5 gap-y-2.5 pt-1',
-                  compact ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4',
+                  compact ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-2 sm:grid-cols-3',
                 )}>
                   <FilterField label="Status">
                     <Select
@@ -522,34 +634,6 @@ export function DomainsList({
                       </SelectContent>
                     </Select>
                   </FilterField>
-
-                  <FilterField label="Sort">
-                    <div className="flex gap-1.5">
-                      <Select
-                        value={initialSort.field || 'last_seen'}
-                        onValueChange={handleSortFieldChange}
-                      >
-                        <SelectTrigger size="sm" className={cn(FILTER_TRIGGER, 'flex-1')}>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {SORT_OPTIONS.map((opt) => (
-                            <SelectItem key={opt.field} value={opt.field}>{opt.label}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={toggleSortDirection}
-                        className="h-8 w-8 p-0 shrink-0"
-                        title={`Sort ${initialSort.direction === 'asc' ? 'ascending' : 'descending'}`}
-                      >
-                        <ArrowUpDown className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  </FilterField>
                 </div>
               )}
             </div>
@@ -570,7 +654,7 @@ export function DomainsList({
                     </Button>
                   )}
                 </div>
-              ) : (
+              ) : selectedDomain ? (
                 <ul className="divide-y divide-slate-100">
                   {localDomains.map((domain) => (
                     <DomainListRow
@@ -582,6 +666,83 @@ export function DomainsList({
                     />
                   ))}
                 </ul>
+              ) : (
+                <>
+                  <div className="md:hidden divide-y divide-slate-100">
+                    {localDomains.map((domain) => (
+                      <DomainListRow
+                        key={domain._id}
+                        domain={domain}
+                        isActive={false}
+                        onOpen={openDomain}
+                        compact={false}
+                      />
+                    ))}
+                  </div>
+                  <div className="hidden md:block overflow-auto custom-scrollbar relative min-h-full">
+                    <table className="min-w-full table-fixed border-separate border-spacing-0">
+                      <thead className="sticky top-0 z-20">
+                        <tr className="bg-slate-50/90 backdrop-blur-md">
+                          <th
+                            scope="col"
+                            className="w-16 sm:w-20 px-2 sm:px-3 py-3 text-center text-xs font-bold text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100/50 transition-colors group select-none hidden sm:table-cell border-b border-slate-100"
+                            onClick={() => handleSortChange('risk')}
+                          >
+                            <div className="flex items-center justify-center">
+                              Risk
+                              <SortIcon field="risk" />
+                            </div>
+                          </th>
+                          <th scope="col" className="w-14 sm:w-16 px-2 sm:px-3 py-3 text-center text-xs font-bold text-slate-500 uppercase tracking-wider hidden md:table-cell border-b border-slate-100">
+                            Status
+                          </th>
+                          <th scope="col" className="px-2 sm:px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider min-w-[180px] border-b border-slate-100">
+                            Domain
+                          </th>
+                          <th scope="col" className="w-44 px-2 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider hidden lg:table-cell border-b border-slate-100">
+                            Violations
+                          </th>
+                          <th scope="col" className="w-20 px-2 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider hidden lg:table-cell border-b border-slate-100">
+                            Cloak
+                          </th>
+                          <th scope="col" className="w-24 px-2 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider hidden lg:table-cell border-b border-slate-100">
+                            Online
+                          </th>
+                          <th
+                            scope="col"
+                            className="w-20 px-2 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100/50 transition-colors group select-none hidden xl:table-cell border-b border-slate-100"
+                            onClick={() => handleSortChange('occurrences')}
+                          >
+                            <div className="flex items-center">
+                              Ads
+                              <SortIcon field="occurrences" />
+                            </div>
+                          </th>
+                          <th
+                            scope="col"
+                            className="w-28 px-2 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100/50 transition-colors group select-none hidden lg:table-cell border-b border-slate-100"
+                            onClick={() => handleSortChange('reviewed_at')}
+                          >
+                            <div className="flex items-center">
+                              Alert
+                              <SortIcon field="reviewed_at" />
+                            </div>
+                          </th>
+                          <th scope="col" className="w-12 sm:w-14 px-2 sm:px-4 py-3 text-right border-b border-slate-100" />
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white">
+                        {localDomains.map((domain) => (
+                          <DomainTableRow
+                            key={domain._id}
+                            domain={domain}
+                            onOpen={openDomain}
+                          />
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
               )}
             </div>
 

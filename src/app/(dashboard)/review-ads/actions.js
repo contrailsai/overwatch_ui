@@ -205,7 +205,19 @@ function buildReviewAdsPipelineStages(filters = {}) {
   ]
 }
 
-export const getAds = traceAction('getAds_review', async (_project_mongo_db_map, page = 1, limit = 20, filters = {}) => {
+function buildReviewAdsSortPipeline(sort = { field: null, direction: 'desc' }) {
+  const dir = sort.direction === 'asc' ? 1 : -1
+  if (sort.field === 'start_date') {
+    return { 'list.start_date': dir, 'list.effective_threat_score': -1, _id: -1 }
+  }
+  if (sort.field === 'risk' || sort.field === 'threat_score') {
+    return { 'list.effective_threat_score': dir, 'list.sourced_at': -1, _id: -1 }
+  }
+  // sourced_at / default
+  return { 'list.sourced_at': dir, 'list.effective_threat_score': -1, _id: -1 }
+}
+
+export const getAds = traceAction('getAds_review', async (_project_mongo_db_map, page = 1, limit = 20, filters = {}, sort = { field: 'sourced_at', direction: 'desc' }) => {
   try {
     const { dbName } = await requireRole(['reviewer'])
     const client = await clientPromise
@@ -213,9 +225,10 @@ export const getAds = traceAction('getAds_review', async (_project_mongo_db_map,
     const collection = adsCollection(db)
 
     const skip = (page - 1) * limit
+    const sortPipeline = buildReviewAdsSortPipeline(sort)
     const pipeline = [
       ...buildReviewAdsPipelineStages(filters),
-      { $sort: { 'list.sourced_at': -1, _id: -1 } },
+      { $sort: sortPipeline },
       {
         $facet: {
           metadata: [{ $count: 'total' }],

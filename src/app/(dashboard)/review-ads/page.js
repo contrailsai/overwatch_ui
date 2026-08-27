@@ -50,6 +50,8 @@ export default async function ReviewAdsPage({ searchParams }) {
 
   const resolvedParams = await searchParams
   const page = parseInt(resolvedParams?.page || '1', 10)
+  const parsedLimit = Number.parseInt(resolvedParams?.limit, 10)
+  const itemsPerPage = Math.min(Number.isNaN(parsedLimit) ? 25 : Math.max(parsedLimit, 1), 100)
 
   const initialFilters = {
     platform: resolvedParams?.platform || 'all',
@@ -71,12 +73,17 @@ export default async function ReviewAdsPage({ searchParams }) {
     search: resolvedParams?.search || '',
   }
 
-  const itemsPerPage = 25
+  const initialSort = {
+    field: resolvedParams?.sortField || 'sourced_at',
+    direction: resolvedParams?.sortDirection === 'asc' ? 'asc' : 'desc',
+  }
+
   const { ads, totalPages, totalCount } = await getAds(
     project.mongo_db_map,
     page,
     itemsPerPage,
     initialFilters,
+    initialSort,
   )
 
   let initialAd = null
@@ -95,6 +102,7 @@ export default async function ReviewAdsPage({ searchParams }) {
           project={project}
           clientDetails={clientDetails}
           initialFilters={initialFilters}
+          initialSort={initialSort}
           totalCount={totalCount}
           initialAd={initialAd}
           itemsPerPage={itemsPerPage}
