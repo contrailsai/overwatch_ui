@@ -154,7 +154,19 @@ export async function normalizeAdForUi(ad, _db = null) {
   const signedByUrl = await signUniqueS3Urls(urlsToSign)
 
   const signedMedia = applySignedMedia(media, signedByUrl)
-  const firstSigned = signedMedia.find((m) => m.signedUrl)?.signedUrl || null
+  // Prefer an image thumb URL so list <img> never receives a video URL
+  const firstImageSigned =
+    signedMedia.find((m) => String(m?.type || '').toLowerCase() === 'image' && m.signedUrl)
+      ?.signedUrl || null
+  const firstSigned =
+    firstImageSigned ||
+    signedMedia.find((m) => {
+      if (!m.signedUrl) return false
+      const t = String(m?.type || '').toLowerCase()
+      if (t === 'video') return false
+      return !/\.(mp4|webm|mov)(\?|$)/i.test(String(m.s3_url || m.signedUrl || ''))
+    })?.signedUrl ||
+    null
 
   const cards = cardsRaw.map((card, cardIndex) => {
     const cardMedia = applySignedMedia(
@@ -201,6 +213,7 @@ export async function normalizeAdForUi(ad, _db = null) {
     update_history: [],
     // convenience aliases for list UI
     sourcing_date: toIsoDate(ad?.list?.sourced_at ?? ad?.ingestion?.ingested_at),
+    reviewed_at: toIsoDate(ad?.list?.reviewed_at ?? ad?.workflow?.reviewed_at ?? ad?.review_details?.reviewed_at),
     posted_date: toIsoDate(ad?.list?.posted_at ?? ad?.list?.start_date),
     start_date: toIsoDate(ad?.list?.start_date ?? ad?.ad_delivery?.start_date),
     end_date: toIsoDate(ad?.list?.end_date ?? ad?.ad_delivery?.end_date),

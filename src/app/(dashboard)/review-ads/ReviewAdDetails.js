@@ -18,7 +18,7 @@ import { REVIEW_IMAGE_MAX_BYTES, formatUploadSizeLimit } from '@/utils/aws/uploa
 import { buildReviewFormDefaults } from '@/utils/analysis/correctionRequestUtils'
 import {
   Loader2, X, CheckCircle, ExternalLink, ChevronLeft, ChevronRight,
-  Plus, Trash2, Upload, Pencil, Save, Eye, Megaphone, CalendarDays,
+  Plus, Trash2, Upload, Pencil, Save, Eye, CalendarDays,
   ChevronDown, ChevronUp, Bot, Globe, AlertCircle, User, History,
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
@@ -35,8 +35,11 @@ import {
   formatDisplayFormat,
   formatAdDate,
   getAdCreativeFields,
+  getAdCreativeMode,
   getAdDestinationLinks,
   getAdImpressions,
+  getAdPrimaryMedia,
+  getMediaItemThumb,
   isTemplatePlaceholder,
 } from '@/lib/ads/ad-display'
 import {
@@ -44,6 +47,10 @@ import {
   AdTargetUrlsInfo,
   adDestinationLabel,
 } from '@/lib/ads/AdDestinationLinks'
+import { AdMediaStage } from '@/components/ads/AdMediaStage'
+import { AdMediaThumb } from '@/components/ads/AdMediaThumb'
+import { AdAdvertiserAvatar } from '@/components/ads/AdAdvertiserAvatar'
+import { AdBodyContacts } from '@/components/ads/AdBodyContacts'
 import { getDomainsByNames } from '@/app/(dashboard)/domains/actions'
 import { isSectionEnabled } from '@/lib/project-sections'
 
@@ -230,16 +237,22 @@ export default function ReviewAdForm({
     ? (contentDraft.cards || []).length > 0
     : (localAd?.content?.cards || []).length > 0
   const currentCard = cards[Math.min(activeCard, Math.max(cards.length - 1, 0))] || cards[0]
-  const previewUrl =
-    currentCard?.media?.[0]?.signedUrl ||
-    currentCard?.media?.[0]?.s3_url ||
-    localAd?.signedImageUrl ||
-    localAd?.content?.media?.[0]?.signedUrl
-
-  const creative = getAdCreativeFields(
+  const creativeMode = getAdCreativeMode(
     editingContent && contentDraft
       ? { ...localAd, content: { ...localAd.content, ...contentDraft } }
       : localAd,
+  )
+  const adForMedia =
+    editingContent && contentDraft
+      ? { ...localAd, content: { ...localAd.content, ...contentDraft } }
+      : localAd
+  const primaryMedia = getAdPrimaryMedia(
+    adForMedia,
+    creativeMode === 'card' ? currentCard : null,
+  )
+
+  const creative = getAdCreativeFields(
+    adForMedia,
     currentCard,
   )
   const impressions = getAdImpressions(localAd)
@@ -248,6 +261,12 @@ export default function ReviewAdForm({
   const endDateLabel = formatAdDate(localAd.end_date || localAd.list?.end_date)
   const sourcedLabel = formatAdDate(localAd.sourcing_date)
   const platforms = localAd.list?.publisher_platforms || localAd.ad_delivery?.publisher_platforms || []
+  const pageName = localAd.page_name || 'Advertiser'
+  const advertiserPic = localAd.advertiser_snapshot?.signed_profile_pic
+  const showTitleRow =
+    Boolean(creative.title) ||
+    (creativeMode === 'card' &&
+      isTemplatePlaceholder(currentCard?.title || localAd.content?.title))
 
   const startEditContent = () => {
     setContentDraft({
@@ -572,6 +591,11 @@ export default function ReviewAdForm({
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
+        <AdAdvertiserAvatar
+          src={advertiserPic}
+          name={pageName}
+          className="h-9 w-9"
+        />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
             {localAd.ad_profile_id ? (
@@ -579,11 +603,11 @@ export default function ReviewAdForm({
                 href={`/review-ad-profiles?profile_id=${localAd.ad_profile_id}`}
                 className="text-base font-semibold text-slate-900 truncate hover:text-blue-700 hover:underline"
               >
-                {localAd.page_name || 'Advertiser'}
+                {pageName}
               </Link>
             ) : (
               <h2 className="text-base font-semibold text-slate-900 truncate">
-                {localAd.page_name || 'Advertiser'}
+                {pageName}
               </h2>
             )}
             <Badge variant="outline" className="text-[10px] shrink-0 capitalize">
@@ -632,15 +656,14 @@ export default function ReviewAdForm({
       <div className="flex-1 min-h-0 overflow-y-auto lg:overflow-hidden flex flex-col lg:flex-row lg:divide-x divide-slate-200">
           {/* Preview + content */}
           <div className="shrink-0 lg:flex-1 lg:min-h-0 lg:overflow-y-auto p-4 space-y-4 bg-white">
-            <div className="rounded-xl overflow-hidden border border-slate-200 bg-slate-50 aspect-square max-h-[420px] flex items-center justify-center relative">
-              {previewUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={previewUrl} alt="" className="max-h-full max-w-full object-contain" />
-              ) : (
-                <Megaphone className="h-12 w-12 text-slate-300" />
-              )}
+            <div className="rounded-xl overflow-hidden border border-slate-200 bg-slate-50 aspect-square max-h-[420px] relative">
+              <AdMediaStage
+                media={primaryMedia}
+                className="absolute inset-0"
+                emptyIconClassName="h-12 w-12 text-slate-300"
+              />
               {cards.length > 1 && (
-                <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
+                <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5 z-10">
                   {cards.map((_, i) => (
                     <button
                       key={i}
@@ -659,7 +682,7 @@ export default function ReviewAdForm({
             {cards.length > 1 && (
               <div className="flex gap-2 overflow-x-auto pb-1">
                 {cards.map((card, i) => {
-                  const thumb = card.media?.[0]?.signedUrl || card.media?.[0]?.s3_url
+                  const thumb = getMediaItemThumb(card.media?.[0])
                   return (
                     <button
                       key={i}
@@ -670,14 +693,12 @@ export default function ReviewAdForm({
                         i === activeCard ? 'border-blue-500 ring-2 ring-blue-200' : 'border-slate-200',
                       )}
                     >
-                      {thumb ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={thumb} alt="" className="h-full w-full object-cover" />
-                      ) : (
-                        <div className="h-full w-full bg-slate-100 flex items-center justify-center text-[10px] text-slate-400">
-                          {i + 1}
-                        </div>
-                      )}
+                      <AdMediaThumb
+                        kind={thumb.kind}
+                        src={thumb.url}
+                        className="h-full w-full"
+                        iconClassName="h-3.5 w-3.5"
+                      />
                     </button>
                   )
                 })}
@@ -994,17 +1015,24 @@ export default function ReviewAdForm({
               ) : (
                 <>
                   <dl className="space-y-3.5">
-                    <InfoRow label="Title">
-                      {creative.title || (
-                        <span className="text-slate-400 italic">
-                          {isTemplatePlaceholder(currentCard?.title || localAd.content?.title)
-                            ? 'Dynamic product placeholder (no fixed title)'
-                            : 'No title'}
-                        </span>
-                      )}
-                    </InfoRow>
+                    {showTitleRow && (
+                      <InfoRow label="Title">
+                        {creative.title || (
+                          <span className="text-slate-400 italic">
+                            {isTemplatePlaceholder(currentCard?.title || localAd.content?.title)
+                              ? 'Dynamic product placeholder (no fixed title)'
+                              : 'No title'}
+                          </span>
+                        )}
+                      </InfoRow>
+                    )}
                     <InfoRow label="Content text" multiline>
-                      {creative.body}
+                      {creative.body ? (
+                        <>
+                          {creative.body}
+                          <AdBodyContacts body={creative.body} />
+                        </>
+                      ) : null}
                     </InfoRow>
                     <InfoRow label="Caption / display">
                       {creative.caption}

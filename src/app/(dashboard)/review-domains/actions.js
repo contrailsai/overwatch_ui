@@ -24,10 +24,6 @@ function buildReviewDomainsMatchQuery(filters = {}) {
     andConditions.push({ 'workflow.review_status': 'reviewed' })
   }
 
-  if (filters.analysisStatus && filters.analysisStatus !== 'all') {
-    andConditions.push({ 'workflow.analysis_status': filters.analysisStatus })
-  }
-
   const visibility = String(filters.visibility_status || filters.visibility || 'all').toLowerCase()
   if (visibility === 'online' || visibility === 'active' || visibility === 'up') {
     andConditions.push({
@@ -62,7 +58,19 @@ function buildReviewDomainsMatchQuery(filters = {}) {
   return query
 }
 
-export const getDomains = traceAction('getDomains_review', async (page = 1, limit = 20, filters = {}) => {
+function buildReviewDomainsSortPipeline(sort = { field: null, direction: 'desc' }) {
+  const dir = sort.direction === 'asc' ? 1 : -1
+  if (sort.field === 'risk') {
+    return { 'list.effective_threat_score': dir, 'list.first_seen_at': -1, _id: -1 }
+  }
+  if (sort.field === 'occurrences') {
+    return { 'list.occurrence_count': dir, _id: -1 }
+  }
+  // first_seen_at / sourced / default
+  return { 'list.first_seen_at': dir, 'list.effective_threat_score': -1, _id: -1 }
+}
+
+export const getDomains = traceAction('getDomains_review', async (page = 1, limit = 20, filters = {}, sort = { field: 'first_seen_at', direction: 'desc' }) => {
   try {
     const { dbName } = await requireRole(['reviewer'])
     const client = await clientPromise
@@ -71,10 +79,11 @@ export const getDomains = traceAction('getDomains_review', async (page = 1, limi
 
     const skip = (page - 1) * limit
     const query = buildReviewDomainsMatchQuery(filters)
+    const sortPipeline = buildReviewDomainsSortPipeline(sort)
 
     const pipeline = [
       { $match: query },
-      { $sort: { 'list.last_analyzed_at': -1, 'list.last_seen_at': -1, _id: -1 } },
+      { $sort: sortPipeline },
       {
         $facet: {
           metadata: [{ $count: 'total' }],

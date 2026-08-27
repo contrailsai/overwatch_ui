@@ -6,7 +6,7 @@ import {
   Facebook, Instagram, Youtube, CheckCircle,
   Siren, ClockFading, Info, Globe, TriangleAlert,
   TrendingDown, Smile, ExternalLink, Search, Megaphone,
-  Eye, Loader2, ArrowUpDown,
+  Eye, Loader2, ArrowUpDown, ArrowUp, ArrowDown, ArrowRight,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Twitter, Reddit } from '@/utils/icons'
@@ -25,9 +25,12 @@ import {
   getAdDisplayPreview,
   getAdImpressions,
   getAdVisibilityLabel,
+  getAdListThumb,
 } from '@/lib/ads/ad-display'
+import { AdMediaThumb } from '@/components/ads/AdMediaThumb'
+import { AdAdvertiserAvatar } from '@/components/ads/AdAdvertiserAvatar'
 import ReportGenerate from '@/components/ReportGenerate'
-import { getAllAdIds, trackClientClick } from './actions'
+import { trackClientClick } from './actions'
 import AdDetailPanel from './AdDetails'
 
 const FILTER_LABEL = 'text-[10px] font-bold text-slate-500 uppercase tracking-wide'
@@ -68,7 +71,7 @@ function PlatformIcon({ platform, className }) {
 function getStatusConfig(status) {
   const s = status?.toLowerCase()
   if (s === 'to be reviewed' || s === 'pending' || !status) {
-    return { label: 'To Be Reviewed', color: 'text-slate-600 bg-slate-50 border-slate-200', icon: ClockFading }
+    return { label: 'To Be Reviewed', color: 'text-slate-700 bg-slate-100 border-slate-200', icon: ClockFading }
   }
   if (s === 'no action' || s === 'pass') {
     return { label: 'No Action', color: 'text-emerald-700 bg-emerald-50 border-emerald-200', icon: CheckCircle }
@@ -84,32 +87,37 @@ function getAdListFields(ad) {
   const preview = getAdDisplayPreview(ad)
   const statusCfg = getStatusConfig(ad.client_status)
   const visibility = getAdVisibilityLabel(ad)
+  const thumb = getAdListThumb(ad)
   return {
     risk: getRiskLabel(ad.score),
     statusCfg,
     visibility,
-    thumb: ad.signedImageUrl || ad.content?.media?.[0]?.signedUrl,
+    thumb,
     title,
     preview: preview && preview !== title ? preview : null,
     formatLabel: formatDisplayFormat(ad.list?.display_format || ad.content?.display_format),
     formatRaw: ad.list?.display_format || ad.content?.display_format,
     impressions: getAdImpressions(ad),
-    startDate: formatAdDate(ad.start_date || ad.list?.start_date),
+    alertDate: formatAdDate(ad.reviewed_at || ad.list?.reviewed_at),
+    startDate: formatAdDate(ad.start_date || ad.posted_date || ad.list?.start_date),
     pageName: ad.page_name || 'Unknown page',
+    avatarSrc: ad.advertiser_snapshot?.signed_profile_pic || null,
   }
 }
 
-function AdThumb({ src, className, iconClassName }) {
+function RiskCell({ risk }) {
   return (
-    <div className={cn('bg-slate-100 overflow-hidden shrink-0', className)}>
-      {src ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={src} alt="" className="h-full w-full object-cover" />
+    <div className={cn('flex flex-col items-center justify-center p-1.5 rounded-lg text-[10px] font-black tracking-wide border shadow-sm mx-auto w-12', risk.color)}>
+      {risk.label === 'High' ? (
+        <Siren className="w-4 h-4 mb-1" />
+      ) : risk.label === 'Medium' ? (
+        <TriangleAlert className="w-4 h-4 mb-1" />
+      ) : risk.label === 'Low' ? (
+        <TrendingDown className="w-4 h-4 mb-1" />
       ) : (
-        <div className="h-full w-full flex items-center justify-center">
-          <Megaphone className={cn('text-slate-300', iconClassName)} />
-        </div>
+        <Smile className="w-4 h-4 mb-1" />
       )}
+      <span className="uppercase text-[8px] leading-none">{risk.label}</span>
     </div>
   )
 }
@@ -156,9 +164,9 @@ function AdMetaBadges({ fields, compact = false }) {
           <span className="tabular-nums">{fields.impressions.text}</span>
         </span>
       )}
-      {fields.startDate && (
+      {(fields.alertDate || fields.startDate) && (
         <span className={cn('text-slate-400 tabular-nums', compact && 'ml-auto')}>
-          {fields.startDate}
+          {fields.alertDate || fields.startDate}
         </span>
       )}
     </div>
@@ -211,13 +219,20 @@ function AdListRow({ ad, isActive, isChecked, onOpen, onToggle }) {
             ariaLabel={`Select ad ${ad._id}`}
           />
         </div>
-        <AdThumb
-          src={fields.thumb}
+        <AdMediaThumb
+          kind={fields.thumb.kind}
+          src={fields.thumb.url}
           className="h-14 w-14 rounded-lg border border-slate-200/80"
           iconClassName="h-4 w-4"
         />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5 min-w-0">
+            <AdAdvertiserAvatar
+              src={fields.avatarSrc}
+              name={fields.pageName}
+              className="h-5 w-5 rounded-md"
+              iconClassName="h-3 w-3"
+            />
             <PlatformIcon platform={ad.platform} />
             <span className="text-[13px] font-semibold text-slate-900 truncate tracking-tight">
               {fields.pageName}
@@ -244,11 +259,12 @@ function AdListRow({ ad, isActive, isChecked, onOpen, onToggle }) {
   )
 }
 
-function AdGridCard({ ad, isChecked, onOpen, onToggle }) {
+function AdMobileCard({ ad, isChecked, onOpen, onToggle }) {
   const fields = getAdListFields(ad)
+  const StatusIcon = fields.statusCfg.icon
 
   return (
-    <div
+    <article
       role="button"
       tabIndex={0}
       onClick={() => onOpen(ad)}
@@ -259,42 +275,150 @@ function AdGridCard({ ad, isChecked, onOpen, onToggle }) {
         }
       }}
       className={cn(
-        'group relative flex flex-col rounded-xl border bg-white text-left shadow-sm overflow-hidden cursor-pointer',
-        'transition-all duration-150',
-        isChecked
-          ? 'border-blue-300 ring-1 ring-blue-100'
-          : 'border-slate-200 hover:border-blue-200 hover:shadow-md hover:ring-1 hover:ring-blue-100',
+        'flex gap-3 p-3 bg-white border-b border-slate-100 cursor-pointer',
+        isChecked && 'bg-slate-50',
       )}
     >
-      <div className="absolute top-2.5 left-2.5 z-10" onClick={(e) => e.stopPropagation()}>
+      <div className="pt-1 shrink-0" onClick={(e) => e.stopPropagation()}>
         <SelectionCheckbox
           checked={isChecked}
           onChange={(e) => onToggle(ad, e)}
           ariaLabel={`Select ad ${ad._id}`}
-          className="bg-white/90 shadow-sm"
         />
       </div>
-      <AdThumb
-        src={fields.thumb}
-        className="aspect-[4/3] w-full"
-        iconClassName="h-8 w-8"
+      <AdMediaThumb
+        kind={fields.thumb.kind}
+        src={fields.thumb.url}
+        className="h-14 w-14 rounded-lg border border-slate-200/80 shrink-0"
+        iconClassName="h-4 w-4"
       />
-      <div className="p-3.5 min-w-0">
-        <div className="flex items-center gap-1.5">
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <AdAdvertiserAvatar
+            src={fields.avatarSrc}
+            name={fields.pageName}
+            className="h-5 w-5 rounded-md"
+            iconClassName="h-3 w-3"
+          />
           <PlatformIcon platform={ad.platform} />
           <span className="text-[13px] font-semibold text-slate-900 truncate tracking-tight">
             {fields.pageName}
           </span>
+          <ArrowRight className="ml-auto h-4 w-4 text-slate-300 shrink-0" />
         </div>
-        <p className="text-[13px] text-slate-800 font-medium mt-1.5 line-clamp-2 leading-snug">
-          {fields.title}
-        </p>
-        {fields.preview && (
-          <p className="text-xs text-slate-500 mt-1 line-clamp-2 leading-relaxed">{fields.preview}</p>
-        )}
-        <AdMetaBadges fields={fields} />
+        <p className="text-[12px] text-slate-800 font-medium mt-0.5 line-clamp-2">{fields.title}</p>
+        <div className="mt-1.5 flex items-center gap-1.5 flex-wrap text-[10px]">
+          <span className={cn('font-medium px-1.5 py-0.5 rounded border', fields.risk.color)}>
+            {fields.risk.label}
+          </span>
+          <span className={cn('inline-flex items-center gap-0.5 font-medium px-1.5 py-0.5 rounded border', fields.statusCfg.color)}>
+            <StatusIcon className="h-2.5 w-2.5" />
+            {fields.statusCfg.label}
+          </span>
+          {fields.alertDate && (
+            <span className="text-slate-400 tabular-nums ml-auto">{fields.alertDate}</span>
+          )}
+        </div>
       </div>
-    </div>
+    </article>
+  )
+}
+
+function AdTableRow({ ad, isChecked, onOpen, onToggle }) {
+  const fields = getAdListFields(ad)
+  const StatusIcon = fields.statusCfg.icon
+
+  return (
+    <tr
+      onClick={() => onOpen(ad)}
+      className={cn(
+        'transition-all cursor-pointer group',
+        isChecked ? 'bg-slate-50' : 'hover:bg-slate-50',
+      )}
+    >
+      <td className="px-2 sm:px-4 whitespace-nowrap align-middle border-b border-slate-50" onClick={(e) => e.stopPropagation()}>
+        <SelectionCheckbox
+          checked={isChecked}
+          onChange={(e) => onToggle(ad, e)}
+          ariaLabel={`Select ad ${ad._id}`}
+        />
+      </td>
+      <td className="px-2 sm:px-3 whitespace-nowrap align-middle hidden sm:table-cell border-b border-slate-50">
+        <RiskCell risk={fields.risk} />
+      </td>
+      <td className="px-2 sm:px-3 whitespace-nowrap align-middle hidden md:table-cell text-center border-b border-slate-50">
+        <div
+          className={cn(
+            'inline-flex items-center justify-center w-8 h-8 rounded-full border shadow-sm mx-auto',
+            fields.statusCfg.color,
+          )}
+          title={fields.statusCfg.label}
+        >
+          <StatusIcon className="w-4 h-4" />
+        </div>
+      </td>
+      <td className="px-2 sm:px-4 py-2.5 align-middle border-b border-slate-50 min-w-0">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <AdMediaThumb
+            kind={fields.thumb.kind}
+            src={fields.thumb.url}
+            className="h-12 w-12 rounded-lg border border-slate-200/80 shrink-0"
+            iconClassName="h-4 w-4"
+          />
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <AdAdvertiserAvatar
+                src={fields.avatarSrc}
+                name={fields.pageName}
+                className="h-5 w-5 rounded-md shrink-0"
+                iconClassName="h-3 w-3"
+              />
+              <span className="text-[13px] font-semibold text-slate-900 truncate">{fields.pageName}</span>
+            </div>
+            <p className="text-[12px] text-slate-700 mt-0.5 line-clamp-1">{fields.title}</p>
+          </div>
+        </div>
+      </td>
+      <td className="px-2 py-2.5 whitespace-nowrap align-middle hidden lg:table-cell border-b border-slate-50 text-center">
+        <PlatformIcon platform={ad.platform} className="mx-auto" />
+      </td>
+      <td className="px-2 py-2.5 whitespace-nowrap align-middle hidden lg:table-cell border-b border-slate-50">
+        <span className="text-[11px] text-slate-600 truncate block max-w-[7rem]" title={fields.formatRaw}>
+          {fields.formatLabel || '—'}
+        </span>
+      </td>
+      <td className="px-2 py-2.5 whitespace-nowrap align-middle hidden xl:table-cell border-b border-slate-50">
+        <span
+          className={cn(
+            'text-[10px] font-medium px-1.5 py-0.5 rounded border',
+            fields.visibility.down
+              ? 'bg-slate-100 text-slate-600 border-slate-200'
+              : 'bg-emerald-50 text-emerald-700 border-emerald-100',
+          )}
+        >
+          {fields.visibility.label}
+        </span>
+      </td>
+      <td className="px-2 py-2.5 whitespace-nowrap align-middle hidden xl:table-cell border-b border-slate-50">
+        {fields.impressions.text ? (
+          <span className="inline-flex items-center gap-0.5 text-[11px] text-slate-600 tabular-nums">
+            <Eye className="h-3 w-3 text-slate-400" />
+            {fields.impressions.text}
+          </span>
+        ) : (
+          <span className="text-[11px] text-slate-300">—</span>
+        )}
+      </td>
+      <td className="px-2 py-2.5 whitespace-nowrap align-middle hidden lg:table-cell border-b border-slate-50">
+        <span className="text-[11px] text-slate-600 tabular-nums">{fields.alertDate || '—'}</span>
+      </td>
+      <td className="px-2 py-2.5 whitespace-nowrap align-middle hidden xl:table-cell border-b border-slate-50">
+        <span className="text-[11px] text-slate-600 tabular-nums">{fields.startDate || '—'}</span>
+      </td>
+      <td className="px-2 sm:px-4 py-2.5 whitespace-nowrap align-middle border-b border-slate-50 text-right">
+        <ArrowRight className="w-4 h-4 text-slate-300 group-hover:text-blue-600 inline-block" />
+      </td>
+    </tr>
   )
 }
 
@@ -321,8 +445,6 @@ export function AdsList({
   const [searchInput, setSearchInput] = useState(initialFilters.searchText || '')
   const [showFilters, setShowFilters] = useState(false)
   const [selectedAds, setSelectedAds] = useState({})
-  const [isAllFilterSelected, setIsAllFilterSelected] = useState(false)
-  const [isSelectingAll, setIsSelectingAll] = useState(false)
   const [summaryState, setSummaryState] = useState({ loading: false, statusText: '' })
   const [detailedPdfState, setDetailedPdfState] = useState({ loading: false, statusText: '' })
   const [detailedDocxState, setDetailedDocxState] = useState({ loading: false, statusText: '' })
@@ -419,19 +541,11 @@ export function AdsList({
     if (newPage >= 1 && newPage <= totalPages) updateQueryParams({ page: newPage })
   }
 
-  const handleSortFieldChange = (field) => {
+  const handleSortChange = (field) => {
+    const direction = (initialSort.field === field && initialSort.direction === 'desc') ? 'asc' : 'desc'
     updateQueryParams({
       sortField: field,
-      sortDirection: initialSort.field === field ? initialSort.direction : 'desc',
-      page: 1,
-    })
-  }
-
-  const toggleSortDirection = () => {
-    const next = initialSort.direction === 'desc' ? 'asc' : 'desc'
-    updateQueryParams({
-      sortField: initialSort.field || 'risk',
-      sortDirection: next,
+      sortDirection: direction,
       page: 1,
     })
   }
@@ -454,7 +568,6 @@ export function AdsList({
       const next = { ...prev }
       if (next[ad._id]) {
         delete next[ad._id]
-        setIsAllFilterSelected(false)
       } else {
         next[ad._id] = { _id: ad._id }
       }
@@ -466,7 +579,6 @@ export function AdsList({
     const isChecked = e.target.checked
     if (!isChecked) {
       setSelectedAds({})
-      setIsAllFilterSelected(false)
       return
     }
     setSelectedAds((prev) => {
@@ -478,33 +590,20 @@ export function AdsList({
     })
   }
 
-  const handleSelectAllFiltered = async () => {
-    setIsSelectingAll(true)
-    try {
-      const ids = await getAllAdIds(initialFilters)
-      setSelectedAds((prev) => {
-        const next = { ...prev }
-        ids.forEach((id) => {
-          if (!next[id]) next[id] = { _id: id }
-        })
-        return next
-      })
-      setIsAllFilterSelected(true)
-    } finally {
-      setIsSelectingAll(false)
-    }
-  }
-
   const handleClearAllSelected = () => {
     setSelectedAds({})
-    setIsAllFilterSelected(false)
   }
 
   const filtersKey = JSON.stringify(initialFilters)
   useEffect(() => {
-    setIsAllFilterSelected(false)
     setSelectedAds({})
   }, [filtersKey])
+
+  const SortIcon = ({ field }) => {
+    if (initialSort.field !== field) return <ArrowUpDown className="w-3.5 h-3.5 text-slate-300 ml-1.5" />
+    if (initialSort.direction === 'asc') return <ArrowUp className="w-3.5 h-3.5 text-blue-600 ml-1.5" />
+    return <ArrowDown className="w-3.5 h-3.5 text-blue-600 ml-1.5" />
+  }
 
   const reportGenerateProps = {
     selectedPostsArray,
@@ -538,7 +637,11 @@ export function AdsList({
   const rangeTo = localAds.length === 0 ? 0 : rangeFrom + localAds.length - 1
 
   const sortLabel =
-    initialSort.field === 'start_date' ? 'Start date' : 'Risk'
+    initialSort.field === 'start_date'
+      ? 'Start date'
+      : initialSort.field === 'reviewed_at'
+        ? 'Alert date'
+        : 'Risk'
 
   return (
     <div className="flex h-full overflow-hidden bg-[#f4f6f8]">
@@ -552,7 +655,7 @@ export function AdsList({
       >
         <div className={cn('shrink-0 border-b border-slate-100 space-y-2', selectedAd ? 'px-3 py-2.5' : 'px-5 py-4 space-y-3')}>
           <div className="flex flex-wrap items-center gap-2">
-            <div className="min-w-0 mr-auto">
+            <div className="min-w-0 shrink-0">
               <p className={cn(
                 'font-bold text-slate-900 tabular-nums tracking-tight leading-none',
                 selectedAd ? 'text-xl' : 'text-2xl sm:text-3xl',
@@ -568,33 +671,6 @@ export function AdsList({
                   <Loader2 className="inline ml-2 h-4 w-4 animate-spin text-slate-400 align-middle" />
                 )}
               </p>
-            </div>
-
-            <div className={cn('relative flex-1', selectedAd ? 'min-w-[120px]' : 'min-w-[180px] max-w-sm')}>
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
-              <input
-                type="text"
-                value={searchInput}
-                onChange={(e) => setSearchInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') submitSearch()
-                }}
-                placeholder="Search page, copy, or URL"
-                className="w-full h-8 bg-slate-50 border border-slate-200 rounded-md pl-8 pr-8 text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-              />
-              {searchInput && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSearchInput('')
-                    updateQueryParams({ search: null, page: 1 })
-                  }}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded-full text-slate-400 hover:bg-slate-200 hover:text-slate-700"
-                  aria-label="Clear search"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              )}
             </div>
 
             <div className="flex items-center gap-1.5 shrink-0">
@@ -622,21 +698,39 @@ export function AdsList({
                 {hasActiveFilter && <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />}
               </Button>
             </div>
-          </div>
 
-          <div
-            className={cn(
-              'gap-2',
-              selectedAd
-                ? 'flex flex-col'
-                : 'flex flex-wrap items-start justify-between',
-            )}
-          >
-            <div className="flex items-center gap-2 min-w-0 flex-wrap">
+            <div className={cn('relative flex-1', selectedAd ? 'min-w-[120px]' : 'min-w-[160px] max-w-sm')}>
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
+              <input
+                type="text"
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') submitSearch()
+                }}
+                placeholder="Search page, copy, or URL"
+                className="w-full h-8 bg-slate-50 border border-slate-200 rounded-md pl-8 pr-8 text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+              />
+              {searchInput && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchInput('')
+                    updateQueryParams({ search: null, page: 1 })
+                  }}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded-full text-slate-400 hover:bg-slate-200 hover:text-slate-700"
+                  aria-label="Clear search"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0 ml-auto">
               {selectedCount > 0 ? (
                 <>
                   <span className="inline-flex items-center text-[10px] font-bold bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded shrink-0">
-                    {isAllFilterSelected ? `All ${totalCount}` : selectedCount} selected
+                    {selectedCount} selected
                   </span>
                   <button
                     type="button"
@@ -645,52 +739,8 @@ export function AdsList({
                   >
                     Clear
                   </button>
-                  {!isAllFilterSelected && totalCount > selectedCount && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={handleSelectAllFiltered}
-                      disabled={isSelectingAll}
-                      className={cn(
-                        'h-7 text-[10px] bg-blue-600 text-white hover:bg-blue-700 font-bold',
-                        selectedAd ? 'w-full sm:w-auto' : '',
-                      )}
-                    >
-                      {isSelectingAll ? (
-                        <Loader2 className="w-3 h-3 animate-spin mr-1.5" />
-                      ) : (
-                        <CheckCircle className="w-3 h-3 mr-1.5 opacity-70" />
-                      )}
-                      Select all {totalCount.toLocaleString()}
-                    </Button>
-                  )}
                 </>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={isAllCurrentPageSelected}
-                    ref={(input) => {
-                      if (input) {
-                        input.indeterminate = isSomeCurrentPageSelected && !isAllCurrentPageSelected
-                      }
-                    }}
-                    onChange={handleToggleAllOnPage}
-                    className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                    aria-label="Select all on this page"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleSelectAllFiltered}
-                    disabled={isSelectingAll || totalCount === 0}
-                    className="text-[11px] font-semibold text-slate-600 hover:text-slate-900 disabled:opacity-50"
-                  >
-                    {isSelectingAll ? 'Selecting…' : `Select all ${totalCount.toLocaleString()}`}
-                  </button>
-                </div>
-              )}
-            </div>
-            <div className={cn('shrink-0', selectedAd ? 'w-full' : '')}>
+              ) : null}
               <ReportGenerate
                 {...reportGenerateProps}
                 compact={Boolean(selectedAd)}
@@ -706,7 +756,7 @@ export function AdsList({
                   'grid gap-x-2.5 gap-y-2.5',
                   selectedAd
                     ? 'grid-cols-2'
-                    : 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6',
+                    : 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5',
                 )}
               >
                 <FilterField label="Platform">
@@ -777,33 +827,6 @@ export function AdsList({
                     })}
                   />
                 </FilterField>
-
-                <FilterField label="Sort">
-                  <div className="flex gap-1.5">
-                    <Select
-                      value={initialSort.field || 'risk'}
-                      onValueChange={handleSortFieldChange}
-                    >
-                      <SelectTrigger size="sm" className={cn(FILTER_TRIGGER, 'flex-1')}>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="risk">Risk</SelectItem>
-                        <SelectItem value="start_date">Start date</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={toggleSortDirection}
-                      className="h-8 w-8 p-0 shrink-0"
-                      title={`Sort ${initialSort.direction === 'asc' ? 'ascending' : 'descending'}`}
-                    >
-                      <ArrowUpDown className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                </FilterField>
               </div>
 
               {hasActiveFilter && (
@@ -849,7 +872,7 @@ export function AdsList({
           )}
         </div>
 
-        <div className={cn('flex-1 overflow-y-auto', !selectedAd && localAds.length > 0 && 'bg-slate-50')}>
+        <div className={cn('flex-1 overflow-y-auto', !selectedAd && localAds.length > 0 && 'bg-white')}>
           {localAds.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-center p-10 text-slate-500">
               <div className="h-14 w-14 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-center mb-4">
@@ -885,17 +908,101 @@ export function AdsList({
               ))}
             </ul>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 p-5">
-              {localAds.map((ad) => (
-                <AdGridCard
-                  key={ad._id}
-                  ad={ad}
-                  isChecked={!!selectedAds[ad._id]}
-                  onOpen={openAd}
-                  onToggle={handleToggleAd}
-                />
-              ))}
-            </div>
+            <>
+              <div className="md:hidden divide-y divide-slate-100">
+                {localAds.map((ad) => (
+                  <AdMobileCard
+                    key={ad._id}
+                    ad={ad}
+                    isChecked={!!selectedAds[ad._id]}
+                    onOpen={openAd}
+                    onToggle={handleToggleAd}
+                  />
+                ))}
+              </div>
+              <div className="hidden md:block flex-1 overflow-auto custom-scrollbar relative min-h-full">
+                <table className="min-w-full table-fixed border-separate border-spacing-0">
+                  <thead className="sticky top-0 z-20">
+                    <tr className="bg-slate-50/90 backdrop-blur-md">
+                      <th scope="col" className="w-10 sm:w-12 px-2 sm:px-4 py-3 text-left border-b border-slate-100">
+                        <input
+                          type="checkbox"
+                          checked={isAllCurrentPageSelected}
+                          ref={(input) => {
+                            if (input) {
+                              input.indeterminate = isSomeCurrentPageSelected && !isAllCurrentPageSelected
+                            }
+                          }}
+                          onChange={handleToggleAllOnPage}
+                          className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                          aria-label="Select all on this page"
+                        />
+                      </th>
+                      <th
+                        scope="col"
+                        className="w-16 sm:w-20 px-2 sm:px-3 py-3 text-center text-xs font-bold text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100/50 transition-colors group select-none hidden sm:table-cell border-b border-slate-100"
+                        onClick={() => handleSortChange('risk')}
+                      >
+                        <div className="flex items-center justify-center">
+                          Risk
+                          <SortIcon field="risk" />
+                        </div>
+                      </th>
+                      <th scope="col" className="w-14 sm:w-16 px-2 sm:px-3 py-3 text-center text-xs font-bold text-slate-500 uppercase tracking-wider hidden md:table-cell border-b border-slate-100">
+                        Status
+                      </th>
+                      <th scope="col" className="px-2 sm:px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider min-w-[200px] border-b border-slate-100">
+                        Ad
+                      </th>
+                      <th scope="col" className="w-14 px-2 py-3 text-center text-xs font-bold text-slate-500 uppercase tracking-wider hidden lg:table-cell border-b border-slate-100">
+                        Plat.
+                      </th>
+                      <th scope="col" className="w-24 px-2 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider hidden lg:table-cell border-b border-slate-100">
+                        Format
+                      </th>
+                      <th scope="col" className="w-24 px-2 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider hidden xl:table-cell border-b border-slate-100">
+                        Visibility
+                      </th>
+                      <th scope="col" className="w-24 px-2 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider hidden xl:table-cell border-b border-slate-100">
+                        Impr.
+                      </th>
+                      <th
+                        scope="col"
+                        className="w-28 px-2 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100/50 transition-colors group select-none hidden lg:table-cell border-b border-slate-100"
+                        onClick={() => handleSortChange('reviewed_at')}
+                      >
+                        <div className="flex items-center">
+                          Alert
+                          <SortIcon field="reviewed_at" />
+                        </div>
+                      </th>
+                      <th
+                        scope="col"
+                        className="w-28 px-2 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100/50 transition-colors group select-none hidden xl:table-cell border-b border-slate-100"
+                        onClick={() => handleSortChange('start_date')}
+                      >
+                        <div className="flex items-center">
+                          Start
+                          <SortIcon field="start_date" />
+                        </div>
+                      </th>
+                      <th scope="col" className="w-12 sm:w-14 px-2 sm:px-4 py-3 text-right border-b border-slate-100" />
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white">
+                    {localAds.map((ad) => (
+                      <AdTableRow
+                        key={ad._id}
+                        ad={ad}
+                        isChecked={!!selectedAds[ad._id]}
+                        onOpen={openAd}
+                        onToggle={handleToggleAd}
+                      />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </div>
 

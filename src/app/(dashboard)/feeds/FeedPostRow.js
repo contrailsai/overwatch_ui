@@ -21,7 +21,7 @@ import { getRiskLabel } from '@/app/(dashboard)/cases/riskBuckets'
 export function getFeedPostStatusConfig(post, allowDoTakedown) {
   const status = post.client_status || 'To Be Reviewed'
   if (status === 'To Be Reviewed') {
-    return { label: 'To Be Reviewed', icon: ClockFading, color: 'text-slate-500 bg-slate-50 border-slate-200' }
+    return { label: 'To Be Reviewed', icon: ClockFading, color: 'text-slate-700 bg-slate-100 border-slate-200' }
   }
   if (status === 'No Action' || status === 'Pass') {
     return { label: 'No Action', icon: CheckCircle, color: 'text-emerald-500 bg-emerald-50 border-emerald-200' }

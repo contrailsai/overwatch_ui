@@ -126,7 +126,11 @@ function buildAdsSortPipeline(sort = { field: null, direction: 'desc' }) {
   if (sort.field === 'sourced_at') {
     return { 'list.sourced_at': dir, 'list.effective_threat_score': -1, _id: 1 }
   }
-  return { 'list.effective_threat_score': dir, 'list.sourced_at': -1, _id: 1 }
+  if (sort.field === 'reviewed_at' || sort.field === 'alert_date') {
+    return { 'list.reviewed_at': dir, 'list.effective_threat_score': -1, _id: 1 }
+  }
+  // risk / threat_score / default
+  return { 'list.effective_threat_score': dir, 'list.reviewed_at': -1, _id: 1 }
 }
 
 function buildAdsReportSortPipeline() {

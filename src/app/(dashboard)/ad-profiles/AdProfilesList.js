@@ -49,7 +49,7 @@ const PlatformIcon = ({ platform, className }) => {
 
 const getStatusConfig = (status) => {
     const s = status?.toLowerCase();
-    if (s === 'to be reviewed' || s === 'pending' || !status) return { label: 'To Be Reviewed', color: 'text-slate-600 bg-slate-50 border-slate-200', icon: ClockFading }
+    if (s === 'to be reviewed' || s === 'pending' || !status) return { label: 'To Be Reviewed', color: 'text-slate-700 bg-slate-100 border-slate-200', icon: ClockFading }
     if (s === 'no action' || s === 'pass') return { label: 'No Action', color: 'text-emerald-700 bg-emerald-50 border-emerald-200', icon: CheckCircle }
     if (s === 'flag for takedown') return { label: 'Flag for Takedown', color: 'text-rose-700 bg-rose-50 border-rose-200', icon: Siren }
     return { label: status, color: 'text-slate-600 bg-slate-50 border-slate-200', icon: Info }

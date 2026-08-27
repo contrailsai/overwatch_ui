@@ -25,19 +25,19 @@ const STRING_RISK_RANK = {
 
 export function getRiskLabel(score) {
   if (score == null || Number.isNaN(Number(score))) {
-    return { label: 'Safe', color: 'text-slate-500 bg-slate-50 border-slate-200' }
+    return { label: 'Safe', color: 'text-slate-600 bg-slate-50 border-slate-200' }
   }
   const n = Number(score)
   if (n > RISK_THRESHOLDS.HIGH) {
-    return { label: 'High', color: 'text-rose-500 bg-rose-50 border-rose-200' }
+    return { label: 'High', color: 'text-rose-700 bg-rose-50 border-rose-300' }
   }
   if (n > RISK_THRESHOLDS.MEDIUM) {
-    return { label: 'Medium', color: 'text-orange-500 bg-orange-50 border-orange-200' }
+    return { label: 'Medium', color: 'text-orange-800 bg-orange-100 border-orange-300' }
   }
   if (n > RISK_THRESHOLDS.LOW) {
-    return { label: 'Low', color: 'text-amber-500 bg-amber-50 border-amber-200' }
+    return { label: 'Low', color: 'text-amber-800 bg-amber-100 border-amber-300' }
   }
-  return { label: 'Safe', color: 'text-slate-500 bg-slate-50 border-slate-200' }
+  return { label: 'Safe', color: 'text-slate-600 bg-slate-50 border-slate-200' }
 }
 
 export const ENGAGEMENT_WEIGHTS = {

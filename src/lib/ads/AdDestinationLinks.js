@@ -199,9 +199,9 @@ export function AdTargetUrlsInfo({
 
 function riskBadgeClass(risk) {
   const v = String(risk || '').toLowerCase()
-  if (v === 'high') return 'bg-rose-50 text-rose-700 border-rose-200'
-  if (v === 'mid' || v === 'medium') return 'bg-orange-50 text-orange-700 border-orange-200'
-  if (v === 'low') return 'bg-amber-50 text-amber-700 border-amber-200'
+  if (v === 'high') return 'bg-rose-50 text-rose-700 border-rose-300'
+  if (v === 'mid' || v === 'medium') return 'bg-orange-100 text-orange-800 border-orange-300'
+  if (v === 'low') return 'bg-amber-100 text-amber-800 border-amber-300'
   if (v === 'safe') return 'bg-emerald-50 text-emerald-700 border-emerald-200'
   return 'bg-slate-50 text-slate-600 border-slate-200'
 }

@@ -33,17 +33,22 @@ export default async function ReviewDomainsPage({ searchParams }) {
 
   const resolvedParams = await searchParams
   const page = parseInt(resolvedParams?.page || '1', 10)
+  const parsedLimit = Number.parseInt(resolvedParams?.limit, 10)
+  const itemsPerPage = Math.min(Number.isNaN(parsedLimit) ? 25 : Math.max(parsedLimit, 1), 100)
 
   const initialFilters = {
     status: resolvedParams?.status || 'pending',
-    analysisStatus: resolvedParams?.analysisStatus || 'all',
     search: resolvedParams?.search || '',
     visibility_status: resolvedParams?.visibility_status || 'all',
     risk: resolvedParams?.risk || 'all',
   }
 
-  const itemsPerPage = 25
-  const { domains, totalPages, totalCount } = await getDomains(page, itemsPerPage, initialFilters)
+  const initialSort = {
+    field: resolvedParams?.sortField || 'first_seen_at',
+    direction: resolvedParams?.sortDirection === 'asc' ? 'asc' : 'desc',
+  }
+
+  const { domains, totalPages, totalCount } = await getDomains(page, itemsPerPage, initialFilters, initialSort)
 
   let initialDomain = null
   if (resolvedParams?.domain_id) {
@@ -59,6 +64,7 @@ export default async function ReviewDomainsPage({ searchParams }) {
           totalPages={totalPages}
           currentPage={page}
           initialFilters={initialFilters}
+          initialSort={initialSort}
           totalCount={totalCount}
           initialDomain={initialDomain}
           itemsPerPage={itemsPerPage}

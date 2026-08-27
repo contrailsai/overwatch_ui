@@ -76,13 +76,15 @@ export const getDomains = traceAction('getDomains', async (page = 1, limit = 25,
     const dir = sort.direction === 'asc' ? 1 : -1
     let sortPipeline
     if (sort.field === 'risk') {
-      sortPipeline = { 'list.effective_threat_score': dir, _id: 1 }
+      sortPipeline = { 'list.effective_threat_score': dir, 'list.reviewed_at': -1, _id: 1 }
     } else if (sort.field === 'occurrences') {
       sortPipeline = { 'list.occurrence_count': dir, _id: 1 }
     } else if (sort.field === 'last_seen') {
       sortPipeline = { 'list.last_seen_at': dir, _id: 1 }
+    } else if (sort.field === 'reviewed_at' || sort.field === 'alert_date') {
+      sortPipeline = { 'list.reviewed_at': dir, 'list.effective_threat_score': -1, _id: 1 }
     } else {
-      sortPipeline = { 'list.last_seen_at': -1, _id: 1 }
+      sortPipeline = { 'list.reviewed_at': -1, 'list.effective_threat_score': -1, _id: 1 }
     }
 
     const facetResult = await collection

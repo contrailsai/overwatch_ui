@@ -29,8 +29,8 @@ export default async function DomainsPage({ searchParams }) {
     }
 
     const sort = {
-        field: resolvedParams.sortField || null,
-        direction: resolvedParams.sortDirection || 'desc',
+        field: resolvedParams.sortField || 'reviewed_at',
+        direction: resolvedParams.sortDirection === 'asc' ? 'asc' : 'desc',
     }
 
     const [domains, initialDomain] = await Promise.all([
