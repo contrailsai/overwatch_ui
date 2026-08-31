@@ -3,9 +3,10 @@
 /**
  * Schema V3 in-place migration.
  *
- * Rewrites Posts/Profiles inside the same tenant DB into lowercase v3 collections,
- * derives case_events + post_embeddings, renames Topics → topics, then drops
- * legacy PascalCase collections (unless --keep-legacy).
+ * Rewrites Posts/Profiles inside the same tenant DB to schema v3 in the canonical
+ * `Posts` collection (PascalCase — matches the UI and ingest contract).
+ * Derives case_events + post_embeddings, renames Topics → topics, drops stray
+ * lowercase `posts` / legacy `Profiles` (unless --keep-legacy).
  *
  * Usage:
  *   node scripts/migrate_v3_inplace.js --db <DB> [--dry-run] [--force] [--keep-legacy]
@@ -25,6 +26,18 @@ const {
   buildUsernameProfileMap,
   normalizePlatform,
 } = require('./lib/v3-transform')
+const {
+  POSTS,
+  LEGACY_POSTS,
+  LEGACY_PROFILES,
+  PROFILES,
+  LEGACY_TOPICS,
+  TOPICS,
+} = require('./lib/collection-names')
+const {
+  collectionExists,
+  resolvePostsSource,
+} = require('./lib/schema-health')
 const { ensureIndexesV3 } = require('./ensure_indexes_v3')
 
 dotenv.config({ path: path.join(__dirname, '../.env.local') })
@@ -66,14 +79,8 @@ function parseArgs(argv) {
     else if (a === '--force') args.force = true
     else if (a === '--keep-legacy') args.keepLegacy = true
   }
-  // de-dupe while preserving order
   args.dbs = [...new Set(args.dbs)]
   return args
-}
-
-async function collectionExists(db, name) {
-  const cols = await db.listCollections({ name }).toArray()
-  return cols.length > 0
 }
 
 async function upsertBatch(collection, docs, dryRun) {
@@ -96,7 +103,14 @@ async function dropIndexSafe(collection, indexName) {
     await collection.dropIndex(indexName)
     return true
   } catch (err) {
-    if (err.code === 27 || /index not found/i.test(err.message || '')) return false
+    if (
+      err.code === 27 ||
+      err.code === 26 ||
+      /index not found/i.test(err.message || '') ||
+      /ns not found/i.test(err.message || '')
+    ) {
+      return false
+    }
     throw err
   }
 }
@@ -108,10 +122,6 @@ async function insertEventsBatch(collection, events, dryRun) {
   return events.length
 }
 
-/**
- * Prefer legacy PascalCase as transform source when both exist (resume mid dual-write).
- * Fall back to lowercase when legacy already dropped.
- */
 async function resolveLegacyOrCurrent(db, legacyName, currentName) {
   if (await collectionExists(db, legacyName)) {
     return { name: legacyName, collection: db.collection(legacyName) }
@@ -123,14 +133,13 @@ async function resolveLegacyOrCurrent(db, legacyName, currentName) {
 }
 
 async function isAlreadyMigrated(db) {
-  const hasPostsLegacy = await collectionExists(db, 'Posts')
-  const hasPosts = await collectionExists(db, 'posts')
-  if (!hasPosts) return false
-  if (hasPostsLegacy) return false
-  const v3 = await db.collection('posts').countDocuments({ schema_version: 3 }, { limit: 1 })
+  const hasCanonical = await collectionExists(db, POSTS)
+  const hasStrayLower = await collectionExists(db, LEGACY_POSTS)
+  if (!hasCanonical) return false
+  if (hasStrayLower) return false
+  const v3 = await db.collection(POSTS).countDocuments({ schema_version: 3 }, { limit: 1 })
   if (v3 > 0) return true
-  // Empty posts + no Posts counts as migrated shell
-  const total = await db.collection('posts').estimatedDocumentCount()
+  const total = await db.collection(POSTS).estimatedDocumentCount()
   return total === 0
 }
 
@@ -155,10 +164,10 @@ function resolveProfileId(post, postToProfile, usernameMap) {
 }
 
 async function migrateProfiles(db, dryRun) {
-  const resolved = await resolveLegacyOrCurrent(db, 'Profiles', 'profiles')
+  const resolved = await resolveLegacyOrCurrent(db, LEGACY_PROFILES, PROFILES)
   if (!resolved) {
     log('  No Profiles/profiles — ensuring empty profiles collection', 'yellow')
-    if (!dryRun) await db.createCollection('profiles').catch(() => {})
+    if (!dryRun) await db.createCollection(PROFILES).catch(() => {})
     return {
       success: 0,
       failed: 0,
@@ -174,7 +183,7 @@ async function migrateProfiles(db, dryRun) {
 
   const postToProfile = buildPostToProfileMap(sourceProfiles)
   const usernameMap = buildUsernameProfileMap(sourceProfiles)
-  const targetCol = db.collection('profiles')
+  const targetCol = db.collection(PROFILES)
 
   let success = 0
   let failed = 0
@@ -218,17 +227,25 @@ async function migrateProfiles(db, dryRun) {
 }
 
 async function migratePosts(db, dryRun, postToProfile, usernameMap, force) {
-  const resolved = await resolveLegacyOrCurrent(db, 'Posts', 'posts')
+  const resolved = await resolvePostsSource(db)
   if (!resolved) {
-    log('  No Posts/posts — ensuring empty posts collection', 'yellow')
-    if (!dryRun) await db.createCollection('posts').catch(() => {})
-    return { success: 0, failed: 0, embeddings: 0, events: 0, sourceCount: 0, sourceName: null }
+    log(`  No ${POSTS}/${LEGACY_POSTS} — ensuring empty ${POSTS} collection`, 'yellow')
+    if (!dryRun) await db.createCollection(POSTS).catch(() => {})
+    return {
+      success: 0,
+      failed: 0,
+      embeddings: 0,
+      events: 0,
+      sourceCount: 0,
+      sourceName: null,
+      skippedShells: 0,
+    }
   }
 
   const total = await resolved.collection.countDocuments({})
   log(`  Posts source (${resolved.name}): ${total}`, 'cyan')
 
-  const postsCol = db.collection('posts')
+  const postsCol = db.collection(POSTS)
   const embCol = db.collection('post_embeddings')
   const eventsCol = db.collection('case_events')
 
@@ -243,6 +260,7 @@ async function migratePosts(db, dryRun, postToProfile, usernameMap, force) {
   let embeddings = 0
   let events = 0
   let processed = 0
+  let skippedShells = 0
 
   const postBatch = []
   const embBatch = []
@@ -291,6 +309,12 @@ async function migratePosts(db, dryRun, postToProfile, usernameMap, force) {
   while (await cursor.hasNext()) {
     const oldPost = await cursor.next()
     processed++
+    const isShell =
+      (oldPost.platform == null || oldPost.platform === '') && oldPost.post_id != null
+    if (isShell) {
+      skippedShells++
+      continue
+    }
     try {
       const profileId = resolveProfileId(oldPost, postToProfile, usernameMap)
       const { post, embedding, events: evts } = transformPostToV3(oldPost, { profileId })
@@ -309,8 +333,14 @@ async function migratePosts(db, dryRun, postToProfile, usernameMap, force) {
   }
   await flush()
 
+  if (skippedShells > 0) {
+    log(
+      `  Skipped ${skippedShells} embedding shell(s) — run cleanup_embedding_shells.js first`,
+      'yellow'
+    )
+  }
   log(
-    `  Posts migrated: ${success} ok, ${failed} failed; embeddings=${embeddings}; events=${events}`,
+    `  Posts migrated → ${POSTS}: ${success} ok, ${failed} failed; embeddings=${embeddings}; events=${events}`,
     failed ? 'yellow' : 'green'
   )
   return {
@@ -318,6 +348,7 @@ async function migratePosts(db, dryRun, postToProfile, usernameMap, force) {
     failed,
     embeddings,
     events,
+    skippedShells,
     sourceCount: total,
     sourceName: resolved.name,
   }
@@ -329,8 +360,8 @@ async function reconcileProfileCounts(db, dryRun) {
     return
   }
 
-  const profiles = db.collection('profiles')
-  const posts = db.collection('posts')
+  const profiles = db.collection(PROFILES)
+  const posts = db.collection(POSTS)
   const allProfiles = await profiles.find({}, { projection: { _id: 1 } }).toArray()
   log(`  Reconciling list.* counts for ${allProfiles.length} profiles…`, 'cyan')
 
@@ -368,8 +399,8 @@ async function reconcileProfileCounts(db, dryRun) {
 }
 
 async function renameTopicsIfNeeded(db, dryRun) {
-  const hasTopics = await collectionExists(db, 'Topics')
-  const hasLower = await collectionExists(db, 'topics')
+  const hasTopics = await collectionExists(db, LEGACY_TOPICS)
+  const hasLower = await collectionExists(db, TOPICS)
   if (!hasTopics) {
     log('  No Topics collection — skip rename', 'cyan')
     return
@@ -379,34 +410,30 @@ async function renameTopicsIfNeeded(db, dryRun) {
     return
   }
   if (dryRun) {
-    log('  [dry-run] would rename Topics → topics', 'yellow')
+    log(`  [dry-run] would rename ${LEGACY_TOPICS} → ${TOPICS}`, 'yellow')
     return
   }
-  await db.renameCollection('Topics', 'topics')
-  log('  Renamed Topics → topics', 'green')
+  await db.renameCollection(LEGACY_TOPICS, TOPICS)
+  log(`  Renamed ${LEGACY_TOPICS} → ${TOPICS}`, 'green')
 }
 
-async function dropLegacyCollections(db, dryRun, keepLegacy) {
+async function dropStrayCollections(db, dryRun, keepLegacy) {
   if (keepLegacy) {
-    log('  --keep-legacy: leaving Posts/Profiles in place', 'yellow')
+    log(`  --keep-legacy: leaving ${LEGACY_POSTS}/${LEGACY_PROFILES} in place`, 'yellow')
     return { dropped: [] }
   }
   if (dryRun) {
-    log('  [dry-run] would drop Posts / Profiles after verify', 'yellow')
+    log(`  [dry-run] would drop stray ${LEGACY_POSTS} / ${LEGACY_PROFILES}`, 'yellow')
     return { dropped: [] }
   }
 
   const dropped = []
-  for (const name of ['Posts', 'Profiles', 'Topics']) {
-    if (await collectionExists(db, name)) {
-      // Topics only drop if topics already exists (rename path handled separately)
-      if (name === 'Topics') {
-        if (!(await collectionExists(db, 'topics'))) continue
-      }
-      await db.collection(name).drop()
-      dropped.push(name)
-      log(`  Dropped legacy collection: ${name}`, 'green')
-    }
+  for (const name of [LEGACY_POSTS, LEGACY_PROFILES, LEGACY_TOPICS]) {
+    if (!(await collectionExists(db, name))) continue
+    if (name === LEGACY_TOPICS && !(await collectionExists(db, TOPICS))) continue
+    await db.collection(name).drop()
+    dropped.push(name)
+    log(`  Dropped stray collection: ${name}`, 'green')
   }
   return { dropped }
 }
@@ -427,36 +454,32 @@ async function migrateOneDb(client, dbName, opts) {
 
   if (!dryRun && (await isAlreadyMigrated(db)) && !force) {
     log(
-      'Already migrated (posts present, Posts gone). Skip — re-run with --force to rewrite.',
+      `Already migrated (${POSTS} is v3, no stray ${LEGACY_POSTS}). Skip — re-run with --force to rewrite.`,
       'yellow'
     )
     return { db: dbName, skipped: true, ok: true }
   }
 
-  // Dual collections: if lowercase side is already fully v3, just finish by
-  // dropping legacy (no full rewrite). Otherwise require --force.
+  // Both Posts + posts: if Posts is fully v3, just drop stray lowercase posts.
   if (
     !dryRun &&
-    (await collectionExists(db, 'posts')) &&
-    (await collectionExists(db, 'Posts')) &&
+    (await collectionExists(db, POSTS)) &&
+    (await collectionExists(db, LEGACY_POSTS)) &&
     !force
   ) {
-    const postsCount = await db.collection('posts').countDocuments({})
-    const v3Count = await db.collection('posts').countDocuments({ schema_version: 3 })
-    const legacyCount = await db.collection('Posts').countDocuments({})
-    if (postsCount > 0 && v3Count === postsCount && postsCount >= legacyCount) {
+    const postsCount = await db.collection(POSTS).countDocuments({})
+    const v3Count = await db.collection(POSTS).countDocuments({ schema_version: 3 })
+    const strayCount = await db.collection(LEGACY_POSTS).countDocuments({})
+    if (postsCount > 0 && v3Count === postsCount) {
       log(
-        `Both Posts and posts exist, but posts is already v3 (${postsCount}). Finishing by dropping legacy…`,
+        `${POSTS} is fully v3 (${postsCount}); dropping stray ${LEGACY_POSTS} (${strayCount})…`,
         'yellow'
       )
-      if (await collectionExists(db, 'Profiles')) {
-        const profilesV3 = await db.collection('profiles').countDocuments({ schema_version: 3 })
-        const profilesTotal = await db.collection('profiles').countDocuments({})
+      if (await collectionExists(db, LEGACY_PROFILES)) {
+        const profilesV3 = await db.collection(PROFILES).countDocuments({ schema_version: 3 })
+        const profilesTotal = await db.collection(PROFILES).countDocuments({})
         if (profilesTotal > 0 && profilesV3 !== profilesTotal) {
-          log(
-            'profiles is not fully v3 — refusing legacy drop. Re-run with --force.',
-            'red'
-          )
+          log('profiles is not fully v3 — refusing stray drop. Re-run with --force.', 'red')
           return {
             db: dbName,
             skipped: false,
@@ -467,21 +490,21 @@ async function migrateOneDb(client, dbName, opts) {
       }
       await reconcileProfileCounts(db, false)
       await ensureIndexesV3(db, (msg) => log(msg, 'cyan'))
-      const { dropped } = await dropLegacyCollections(db, false, keepLegacy)
+      const { dropped } = await dropStrayCollections(db, false, keepLegacy)
       log(`Done. Dropped: ${dropped.join(', ') || '(none)'}`, 'green')
       return {
         db: dbName,
         skipped: false,
         ok: true,
         posts: postsCount,
-        profiles: await db.collection('profiles').countDocuments({}),
+        profiles: await db.collection(PROFILES).countDocuments({}),
         embeddings: await db.collection('post_embeddings').countDocuments({}),
         events: await db.collection('case_events').countDocuments({}),
       }
     }
-    if (postsCount > 0) {
+    if (strayCount > 0) {
       log(
-        'Both Posts and posts exist (partial prior run). Re-run with --force to resume upserts.',
+        `Both ${POSTS} and ${LEGACY_POSTS} exist (partial prior run). Re-run with --force.`,
         'red'
       )
       return {
@@ -493,22 +516,20 @@ async function migrateOneDb(client, dbName, opts) {
     }
   }
 
-  // --force rewrites from legacy; unique indexes from a prior partial run would block
-  // re-upserting colliding platform_*_id values that ensureIndexesV3 later dedupes.
   if (force && !dryRun) {
     const droppedPostIdx = await dropIndexSafe(
-      db.collection('posts'),
+      db.collection(POSTS),
       'platform_platform_post_id_unique'
     )
     const droppedProfileIdx = await dropIndexSafe(
-      db.collection('profiles'),
+      db.collection(PROFILES),
       'platform_platform_user_id_unique'
     )
     if (droppedPostIdx || droppedProfileIdx) {
       log(
         `  Dropped unique indexes for --force rewrite (${[
-          droppedPostIdx && 'posts',
-          droppedProfileIdx && 'profiles',
+          droppedPostIdx && POSTS,
+          droppedProfileIdx && PROFILES,
         ]
           .filter(Boolean)
           .join(', ')})`,
@@ -542,40 +563,40 @@ async function migrateOneDb(client, dbName, opts) {
     log('\n[5/5] [dry-run] skip index creation', 'yellow')
   }
 
-  // Count check before drop
   if (!dryRun) {
-    const targetPosts = await db.collection('posts').countDocuments({})
-    const targetProfiles = await db.collection('profiles').countDocuments({})
-    if (
-      postResult.sourceName === 'Posts' &&
-      targetPosts > postResult.sourceCount
-    ) {
+    const targetPosts = await db.collection(POSTS).countDocuments({})
+    const targetProfiles = await db.collection(PROFILES).countDocuments({})
+    if (targetPosts > postResult.sourceCount) {
       throw new Error(
-        `Post count mismatch before drop: source Posts=${postResult.sourceCount} vs posts=${targetPosts}`
+        `Post count mismatch: source=${postResult.sourceCount} vs ${POSTS}=${targetPosts}`
       )
     }
-    if (
-      postResult.sourceName === 'Posts' &&
-      targetPosts < postResult.sourceCount
-    ) {
+    if (targetPosts < postResult.sourceCount) {
       log(
-        `  Post count: source Posts=${postResult.sourceCount} → posts=${targetPosts} (dupes pruned for unique index)`,
+        `  Post count: source=${postResult.sourceCount} → ${POSTS}=${targetPosts} (dupes pruned)`,
         'yellow'
       )
     }
     if (
-      profileResult.sourceName === 'Profiles' &&
+      profileResult.sourceName === LEGACY_PROFILES &&
       profileResult.sourceCount !== targetProfiles
     ) {
-      throw new Error(
-        `Profile count mismatch before drop: source Profiles=${profileResult.sourceCount} vs profiles=${targetProfiles}`
-      )
+      if (targetProfiles >= profileResult.sourceCount) {
+        log(
+          `  Profile count: source ${LEGACY_PROFILES}=${profileResult.sourceCount} → ${PROFILES}=${targetProfiles}`,
+          'yellow'
+        )
+      } else {
+        throw new Error(
+          `Profile count mismatch: source ${LEGACY_PROFILES}=${profileResult.sourceCount} vs ${PROFILES}=${targetProfiles}`
+        )
+      }
     }
-    log(`  Count check ok: posts=${targetPosts}, profiles=${targetProfiles}`, 'green')
+    log(`  Count check ok: ${POSTS}=${targetPosts}, ${PROFILES}=${targetProfiles}`, 'green')
   }
 
-  log('\nDropping legacy collections…', 'bright')
-  const { dropped } = await dropLegacyCollections(db, dryRun, keepLegacy)
+  log('\nDropping stray collections…', 'bright')
+  const { dropped } = await dropStrayCollections(db, dryRun, keepLegacy)
 
   log('\n----------------------------------------', 'bright')
   log(`Summary: ${dbName}`, 'bright')
@@ -583,7 +604,7 @@ async function migrateOneDb(client, dbName, opts) {
   log(`Embeddings: ${postResult.embeddings}`, 'cyan')
   log(`Case events: ${postResult.events}`, 'cyan')
   log(`Profile failures: ${profileResult.failed}`, profileResult.failed ? 'yellow' : 'cyan')
-  if (dropped.length) log(`Dropped: ${dropped.join(', ')}`, 'cyan')
+  if (dropped.length) log(`Dropped stray: ${dropped.join(', ')}`, 'cyan')
   log(
     dryRun
       ? 'Dry run complete — no data written.'
@@ -653,7 +674,7 @@ async function main() {
   log('Batch summary', 'bright')
   for (const r of results) {
     if (r.skipped) log(`  ${r.db}: skipped (already migrated)`, 'yellow')
-    else if (r.ok) log(`  ${r.db}: OK (posts=${r.posts ?? '?'})`, 'green')
+    else if (r.ok) log(`  ${r.db}: OK (Posts=${r.posts ?? '?'})`, 'green')
     else log(`  ${r.db}: FAIL ${r.error || ''}`, 'red')
   }
   log('========================================', 'bright')

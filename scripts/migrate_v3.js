@@ -212,7 +212,7 @@ async function migratePosts(sourceDb, targetDb, dryRun, postToProfile, usernameM
   const total = await resolved.collection.countDocuments({})
   log(`  Posts source (${resolved.name}): ${total}`, 'cyan')
 
-  const postsCol = targetDb.collection('posts')
+  const postsCol = targetDb.collection('Posts')
   const embCol = targetDb.collection('post_embeddings')
   const eventsCol = targetDb.collection('case_events')
 
@@ -311,7 +311,7 @@ async function reconcileProfileCounts(targetDb, dryRun) {
   }
 
   const profiles = targetDb.collection('profiles')
-  const posts = targetDb.collection('posts')
+  const posts = targetDb.collection('Posts')
   const allProfiles = await profiles.find({}, { projection: { _id: 1 } }).toArray()
   log(`  Reconciling list.* counts for ${allProfiles.length} profiles…`, 'cyan')
 

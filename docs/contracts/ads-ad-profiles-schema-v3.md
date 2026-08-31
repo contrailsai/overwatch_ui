@@ -92,6 +92,8 @@ Reuse from posts contract:
   source,                      // "meta_ads_library" | …
   platform_ad_id,              // Meta ad_archive_id
   original_url,
+  channel,                     // "ingestion" | "library" | "feed" — optional; client UI derives if absent
+  submitted_url,               // optional — client Upload Content URL (forces channel=ingestion in UI)
   ad_profile_id,               // ObjectId → Ad_profiles
 
   workflow: {
@@ -162,6 +164,16 @@ Reuse from posts contract:
 ```
 
 Canonical identity: `{ platform, platform_ad_id }`. Unique index intent: `{ platform: 1, platform_ad_id: 1 }`.
+
+### `channel` (UI + optional persist)
+
+| Value | Meaning | How the client resolves it |
+|-------|---------|----------------------------|
+| `ingestion` | Client **Upload Content** request | Prefer stored `channel`; else `submitted_url` set; else `ingestion.type` is `facebook_share_post` / `client_request` |
+| `library` | Meta Ads Library crawl / reviewer manual with `/ads/library` URL | `original_url` (or `ingestion.source_url`) contains `/ads/library` |
+| `feed` | Platform feed post (`/share`, `/posts`, `/reels`, permalinks, etc.) | URL matches feed patterns; default when not library and not client-requested |
+
+Client-requested ads **always display `ingestion`**, even when the submitted link resolves to a library or feed URL internally. Ingest may set `channel: "ingestion"` and/or `submitted_url` at write time.
 
 ### Mapping from Meta Ads Library payload
 

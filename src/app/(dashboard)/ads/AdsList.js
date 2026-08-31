@@ -21,6 +21,9 @@ import { getRiskLabel } from '@/app/(dashboard)/cases/riskBuckets'
 import {
   formatDisplayFormat,
   formatAdDate,
+  formatAdChannelLabel,
+  getAdChannel,
+  getAdChannelBadgeClass,
   getAdDisplayTitle,
   getAdDisplayPreview,
   getAdImpressions,
@@ -88,6 +91,7 @@ function getAdListFields(ad) {
   const statusCfg = getStatusConfig(ad.client_status)
   const visibility = getAdVisibilityLabel(ad)
   const thumb = getAdListThumb(ad)
+  const channel = getAdChannel(ad)
   return {
     risk: getRiskLabel(ad.score),
     statusCfg,
@@ -97,6 +101,8 @@ function getAdListFields(ad) {
     preview: preview && preview !== title ? preview : null,
     formatLabel: formatDisplayFormat(ad.list?.display_format || ad.content?.display_format),
     formatRaw: ad.list?.display_format || ad.content?.display_format,
+    channel,
+    channelLabel: formatAdChannelLabel(channel),
     impressions: getAdImpressions(ad),
     alertDate: formatAdDate(ad.reviewed_at || ad.list?.reviewed_at),
     startDate: formatAdDate(ad.start_date || ad.posted_date || ad.list?.start_date),
@@ -156,6 +162,17 @@ function AdMetaBadges({ fields, compact = false }) {
       {fields.formatLabel && (
         <span className="text-slate-500 truncate max-w-[9rem]" title={fields.formatRaw}>
           {fields.formatLabel}
+        </span>
+      )}
+      {fields.channelLabel && (
+        <span
+          className={cn(
+            'font-medium px-1.5 py-0.5 rounded border',
+            getAdChannelBadgeClass(fields.channel),
+          )}
+          title={fields.channelLabel}
+        >
+          {fields.channelLabel}
         </span>
       )}
       {fields.impressions.text && (
@@ -315,6 +332,14 @@ function AdMobileCard({ ad, isChecked, onOpen, onToggle }) {
             <StatusIcon className="h-2.5 w-2.5" />
             {fields.statusCfg.label}
           </span>
+          <span
+            className={cn(
+              'font-medium px-1.5 py-0.5 rounded border',
+              getAdChannelBadgeClass(fields.channel),
+            )}
+          >
+            {fields.channelLabel}
+          </span>
           {fields.alertDate && (
             <span className="text-slate-400 tabular-nums ml-auto">{fields.alertDate}</span>
           )}
@@ -385,6 +410,16 @@ function AdTableRow({ ad, isChecked, onOpen, onToggle }) {
       <td className="px-2 py-2.5 whitespace-nowrap align-middle hidden lg:table-cell border-b border-slate-50">
         <span className="text-[11px] text-slate-600 truncate block max-w-[7rem]" title={fields.formatRaw}>
           {fields.formatLabel || '—'}
+        </span>
+      </td>
+      <td className="px-2 py-2.5 whitespace-nowrap align-middle hidden lg:table-cell border-b border-slate-50">
+        <span
+          className={cn(
+            'text-[10px] font-medium px-1.5 py-0.5 rounded border',
+            getAdChannelBadgeClass(fields.channel),
+          )}
+        >
+          {fields.channelLabel}
         </span>
       </td>
       <td className="px-2 py-2.5 whitespace-nowrap align-middle hidden xl:table-cell border-b border-slate-50">
@@ -959,6 +994,9 @@ export function AdsList({
                       </th>
                       <th scope="col" className="w-24 px-2 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider hidden lg:table-cell border-b border-slate-100">
                         Format
+                      </th>
+                      <th scope="col" className="w-24 px-2 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider hidden lg:table-cell border-b border-slate-100">
+                        Channel
                       </th>
                       <th scope="col" className="w-24 px-2 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider hidden xl:table-cell border-b border-slate-100">
                         Visibility

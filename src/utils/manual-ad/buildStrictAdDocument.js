@@ -1,3 +1,5 @@
+import { inferAdChannelFromUrl } from '@/lib/ads/ad-display'
+
 function parseDate(dateVal) {
   if (dateVal == null || dateVal === '') return null
   if (typeof dateVal === 'string' || typeof dateVal === 'number') {
@@ -83,6 +85,7 @@ export function buildStrictAdDocument(data, s3Stored) {
     source: 'manual_upload',
     platform_ad_id: platformAdId,
     original_url: originalUrl,
+    channel: inferAdChannelFromUrl(originalUrl),
     ad_profile_id: null,
     workflow: {
       ai_status: 'pending',

@@ -12,6 +12,7 @@ import {
   insertCaseEvent,
   mapV3ClientStatusToUi,
 } from '@/utils/mongodb/v3-schema'
+import { getAdChannel } from '@/lib/ads/ad-display'
 import { RISK_THRESHOLDS } from '@/app/(dashboard)/cases/riskBuckets'
 
 export { ONLINE_VISIBILITY_VALUES, insertCaseEvent }
@@ -190,6 +191,7 @@ export async function normalizeAdForUi(ad, _db = null) {
     source: ad.source || null,
     platform_ad_id: ad.platform_ad_id || null,
     original_url: ad.original_url || null,
+    channel: getAdChannel(ad),
     ad_profile_id: ad.ad_profile_id ? ad.ad_profile_id.toString() : null,
     workflow: serializeForClient(ad.workflow) ?? null,
     list: serializeForClient(ad.list) ?? null,

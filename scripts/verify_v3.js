@@ -14,6 +14,14 @@ const { MongoClient } = require('mongodb')
 const dotenv = require('dotenv')
 const path = require('path')
 
+const {
+  resolvePostsCollection,
+  SHELL_FILTER,
+  v1FlatFilter,
+  partialV3Filter,
+  POSTS,
+} = require('./lib/schema-health')
+
 dotenv.config({ path: path.join(__dirname, '../.env.local') })
 
 const colors = {
@@ -72,11 +80,25 @@ async function main() {
     log(`Verify v3: ${args.db}`, 'bright')
     log('========================================', 'bright')
 
-    const postsCount = await db.collection('posts').countDocuments({})
+    const postsResolved = await resolvePostsCollection(db)
+    if (!postsResolved) {
+      fail(`No ${POSTS} collection found`)
+      log('\nVerification FAILED', 'red')
+      process.exit(1)
+    }
+    const postsColName = postsResolved.name
+    const postsCol = postsResolved.collection
+
+    const postsCount = await postsCol.countDocuments({})
     const profilesCount = await db.collection('profiles').countDocuments({})
     const embCount = await db.collection('post_embeddings').countDocuments({})
     const eventsCount = await db.collection('case_events').countDocuments({})
 
+    const shellCount = await postsCol.countDocuments(SHELL_FILTER)
+    const v1Count = await postsCol.countDocuments(v1FlatFilter())
+    const partialCount = await postsCol.countDocuments(partialV3Filter())
+
+    log(`posts collection: ${postsColName}`, 'cyan')
     log(`posts: ${postsCount}`, 'cyan')
     log(`profiles: ${profilesCount}`, 'cyan')
     log(`post_embeddings: ${embCount}`, 'cyan')
@@ -85,15 +107,27 @@ async function main() {
     if (postsCount === 0) {
       warn('No posts in target DB')
     }
+    if (shellCount > 0) {
+      fail(`${shellCount} embedding shell(s) remain (no platform, has post_id)`)
+    } else {
+      log('✓ No embedding shells', 'green')
+    }
+    if (v1Count > 0) {
+      fail(`${v1Count} flat v1 post(s) remain (schema_version != 3)`)
+    } else if (postsCount > 0) {
+      log('✓ No flat v1 posts', 'green')
+    }
+    if (partialCount > 0) {
+      fail(`${partialCount} partial v3 post(s) (missing list/workflow/dates)`)
+    } else if (postsCount > 0) {
+      log('✓ No partial v3 posts', 'green')
+    }
 
     // Sample posts for schema checks
     const sampleSize = Math.min(50, postsCount)
     const samplePosts =
       sampleSize > 0
-        ? await db
-            .collection('posts')
-            .aggregate([{ $sample: { size: sampleSize } }])
-            .toArray()
+        ? await postsCol.aggregate([{ $sample: { size: sampleSize } }]).toArray()
         : []
 
     let missingSchema = 0
@@ -136,7 +170,7 @@ async function main() {
         .aggregate([
           {
             $lookup: {
-              from: 'posts',
+              from: postsColName,
               localField: 'post_id',
               foreignField: '_id',
               as: 'post',
@@ -167,14 +201,16 @@ async function main() {
         .toArray()
       let unresolved = 0
       for (const ev of sampleEvents) {
-        const found = await db.collection('posts').findOne(
+        const found = await postsCol.findOne(
           { _id: ev.entity_id },
           { projection: { _id: 1 } }
         )
         if (!found) unresolved++
       }
       if (unresolved > 0) {
-        fail(`${unresolved}/${sampleEvents.length} sampled case_events entity_id missing post`)
+        warn(
+          `${unresolved}/${sampleEvents.length} sampled case_events entity_id missing post (often from deleted embedding shells)`
+        )
       } else if (sampleEvents.length > 0) {
         log('✓ Sampled case_events resolve to posts', 'green')
       }
@@ -196,7 +232,7 @@ async function main() {
       if (profile.schema_version !== 3) {
         fail(`Profile ${profile._id} missing schema_version 3`)
       }
-      const actual = await db.collection('posts').countDocuments({
+      const actual = await postsCol.countDocuments({
         profile_id: profile._id,
       })
       const listed = profile.list?.post_count
@@ -220,7 +256,7 @@ async function main() {
     // Source vs target counts
     if (args.source) {
       const sourceDb = client.db(args.source)
-      const srcPosts = await resolveCount(sourceDb, ['Posts', 'posts'])
+      const srcPosts = await resolveCount(sourceDb, [POSTS, 'posts'])
       const srcProfiles = await resolveCount(sourceDb, ['Profiles', 'profiles'])
       log(
         `Source posts (${srcPosts.name}): ${srcPosts.count} → target posts: ${postsCount}`,

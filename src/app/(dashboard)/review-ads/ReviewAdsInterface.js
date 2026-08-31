@@ -19,6 +19,9 @@ import { getRiskLabel } from '@/app/(dashboard)/cases/riskBuckets'
 import {
   formatDisplayFormat,
   formatAdDate,
+  formatAdChannelLabel,
+  getAdChannel,
+  getAdChannelBadgeClass,
   getAdDisplayTitle,
   getAdDisplayPreview,
   getAdImpressions,
@@ -79,6 +82,7 @@ function getAdListFields(ad) {
   const preview = getAdDisplayPreview(ad)
   const thumb = getAdListThumb(ad)
   const reviewStatus = ad.workflow?.review_status || ad.list?.review_status || 'pending'
+  const channel = getAdChannel(ad)
   return {
     risk: getRiskLabel(ad.score),
     thumb,
@@ -86,6 +90,8 @@ function getAdListFields(ad) {
     preview: preview && preview !== title ? preview : null,
     formatLabel: formatDisplayFormat(ad.list?.display_format),
     formatRaw: ad.list?.display_format,
+    channel,
+    channelLabel: formatAdChannelLabel(channel),
     impressions: getAdImpressions(ad),
     sourced: formatAdDate(ad.sourcing_date),
     startDate: formatAdDate(ad.start_date || ad.posted_date || ad.list?.start_date),
@@ -128,6 +134,16 @@ function AdMetaBadges({ fields, compact = false }) {
       {fields.formatLabel && (
         <span className="text-slate-500" title={fields.formatRaw}>
           {fields.formatLabel}
+        </span>
+      )}
+      {fields.channelLabel && (
+        <span
+          className={cn(
+            'font-medium px-1.5 py-0.5 rounded border',
+            getAdChannelBadgeClass(fields.channel),
+          )}
+        >
+          {fields.channelLabel}
         </span>
       )}
       {fields.impressions.text && (
@@ -250,6 +266,14 @@ function AdMobileCard({ ad, onOpen }) {
           )}>
             {fields.reviewLabel}
           </span>
+          <span
+            className={cn(
+              'font-medium px-1.5 py-0.5 rounded border',
+              getAdChannelBadgeClass(fields.channel),
+            )}
+          >
+            {fields.channelLabel}
+          </span>
           {fields.sourced && (
             <span className="text-slate-400 tabular-nums ml-auto">{fields.sourced}</span>
           )}
@@ -309,6 +333,16 @@ function AdTableRow({ ad, onOpen }) {
       <td className="px-2 py-2.5 whitespace-nowrap align-middle hidden lg:table-cell border-b border-slate-50">
         <span className="text-[11px] text-slate-600 truncate block max-w-[7rem]" title={fields.formatRaw}>
           {fields.formatLabel || '—'}
+        </span>
+      </td>
+      <td className="px-2 py-2.5 whitespace-nowrap align-middle hidden lg:table-cell border-b border-slate-50">
+        <span
+          className={cn(
+            'text-[10px] font-medium px-1.5 py-0.5 rounded border',
+            getAdChannelBadgeClass(fields.channel),
+          )}
+        >
+          {fields.channelLabel}
         </span>
       </td>
       <td className="px-2 py-2.5 whitespace-nowrap align-middle hidden xl:table-cell border-b border-slate-50">
@@ -803,6 +837,9 @@ export function ReviewAdsInterface({
                       </th>
                       <th scope="col" className="w-24 px-2 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider hidden lg:table-cell border-b border-slate-100">
                         Format
+                      </th>
+                      <th scope="col" className="w-24 px-2 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider hidden lg:table-cell border-b border-slate-100">
+                        Channel
                       </th>
                       <th scope="col" className="w-24 px-2 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider hidden xl:table-cell border-b border-slate-100">
                         Delivery
