@@ -1,7 +1,10 @@
 #!/usr/bin/env node
 
 /**
- * Copy lowercase `posts` → capitalized `Posts` in a tenant DB, then drop `posts`.
+ * Legacy cleanup: copy mistaken lowercase `posts` → canonical `Posts`, then drop `posts`.
+ *
+ * Prefer migrate_v3_inplace.js (writes directly to Posts). Use this script only when a
+ * tenant DB still has v3 data in lowercase `posts` with no `Posts` collection.
  *
  * Usage:
  *   node scripts/migrate_posts_to_Posts.js --db Ambani-Data-Search --dry-run

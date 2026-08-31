@@ -4,6 +4,78 @@
 
 const TEMPLATE_VAR_RE = /\{\{[^}]+\}\}/
 
+export const AD_CHANNEL = {
+  INGESTION: 'ingestion',
+  LIBRARY: 'library',
+  FEED: 'feed',
+}
+
+export const AD_CHANNEL_LABELS = {
+  ingestion: 'Ingestion',
+  library: 'Library',
+  feed: 'Feed',
+}
+
+const LIBRARY_URL_RE = /\/ads\/library/i
+const FEED_URL_RE =
+  /\/share\/|\/posts\/|\/reels\/|permalink\.php|story_fbid|fbid|facebook\.com\/\d+\/posts\//i
+
+/** Client Upload Content requests — show as ingestion even when the link is library or feed. */
+function isClientIngestedAd(ad) {
+  if (ad?.channel === AD_CHANNEL.INGESTION) return true
+  if (ad?.submitted_url) return true
+  const ingestionType = String(ad?.ingestion?.type || '')
+  return (
+    ingestionType === 'facebook_share_post' ||
+    ingestionType === 'client_request' ||
+    ingestionType === 'client_requested_link'
+  )
+}
+
+/** Classify by URL shape when the ad was not client-requested. */
+export function inferAdChannelFromUrl(originalUrl) {
+  const url = String(originalUrl || '')
+  if (LIBRARY_URL_RE.test(url)) return AD_CHANNEL.LIBRARY
+  if (FEED_URL_RE.test(url)) return AD_CHANNEL.FEED
+  return AD_CHANNEL.FEED
+}
+
+export function getAdChannel(ad) {
+  const stored = ad?.channel
+  if (stored === 'ads_library') return AD_CHANNEL.LIBRARY
+  if (
+    stored === AD_CHANNEL.INGESTION ||
+    stored === AD_CHANNEL.LIBRARY ||
+    stored === AD_CHANNEL.FEED
+  ) {
+    return stored
+  }
+  if (isClientIngestedAd(ad)) return AD_CHANNEL.INGESTION
+  const url =
+    ad?.original_url ||
+    ad?.original_link ||
+    ad?.ingestion?.source_url ||
+    ad?.submitted_url ||
+    ''
+  return inferAdChannelFromUrl(url)
+}
+
+export function formatAdChannelLabel(channel) {
+  if (channel === 'ads_library') return AD_CHANNEL_LABELS.library
+  return AD_CHANNEL_LABELS[channel] || AD_CHANNEL_LABELS.feed
+}
+
+export function getAdChannelBadgeClass(channel) {
+  const resolved = channel === 'ads_library' ? AD_CHANNEL.LIBRARY : channel
+  if (resolved === AD_CHANNEL.INGESTION) {
+    return 'bg-violet-50 text-violet-700 border-violet-100'
+  }
+  if (resolved === AD_CHANNEL.LIBRARY) {
+    return 'bg-indigo-50 text-indigo-700 border-indigo-100'
+  }
+  return 'bg-amber-50 text-amber-800 border-amber-100'
+}
+
 export const DISPLAY_FORMAT_LABELS = {
   DPA: 'Dynamic Product Ad',
   CAROUSEL: 'Carousel',
