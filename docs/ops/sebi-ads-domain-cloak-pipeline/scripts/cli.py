@@ -27,8 +27,11 @@ PIPELINE_ROOT = Path(
 sys.path.insert(0, str(PIPELINE_ROOT))
 
 from database.connection import close_connection, connect_to_database  # noqa: E402
+from datetime import datetime
+
 from sebi_report.apply import apply_empty_frames, load_unique_domains  # noqa: E402
 from sebi_report.analyze_intel import run_intel_batch  # noqa: E402
+from sebi_report.bulk_review_cloak_ads import run_bulk_review_cloak_ads, write_bulk_review_artifact  # noqa: E402
 from sebi_report.cloak_probe import run_cloak_probe_batch  # noqa: E402
 from sebi_report.extract import extract_unique_domains, write_extract_artifacts  # noqa: E402
 
@@ -201,6 +204,54 @@ def cmd_cloak_probe(args: argparse.Namespace) -> int:
     return 0 if summary.get("ok") else 1
 
 
+def _parse_ymd(value: str) -> datetime:
+    return datetime.strptime(value, "%Y-%m-%d")
+
+
+def cmd_bulk_review_cloak(args: argparse.Namespace) -> int:
+    """Bulk-review library ads with known cloak scam landing domains."""
+    _set_db(args.db)
+    start = _parse_ymd(args.start)
+    end = _parse_ymd(args.end)
+    if end <= start:
+        print("--end must be after --start", file=sys.stderr)
+        return 1
+
+    db = connect_to_database()
+    try:
+        result = run_bulk_review_cloak_ads(
+            db,
+            start=start,
+            end=end,
+            dry_run=not args.apply,
+            reviewer_email=args.reviewer,
+            only_pending=not args.include_reviewed,
+        )
+        out_path = Path(args.out) / "bulk_review_cloak_result.json"
+        write_bulk_review_artifact(result, out_path)
+        summary = {
+            "ok": result.get("ok"),
+            "dry_run": result.get("dry_run"),
+            "date_range": result.get("date_range"),
+            "stats": result.get("stats"),
+            "scam_domains_loaded": result.get("scam_domains_loaded"),
+            "targets": len(result.get("targets") or []),
+            "apply": {
+                k: result["apply"][k]
+                for k in ("dry_run", "reviewer_email", "skipped", "errors")
+                if k in result.get("apply", {})
+            },
+        }
+        for key in ("would_update", "updated"):
+            if key in result.get("apply", {}):
+                summary["apply"][key] = result["apply"][key]
+        print(json.dumps(summary, indent=2))
+        print(f"wrote {out_path}")
+    finally:
+        close_connection()
+    return 0
+
+
 def _add_common(p: argparse.ArgumentParser) -> None:
     p.add_argument("--db", default="SEBI-Data-Search")
     p.add_argument("--out", default=str(ROOT / "out"), help="Artifact directory")
@@ -257,6 +308,26 @@ def main(argv: list[str] | None = None) -> int:
     p_cloak.add_argument("--headed", action="store_true")
     p_cloak.add_argument("--no-write", action="store_true", help="Do not update Mongo")
     p_cloak.set_defaults(func=cmd_cloak_probe)
+
+    p_review = sub.add_parser(
+        "bulk-review-cloak",
+        help="Bulk-submit library ad reviews for known cloak scam domains (dry-run by default)",
+    )
+    _add_common(p_review)
+    p_review.add_argument("--start", default="2026-08-30", help="Inclusive start date (YYYY-MM-DD, sourced_at)")
+    p_review.add_argument(
+        "--end",
+        default="2026-09-02",
+        help="Exclusive end date (YYYY-MM-DD). Use 2026-09-02 to include all of Sep 1.",
+    )
+    p_review.add_argument("--apply", action="store_true", help="Write reviews to Mongo (default: dry-run)")
+    p_review.add_argument("--reviewer", default="sebi-reviewer@contrails.ai")
+    p_review.add_argument(
+        "--include-reviewed",
+        action="store_true",
+        help="Include ads already marked reviewed (default: pending only)",
+    )
+    p_review.set_defaults(func=cmd_bulk_review_cloak)
 
     args = parser.parse_args(argv)
     if args.cmd == "apply" and not args.from_file:

@@ -57,6 +57,9 @@ function applySignedMedia(media = [], signedByUrl) {
   return media.map((m) => ({
     ...serializeForClient(m),
     signedUrl: m?.s3_url ? signedByUrl.get(m.s3_url) || null : null,
+    thumbnailSignedUrl: m?.thumbnail_s3_url
+      ? signedByUrl.get(m.thumbnail_s3_url) || null
+      : null,
   }))
 }
 
@@ -149,7 +152,8 @@ export async function normalizeAdForUi(ad, _db = null) {
 
   const urlsToSign = [
     ...media.map((m) => m?.s3_url),
-    ...cardsRaw.flatMap((card) => (card?.media || []).map((m) => m?.s3_url)),
+    ...media.map((m) => m?.thumbnail_s3_url),
+    ...cardsRaw.flatMap((card) => (card?.media || []).flatMap((m) => [m?.s3_url, m?.thumbnail_s3_url])),
     advertiser.profile_pic_s3,
   ]
   const signedByUrl = await signUniqueS3Urls(urlsToSign)

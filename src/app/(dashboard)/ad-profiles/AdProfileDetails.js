@@ -18,6 +18,7 @@ import { Badge } from '@/components/ui/badge'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import { format } from 'date-fns'
+import { getAdSourceLinkLabel } from '@/lib/ads/ad-display'
 
 const PlatformIcon = ({ platform, className }) => {
     const p = platform?.toLowerCase()
@@ -412,7 +413,7 @@ export default function AdProfileDetailPanel({ profile, project, isOpen, onClose
                                                     <div className="ml-auto">
                                                         {c.original_url && (
                                                             <a href={c.original_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-600 hover:text-blue-800 hover:underline bg-blue-50 px-2 py-0.5 rounded-md">
-                                                                Ads Library <ExternalLink className="w-2.5 h-2.5" />
+                                                                {getAdSourceLinkLabel(c)} <ExternalLink className="w-2.5 h-2.5" />
                                                             </a>
                                                         )}
                                                     </div>
@@ -447,7 +448,7 @@ export default function AdProfileDetailPanel({ profile, project, isOpen, onClose
                                                         </Link>
                                                         {c.original_url && (
                                                             <a href={c.original_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-[10px] font-bold text-slate-600 hover:text-blue-600 px-2 py-1 rounded-md border border-slate-100 group/link">
-                                                                Ads Library
+                                                                {getAdSourceLinkLabel(c)}
                                                                 <ExternalLink className="w-2.5 h-2.5 opacity-40 group-hover/link:opacity-100 transition-all" />
                                                             </a>
                                                         )}

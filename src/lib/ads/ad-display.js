@@ -76,6 +76,19 @@ export function getAdChannelBadgeClass(channel) {
   return 'bg-amber-50 text-amber-800 border-amber-100'
 }
 
+/** UI label for platform_ad_id — feed posts show Post ID. */
+export function getAdIdentityLabel(ad) {
+  return getAdChannel(ad) === AD_CHANNEL.FEED ? 'Post ID' : 'Ad ID'
+}
+
+/** UI label for original_url link — channel-aware. */
+export function getAdSourceLinkLabel(ad) {
+  const channel = getAdChannel(ad)
+  if (channel === AD_CHANNEL.FEED) return 'View Post'
+  if (channel === AD_CHANNEL.LIBRARY) return 'Ads Library'
+  return 'Source'
+}
+
 export const DISPLAY_FORMAT_LABELS = {
   DPA: 'Dynamic Product Ad',
   CAROUSEL: 'Carousel',
@@ -134,6 +147,97 @@ function mediaPlayableUrl(item, { allowS3 = false } = {}) {
   return item?.signedUrl || (allowS3 ? item?.s3_url : null) || null
 }
 
+function mediaPosterUrl(item, { allowS3 = false } = {}) {
+  return (
+    item?.thumbnailSignedUrl ||
+    (allowS3 ? item?.thumbnail_s3_url : null) ||
+    item?.thumbnail_url ||
+    null
+  )
+}
+
+function resolveMediaCandidates(ad, card = null) {
+  const content = ad?.content || {}
+  const mode = getAdCreativeMode(ad)
+  if (mode === 'card') {
+    const active = card || content.cards?.[0] || null
+    return Array.isArray(active?.media) ? active.media : []
+  }
+  return Array.isArray(content.media) ? content.media : []
+}
+
+/**
+ * All playable media items for the active creative scope.
+ * @returns {{ type: 'image' | 'video', url: string, role?: string, posterUrl?: string }[]}
+ */
+export function getAdViewableMedia(ad, card = null) {
+  const candidates = resolveMediaCandidates(ad, card)
+  const items = []
+
+  for (const item of candidates) {
+    const url = mediaPlayableUrl(item, { allowS3: true })
+    if (!url) continue
+    const type = mediaTypeOf(item) || 'image'
+    items.push({
+      type,
+      url,
+      role: item?.role || null,
+      posterUrl: type === 'video' ? mediaPosterUrl(item, { allowS3: true }) : null,
+    })
+  }
+
+  if (items.length === 0 && ad?.signedImageUrl) {
+    const looksVideo = /\.(mp4|webm|mov)(\?|$)/i.test(String(ad.signedImageUrl))
+    items.push({
+      type: looksVideo ? 'video' : 'image',
+      url: ad.signedImageUrl,
+      role: null,
+      posterUrl: null,
+    })
+  }
+
+  return items
+}
+
+/** Default filmstrip index — thumbnail / first image first. */
+export function getDefaultMediaIndex(viewableMedia) {
+  if (!Array.isArray(viewableMedia) || viewableMedia.length === 0) return 0
+  const thumbIdx = viewableMedia.findIndex((m) => m.role === 'thumbnail')
+  if (thumbIdx >= 0) return thumbIdx
+  const imageIdx = viewableMedia.findIndex((m) => m.type === 'image')
+  if (imageIdx >= 0) return imageIdx
+  return 0
+}
+
+/**
+ * Navigation mode for detail creative stage.
+ * @returns {{ kind: 'cards' | 'media' | 'none', count: number }}
+ */
+export function getAdMediaNav(ad, card = null) {
+  const content = ad?.content || {}
+  const cards = Array.isArray(content.cards) ? content.cards : []
+  if (cards.length > 1) {
+    return { kind: 'cards', count: cards.length }
+  }
+  const viewable = getAdViewableMedia(ad, card)
+  if (viewable.length > 1) {
+    return { kind: 'media', count: viewable.length }
+  }
+  return { kind: 'none', count: Math.max(viewable.length, 1) }
+}
+
+/** Subtitle for creative panel — card vs flat media navigation. */
+export function getAdCreativeNavLabel(ad, { activeCard = 0, activeMediaIndex = 0, card = null } = {}) {
+  const nav = getAdMediaNav(ad, card)
+  if (nav.kind === 'cards') {
+    return `Card ${Math.min(activeCard, nav.count - 1) + 1} of ${nav.count}`
+  }
+  if (nav.kind === 'media') {
+    return `Media ${Math.min(activeMediaIndex, nav.count - 1) + 1} of ${nav.count}`
+  }
+  return 'Single creative'
+}
+
 /** Normalize body which may be a string or `{ text }` from Meta ingest. */
 function resolveBodyText(body) {
   if (body == null) return null
@@ -162,9 +266,18 @@ function flattenAdMedia(ad) {
  */
 export function getAdListThumb(ad) {
   const media = flattenAdMedia(ad)
-  const firstImage = media.find((m) => mediaTypeOf(m) === 'image' && mediaPlayableUrl(m))
-  if (firstImage) {
-    return { kind: 'image', url: mediaPlayableUrl(firstImage) }
+  const thumbImage = media.find(
+    (m) =>
+      (m.role === 'thumbnail' || mediaTypeOf(m) === 'image') && mediaPlayableUrl(m),
+  )
+  if (thumbImage) {
+    return { kind: 'image', url: mediaPlayableUrl(thumbImage) }
+  }
+  const videoWithPoster = media.find(
+    (m) => mediaTypeOf(m) === 'video' && mediaPosterUrl(m),
+  )
+  if (videoWithPoster) {
+    return { kind: 'image', url: mediaPosterUrl(videoWithPoster) }
   }
   const hasVideo = media.some((m) => mediaTypeOf(m) === 'video')
   if (hasVideo) return { kind: 'video' }
@@ -181,36 +294,19 @@ export function getAdListThumb(ad) {
  * Primary media for detail stage (active card or top-level).
  * @returns {{ type: 'image' | 'video' | null, url?: string }}
  */
-export function getAdPrimaryMedia(ad, card = null) {
-  const content = ad?.content || {}
-  const mode = getAdCreativeMode(ad)
-  let candidates = []
-
-  if (mode === 'card') {
-    const active = card || content.cards?.[0] || null
-    candidates = Array.isArray(active?.media) ? active.media : []
-  } else {
-    candidates = Array.isArray(content.media) ? content.media : []
+export function getAdPrimaryMedia(ad, card = null, mediaIndex = null) {
+  const viewable = getAdViewableMedia(ad, card)
+  if (viewable.length === 0) return { type: null }
+  const idx =
+    mediaIndex == null
+      ? getDefaultMediaIndex(viewable)
+      : Math.min(Math.max(0, mediaIndex), viewable.length - 1)
+  const item = viewable[idx]
+  return {
+    type: item.type,
+    url: item.url,
+    poster: item.posterUrl || undefined,
   }
-
-  // allowS3: review edit drafts may only have s3_url before re-sign
-  const withUrl = candidates.find((m) => mediaPlayableUrl(m, { allowS3: true }))
-  if (withUrl) {
-    return {
-      type: mediaTypeOf(withUrl) || 'image',
-      url: mediaPlayableUrl(withUrl, { allowS3: true }),
-    }
-  }
-
-  // Fallbacks used by older list aliases
-  if (ad?.signedImageUrl) {
-    const looksVideo = /\.(mp4|webm|mov)(\?|$)/i.test(String(ad.signedImageUrl))
-    return {
-      type: looksVideo ? 'video' : 'image',
-      url: ad.signedImageUrl,
-    }
-  }
-  return { type: null }
 }
 
 /** Thumb kind for a single media item (e.g. card filmstrip). */
@@ -219,7 +315,11 @@ export function getMediaItemThumb(item) {
   const type = mediaTypeOf(item)
   const url = mediaPlayableUrl(item, { allowS3: true })
   if (type === 'image' && url) return { kind: 'image', url }
-  if (type === 'video') return { kind: 'video' }
+  if (type === 'video') {
+    const poster = mediaPosterUrl(item, { allowS3: true })
+    if (poster) return { kind: 'image', url: poster }
+    return { kind: 'video' }
+  }
   if (url && !/\.(mp4|webm|mov)(\?|$)/i.test(String(url))) {
     return { kind: 'image', url }
   }

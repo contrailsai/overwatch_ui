@@ -26,6 +26,7 @@ import {
   getAdDisplayPreview,
   getAdImpressions,
   getAdListThumb,
+  getAdSourceLinkLabel,
 } from '@/lib/ads/ad-display'
 import { AdMediaThumb } from '@/components/ads/AdMediaThumb'
 import { AdAdvertiserAvatar } from '@/components/ads/AdAdvertiserAvatar'
@@ -951,7 +952,7 @@ export function ReviewAdsInterface({
                 rel="noreferrer"
                 className="ml-auto text-xs text-blue-600 flex items-center gap-1"
               >
-                Ads Library <ExternalLink className="h-3 w-3" />
+                {getAdSourceLinkLabel(selectedAd)} <ExternalLink className="h-3 w-3" />
               </a>
             )}
           </div>

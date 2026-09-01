@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils'
 export function AdMediaStage({ media, className, emptyIconClassName = 'h-12 w-12 text-slate-300' }) {
   const type = media?.type
   const url = media?.url
+  const poster = media?.poster
 
   return (
     <div
@@ -21,6 +22,7 @@ export function AdMediaStage({ media, className, emptyIconClassName = 'h-12 w-12
       {type === 'video' && url ? (
         <video
           src={url}
+          poster={poster || undefined}
           controls
           preload="metadata"
           playsInline

@@ -38,8 +38,10 @@ function normalizeAdPlatform(raw) {
 
 function extractAdArchiveId(post) {
   const url = String(post.original_url || post.ingestion?.source_url || '')
-  const match = url.match(/ads\/library\/\?id=(\d+)/i)
-  if (match) return match[1]
+  const libraryMatch = url.match(/ads\/library\/\?id=(\d+)/i)
+  if (libraryMatch) return libraryMatch[1]
+  const postMatch = url.match(/\/posts\/(\d+)/i)
+  if (postMatch) return postMatch[1]
   return String(post.platform_post_id || post.platform_ad_id || '').trim()
 }
 
