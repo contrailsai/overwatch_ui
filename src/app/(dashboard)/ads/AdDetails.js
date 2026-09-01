@@ -399,6 +399,7 @@ export default function AdDetailPanel({
 
               {mediaNav.kind === 'cards' && (
                 <AdMediaNavigator
+                  theme="light"
                   items={cards}
                   activeIndex={activeCard}
                   onSelect={(i) => {
@@ -410,6 +411,7 @@ export default function AdDetailPanel({
               )}
               {mediaNav.kind === 'media' && (
                 <AdMediaNavigator
+                  theme="light"
                   items={viewableMedia}
                   activeIndex={activeMediaIndex}
                   onSelect={setActiveMediaIndex}
