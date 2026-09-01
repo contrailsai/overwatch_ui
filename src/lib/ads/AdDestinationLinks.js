@@ -1,6 +1,7 @@
 'use client'
 
-import { ExternalLink, Globe, Eye } from 'lucide-react'
+import { useState } from 'react'
+import { ChevronDown, ChevronUp, ExternalLink, Globe, Eye } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { getAdDestinationLinks } from '@/lib/ads/ad-display'
@@ -112,6 +113,7 @@ export function AdTargetUrlsInfo({
   ad,
   domainsByHost = null,
   domainsHrefBase = null,
+  hideHeading = false,
   className,
 }) {
   const targets = getAdTargetDomains(ad, domainsByHost)
@@ -119,12 +121,14 @@ export function AdTargetUrlsInfo({
 
   return (
     <div className={cn('rounded-xl border border-rose-100 bg-rose-50/40 px-3.5 py-3 space-y-2.5', className)}>
-      <div className="flex items-center gap-2">
-        <Globe className="h-3.5 w-3.5 text-rose-600 shrink-0" />
-        <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-rose-700">
-          Target URLs
-        </p>
-      </div>
+      {!hideHeading ? (
+        <div className="flex items-center gap-2">
+          <Globe className="h-3.5 w-3.5 text-rose-600 shrink-0" />
+          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-rose-700">
+            Target URLs
+          </p>
+        </div>
+      ) : null}
       <ul className="space-y-2.5">
         {targets.map((domain) => {
           const domainHref = domain._id && domainsHrefBase
@@ -214,6 +218,7 @@ export function AdLinkedDomainsAnalysis({
   ad,
   domainsByHost = null,
   domainsHrefBase = null,
+  hideHeading = false,
   className,
 }) {
   const linked = getAdLinkedDomains(ad, domainsByHost)
@@ -221,9 +226,11 @@ export function AdLinkedDomainsAnalysis({
   if (domainsByHost == null) {
     return (
       <div className={cn('space-y-2', className)}>
-        <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-          Linked Domain Analysis
-        </h4>
+        {!hideHeading ? (
+          <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+            Linked Domain Analysis
+          </h4>
+        ) : null}
         <p className="text-xs text-slate-400 italic">Loading domain matches…</p>
       </div>
     )
@@ -232,9 +239,11 @@ export function AdLinkedDomainsAnalysis({
   if (linked.length === 0) {
     return (
       <div className={cn('space-y-2', className)}>
-        <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-          Linked Domain Analysis
-        </h4>
+        {!hideHeading ? (
+          <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+            Linked Domain Analysis
+          </h4>
+        ) : null}
         <p className="text-xs text-slate-400 italic">
           No reviewed domains matched this ad&apos;s destinations.
         </p>
@@ -244,9 +253,11 @@ export function AdLinkedDomainsAnalysis({
 
   return (
     <div className={cn('space-y-2.5', className)}>
-      <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-        Linked Domain Analysis
-      </h4>
+      {!hideHeading ? (
+        <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+          Linked Domain Analysis
+        </h4>
+      ) : null}
       <ul className="space-y-2.5">
         {linked.map((domain) => {
           const domainHref = domain._id && domainsHrefBase
@@ -349,6 +360,105 @@ export function AdLinkedDomainsAnalysis({
           )
         })}
       </ul>
+    </div>
+  )
+}
+
+/**
+ * Review-ads domain signal strip: compact scam/cloak targets by default,
+ * expandable to full linked-domain dossier cards.
+ */
+export function AdDomainAnalysisPanel({
+  ad,
+  domainsByHost = null,
+  domainsHrefBase = null,
+  className,
+}) {
+  const [showDetails, setShowDetails] = useState(false)
+
+  const hosts = getAdDestinationLinks(ad)
+    .map((l) => l.host)
+    .filter(Boolean)
+  if (hosts.length === 0) return null
+
+  const isLoading = domainsByHost == null
+  const linked = getAdLinkedDomains(ad, domainsByHost)
+  const targets = getAdTargetDomains(ad, domainsByHost)
+
+  if (!isLoading && linked.length === 0) return null
+
+  const hasScamTargets = targets.some((d) => d.hasScamLander)
+  const hasCloakOnly = !hasScamTargets && targets.some((d) => d.cloakUnlocked)
+
+  const chromeClass = showDetails || isLoading
+    ? 'border-slate-200 bg-[#fbfcfd] border-l-slate-300'
+    : hasScamTargets
+      ? 'border-rose-200 bg-rose-50/35 border-l-rose-500'
+      : hasCloakOnly
+        ? 'border-amber-200 bg-amber-50/40 border-l-amber-500'
+        : 'border-slate-200 bg-[#fbfcfd] border-l-slate-300'
+
+  return (
+    <div className={cn('rounded-2xl border border-l-[3px] p-4 space-y-3', chromeClass, className)}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-2 min-w-0 flex-wrap">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+            Domain analysis
+          </p>
+          {!isLoading && linked.length > 0 ? (
+            <span className="text-[10px] font-medium text-slate-400 tabular-nums">
+              {linked.length} matched
+            </span>
+          ) : null}
+        </div>
+        <button
+          type="button"
+          disabled={isLoading}
+          aria-expanded={showDetails}
+          aria-controls="ad-domain-analysis-body"
+          onClick={() => setShowDetails((prev) => !prev)}
+          className={cn(
+            'inline-flex items-center gap-1 h-7 text-xs font-semibold text-slate-500 shrink-0 transition-colors',
+            isLoading ? 'opacity-50 cursor-not-allowed' : 'hover:text-slate-700',
+          )}
+        >
+          {showDetails ? 'Hide details' : 'Show details'}
+          {showDetails ? (
+            <ChevronUp className="h-3.5 w-3.5" />
+          ) : (
+            <ChevronDown className="h-3.5 w-3.5" />
+          )}
+        </button>
+      </div>
+
+      <div id="ad-domain-analysis-body">
+        {isLoading ? (
+          <div className="space-y-2">
+            <div className="h-10 bg-slate-100 animate-pulse rounded-lg" />
+            <div className="h-10 bg-slate-100 animate-pulse rounded-lg" />
+          </div>
+        ) : showDetails ? (
+          <div className="animate-in slide-in-from-top-2 fade-in duration-200">
+            <AdLinkedDomainsAnalysis
+              ad={ad}
+              domainsByHost={domainsByHost}
+              domainsHrefBase={domainsHrefBase}
+              hideHeading
+            />
+          </div>
+        ) : targets.length > 0 ? (
+          <AdTargetUrlsInfo
+            ad={ad}
+            domainsByHost={domainsByHost}
+            domainsHrefBase={domainsHrefBase}
+            hideHeading
+          />
+        ) : (
+          <p className="text-xs text-slate-500 italic">
+            No scam/cloak targets flagged on matched domains.
+          </p>
+        )}
+      </div>
     </div>
   )
 }

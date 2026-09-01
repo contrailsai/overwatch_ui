@@ -22,6 +22,9 @@ KNOWN_CLOAK_PAIRS: list[tuple[str, str]] = [
     ("pEl8X", "tup5min"),
     ("pEl8X", "tupscdn"),
     ("pEl8X", "clstup"),
+    ("pEl8X", "sacdpz111"),
+    ("pEl8X", "priyadpz111"),
+    ("pEl8X", "nirmz4el"),
 ]
 
 KNOWN_CLOAK_KEYS = frozenset(k.lower() for k, _ in KNOWN_CLOAK_PAIRS)

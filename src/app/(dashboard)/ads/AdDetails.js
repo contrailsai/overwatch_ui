@@ -22,11 +22,16 @@ import {
   formatAdDate,
   getAdCreativeFields,
   getAdCreativeMode,
+  getAdCreativeNavLabel,
   getAdDestinationLinks,
+  getAdIdentityLabel,
   getAdImpressions,
+  getAdMediaNav,
   getAdPrimaryMedia,
+  getAdSourceLinkLabel,
+  getAdViewableMedia,
   getAdVisibilityLabel,
-  getMediaItemThumb,
+  getDefaultMediaIndex,
   isTemplatePlaceholder,
 } from '@/lib/ads/ad-display'
 import {
@@ -36,7 +41,7 @@ import {
   adDestinationLabel,
 } from '@/lib/ads/AdDestinationLinks'
 import { AdMediaStage } from '@/components/ads/AdMediaStage'
-import { AdMediaThumb } from '@/components/ads/AdMediaThumb'
+import { AdMediaCounter, AdMediaNavigator } from '@/components/ads/AdMediaNavigator'
 import { AdAdvertiserAvatar } from '@/components/ads/AdAdvertiserAvatar'
 import { AdBodyContacts } from '@/components/ads/AdBodyContacts'
 import { getDomainsByNames } from '@/app/(dashboard)/domains/actions'
@@ -152,6 +157,7 @@ export default function AdDetailPanel({
   const [clientStatus, setClientStatus] = useState('To Be Reviewed')
   const [showProcessed, setShowProcessed] = useState(false)
   const [activeCard, setActiveCard] = useState(0)
+  const [activeMediaIndex, setActiveMediaIndex] = useState(0)
   const [domainsByHost, setDomainsByHost] = useState(null)
   const [copiedId, setCopiedId] = useState(false)
 
@@ -161,6 +167,7 @@ export default function AdDetailPanel({
     setClientStatus(ad.client_status || 'To Be Reviewed')
     setNoteText('')
     setActiveCard(0)
+    setActiveMediaIndex(getDefaultMediaIndex(getAdViewableMedia(ad)))
     setShowProcessed(false)
     setCopiedId(false)
     setDomainsByHost(null)
@@ -218,10 +225,23 @@ export default function AdDetailPanel({
     : [{ title: ad?.content?.title, media: ad?.content?.media || [] }]
   const currentCard = cards[Math.min(activeCard, cards.length - 1)] || cards[0]
   const creativeMode = getAdCreativeMode(ad)
-  const primaryMedia = getAdPrimaryMedia(
+  const mediaNav = getAdMediaNav(ad, creativeMode === 'card' ? currentCard : null)
+  const viewableMedia = getAdViewableMedia(
     ad,
     creativeMode === 'card' ? currentCard : null,
   )
+  const primaryMedia = getAdPrimaryMedia(
+    ad,
+    creativeMode === 'card' ? currentCard : null,
+    activeMediaIndex,
+  )
+  const identityLabel = getAdIdentityLabel(ad)
+  const sourceLinkLabel = getAdSourceLinkLabel(ad)
+  const creativeNavLabel = getAdCreativeNavLabel(ad, {
+    activeCard,
+    activeMediaIndex,
+    card: creativeMode === 'card' ? currentCard : null,
+  })
   const creative = getAdCreativeFields(ad, currentCard)
   const impressions = getAdImpressions(ad)
   const formatLabel = formatDisplayFormat(ad?.list?.display_format || ad?.content?.display_format)
@@ -301,7 +321,7 @@ export default function AdDetailPanel({
             {/* Row 2 — compact meta + status (text-only height) */}
             <div className="flex items-center gap-x-2 gap-y-1 flex-wrap min-w-0 pl-0 lg:pl-[4.25rem]">
               <div className="flex items-center gap-1 min-w-0 text-[11px] text-slate-500 leading-none">
-                <span className="shrink-0">Ad ID</span>
+                <span className="shrink-0">{identityLabel}</span>
                 <button
                   type="button"
                   onClick={async () => {
@@ -315,7 +335,7 @@ export default function AdDetailPanel({
                       /* ignore */
                     }
                   }}
-                  title="Copy Ad ID"
+                  title={`Copy ${identityLabel}`}
                   className="inline-flex items-center gap-1 font-mono text-slate-700 hover:text-blue-700 hover:underline truncate max-w-[14rem] sm:max-w-[18rem]"
                 >
                   <span className="truncate">{ad.platform_ad_id || ad._id}</span>
@@ -334,7 +354,7 @@ export default function AdDetailPanel({
                       rel="noreferrer"
                       className="text-blue-600 inline-flex items-center gap-0.5 hover:underline shrink-0"
                     >
-                      Ads Library <ExternalLink className="h-3 w-3" />
+                      {sourceLinkLabel} <ExternalLink className="h-3 w-3" />
                     </a>
                   </>
                 )}
@@ -371,49 +391,29 @@ export default function AdDetailPanel({
                   className="absolute inset-0"
                   emptyIconClassName="h-12 w-12 text-slate-600"
                 />
-                {cards.length > 1 && (
-                  <div className="absolute top-2.5 left-2.5 rounded-md bg-black/55 backdrop-blur-sm px-2 py-0.5 text-[10px] font-semibold tabular-nums text-white/90 tracking-wide z-10">
-                    {Math.min(activeCard, cards.length - 1) + 1} / {cards.length}
-                  </div>
-                )}
+                <AdMediaCounter
+                  activeIndex={mediaNav.kind === 'cards' ? activeCard : activeMediaIndex}
+                  total={mediaNav.count}
+                />
               </div>
 
-              {cards.length > 1 && (
-                <div
-                  className="w-[72px] shrink-0 rounded-xl border border-slate-200 bg-[#0c1015] flex flex-col items-center gap-1.5 py-2 px-1.5 overflow-y-auto custom-scrollbar"
-                  role="listbox"
-                  aria-label="Ad cards"
-                >
-                  {cards.map((card, i) => {
-                    const thumb = getMediaItemThumb(card.media?.[0])
-                    const isActive = i === activeCard
-                    return (
-                      <button
-                        key={i}
-                        type="button"
-                        role="option"
-                        aria-selected={isActive}
-                        onClick={() => setActiveCard(i)}
-                        className={cn(
-                          'relative h-14 w-14 rounded-md overflow-hidden border shrink-0 transition-all duration-150',
-                          isActive
-                            ? 'border-sky-400 ring-2 ring-sky-400/40'
-                            : 'border-white/15 opacity-70 hover:opacity-100 hover:border-white/35',
-                        )}
-                      >
-                        <AdMediaThumb
-                          kind={thumb.kind}
-                          src={thumb.url}
-                          className="h-full w-full bg-slate-800"
-                          iconClassName="h-3.5 w-3.5"
-                        />
-                        <span className="absolute bottom-0 inset-x-0 bg-black/55 text-[9px] font-bold tabular-nums text-white/90 text-center leading-4">
-                          {i + 1}
-                        </span>
-                      </button>
-                    )
-                  })}
-                </div>
+              {mediaNav.kind === 'cards' && (
+                <AdMediaNavigator
+                  items={cards}
+                  activeIndex={activeCard}
+                  onSelect={(i) => {
+                    setActiveCard(i)
+                    setActiveMediaIndex(getDefaultMediaIndex(getAdViewableMedia(ad, cards[i])))
+                  }}
+                  getThumbItem={(_, i) => cards[i]?.media?.[0]}
+                />
+              )}
+              {mediaNav.kind === 'media' && (
+                <AdMediaNavigator
+                  items={viewableMedia}
+                  activeIndex={activeMediaIndex}
+                  onSelect={setActiveMediaIndex}
+                />
               )}
             </div>
 
@@ -423,9 +423,7 @@ export default function AdDetailPanel({
                   Ad creative
                 </p>
                 <p className="text-[11px] text-slate-500 tabular-nums">
-                  {cards.length > 1
-                    ? `Card ${Math.min(activeCard, cards.length - 1) + 1} of ${cards.length}`
-                    : 'Single creative'}
+                  {creativeNavLabel}
                   {formatLabel ? ` · ${formatLabel}` : ''}
                 </p>
               </div>

@@ -22,6 +22,7 @@ import { cn } from '@/lib/utils'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { format } from 'date-fns'
 import { DateFilterPopover } from '@/app/(dashboard)/cases/DateFilterPopover'
+import { getAdSourceLinkLabel } from '@/lib/ads/ad-display'
 
 const isPendingReviewAd = (ad) =>
     ad?.workflow?.review_status === 'pending' || ad?.list?.review_threat_score == null
@@ -686,7 +687,7 @@ function AdProfileDetailPanel({ profile, profiles = [], project, isOpen, onClose
                                                                     rel="noreferrer"
                                                                     className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-600 hover:text-blue-800 hover:underline bg-blue-50 px-2 py-0.5 rounded-md"
                                                                 >
-                                                                    Ads Library <ExternalLink className="w-2.5 h-2.5" />
+                                                                    {getAdSourceLinkLabel(c)} <ExternalLink className="w-2.5 h-2.5" />
                                                                 </a>
                                                             )}
                                                         </div>

@@ -175,6 +175,10 @@ Canonical identity: `{ platform, platform_ad_id }`. Unique index intent: `{ plat
 
 Client-requested ads **always display `ingestion`**, even when the submitted link resolves to a library or feed URL internally. Ingest may set `channel: "ingestion"` and/or `submitted_url` at write time.
 
+**UI labels by channel:** feed-channel ads show `platform_ad_id` as **Post ID** and link to `original_url` as **View Post**; library ads show **Ad ID** / **Ads Library**; ingestion shows **Ad ID** / **Source**.
+
+**Media navigation:** when `content.cards.length > 1`, the client uses card carousel (Meta DPA/carousel). When `content.cards` is empty but `content.media.length > 1` (typical for migrated feed posts with thumbnail + video), the client shows a flat **media carousel** so reviewers can browse every captured asset. Single-item creatives render without a filmstrip.
+
 ### Mapping from Meta Ads Library payload
 
 | Meta field | Ads field |

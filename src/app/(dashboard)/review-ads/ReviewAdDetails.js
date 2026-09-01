@@ -36,19 +36,24 @@ import {
   formatAdDate,
   getAdCreativeFields,
   getAdCreativeMode,
+  getAdCreativeNavLabel,
   getAdDestinationLinks,
+  getAdIdentityLabel,
   getAdImpressions,
+  getAdMediaNav,
   getAdPrimaryMedia,
-  getMediaItemThumb,
+  getAdSourceLinkLabel,
+  getAdViewableMedia,
+  getDefaultMediaIndex,
   isTemplatePlaceholder,
 } from '@/lib/ads/ad-display'
 import {
   AdDestinationLinks,
-  AdTargetUrlsInfo,
+  AdDomainAnalysisPanel,
   adDestinationLabel,
 } from '@/lib/ads/AdDestinationLinks'
 import { AdMediaStage } from '@/components/ads/AdMediaStage'
-import { AdMediaThumb } from '@/components/ads/AdMediaThumb'
+import { AdMediaCounter, AdMediaNavigator } from '@/components/ads/AdMediaNavigator'
 import { AdAdvertiserAvatar } from '@/components/ads/AdAdvertiserAvatar'
 import { AdBodyContacts } from '@/components/ads/AdBodyContacts'
 import { getDomainsByNames } from '@/app/(dashboard)/domains/actions'
@@ -112,6 +117,7 @@ export default function ReviewAdForm({
   const [localAd, setLocalAd] = useState(ad)
   const [showSuccess, setShowSuccess] = useState(false)
   const [activeCard, setActiveCard] = useState(0)
+  const [activeMediaIndex, setActiveMediaIndex] = useState(0)
   const [editingContent, setEditingContent] = useState(false)
   const [contentDraft, setContentDraft] = useState(null)
   const [savingContent, setSavingContent] = useState(false)
@@ -149,6 +155,7 @@ export default function ReviewAdForm({
   useEffect(() => {
     setLocalAd(ad)
     setActiveCard(0)
+    setActiveMediaIndex(getDefaultMediaIndex(getAdViewableMedia(ad)))
     setEditingContent(false)
     setContentDraft(null)
     setDomainsByHost(null)
@@ -171,12 +178,18 @@ export default function ReviewAdForm({
       String(ad?.workflow?.visibility_status || ad?.visibility_status || 'available').toLowerCase() !== 'down',
     )
 
-    if (!ad || !isSectionEnabled(project, 'domains')) return undefined
+    if (!ad || !isSectionEnabled(project, 'domains')) {
+      setDomainsByHost({})
+      return undefined
+    }
 
     const hosts = getAdDestinationLinks(ad)
       .map((l) => l.host)
       .filter(Boolean)
-    if (hosts.length === 0) return undefined
+    if (hosts.length === 0) {
+      setDomainsByHost({})
+      return undefined
+    }
 
     let cancelled = false
     getDomainsByNames(hosts, { includeUnreviewed: true }).then((map) => {
@@ -249,7 +262,23 @@ export default function ReviewAdForm({
   const primaryMedia = getAdPrimaryMedia(
     adForMedia,
     creativeMode === 'card' ? currentCard : null,
+    activeMediaIndex,
   )
+  const mediaNav = getAdMediaNav(
+    adForMedia,
+    creativeMode === 'card' ? currentCard : null,
+  )
+  const viewableMedia = getAdViewableMedia(
+    adForMedia,
+    creativeMode === 'card' ? currentCard : null,
+  )
+  const identityLabel = getAdIdentityLabel(localAd)
+  const sourceLinkLabel = getAdSourceLinkLabel(localAd)
+  const creativeNavLabel = getAdCreativeNavLabel(adForMedia, {
+    activeCard,
+    activeMediaIndex,
+    card: creativeMode === 'card' ? currentCard : null,
+  })
 
   const creative = getAdCreativeFields(
     adForMedia,
@@ -623,7 +652,7 @@ export default function ReviewAdForm({
             )}
           </div>
           <p className="text-xs text-slate-500 truncate">
-            Ad ID {localAd.platform_ad_id}
+            {identityLabel} {localAd.platform_ad_id}
             {localAd.original_url && (
               <>
                 {' · '}
@@ -633,7 +662,7 @@ export default function ReviewAdForm({
                   rel="noreferrer"
                   className="text-blue-600 inline-flex items-center gap-0.5"
                 >
-                  Ads Library <ExternalLink className="h-3 w-3" />
+                  {sourceLinkLabel} <ExternalLink className="h-3 w-3" />
                 </a>
               </>
             )}
@@ -656,54 +685,49 @@ export default function ReviewAdForm({
       <div className="flex-1 min-h-0 overflow-y-auto lg:overflow-hidden flex flex-col lg:flex-row lg:divide-x divide-slate-200">
           {/* Preview + content */}
           <div className="shrink-0 lg:flex-1 lg:min-h-0 lg:overflow-y-auto p-4 space-y-4 bg-white">
-            <div className="rounded-xl overflow-hidden border border-slate-200 bg-slate-50 aspect-square max-h-[420px] relative">
-              <AdMediaStage
-                media={primaryMedia}
-                className="absolute inset-0"
-                emptyIconClassName="h-12 w-12 text-slate-300"
-              />
-              {cards.length > 1 && (
-                <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5 z-10">
-                  {cards.map((_, i) => (
-                    <button
-                      key={i}
-                      type="button"
-                      onClick={() => setActiveCard(i)}
-                      className={cn(
-                        'h-2 w-2 rounded-full',
-                        i === activeCard ? 'bg-blue-600' : 'bg-white/80 border border-slate-300',
-                      )}
-                    />
-                  ))}
-                </div>
+            <div className="flex gap-2 w-full items-stretch">
+              <div className="relative aspect-square flex-1 min-w-0 max-h-[420px] rounded-xl overflow-hidden border border-slate-200 bg-slate-50">
+                <AdMediaStage
+                  media={primaryMedia}
+                  className="absolute inset-0"
+                  emptyIconClassName="h-12 w-12 text-slate-300"
+                />
+                <AdMediaCounter
+                  activeIndex={mediaNav.kind === 'cards' ? activeCard : activeMediaIndex}
+                  total={mediaNav.count}
+                />
+              </div>
+
+              {mediaNav.kind === 'cards' && (
+                <AdMediaNavigator
+                  theme="light"
+                  items={cards}
+                  activeIndex={activeCard}
+                  onSelect={(i) => {
+                    setActiveCard(i)
+                    setActiveMediaIndex(getDefaultMediaIndex(getAdViewableMedia(adForMedia, cards[i])))
+                  }}
+                  getThumbItem={(_, i) => cards[i]?.media?.[0]}
+                />
+              )}
+              {mediaNav.kind === 'media' && (
+                <AdMediaNavigator
+                  theme="light"
+                  items={viewableMedia}
+                  activeIndex={activeMediaIndex}
+                  onSelect={setActiveMediaIndex}
+                />
               )}
             </div>
 
-            {cards.length > 1 && (
-              <div className="flex gap-2 overflow-x-auto pb-1">
-                {cards.map((card, i) => {
-                  const thumb = getMediaItemThumb(card.media?.[0])
-                  return (
-                    <button
-                      key={i}
-                      type="button"
-                      onClick={() => setActiveCard(i)}
-                      className={cn(
-                        'h-14 w-14 rounded-lg overflow-hidden border shrink-0',
-                        i === activeCard ? 'border-blue-500 ring-2 ring-blue-200' : 'border-slate-200',
-                      )}
-                    >
-                      <AdMediaThumb
-                        kind={thumb.kind}
-                        src={thumb.url}
-                        className="h-full w-full"
-                        iconClassName="h-3.5 w-3.5"
-                      />
-                    </button>
-                  )
-                })}
-              </div>
-            )}
+            {isSectionEnabled(project, 'domains') ? (
+              <AdDomainAnalysisPanel
+                key={localAd._id}
+                ad={localAd}
+                domainsByHost={domainsByHost}
+                domainsHrefBase="/review-domains"
+              />
+            ) : null}
 
             <div
               className={cn(
@@ -719,9 +743,7 @@ export default function ReviewAdForm({
                     Ad creative
                   </p>
                   <p className="text-xs text-slate-500 mt-1">
-                    {cards.length > 1
-                      ? `Card ${Math.min(activeCard, cards.length - 1) + 1} of ${cards.length}`
-                      : 'Single creative'}
+                    {creativeNavLabel}
                     {formatLabel ? ` · ${formatLabel}` : ''}
                     {editingContent ? ' · editing' : ''}
                   </p>
@@ -1059,12 +1081,6 @@ export default function ReviewAdForm({
                       />
                     </InfoRow>
                   </dl>
-
-                  <AdTargetUrlsInfo
-                    ad={localAd}
-                    domainsByHost={domainsByHost}
-                    domainsHrefBase={isSectionEnabled(project, 'domains') ? '/review-domains' : null}
-                  />
 
                   <Separator />
 
