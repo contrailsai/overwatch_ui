@@ -109,10 +109,25 @@ export function formatDisplayFormat(raw) {
   return DISPLAY_FORMAT_LABELS[key] || String(raw).replace(/_/g, ' ')
 }
 
+function isUrlLike(value) {
+  const s = String(value || '').trim()
+  if (!s) return false
+  if (/^https?:\/\//i.test(s)) return true
+  try {
+    // eslint-disable-next-line no-new
+    new URL(s)
+    return true
+  } catch {
+    return false
+  }
+}
+
 export function isTemplatePlaceholder(value) {
   if (value == null) return true
   const s = String(value).trim()
   if (!s) return true
+  // Real destination URLs may contain Meta macro tokens in query params.
+  if (isUrlLike(s)) return false
   return TEMPLATE_VAR_RE.test(s)
 }
 
@@ -121,6 +136,19 @@ function firstRealText(...values) {
     if (value == null) continue
     const s = String(value).trim()
     if (!s) continue
+    if (isTemplatePlaceholder(s)) continue
+    return s
+  }
+  return null
+}
+
+/** Like firstRealText but keeps URL-like values even when they contain {{…}} macros. */
+function firstRealDestinationUrl(...values) {
+  for (const value of values) {
+    if (value == null) continue
+    const s = String(value).trim()
+    if (!s) continue
+    if (isUrlLike(s)) return s
     if (isTemplatePlaceholder(s)) continue
     return s
   }
@@ -480,8 +508,27 @@ function parseDestinationUrl(url) {
   }
 }
 
+function collectPayloadDestinationUrls(ad) {
+  const payload = ad?.source_payload || {}
+  const collected = []
+
+  for (const link of payload.links || []) {
+    const url = firstRealDestinationUrl(link?.destination_url)
+    if (!url) continue
+    const role = link?.role ? String(link.role) : null
+    collected.push({ url, payloadLabel: role })
+  }
+
+  const ctaUrl = firstRealDestinationUrl(payload.cta?.destination_url)
+  if (ctaUrl) {
+    collected.push({ url: ctaUrl, payloadLabel: 'cta' })
+  }
+
+  return collected
+}
+
 /**
- * All destination link_urls for an ad (per-card + top-level), deduped by exact URL.
+ * All destination link_urls for an ad (per-card + top-level + source_payload), deduped by exact URL.
  * @returns {{ cardIndex: number|null, cardIndexes: number[], label: string|null, url: string, host: string, display: string }[]}
  */
 export function getAdDestinationLinks(ad) {
@@ -489,22 +536,39 @@ export function getAdDestinationLinks(ad) {
   const cards = Array.isArray(content.cards) ? content.cards : []
   const byUrl = new Map()
 
-  cards.forEach((card, cardIndex) => {
-    const url = firstRealText(card?.link_url)
+  const addUrl = (url, { cardIndex = null, payloadLabel = null } = {}) => {
     if (!url) return
     const existing = byUrl.get(url)
     if (existing) {
-      existing.cardIndexes.push(cardIndex)
+      if (cardIndex != null && !existing.cardIndexes.includes(cardIndex)) {
+        existing.cardIndexes.push(cardIndex)
+      }
+      if (payloadLabel && !existing.payloadLabels.includes(payloadLabel)) {
+        existing.payloadLabels.push(payloadLabel)
+      }
       return
     }
     const { host, display } = parseDestinationUrl(url)
-    byUrl.set(url, { url, host, display, cardIndexes: [cardIndex] })
+    byUrl.set(url, {
+      url,
+      host,
+      display,
+      cardIndexes: cardIndex != null ? [cardIndex] : [],
+      payloadLabels: payloadLabel ? [payloadLabel] : [],
+    })
+  }
+
+  cards.forEach((card, cardIndex) => {
+    const url = firstRealDestinationUrl(card?.link_url)
+    if (!url) return
+    addUrl(url, { cardIndex })
   })
 
-  const topUrl = firstRealText(content.link_url)
-  if (topUrl && !byUrl.has(topUrl)) {
-    const { host, display } = parseDestinationUrl(topUrl)
-    byUrl.set(topUrl, { url: topUrl, host, display, cardIndexes: [] })
+  const topUrl = firstRealDestinationUrl(content.link_url)
+  if (topUrl) addUrl(topUrl)
+
+  for (const { url, payloadLabel } of collectPayloadDestinationUrls(ad)) {
+    if (!byUrl.has(url)) addUrl(url, { payloadLabel })
   }
 
   const multiCard = cards.length > 1
@@ -514,6 +578,10 @@ export function getAdDestinationLinks(ad) {
       label = `Cards ${entry.cardIndexes.map((i) => i + 1).join(', ')}`
     } else if (entry.cardIndexes.length === 1 && multiCard) {
       label = `Card ${entry.cardIndexes[0] + 1}`
+    } else if (entry.payloadLabels.length > 0 && entry.cardIndexes.length === 0) {
+      label = entry.payloadLabels
+        .map((role) => role.replace(/_/g, ' '))
+        .join(', ')
     }
     return {
       cardIndex: entry.cardIndexes[0] ?? null,
@@ -526,19 +594,53 @@ export function getAdDestinationLinks(ad) {
   })
 }
 
+/**
+ * Feed engagement counts when stored on the ad or in source_payload.
+ * @returns {{ likes: number, comments: number, shares: number, views: number } | null}
+ */
+export function getAdFeedEngagement(ad) {
+  const eng = ad?.feed_engagement || ad?.source_payload?.feed_engagement
+  if (!eng || typeof eng !== 'object') return null
+
+  const likes = Number(eng.likes)
+  const comments = Number(eng.comments)
+  const shares = Number(eng.shares)
+  const views = Number(eng.views)
+  const hasAny = [likes, comments, shares, views].some(
+    (value) => Number.isFinite(value) && value > 0,
+  )
+  if (!hasAny) return null
+
+  return {
+    likes: Number.isFinite(likes) ? likes : 0,
+    comments: Number.isFinite(comments) ? comments : 0,
+    shares: Number.isFinite(shares) ? shares : 0,
+    views: Number.isFinite(views) ? views : 0,
+  }
+}
+
+/** Share/submitted URL used at ingest when it differs from canonical original_url. */
+export function getAdIngestionSourceUrl(ad) {
+  const ingested = String(ad?.ingestion_source_url || ad?.ingestion?.source_url || '').trim()
+  const original = String(ad?.original_url || '').trim()
+  if (!ingested || ingested === original) return null
+  return ingested
+}
+
 /** Labeled creative fields for the detail info panel. */
 export function getAdCreativeFields(ad, card = null) {
   const content = ad?.content || {}
   const active = card || content.cards?.[0] || {}
+  const payloadCta = ad?.source_payload?.cta || {}
 
   const title = firstRealText(active.title, content.title)
   const body = firstRealText(resolveBodyText(active.body), resolveBodyText(content.body))
   const caption = firstRealText(active.caption, content.caption)
   const linkDescription = firstRealText(active.link_description, content.link_description)
-  const cta = firstRealText(active.cta_text, content.cta_text)
-  const ctaType = firstRealText(active.cta_type, content.cta_type)
-  const linkUrl = firstRealText(active.link_url, content.link_url)
-  const displayUrl = firstRealText(content.caption, active.caption)
+  const cta = firstRealText(active.cta_text, content.cta_text, payloadCta.title)
+  const ctaType = firstRealText(active.cta_type, content.cta_type, payloadCta.link_style)
+  const linkUrl = firstRealDestinationUrl(active.link_url, content.link_url, payloadCta.destination_url)
+  const displayUrl = firstRealText(content.caption, active.caption, payloadCta.link_display)
 
   return {
     title,

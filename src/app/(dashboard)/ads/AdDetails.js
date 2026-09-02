@@ -26,6 +26,7 @@ import {
   getAdDestinationLinks,
   getAdIdentityLabel,
   getAdImpressions,
+  getAdIngestionSourceUrl,
   getAdMediaNav,
   getAdPrimaryMedia,
   getAdSourceLinkLabel,
@@ -44,6 +45,8 @@ import { AdMediaStage } from '@/components/ads/AdMediaStage'
 import { AdMediaCounter, AdMediaNavigator } from '@/components/ads/AdMediaNavigator'
 import { AdAdvertiserAvatar } from '@/components/ads/AdAdvertiserAvatar'
 import { AdBodyContacts } from '@/components/ads/AdBodyContacts'
+import { AdFeedEngagement } from '@/components/ads/AdFeedEngagement'
+import { AdIngestionSourceLink } from '@/components/ads/AdIngestionSourceLink'
 import { getDomainsByNames } from '@/app/(dashboard)/domains/actions'
 import { isSectionEnabled } from '@/lib/project-sections'
 
@@ -249,6 +252,7 @@ export default function AdDetailPanel({
   const endDateLabel = formatAdDate(ad.end_date || ad.list?.end_date)
   const sourcedLabel = formatAdDate(ad.sourcing_date)
   const platforms = ad.list?.publisher_platforms || ad.ad_delivery?.publisher_platforms || []
+  const ingestionSourceUrl = getAdIngestionSourceUrl(ad)
   const risk = getRiskLabel(ad.score)
   const statusCfg = getStatusConfig(clientStatus)
   const StatusIcon = statusCfg.icon
@@ -472,7 +476,14 @@ export default function AdDetailPanel({
                     activeCard={activeCard}
                   />
                 </InfoRow>
+                {ingestionSourceUrl ? (
+                  <InfoRow label="Ingested from">
+                    <AdIngestionSourceLink ad={ad} />
+                  </InfoRow>
+                ) : null}
               </dl>
+
+              <AdFeedEngagement ad={ad} compact />
 
               <AdTargetUrlsInfo
                 ad={ad}
