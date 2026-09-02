@@ -84,12 +84,28 @@ SCAM_MARKERS = (
 
 NAV_TIMEOUT_MS = 25_000
 SETTLE_MS = 2_500
-VIEWPORT = {"width": 1440, "height": 900}
-UA = (
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) "
-    "Chrome/131.0.0.0 Safari/537.36"
-)
+VIEW_PROFILE = "mobile_android"
+PLAYWRIGHT_DEVICE_NAME = "Pixel 5"
+
+_STEALTH_INIT_SCRIPT = """
+Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+window.chrome = { runtime: {} };
+"""
+
+
+def probe_device(playwright: Any) -> dict[str, Any]:
+    """Playwright Pixel 5 preset — Android mobile Chrome."""
+    return dict(playwright.devices[PLAYWRIGHT_DEVICE_NAME])
+
+
+def _new_probe_context(browser: Any, device: dict[str, Any]) -> Any:
+    context = browser.new_context(
+        **device,
+        locale="en-IN",
+        ignore_https_errors=True,
+    )
+    context.add_init_script(_STEALTH_INIT_SCRIPT)
+    return context
 
 MEDIA_CANDIDATES_JS = """
 () => {
@@ -180,6 +196,7 @@ def _upload_screenshot(
     run_id: str,
     label: str,
     source_url: str,
+    viewport: dict[str, int],
 ) -> dict[str, Any]:
     db_name = db_name_from_env()
     # screenshot_key already prefixes non-full labels with "variant-"
@@ -190,8 +207,8 @@ def _upload_screenshot(
         "s3_url": url,
         "captured_at": datetime.now(UTC).isoformat(),
         "source_url": source_url,
-        "width": VIEWPORT["width"],
-        "height": None,
+        "width": viewport.get("width"),
+        "height": viewport.get("height"),
         "content_type": "image/png",
         "sha256": hashlib.sha256(png).hexdigest(),
         "label": label,
@@ -207,6 +224,7 @@ def capture_variant(
     label: str,
     param_key: str | None,
     param_value: str | None,
+    viewport: dict[str, int],
     archive: bool = True,
 ) -> dict[str, Any]:
     out: dict[str, Any] = {
@@ -281,6 +299,7 @@ def capture_variant(
                     run_id=run_id,
                     label=label,
                     source_url=url,
+                    viewport=viewport,
                 )
             except Exception as exc:  # noqa: BLE001
                 out["screenshot"] = {"error": str(exc)[:200], "source_url": url}
@@ -301,18 +320,13 @@ def probe_domain(
     domain_name: str,
     pairs: list[tuple[str, str]],
     *,
+    device: dict[str, Any],
     archive: bool = True,
 ) -> dict[str, Any]:
     run_id = str(uuid.uuid4())
-    context = browser.new_context(
-        viewport=VIEWPORT,
-        user_agent=UA,
-        locale="en-IN",
-        ignore_https_errors=True,
-    )
-    context.add_init_script(
-        "Object.defineProperty(navigator, 'webdriver', { get: () => undefined });"
-    )
+    viewport = device.get("viewport") or {"width": 393, "height": 851}
+    user_agent = device.get("user_agent") or ""
+    context = _new_probe_context(browser, device)
     page = context.new_page()
     page.set_default_timeout(NAV_TIMEOUT_MS)
 
@@ -324,6 +338,7 @@ def probe_domain(
         label="bare",
         param_key=None,
         param_value=None,
+        viewport=viewport,
         archive=archive,
     )
 
@@ -340,6 +355,7 @@ def probe_domain(
             label=label,
             param_key=key,
             param_value=value,
+            viewport=viewport,
             archive=False,
         )
         v["differs_from_bare"] = bool(
@@ -357,6 +373,7 @@ def probe_domain(
                     run_id=run_id,
                     label=label,
                     source_url=v.get("url") or "",
+                    viewport=viewport,
                 )
             except Exception as exc:  # noqa: BLE001
                 v["screenshot"] = {"error": str(exc)[:200], "source_url": v.get("url")}
@@ -393,6 +410,7 @@ def probe_domain(
                     domain_name=domain_name,
                     run_id=run_id,
                     page_url=v.get("final_url") or v.get("url") or "",
+                    user_agent=user_agent,
                 )
             except Exception as exc:  # noqa: BLE001
                 archived = {
@@ -474,6 +492,9 @@ def probe_domain(
         "domain_name": domain_name,
         "run_id": run_id,
         "probed_at": datetime.now(UTC).isoformat(),
+        "view_profile": VIEW_PROFILE,
+        "user_agent": user_agent,
+        "viewport": viewport,
         "bare": slim_variant(bare),
         "variants": [slim_variant(v) for v in unique_variants],
         "unlocked": bool(unlocked),
@@ -502,10 +523,14 @@ def write_probe_to_mongo(db: Database, domain_id: ObjectId, probe: dict[str, Any
         if v.get("url")
     ]
 
+    probe_ua = probe.get("user_agent") or ""
+    probe_viewport = probe.get("viewport") or {}
+
     set_doc: dict[str, Any] = {
         "analysis_results.cloak_probe": {
             "probed_at": probe.get("probed_at"),
             "run_id": probe.get("run_id"),
+            "view_profile": probe.get("view_profile") or VIEW_PROFILE,
             "unlocked": probe.get("unlocked"),
             "unlocked_params": probe.get("unlocked_params") or [],
             "creative_count": probe.get("creative_count") or 0,
@@ -523,7 +548,8 @@ def write_probe_to_mongo(db: Database, domain_id: ObjectId, probe: dict[str, Any
     # Slim capture.variants for PRD consumers
     set_doc["analysis_results.capture"] = {
         "run_id": probe.get("run_id"),
-        "user_agent": UA,
+        "user_agent": probe_ua,
+        "viewport": probe_viewport,
         "variants": [
             {
                 "label": v.get("label"),
@@ -618,17 +644,18 @@ def run_cloak_probe_batch(
     multi_creative_n = 0
 
     with sync_playwright() as p:
+        device = probe_device(p)
         browser = p.chromium.launch(headless=headless)
         try:
             for i, doc in enumerate(docs, 1):
                 name = doc["domain_name"]
                 print(
                     f"[{i}/{len(docs)}] probe+capture {name} "
-                    f"({len(pairs)+1} urls, archive={archive})",
+                    f"({len(pairs)+1} urls, view_profile={VIEW_PROFILE}, archive={archive})",
                     flush=True,
                 )
                 try:
-                    probe = probe_domain(browser, name, pairs, archive=archive)
+                    probe = probe_domain(browser, name, pairs, device=device, archive=archive)
                 except Exception as exc:  # noqa: BLE001
                     probe = {
                         "domain_name": name,
@@ -668,6 +695,7 @@ def run_cloak_probe_batch(
                     {
                         "domain_name": name,
                         "object_id": str(doc["_id"]),
+                        "view_profile": probe.get("view_profile") or VIEW_PROFILE,
                         "unlocked": probe.get("unlocked"),
                         "creative_count": probe.get("creative_count"),
                         "unlocked_params": probe.get("unlocked_params"),
@@ -702,6 +730,7 @@ def run_cloak_probe_batch(
         "total": len(docs),
         "unlocked": unlocked_n,
         "multi_creative": multi_creative_n,
+        "view_profile": VIEW_PROFILE,
         "pairs_tried": [f"{k}={v}" for k, v in pairs],
         "archive": archive,
         "results": results,

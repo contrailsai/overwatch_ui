@@ -30,6 +30,7 @@ import {
 } from '@/lib/ads/ad-display'
 import { AdMediaThumb } from '@/components/ads/AdMediaThumb'
 import { AdAdvertiserAvatar } from '@/components/ads/AdAdvertiserAvatar'
+import { AdChannelFilter } from '@/components/ads/AdChannelFilter'
 import ReviewAdForm from './ReviewAdDetails'
 
 const FILTER_LABEL = 'text-[10px] font-bold text-slate-500 uppercase tracking-wide'
@@ -37,16 +38,9 @@ const FILTER_TRIGGER =
   'w-full h-8 text-xs bg-slate-50 border-slate-200 hover:border-slate-300 focus:ring-blue-500/20 px-2.5'
 
 function parseFilters(searchParams) {
-  const aiAnalyzedRaw = searchParams.get('aiAnalyzed')
-  let aiAnalyzed = 'all'
-  if (aiAnalyzedRaw === 'analyzed' || aiAnalyzedRaw === 'true') aiAnalyzed = 'analyzed'
-  else if (aiAnalyzedRaw === 'not_analyzed') aiAnalyzed = 'not_analyzed'
-
   return {
-    platform: searchParams.get('platform') || 'all',
+    channel: searchParams.get('channel') || 'all',
     status: searchParams.get('status') || 'pending',
-    aiAnalyzed,
-    visibility_status: searchParams.get('visibility_status') || 'all',
     aiRisk: searchParams.get('aiRisk') || 'all',
     is_active: searchParams.get('is_active') || 'all',
     display_format: searchParams.get('display_format') || 'all',
@@ -411,9 +405,7 @@ export function ReviewAdsInterface({
 
   const hasActiveFilters =
     filters.status !== 'pending' ||
-    filters.platform !== 'all' ||
-    filters.aiAnalyzed !== 'all' ||
-    filters.visibility_status !== 'all' ||
+    filters.channel !== 'all' ||
     filters.aiRisk !== 'all' ||
     filters.is_active !== 'all' ||
     filters.display_format !== 'all' ||
@@ -464,9 +456,7 @@ export function ReviewAdsInterface({
     setSearchInput('')
     updateParams({
       status: 'pending',
-      platform: 'all',
-      aiAnalyzed: 'all',
-      visibility_status: 'all',
+      channel: 'all',
       aiRisk: 'all',
       is_active: 'all',
       display_format: 'all',
@@ -626,22 +616,12 @@ export function ReviewAdsInterface({
                 </Select>
               </FilterField>
 
-              <FilterField label="Platform">
-                <Select
-                  value={filters.platform}
-                  onValueChange={(v) => updateParams({ platform: v, page: 1 })}
-                >
-                  <SelectTrigger size="sm" className={FILTER_TRIGGER}>
-                    <SelectValue placeholder="All platforms" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All platforms</SelectItem>
-                    <SelectItem value="meta">Meta</SelectItem>
-                    <SelectItem value="google">Google</SelectItem>
-                    <SelectItem value="tiktok">TikTok</SelectItem>
-                  </SelectContent>
-                </Select>
-              </FilterField>
+              <div className="min-w-0">
+                <AdChannelFilter
+                  value={filters.channel}
+                  onChange={(v) => updateParams({ channel: v, page: 1 })}
+                />
+              </div>
 
               <FilterField label="Delivery">
                 <Select
@@ -655,22 +635,6 @@ export function ReviewAdsInterface({
                     <SelectItem value="all">All delivery</SelectItem>
                     <SelectItem value="true">Active</SelectItem>
                     <SelectItem value="false">Inactive</SelectItem>
-                  </SelectContent>
-                </Select>
-              </FilterField>
-
-              <FilterField label="Visibility">
-                <Select
-                  value={filters.visibility_status}
-                  onValueChange={(v) => updateParams({ visibility_status: v, page: 1 })}
-                >
-                  <SelectTrigger size="sm" className={FILTER_TRIGGER}>
-                    <SelectValue placeholder="All visibility" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All visibility</SelectItem>
-                    <SelectItem value="available">Available</SelectItem>
-                    <SelectItem value="down">Taken down</SelectItem>
                   </SelectContent>
                 </Select>
               </FilterField>
@@ -692,22 +656,6 @@ export function ReviewAdsInterface({
                     <SelectItem value="MULTI_IMAGES">Multi image</SelectItem>
                     <SelectItem value="MULTI_VIDEOS">Multi video</SelectItem>
                     <SelectItem value="SLIDESHOW">Slideshow</SelectItem>
-                  </SelectContent>
-                </Select>
-              </FilterField>
-
-              <FilterField label="AI analysis">
-                <Select
-                  value={filters.aiAnalyzed}
-                  onValueChange={(v) => updateParams({ aiAnalyzed: v, page: 1 })}
-                >
-                  <SelectTrigger size="sm" className={FILTER_TRIGGER}>
-                    <SelectValue placeholder="All AI" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All AI</SelectItem>
-                    <SelectItem value="analyzed">Analyzed</SelectItem>
-                    <SelectItem value="not_analyzed">Not analyzed</SelectItem>
                   </SelectContent>
                 </Select>
               </FilterField>

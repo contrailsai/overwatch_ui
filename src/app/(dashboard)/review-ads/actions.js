@@ -24,23 +24,13 @@ import {
   fetchAdUpdateHistory,
   getAdMedia,
   riskRankFromScore,
-  ONLINE_VISIBILITY_VALUES,
   insertCaseEvent,
 } from '@/lib/ads/ad-helpers'
 import { buildEffectiveThreatScoreRange } from '@/utils/mongodb/v3-schema'
+import { buildAdChannelMatchCondition } from '@/lib/ads/ad-channel-filter'
 
 function escapeRegex(text) {
   return String(text).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
-
-function analysisResultsKeyCountExpr() {
-  return { $size: { $objectToArray: { $ifNull: ['$analysis_results', {}] } } }
-}
-
-function normalizeAiAnalyzedFilter(value) {
-  if (value === 'analyzed' || value === true || value === 'true') return 'analyzed'
-  if (value === 'not_analyzed') return 'not_analyzed'
-  return 'all'
 }
 
 function buildReviewAdsMatchQuery(filters = {}) {
@@ -53,49 +43,9 @@ function buildReviewAdsMatchQuery(filters = {}) {
     andConditions.push({ 'workflow.review_status': 'reviewed' })
   }
 
-  const aiMode = normalizeAiAnalyzedFilter(filters.aiAnalyzed)
-  if (aiMode === 'analyzed') {
-    andConditions.push({
-      $or: [
-        { 'workflow.ai_status': 'completed' },
-        { $expr: { $gt: [analysisResultsKeyCountExpr(), 0] } },
-      ],
-    })
-  } else if (aiMode === 'not_analyzed') {
-    andConditions.push({
-      $and: [
-        {
-          $or: [
-            { 'workflow.ai_status': 'pending' },
-            { 'workflow.ai_status': { $exists: false } },
-            { 'workflow.ai_status': null },
-          ],
-        },
-        { $expr: { $eq: [analysisResultsKeyCountExpr(), 0] } },
-      ],
-    })
-  }
-
-  if (filters.platform && filters.platform !== 'all') {
-    query.platform = { $regex: new RegExp(`^${filters.platform}$`, 'i') }
-  }
-
-  if (filters.visibility_status && filters.visibility_status !== 'all') {
-    const visibilityLower = String(filters.visibility_status).toLowerCase()
-    if (visibilityLower === 'down') {
-      query['workflow.visibility_status'] = 'down'
-    } else if (
-      visibilityLower === 'available' ||
-      ONLINE_VISIBILITY_VALUES.includes(visibilityLower)
-    ) {
-      andConditions.push({
-        $or: [
-          { 'workflow.visibility_status': { $in: ONLINE_VISIBILITY_VALUES } },
-          { 'workflow.visibility_status': { $exists: false } },
-          { 'workflow.visibility_status': null },
-        ],
-      })
-    }
+  const channelMatch = buildAdChannelMatchCondition(filters.channel)
+  if (channelMatch) {
+    andConditions.push(channelMatch)
   }
 
   if (filters.is_active === 'true' || filters.is_active === true) {

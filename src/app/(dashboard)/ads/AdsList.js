@@ -33,6 +33,7 @@ import {
 } from '@/lib/ads/ad-display'
 import { AdMediaThumb } from '@/components/ads/AdMediaThumb'
 import { AdAdvertiserAvatar } from '@/components/ads/AdAdvertiserAvatar'
+import { AdChannelFilter } from '@/components/ads/AdChannelFilter'
 import ReportGenerate from '@/components/ReportGenerate'
 import { trackClientClick } from './actions'
 import AdDetailPanel from './AdDetails'
@@ -660,13 +661,16 @@ export function AdsList({
   }
 
   const hasActiveFilter = (
-    initialFilters.platform !== 'all' ||
+    (initialFilters.channel && initialFilters.channel !== 'all') ||
     initialFilters.status !== 'all' ||
     Boolean(initialFilters.searchText) ||
     Boolean(initialFilters.start_date_from) ||
     Boolean(initialFilters.start_date_to) ||
+    Boolean(initialFilters.alert_date_from) ||
+    Boolean(initialFilters.alert_date_to) ||
     (initialFilters.risk && initialFilters.risk !== 'all') ||
-    (initialFilters.visibility_status && initialFilters.visibility_status !== 'all')
+    (initialFilters.visibility_status && initialFilters.visibility_status !== 'all') ||
+    (initialFilters.display_format && initialFilters.display_format !== 'all')
   )
 
   const rangeFrom = localAds.length === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1
@@ -689,7 +693,7 @@ export function AdsList({
             : 'flex w-full bg-white',
         )}
       >
-        <div className={cn('shrink-0 border-b border-slate-100 space-y-2', selectedAd ? 'px-3 py-2.5' : 'px-5 py-4 space-y-3')}>
+        <div className={cn('shrink-0 border-b border-slate-100 space-y-2 overflow-visible', selectedAd ? 'px-3 py-2.5' : 'px-5 py-4 space-y-3')}>
           <div className="flex flex-wrap items-center gap-2">
             <div className="min-w-0 shrink-0">
               <p className={cn(
@@ -762,8 +766,8 @@ export function AdsList({
               )}
             </div>
 
-            <div className="flex items-center gap-2 shrink-0 ml-auto">
-              {selectedCount > 0 ? (
+            <div className="flex items-center gap-2 shrink-0 ml-auto min-w-0">
+              {selectedAd && selectedCount > 0 ? (
                 <>
                   <span className="inline-flex items-center text-[10px] font-bold bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded shrink-0">
                     {selectedCount} selected
@@ -780,10 +784,26 @@ export function AdsList({
               <ReportGenerate
                 {...reportGenerateProps}
                 compact={Boolean(selectedAd)}
-                showLabel={!selectedAd}
+                toolbar={!selectedAd}
+                showLabel={false}
               />
             </div>
           </div>
+
+          {!selectedAd && selectedCount > 0 && (
+            <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-2">
+              <span className="inline-flex items-center text-[10px] font-bold bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded shrink-0">
+                {selectedCount} selected
+              </span>
+              <button
+                type="button"
+                onClick={handleClearAllSelected}
+                className="text-[10px] font-bold text-slate-400 hover:text-slate-700 underline underline-offset-2 shrink-0"
+              >
+                Clear
+              </button>
+            </div>
+          )}
 
           {showFilters && (
             <div className="space-y-2.5 pt-1">
@@ -792,27 +812,15 @@ export function AdsList({
                   'grid gap-x-2.5 gap-y-2.5',
                   selectedAd
                     ? 'grid-cols-2'
-                    : 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5',
+                    : 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6',
                 )}
               >
-                <FilterField label="Platform">
-                  <Select
-                    value={initialFilters.platform || 'all'}
-                    onValueChange={(val) => handleFilterChange('platform', val)}
-                  >
-                    <SelectTrigger size="sm" className={FILTER_TRIGGER}>
-                      <SelectValue placeholder="All platforms" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All platforms</SelectItem>
-                      <SelectItem value="meta">Meta</SelectItem>
-                      <SelectItem value="facebook">Facebook</SelectItem>
-                      <SelectItem value="instagram">Instagram</SelectItem>
-                      <SelectItem value="google">Google</SelectItem>
-                      <SelectItem value="tiktok">TikTok</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </FilterField>
+                <div className="min-w-0">
+                  <AdChannelFilter
+                    value={initialFilters.channel || 'all'}
+                    onChange={(val) => handleFilterChange('channel', val)}
+                  />
+                </div>
 
                 <div className="min-w-0">
                   <StatusFilter
@@ -851,6 +859,27 @@ export function AdsList({
                   </Select>
                 </FilterField>
 
+                <FilterField label="Format">
+                  <Select
+                    value={initialFilters.display_format || 'all'}
+                    onValueChange={(val) => handleFilterChange('display_format', val)}
+                  >
+                    <SelectTrigger size="sm" className={FILTER_TRIGGER}>
+                      <SelectValue placeholder="All formats" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All formats</SelectItem>
+                      <SelectItem value="DPA">Dynamic product ad</SelectItem>
+                      <SelectItem value="CAROUSEL">Carousel</SelectItem>
+                      <SelectItem value="IMAGE">Image</SelectItem>
+                      <SelectItem value="VIDEO">Video</SelectItem>
+                      <SelectItem value="MULTI_IMAGES">Multi image</SelectItem>
+                      <SelectItem value="MULTI_VIDEOS">Multi video</SelectItem>
+                      <SelectItem value="SLIDESHOW">Slideshow</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </FilterField>
+
                 <FilterField label="Start date">
                   <DateFilterPopover
                     title="Start Date"
@@ -859,6 +888,19 @@ export function AdsList({
                     onApply={(range) => updateQueryParams({
                       start_date_from: range?.from ? range.from.toISOString() : null,
                       start_date_to: range?.to ? range.to.toISOString() : null,
+                      page: 1,
+                    })}
+                  />
+                </FilterField>
+
+                <FilterField label="Alert date">
+                  <DateFilterPopover
+                    title="Alert Date"
+                    initialFrom={initialFilters.alert_date_from}
+                    initialTo={initialFilters.alert_date_to}
+                    onApply={(range) => updateQueryParams({
+                      alert_date_from: range?.from ? range.from.toISOString() : null,
+                      alert_date_to: range?.to ? range.to.toISOString() : null,
                       page: 1,
                     })}
                   />
@@ -873,9 +915,9 @@ export function AdsList({
                       Search
                     </span>
                   )}
-                  {initialFilters.platform !== 'all' && (
+                  {initialFilters.channel && initialFilters.channel !== 'all' && (
                     <span className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded font-bold text-[10px] uppercase tracking-wider border border-blue-100">
-                      {initialFilters.platform}
+                      {formatAdChannelLabel(initialFilters.channel)}
                     </span>
                   )}
                   {initialFilters.status !== 'all' && (
@@ -890,7 +932,17 @@ export function AdsList({
                   )}
                   {(initialFilters.start_date_from || initialFilters.start_date_to) && (
                     <span className="px-2 py-0.5 bg-amber-50 text-amber-700 rounded font-bold text-[10px] uppercase tracking-wider border border-amber-100">
-                      Date range
+                      Start date
+                    </span>
+                  )}
+                  {(initialFilters.alert_date_from || initialFilters.alert_date_to) && (
+                    <span className="px-2 py-0.5 bg-amber-50 text-amber-700 rounded font-bold text-[10px] uppercase tracking-wider border border-amber-100">
+                      Alert date
+                    </span>
+                  )}
+                  {initialFilters.display_format && initialFilters.display_format !== 'all' && (
+                    <span className="px-2 py-0.5 bg-slate-100 text-slate-700 rounded font-bold text-[10px] uppercase tracking-wider border border-slate-200">
+                      {formatDisplayFormat(initialFilters.display_format)}
                     </span>
                   )}
                   {initialFilters.visibility_status && initialFilters.visibility_status !== 'all' && (
