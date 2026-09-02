@@ -40,6 +40,7 @@ import {
   getAdDestinationLinks,
   getAdIdentityLabel,
   getAdImpressions,
+  getAdIngestionSourceUrl,
   getAdMediaNav,
   getAdPrimaryMedia,
   getAdSourceLinkLabel,
@@ -56,6 +57,8 @@ import { AdMediaStage } from '@/components/ads/AdMediaStage'
 import { AdMediaCounter, AdMediaNavigator } from '@/components/ads/AdMediaNavigator'
 import { AdAdvertiserAvatar } from '@/components/ads/AdAdvertiserAvatar'
 import { AdBodyContacts } from '@/components/ads/AdBodyContacts'
+import { AdFeedEngagement } from '@/components/ads/AdFeedEngagement'
+import { AdIngestionSourceLink } from '@/components/ads/AdIngestionSourceLink'
 import { getDomainsByNames } from '@/app/(dashboard)/domains/actions'
 import { isSectionEnabled } from '@/lib/project-sections'
 
@@ -290,6 +293,7 @@ export default function ReviewAdForm({
   const endDateLabel = formatAdDate(localAd.end_date || localAd.list?.end_date)
   const sourcedLabel = formatAdDate(localAd.sourcing_date)
   const platforms = localAd.list?.publisher_platforms || localAd.ad_delivery?.publisher_platforms || []
+  const ingestionSourceUrl = getAdIngestionSourceUrl(localAd)
   const pageName = localAd.page_name || 'Advertiser'
   const advertiserPic = localAd.advertiser_snapshot?.signed_profile_pic
   const showTitleRow =
@@ -1080,7 +1084,14 @@ export default function ReviewAdForm({
                         activeCard={activeCard}
                       />
                     </InfoRow>
+                    {ingestionSourceUrl ? (
+                      <InfoRow label="Ingested from">
+                        <AdIngestionSourceLink ad={localAd} />
+                      </InfoRow>
+                    ) : null}
                   </dl>
+
+                  <AdFeedEngagement ad={localAd} />
 
                   <Separator />
 

@@ -188,6 +188,24 @@ export async function normalizeAdForUi(ad, _db = null) {
     ? signedByUrl.get(advertiser.profile_pic_s3) || null
     : null
 
+  const feedEngagementRaw = ad?.source_payload?.feed_engagement
+  const feedEngagement =
+    feedEngagementRaw && typeof feedEngagementRaw === 'object'
+      ? {
+          likes: feedEngagementRaw.likes ?? 0,
+          comments: feedEngagementRaw.comments ?? 0,
+          shares: feedEngagementRaw.shares ?? 0,
+          views: feedEngagementRaw.views ?? 0,
+        }
+      : null
+
+  const ingestionSourceUrl = (() => {
+    const ingested = String(ad?.ingestion?.source_url || '').trim()
+    const original = String(ad?.original_url || '').trim()
+    if (!ingested || ingested === original) return null
+    return ingested
+  })()
+
   return {
     _id: ad._id.toString(),
     schema_version: ad.schema_version ?? 3,
@@ -213,6 +231,8 @@ export async function normalizeAdForUi(ad, _db = null) {
     review_details: serializeForClient(ad.review_details) ?? null,
     analysis_correction_request: serializeForClient(ad.analysis_correction_request) ?? null,
     ingestion: serializeForClient(ad.ingestion) ?? null,
+    feed_engagement: feedEngagement,
+    ingestion_source_url: ingestionSourceUrl,
     system: serializeForClient(ad.system) ?? null,
     content_reviewed_by: ad.content_reviewed_by || null,
     signedImageUrl: firstSigned,
