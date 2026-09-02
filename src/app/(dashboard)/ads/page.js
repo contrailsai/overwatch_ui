@@ -26,13 +26,16 @@ export default async function AdsPage({ searchParams }) {
   const itemsPerPage = Math.min(Number.isNaN(parsedLimit) ? 25 : Math.max(parsedLimit, 1), 100)
 
   const filters = {
-    platform: resolvedParams.platform || 'all',
+    channel: resolvedParams.channel || 'all',
     status: resolvedParams.status || 'all',
     searchText: resolvedParams.search || '',
     start_date_from: resolvedParams.start_date_from || null,
     start_date_to: resolvedParams.start_date_to || null,
+    alert_date_from: resolvedParams.alert_date_from || null,
+    alert_date_to: resolvedParams.alert_date_to || null,
     risk: resolvedParams.risk || 'all',
     visibility_status: resolvedParams.visibility_status || 'all',
+    display_format: resolvedParams.display_format || 'all',
   }
 
   const sort = {

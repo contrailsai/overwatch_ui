@@ -54,15 +54,8 @@ export default async function ReviewAdsPage({ searchParams }) {
   const itemsPerPage = Math.min(Number.isNaN(parsedLimit) ? 25 : Math.max(parsedLimit, 1), 100)
 
   const initialFilters = {
-    platform: resolvedParams?.platform || 'all',
+    channel: resolvedParams?.channel || 'all',
     status: resolvedParams?.status || 'pending',
-    aiAnalyzed: (() => {
-      const v = resolvedParams?.aiAnalyzed
-      if (v === 'analyzed' || v === 'true') return 'analyzed'
-      if (v === 'not_analyzed') return 'not_analyzed'
-      return 'all'
-    })(),
-    visibility_status: resolvedParams?.visibility_status || 'all',
     aiRisk: resolvedParams?.aiRisk || 'all',
     is_active: resolvedParams?.is_active || 'all',
     display_format: resolvedParams?.display_format || 'all',

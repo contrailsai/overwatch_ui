@@ -8,6 +8,7 @@ Stored on the same `Domains` document (`schema_version: 1`). Domain identity rem
 {
   probed_at: ISODateString,
   run_id: uuid,
+  view_profile: "mobile_android",  // Playwright Pixel 5 emulation
   unlocked: boolean,
   unlocked_params: ["pEl8X=MI1_HT2", ...],
   creative_count: number,
@@ -72,6 +73,8 @@ domain-analyzer/{DB_NAME}/{domain_name}/{run_id}/media/{sha256}.{ext}
 | `analysis_results.page_text` | Text/headings for primary |
 | `analysis_results.content_classification` | category/labels; `cloak_param`, `source_url` |
 | `analysis_results.capture.variants` | Slim `{ label, title, url, kind, screenshot_s3_url }` |
+| `analysis_results.capture.user_agent` | Mobile Android Chrome UA used for probe |
+| `analysis_results.capture.viewport` | `{ width, height }` — mobile viewport (~393×851) |
 
 ## Discovery helpers
 

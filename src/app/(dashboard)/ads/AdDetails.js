@@ -560,9 +560,7 @@ export default function AdDetailPanel({
                           <p className={cn('text-sm font-medium leading-relaxed whitespace-pre-wrap', textClass)}>
                             {reasoning}
                           </p>
-                        ) : (
-                          <p className="text-xs text-slate-400 italic">No reasoning text for this code.</p>
-                        )}
+                        ) : null}
                       </div>
                     )
                   })}

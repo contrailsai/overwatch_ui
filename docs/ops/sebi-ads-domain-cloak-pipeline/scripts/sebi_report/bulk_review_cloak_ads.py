@@ -118,22 +118,34 @@ def url_has_known_cloak(url: str) -> bool:
     return False
 
 
-def load_scam_domains(db: Database) -> set[str]:
-    """Domains confirmed as cloak scam via Domains analysis (probe unlock or scam class)."""
-    names: set[str] = set()
-    for doc in db["Domains"].find(
-        {
+def load_scam_domains(db: Database, *, cloak_unlocked_only: bool = True) -> set[str]:
+    """Domains with confirmed cloak unlock (default) or broader scam classification."""
+    query: dict[str, Any]
+    if cloak_unlocked_only:
+        query = {"analysis_results.cloak_probe.unlocked": True}
+    else:
+        query = {
             "$or": [
                 {"analysis_results.cloak_probe.unlocked": True},
                 {"analysis_results.content_classification.category": "scam"},
             ]
-        },
-        {"domain_name": 1},
-    ):
+        }
+    names: set[str] = set()
+    for doc in db["Domains"].find(query, {"domain_name": 1}):
         name = doc.get("domain_name")
         if isinstance(name, str) and name.strip():
             names.add(name.strip())
     return names
+
+
+# Ad_profiles review shape (Review Ad Profiles UI).
+PROFILE_REVIEW_TEMPLATE = {
+    "risk": "high",
+    "violations": ["fraud", "investment-scams"],
+    "reasoning": "",
+    "reviewer_comments": "",
+    "action": "submit_to_client",
+}
 
 
 def build_review_details(*, reviewed_at: datetime | None = None) -> dict[str, Any]:
@@ -158,14 +170,23 @@ def ad_matches_cloak(ad: dict[str, Any], scam_domains: set[str]) -> tuple[bool, 
     return bool(hit_domains), hit_domains, match_kind
 
 
+def build_profile_review_details(*, reviewed_at: datetime | None = None) -> dict[str, Any]:
+    now = reviewed_at or datetime.now(UTC).replace(tzinfo=None)
+    return {
+        **PROFILE_REVIEW_TEMPLATE,
+        "reviewed_at": now.isoformat(timespec="milliseconds") + "Z",
+    }
+
+
 def collect_bulk_review_targets(
     db: Database,
     *,
     start: datetime,
     end: datetime,
     only_pending: bool = True,
+    cloak_unlocked_only: bool = True,
 ) -> dict[str, Any]:
-    scam_domains = load_scam_domains(db)
+    scam_domains = load_scam_domains(db, cloak_unlocked_only=cloak_unlocked_only)
     query: dict[str, Any] = {"list.sourced_at": {"$gte": start, "$lt": end}}
     if only_pending:
         query["workflow.review_status"] = {"$ne": "reviewed"}
@@ -181,6 +202,7 @@ def collect_bulk_review_targets(
         "content.cards.link_url": 1,
         "workflow.review_status": 1,
         "list.sourced_at": 1,
+        "ad_profile_id": 1,
     }
 
     stats = {
@@ -212,9 +234,11 @@ def collect_bulk_review_targets(
             continue
 
         stats["library_cloak_match"] += 1
+        profile_id = ad.get("ad_profile_id")
         targets.append(
             {
                 "ad_id": str(ad["_id"]),
+                "ad_profile_id": str(profile_id) if profile_id else None,
                 "platform_ad_id": ad.get("platform_ad_id"),
                 "domains": sorted(hit_domains),
                 "match_kind": match_kind,
@@ -223,10 +247,14 @@ def collect_bulk_review_targets(
             }
         )
 
+    profile_ids = sorted({t["ad_profile_id"] for t in targets if t.get("ad_profile_id")})
+
     return {
+        "cloak_unlocked_only": cloak_unlocked_only,
         "scam_domains_loaded": len(scam_domains),
         "stats": stats,
         "targets": targets,
+        "unique_profile_ids": profile_ids,
     }
 
 
@@ -299,6 +327,73 @@ def apply_bulk_reviews(
     }
 
 
+def apply_bulk_profile_reviews(
+    db: Database,
+    profile_ids: list[str],
+    *,
+    dry_run: bool = True,
+) -> dict[str, Any]:
+    reviewed_at = datetime.now(UTC).replace(tzinfo=None)
+    review_details = build_profile_review_details(reviewed_at=reviewed_at)
+    risk = review_details["risk"]
+    action = review_details["action"]
+    client_status = "alerted" if action == "submit_to_client" else "open"
+    if action == "ignore":
+        client_status = "no_action"
+
+    updated = 0
+    skipped = 0
+    errors: list[dict[str, str]] = []
+
+    for profile_id in profile_ids:
+        if dry_run:
+            updated += 1
+            continue
+
+        try:
+            oid = ObjectId(profile_id)
+        except Exception:
+            errors.append({"ad_profile_id": profile_id, "error": "invalid ObjectId"})
+            skipped += 1
+            continue
+
+        existing = db["Ad_profiles"].find_one(
+            {"_id": oid},
+            {"workflow.review_status": 1},
+        )
+        if not existing:
+            errors.append({"ad_profile_id": profile_id, "error": "not found"})
+            skipped += 1
+            continue
+        if (existing.get("workflow") or {}).get("review_status") == "reviewed":
+            skipped += 1
+            continue
+
+        db["Ad_profiles"].update_one(
+            {"_id": oid},
+            {
+                "$set": {
+                    "review_details": review_details,
+                    "workflow.review_status": "reviewed",
+                    "workflow.reviewed_at": reviewed_at,
+                    "workflow.client_status": client_status,
+                    "list.risk": risk,
+                    "list.risk_rank": risk,
+                    "system.updated_at": reviewed_at,
+                }
+            },
+        )
+        updated += 1
+
+    return {
+        "dry_run": dry_run,
+        "would_update" if dry_run else "updated": updated,
+        "skipped": skipped,
+        "errors": errors,
+        "profile_review_template": PROFILE_REVIEW_TEMPLATE,
+    }
+
+
 def run_bulk_review_cloak_ads(
     db: Database,
     *,
@@ -307,12 +402,15 @@ def run_bulk_review_cloak_ads(
     dry_run: bool = True,
     reviewer_email: str = DEFAULT_REVIEWER,
     only_pending: bool = True,
+    with_profiles: bool = True,
+    cloak_unlocked_only: bool = True,
 ) -> dict[str, Any]:
     collected = collect_bulk_review_targets(
         db,
         start=start,
         end=end,
         only_pending=only_pending,
+        cloak_unlocked_only=cloak_unlocked_only,
     )
     apply_result = apply_bulk_reviews(
         db,
@@ -320,12 +418,21 @@ def run_bulk_review_cloak_ads(
         reviewer_email=reviewer_email,
         dry_run=dry_run,
     )
+    profile_apply: dict[str, Any] | None = None
+    if with_profiles:
+        profile_apply = apply_bulk_profile_reviews(
+            db,
+            collected.get("unique_profile_ids") or [],
+            dry_run=dry_run,
+        )
     return {
         "ok": True,
         "date_range": {"start": start.isoformat(), "end_exclusive": end.isoformat()},
         "dry_run": dry_run,
+        "with_profiles": with_profiles,
         **collected,
         "apply": apply_result,
+        "profile_apply": profile_apply,
     }
 
 

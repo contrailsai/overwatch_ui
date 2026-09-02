@@ -12,6 +12,7 @@ import {
   insertCaseEvent,
 } from '@/lib/ads/ad-helpers'
 import { REVIEWED_ADS_FILTER } from '@/lib/ads/reviewed-ad-filter'
+import { buildAdChannelMatchCondition } from '@/lib/ads/ad-channel-filter'
 import {
   mapUiClientStatusToV3,
   buildEffectiveThreatScoreRange,
@@ -34,9 +35,18 @@ function escapeRegex(text) {
 function buildAdsMatchQuery(filters = {}) {
   const andConditions = [REVIEWED_ADS_FILTER]
 
-  if (filters.platform && filters.platform !== 'all') {
+  const channelMatch = buildAdChannelMatchCondition(filters.channel)
+  if (channelMatch) {
+    andConditions.push(channelMatch)
+  }
+
+  if (filters.display_format && filters.display_format !== 'all') {
+    const format = String(filters.display_format).toUpperCase()
     andConditions.push({
-      platform: { $regex: new RegExp(`^${escapeRegex(filters.platform)}$`, 'i') },
+      $or: [
+        { 'list.display_format': { $regex: new RegExp(`^${format}$`, 'i') } },
+        { 'content.display_format': { $regex: new RegExp(`^${format}$`, 'i') } },
+      ],
     })
   }
 
@@ -101,6 +111,13 @@ function buildAdsMatchQuery(filters = {}) {
     if (filters.start_date_from) dateRange.$gte = new Date(filters.start_date_from)
     if (filters.start_date_to) dateRange.$lte = new Date(filters.start_date_to)
     andConditions.push({ 'list.start_date': dateRange })
+  }
+
+  if (filters.alert_date_from || filters.alert_date_to) {
+    const dateRange = {}
+    if (filters.alert_date_from) dateRange.$gte = new Date(filters.alert_date_from)
+    if (filters.alert_date_to) dateRange.$lte = new Date(filters.alert_date_to)
+    andConditions.push({ 'list.reviewed_at': dateRange })
   }
 
   if (filters.risk && filters.risk !== 'all') {
