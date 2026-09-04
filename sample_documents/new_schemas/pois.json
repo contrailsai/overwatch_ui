@@ -4,10 +4,19 @@
   },
   "name": "mukesh ambani",
   "display_name": "Mukesh Ambani",
-  "aliases": [
-    "Mukesh Ambani"
-  ],
-  "meta": {},
+  "aliases": [],
+  "tier": "other",
+  "summary": "",
+  "image": {
+    "s3_url": null,
+    "s3_key": null
+  },
+  "meta": {
+    "title": "",
+    "organization": "",
+    "state": "",
+    "notes": ""
+  },
   "topics": [
     {
       "$oid": "6a5000010000000000000001"
@@ -15,7 +24,9 @@
   ],
   "topic_count": 1,
   "post_count": 12,
-  "is_shell": true,
+  "is_shell": false,
+  "status": "active",
+  "merged_into": null,
   "created_at": {
     "$date": "2026-07-03T10:00:00.000Z"
   },

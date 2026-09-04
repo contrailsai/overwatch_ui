@@ -16,6 +16,9 @@ create table public.project (
 --                   omit or true = show that sidebar group + its routes
 --                   false = gray out in sidebar (non-clickable) and 404 the routes
 --                   missing sections object defaults all four to true
+--   default_landing_page  '/' | '/cases' | '/ads' | '/domains' | '/feeds'
+--                   first page after login; omit defaults to '/' (Analytics)
+--                   if mapped section is disabled, redirect falls back to '/'
 
 create table public.client_details (
   id uuid not null default auth.uid (),

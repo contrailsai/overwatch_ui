@@ -36,6 +36,25 @@ Preview targets without running the full pipeline:
 
 Artifacts land in `./out/` (`run_new_result.json`, `cloak_probe_targets.txt`, etc.).
 
+## Cloak probe (standalone)
+
+Mobile Android token probing lives in **`Data_pipeline_test/domain_analyzer/`** — one Mongo connection per batch:
+
+```bash
+DB_NAME=SEBI-Data-Search "$PIPELINE_ROOT/.venv/bin/python" \
+  "$PIPELINE_ROOT/domain_analyzer/run_cloak_probe.py" \
+  --retry-not-unlocked-only \
+  --out ./out
+```
+
+Resume from a targets file (single connection, no per-domain reconnect):
+
+```bash
+./resume_mobile_probe.sh 25   # 0-based start index
+```
+
+Skip known-bad hosts by default (`economicinsight360.com`, `ipomoeazenithlau.quest`); override with `--skip-domains`.
+
 ## Cloak probe device profile
 
 Probes run in **Android mobile view** (Playwright `Pixel 5` preset) so device-gated scam landers are captured. Desktop-only cloaks that still render on mobile continue to unlock; new mobile-only cloaks are detected.

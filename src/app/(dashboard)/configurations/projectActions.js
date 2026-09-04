@@ -5,7 +5,11 @@ import clientPromise from '@/utils/mongodb/client'
 import { postsCollection } from '@/utils/mongodb/collections'
 import { revalidatePath } from 'next/cache'
 import { getAuthContext, requireRole, invalidateTenantContext } from '@/utils/auth-context'
-import { normalizeSections } from '@/lib/project-sections'
+import {
+  normalizeSections,
+  normalizeDefaultLandingPage,
+  resolveDefaultLandingPage,
+} from '@/lib/project-sections'
 import { runInSpan, traceAction } from '@/utils/tracing'
 import { logActionError, LOKI_STREAMS } from '@/utils/otel-logger'
 
@@ -453,6 +457,7 @@ export const updateProjectSections = traceAction('configurations.updateProjectSe
   }
 
   projectDetails.sections = normalizeSections(sectionsInput)
+  projectDetails.default_landing_page = resolveDefaultLandingPage(projectDetails)
 
   const supabase = await createClient()
   const { error } = await runInSpan(
@@ -480,7 +485,11 @@ export const updateProjectSections = traceAction('configurations.updateProjectSe
   revalidatePath('/', 'layout')
   revalidatePath('/configurations')
 
-  return { success: true, sections: projectDetails.sections }
+  return {
+    success: true,
+    sections: projectDetails.sections,
+    default_landing_page: projectDetails.default_landing_page,
+  }
 }, { loki_stream: LOKI_STREAMS.configurations })
 
 export const updateDoTakedowns = traceAction('configurations.updateDoTakedowns', async (enabled) => {
@@ -547,4 +556,76 @@ export const updateDoTakedowns = traceAction('configurations.updateDoTakedowns',
   revalidatePath('/configurations')
 
   return { success: true, do_takedowns: projectDetails.do_takedowns }
+}, { loki_stream: LOKI_STREAMS.configurations })
+
+export const updateDefaultLandingPage = traceAction('configurations.updateDefaultLandingPage', async (value) => {
+  const ctx = await getAuthContext()
+  if (!ctx?.clientDetails?.project_name) {
+    return { error: 'Not authenticated' }
+  }
+
+  const projectData = ctx.project
+  if (!projectData?.mongo_db_map) {
+    return { error: 'Project not found' }
+  }
+
+  const allowedRoles = ['client-admin', 'reviewer']
+  if (!allowedRoles.includes(ctx.clientDetails.permission)) {
+    return { error: 'Insufficient permissions to update project settings' }
+  }
+
+  if (projectData.editable !== true) {
+    return { error: 'Project details are locked for this project' }
+  }
+
+  let projectDetails = {}
+  try {
+    projectDetails = typeof projectData?.project_details === 'string'
+      ? JSON.parse(projectData.project_details)
+      : (projectData?.project_details || {})
+  } catch (e) {
+    logActionError({
+      loki_stream: LOKI_STREAMS.configurations,
+      app_action: 'updateDefaultLandingPage',
+      message: 'Error parsing project_details',
+    }, e)
+    console.error('Error parsing project_details:', e)
+    projectDetails = {}
+  }
+
+  const normalized = normalizeDefaultLandingPage(value)
+  projectDetails.default_landing_page = normalized
+  const resolved = resolveDefaultLandingPage(projectDetails)
+  if (resolved !== normalized) {
+    return { error: 'That landing page is disabled for this project' }
+  }
+  projectDetails.default_landing_page = resolved
+
+  const supabase = await createClient()
+  const { error } = await runInSpan(
+    'configurations.updateDefaultLandingPage.supabase_update',
+    async () =>
+      supabase
+        .from('project')
+        .update({ project_details: projectDetails })
+        .eq('project_name', ctx.clientDetails.project_name),
+    { 'app.span_type': 'supabase_query' }
+  )
+
+  if (error) {
+    logActionError({
+      loki_stream: LOKI_STREAMS.configurations,
+      app_action: 'updateDefaultLandingPage',
+      message: 'Error updating default_landing_page',
+      project_name: ctx.clientDetails.project_name,
+    }, error)
+    console.error('Error updating default_landing_page:', error)
+    return { error: 'Failed to update default landing page' }
+  }
+
+  await invalidateTenantContext(ctx.user?.id)
+  revalidatePath('/', 'layout')
+  revalidatePath('/configurations')
+
+  return { success: true, default_landing_page: projectDetails.default_landing_page }
 }, { loki_stream: LOKI_STREAMS.configurations })

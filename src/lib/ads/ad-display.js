@@ -184,14 +184,46 @@ function mediaPosterUrl(item, { allowS3 = false } = {}) {
   )
 }
 
+function isThumbnailRole(m) {
+  return String(m?.role || '').toLowerCase() === 'thumbnail'
+}
+
 function resolveMediaCandidates(ad, card = null) {
   const content = ad?.content || {}
   const mode = getAdCreativeMode(ad)
   if (mode === 'card') {
-    const active = card || content.cards?.[0] || null
-    return Array.isArray(active?.media) ? active.media : []
+    const cards = Array.isArray(content.cards) ? content.cards : []
+    const active = card || cards[0] || null
+    const cardMedia = Array.isArray(active?.media) ? active.media : []
+    const hasPlayable = cardMedia.some((m) => mediaPlayableUrl(m, { allowS3: true }))
+    if (hasPlayable || !active) return cardMedia
+
+    let idx = cards.indexOf(active)
+    if (idx < 0 && active?.media?.[0]?.card_index != null) {
+      idx = Number(active.media[0].card_index)
+    }
+    if (!Number.isFinite(idx) || idx < 0) idx = 0
+
+    const fromFlat = (Array.isArray(content.media) ? content.media : []).filter(
+      (m) => Number(m?.card_index) === idx && !isThumbnailRole(m),
+    )
+    return fromFlat.length > 0 ? fromFlat : cardMedia
   }
   return Array.isArray(content.media) ? content.media : []
+}
+
+/** Filmstrip thumb for card i — card media, else flat content.media by card_index. */
+export function getCardFilmstripThumbItem(ad, cardIndex) {
+  const card = ad?.content?.cards?.[cardIndex]
+  const fromCard = card?.media?.[0]
+  if (fromCard && mediaPlayableUrl(fromCard, { allowS3: true })) return fromCard
+  const fromFlat = (ad?.content?.media || []).find(
+    (m) =>
+      Number(m?.card_index) === cardIndex &&
+      !isThumbnailRole(m) &&
+      mediaPlayableUrl(m, { allowS3: true }),
+  )
+  return fromFlat || fromCard || null
 }
 
 /**
@@ -294,9 +326,15 @@ function flattenAdMedia(ad) {
  */
 export function getAdListThumb(ad) {
   const media = flattenAdMedia(ad)
+  // Prefer card/creative image over page thumbnail (avatar)
+  const creativeImage = media.find(
+    (m) => !isThumbnailRole(m) && mediaTypeOf(m) === 'image' && mediaPlayableUrl(m),
+  )
+  if (creativeImage) {
+    return { kind: 'image', url: mediaPlayableUrl(creativeImage) }
+  }
   const thumbImage = media.find(
-    (m) =>
-      (m.role === 'thumbnail' || mediaTypeOf(m) === 'image') && mediaPlayableUrl(m),
+    (m) => mediaTypeOf(m) === 'image' && mediaPlayableUrl(m),
   )
   if (thumbImage) {
     return { kind: 'image', url: mediaPlayableUrl(thumbImage) }

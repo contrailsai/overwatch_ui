@@ -42,3 +42,31 @@ export function normalizeSections(input) {
     feeds: input?.feeds !== false,
   }
 }
+
+export const LANDING_PAGE_OPTIONS = [
+  { value: '/cases', label: 'Posts', section: 'posts' },
+  { value: '/ads', label: 'Ads', section: 'ads' },
+  { value: '/domains', label: 'Domains', section: 'domains' },
+  { value: '/', label: 'Analytics', section: null },
+  { value: '/feeds', label: 'Feeds', section: 'feeds' },
+]
+
+const LANDING_PAGE_VALUES = new Set(LANDING_PAGE_OPTIONS.map((o) => o.value))
+
+export function normalizeDefaultLandingPage(value) {
+  if (typeof value === 'string' && LANDING_PAGE_VALUES.has(value)) {
+    return value
+  }
+  return '/'
+}
+
+export function resolveDefaultLandingPage(projectDetails) {
+  const path = normalizeDefaultLandingPage(projectDetails?.default_landing_page)
+  const option = LANDING_PAGE_OPTIONS.find((o) => o.value === path)
+  if (!option) return '/'
+  if (!option.section) return path
+
+  const sections = getEnabledSections(projectDetails)
+  if (sections[option.section] === false) return '/'
+  return path
+}

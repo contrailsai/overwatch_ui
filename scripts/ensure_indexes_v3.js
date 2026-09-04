@@ -563,6 +563,33 @@ async function ensureIndexesV3(db, log = console.log) {
 
   await ok(topics, { posts: 1 }, { name: 'posts_multikey' }, 'topics: posts multikey')
 
+  await ok(
+    posts,
+    { 'review_details.poi_names': 1, 'list.sourced_at': -1 },
+    { name: 'poi_names_sourced_at' },
+    'Posts: review_details.poi_names + sourced_at (POI informatics)'
+  )
+
+  const pois = db.collection('pois')
+  await ok(
+    pois,
+    { name: 1 },
+    { unique: true, name: 'name_unique' },
+    'pois: name unique'
+  )
+  await ok(
+    pois,
+    { tier: 1, post_count: -1 },
+    { name: 'tier_post_count' },
+    'pois: tier + post_count'
+  )
+  await ok(
+    pois,
+    { status: 1, tier: 1, post_count: -1 },
+    { name: 'status_tier_post_count' },
+    'pois: status + tier + post_count'
+  )
+
   if (failed > 0) {
     throw new Error(`v3 indexes incomplete: ${failed} index(es) failed`)
   }

@@ -11,7 +11,7 @@
 
 The old `Posts` / `Profiles` documents mixed list-sort fields, embeddings, and audit history into one kitchen-sink shape. Schema v3:
 
-1. Uses **lowercase** collection names.
+1. Retains **uppercase** collection names (`Posts`, `Profiles`, `Ads`) for compatibility with existing services.
 2. Materializes hot filter/sort fields under `list.*` and `workflow.*`.
 3. Moves vectors to **`post_embeddings`** / **`profile_embeddings`**.
 4. Moves audit trail to **`case_events`**.
@@ -27,15 +27,17 @@ Every tenant is its own Mongo database (`db_name` from the project’s `mongo_db
 
 | Collection | Role |
 |------------|------|
-| `posts` | Canonical post / case document (`schema_version: 3`) |
-| `profiles` | Canonical profile (`schema_version: 3`); no `posts[]` |
-| `post_embeddings` | 1:1 with `posts._id` via `post_id` |
-| `profile_embeddings` | 1:1 with `profiles._id` via `profile_id` (when used) |
+| `Posts` | Canonical post / case document (`schema_version: 3`) |
+| `Profiles` | Canonical profile (`schema_version: 3`); no embedded `posts[]` |
+| `post_embeddings` | 1:1 with `Posts._id` via `post_id` |
+| `profile_embeddings` | 1:1 with `Profiles._id` via `profile_id` (when used) |
 | `case_events` | Append-only audit log for posts and profiles |
-| `topics` | Topic membership (`posts[]` of ObjectIds); lowercase |
-| `pois` | POI graph nodes |
+| `topics` | Topic membership (`Posts[]` of ObjectIds) |
+| `pois` | POI graph nodes + informatics profiles (`tier`, `summary`, `image`, `meta`, `aliases`; feeds still uses `display_name` / `name` / `post_count`) |
 
-**SQS `collection_name`:** use `"posts"` (not `"Posts"`). The client already sends `"posts"` for manual upload and re-queue AI.
+> **Note:** Collections retain uppercase names (`Posts`, `Profiles`, `Ads`, `Ad_profiles`) but use v3 schema internally. This avoids breaking other services that reference the original collection names.
+
+**SQS `collection_name`:** use `"Posts"`. The client sends `"Posts"` for manual upload and re-queue AI.
 
 ---
 
@@ -169,7 +171,7 @@ Use native BSON `Date` everywhere. Do not store epoch integers or ISO strings fo
 
 ## Document shapes
 
-### `posts` (v3)
+### `Posts` (v3)
 
 ```js
 {
@@ -223,11 +225,11 @@ Use native BSON `Date` everywhere. Do not store epoch integers or ISO strings fo
 
 `caption`, top-level `content` string, `author` / `user` / `profile` blobs, `stats` / `engagement` as the only engagement source, `id` / `code` / `post_id` aliases, `timestamp`, `text_embedding`, `image_embedding`, `metadata.update_history`, `takedown_info.*`, `processed` / `processed_at` as the alert signal.
 
-Canonical identity is `platform_post_id`. Unique index intent: `{ platform: 1, platform_post_id: 1 }`.
+Canonical identity is `platform_post_id`. Unique index intent: `{ platform: 1, platform_post_id: 1 }` on `Posts`.
 
 Full sample: [`sample_documents/new_schemas/posts.json`](../../sample_documents/new_schemas/posts.json).
 
-### `profiles` (v3)
+### `Profiles` (v3)
 
 ```js
 {
@@ -302,8 +304,8 @@ Sample: [`sample_documents/new_schemas/case_events.json`](../../sample_documents
 
 ### 1. Ingest
 
-- [ ] Insert into `posts` / `profiles` (lowercase) with `schema_version: 3`.
-- [ ] Resolve or upsert profile; set `posts.profile_id`; `$inc` `profiles.list.post_count`.
+- [ ] Insert into `Posts` / `Profiles` with `schema_version: 3`.
+- [ ] Resolve or upsert profile; set `Posts.profile_id`; `$inc` `Profiles.list.post_count`.
 - [ ] Write `author_snapshot`, `content.*`, `list.posted_at` / `sourced_at` / `engagement_score`.
 - [ ] Initialize `workflow` + empty/null AI `list.*` scores.
 - [ ] Upsert embeddings into `post_embeddings` (not on the post doc).
@@ -313,7 +315,7 @@ Sample: [`sample_documents/new_schemas/case_events.json`](../../sample_documents
 
 ### 2. Content moderation worker
 
-- [ ] Accept SQS `collection_name: "posts"` (and treat `"Posts"` as legacy alias during transition if needed).
+- [ ] Accept SQS `collection_name: "Posts"`.
 - [ ] **Read** caption/media/author from:
   - `content.caption`
   - `content.media[].s3_url`
@@ -354,7 +356,7 @@ Suggested `$set` after full analysis:
 
 ### 4. Any other readers
 
-- [ ] Replace `Posts` → `posts`, `Profiles` → `profiles`.
+- [ ] Use `Posts` / `Profiles` collection names (unchanged from legacy).
 - [ ] Replace sort/filter on computed fields with `list.*` / `workflow.*`.
 - [ ] Replace action-log reads with `case_events` queries:
   `{ entity_type: "post", entity_id: <ObjectId> }` sorted by `occurred_at: -1`.
@@ -365,7 +367,7 @@ Suggested `$set` after full analysis:
 
 | Legacy | V3 |
 |--------|-----|
-| `Posts` / `Profiles` | `posts` / `profiles` |
+| `Posts` / `Profiles` | `Posts` / `Profiles` (names unchanged; v3 schema inside) |
 | `post_content.caption` | `content.caption` |
 | `post_content.media_urls[]` | `content.media[]` |
 | `profile` / `user` / `author` | `author_snapshot` (+ `profile_id`) |
@@ -395,7 +397,7 @@ Suggested `$set` after full analysis:
 
 ## Indexes expected (create per tenant)
 
-**posts**
+**Posts**
 
 - `{ platform: 1, platform_post_id: 1 }` unique  
 - `{ "workflow.review_status": 1, "list.risk_rank": -1, "list.alert_hour_ist": -1, "list.engagement_score": -1 }`  
@@ -407,7 +409,7 @@ Suggested `$set` after full analysis:
 - `{ "list.cluster_id": 1, "list.is_cluster_representative": 1, "list.risk_rank": -1 }`  
 - `{ "workflow.takedown_status": 1, "takedown.initiated_at": -1 }`  
 
-**profiles**
+**Profiles**
 
 - `{ platform: 1, platform_user_id: 1 }` unique  
 - `{ "workflow.review_status": 1, "list.risk_rank": -1, "list.last_active_at": -1 }`  

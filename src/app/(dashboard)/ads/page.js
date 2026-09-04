@@ -29,8 +29,6 @@ export default async function AdsPage({ searchParams }) {
     channel: resolvedParams.channel || 'all',
     status: resolvedParams.status || 'all',
     searchText: resolvedParams.search || '',
-    start_date_from: resolvedParams.start_date_from || null,
-    start_date_to: resolvedParams.start_date_to || null,
     alert_date_from: resolvedParams.alert_date_from || null,
     alert_date_to: resolvedParams.alert_date_to || null,
     risk: resolvedParams.risk || 'all',
@@ -39,7 +37,7 @@ export default async function AdsPage({ searchParams }) {
   }
 
   const sort = {
-    field: resolvedParams.sortField || 'risk',
+    field: resolvedParams.sortField || 'reviewed_at',
     direction: resolvedParams.sortDirection === 'asc' ? 'asc' : 'desc',
   }
 

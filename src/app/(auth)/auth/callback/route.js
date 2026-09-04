@@ -1,12 +1,15 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/utils/supabase/server'
+import { getAuthContext } from '@/utils/auth-context'
+import { resolveDefaultLandingPage } from '@/lib/project-sections'
 import { flushOtelLogs, logActionWarn, LOKI_STREAMS, otelLogger } from '@/utils/otel-logger'
 
 export async function GET(request) {
   const { searchParams, origin } = new URL(request.url)
   const code = searchParams.get('code')
-  // if "next" is in param, use it as the redirect URL
-  const next = searchParams.get('next') ?? '/'
+  // Explicit deep-link next param wins; otherwise use project default landing page
+  const hasExplicitNext = searchParams.has('next')
+  const nextParam = searchParams.get('next')
   const forwardedHost = request.headers.get('x-forwarded-host')
   const isLocalEnv = process.env.NODE_ENV === 'development'
 
@@ -14,6 +17,12 @@ export async function GET(request) {
     const supabase = await createClient()
     const { error } = await supabase.auth.exchangeCodeForSession(code)
     if (!error) {
+      let next = hasExplicitNext ? (nextParam || '/') : null
+      if (!next) {
+        const ctx = await getAuthContext()
+        next = resolveDefaultLandingPage(ctx?.project?.project_details)
+      }
+
       otelLogger.info('[auth.callback] exchangeCodeForSession success', {
         app_span_type: 'auth_callback',
         has_forwarded_host: !!forwardedHost,

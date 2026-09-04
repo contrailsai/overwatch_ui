@@ -10,14 +10,14 @@ This document records all client-side changes made so the Overwatch UI reads and
 
 ## Overview
 
-The v3 database uses **lowercase collection names** and **materialized sub-documents** for list queries. The UI layer keeps the same normalized response shape (e.g. `client_status`, `takedown_info`, `user`) via server-side mappers so React components did not require a full rewrite.
+The v3 database retains **uppercase collection names** (`Posts`, `Profiles`, `Ads`, `Ad_profiles`) for compatibility with other services, and uses **materialized sub-documents** for list queries. The UI layer keeps the same normalized response shape (e.g. `client_status`, `takedown_info`, `user`) via server-side mappers so React components did not require a full rewrite.
 
 ### Collections (v3)
 
 | Legacy | V3 | Notes |
 |--------|-----|-------|
-| `Posts` | `posts` | Main case/post documents |
-| `Profiles` | `profiles` | Profile documents; no embedded `posts[]` |
+| `Posts` | `Posts` | Main case/post documents (name unchanged; v3 schema inside) |
+| `Profiles` | `Profiles` | Profile documents; no embedded `posts[]` (name unchanged) |
 | — | `post_embeddings` | 1:1 with `post_id`; Atlas vector index lives here |
 | — | `profile_embeddings` | 1:1 with profile |
 | — | `case_events` | Unified audit log |
@@ -29,13 +29,13 @@ The v3 database uses **lowercase collection names** and **materialized sub-docum
 
 | Collection | Count |
 |------------|------:|
-| `posts` | 2,407 |
-| `profiles` | 2,363 |
+| `Posts` | 2,407 |
+| `Profiles` | 2,363 |
 | `post_embeddings` | 2,857 |
 | `case_events` | 10,981 |
 | `topics` | 505 |
 
-Reviewed cases filter returns **2,407** posts. Profiles with `list.reviewed_post_count > 0` returns **1,878**.
+Reviewed cases filter returns **2,407** Posts. Profiles with `list.reviewed_post_count > 0` returns **1,878**.
 
 ---
 

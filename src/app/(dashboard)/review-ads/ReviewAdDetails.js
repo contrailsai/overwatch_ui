@@ -45,6 +45,7 @@ import {
   getAdPrimaryMedia,
   getAdSourceLinkLabel,
   getAdViewableMedia,
+  getCardFilmstripThumbItem,
   getDefaultMediaIndex,
   isTemplatePlaceholder,
 } from '@/lib/ads/ad-display'
@@ -711,7 +712,7 @@ export default function ReviewAdForm({
                     setActiveCard(i)
                     setActiveMediaIndex(getDefaultMediaIndex(getAdViewableMedia(adForMedia, cards[i])))
                   }}
-                  getThumbItem={(_, i) => cards[i]?.media?.[0]}
+                  getThumbItem={(_, i) => getCardFilmstripThumbItem(adForMedia, i)}
                 />
               )}
               {mediaNav.kind === 'media' && (
