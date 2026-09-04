@@ -73,3 +73,46 @@ export function buildAdChannelMatchCondition(channel) {
 
   return null
 }
+
+/**
+ * Aggregation expression: lower rank = higher list priority.
+ * ingestion (0) > feed (1) > library (2). Mirrors getAdChannel().
+ */
+export function buildAdChannelRankExpression() {
+  const channelLower = { $toLower: { $ifNull: ['$channel', ''] } }
+  const submittedUrl = { $ifNull: ['$submitted_url', ''] }
+  const ingestionType = { $ifNull: ['$ingestion.type', ''] }
+  const sourceUrl = {
+    $ifNull: [
+      '$original_url',
+      { $ifNull: ['$original_link', { $ifNull: ['$ingestion.source_url', ''] }] },
+    ],
+  }
+
+  const isClientIngested = {
+    $or: [
+      { $gt: [{ $strLenCP: submittedUrl }, 0] },
+      { $in: [ingestionType, CLIENT_INGESTION_TYPES] },
+    ],
+  }
+
+  const isLibraryUrl = {
+    $regexMatch: {
+      input: { $ifNull: [sourceUrl, ''] },
+      regex: LIBRARY_URL_REGEX,
+    },
+  }
+
+  return {
+    $switch: {
+      branches: [
+        { case: { $eq: [channelLower, AD_CHANNEL.INGESTION] }, then: 0 },
+        { case: { $in: [channelLower, [AD_CHANNEL.LIBRARY, 'ads_library']] }, then: 2 },
+        { case: { $eq: [channelLower, AD_CHANNEL.FEED] }, then: 1 },
+        { case: isClientIngested, then: 0 },
+        { case: isLibraryUrl, then: 2 },
+      ],
+      default: 1,
+    },
+  }
+}

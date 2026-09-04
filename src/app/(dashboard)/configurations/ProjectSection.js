@@ -6,6 +6,7 @@ import {
     updateLabels,
     updateProjectSections,
     updateDoTakedowns,
+    updateDefaultLandingPage,
     get_cron_jobs,
     create_cron_job,
     update_cron_job,
@@ -27,7 +28,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { format } from 'date-fns'
-import { SECTION_META, getEnabledSections } from '@/lib/project-sections'
+import { SECTION_META, getEnabledSections, LANDING_PAGE_OPTIONS, resolveDefaultLandingPage } from '@/lib/project-sections'
 
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
@@ -202,6 +203,9 @@ export default function ProjectSection({ project, isEditable }) {
     const [cronForm, setCronForm] = useState(defaultCronForm)
     const [sections, setSections] = useState(() => getEnabledSections(project?.project_details))
     const [doTakedowns, setDoTakedowns] = useState(() => project?.project_details?.do_takedowns !== false)
+    const [defaultLandingPage, setDefaultLandingPage] = useState(
+        () => resolveDefaultLandingPage(project?.project_details)
+    )
     const [sectionFeedback, setSectionFeedback] = useState(null)
 
     const [projectDescription, setProjectDescription] = useState(project?.project_details?.description || '')
@@ -232,19 +236,29 @@ export default function ProjectSection({ project, isEditable }) {
     useEffect(() => {
         setSections(getEnabledSections(project?.project_details))
         setDoTakedowns(project?.project_details?.do_takedowns !== false)
-    }, [project?.project_details?.sections, project?.project_details?.do_takedowns])
+        setDefaultLandingPage(resolveDefaultLandingPage(project?.project_details))
+    }, [project?.project_details?.sections, project?.project_details?.do_takedowns, project?.project_details?.default_landing_page])
 
     const handleSectionToggle = (key, enabled) => {
         const previous = sections
+        const previousLanding = defaultLandingPage
         const next = { ...sections, [key]: enabled }
         setSections(next)
+        const landingOption = LANDING_PAGE_OPTIONS.find((o) => o.value === defaultLandingPage)
+        if (landingOption?.section === key && !enabled) {
+            setDefaultLandingPage('/')
+        }
         startSectionTransition(async () => {
             const res = await updateProjectSections(next)
             if (res?.error) {
                 setSections(previous)
+                setDefaultLandingPage(previousLanding)
                 setSectionFeedback({ type: 'error', message: res.error })
                 setTimeout(() => setSectionFeedback(null), 4000)
                 return
+            }
+            if (res?.default_landing_page) {
+                setDefaultLandingPage(res.default_landing_page)
             }
             setSectionFeedback({ type: 'success', message: 'Monitoring sections updated' })
             setTimeout(() => setSectionFeedback(null), 3000)
@@ -264,6 +278,23 @@ export default function ProjectSection({ project, isEditable }) {
                 return
             }
             setSectionFeedback({ type: 'success', message: 'Takedowns setting updated' })
+            setTimeout(() => setSectionFeedback(null), 3000)
+            router.refresh()
+        })
+    }
+
+    const handleDefaultLandingPageChange = (value) => {
+        const previous = defaultLandingPage
+        setDefaultLandingPage(value)
+        startSectionTransition(async () => {
+            const res = await updateDefaultLandingPage(value)
+            if (res?.error) {
+                setDefaultLandingPage(previous)
+                setSectionFeedback({ type: 'error', message: res.error })
+                setTimeout(() => setSectionFeedback(null), 4000)
+                return
+            }
+            setSectionFeedback({ type: 'success', message: 'Default landing page updated' })
             setTimeout(() => setSectionFeedback(null), 3000)
             router.refresh()
         })
@@ -743,6 +774,58 @@ export default function ProjectSection({ project, isEditable }) {
                                 aria-label="Show Takedowns in sidebar"
                                 className="touch-manipulation"
                             />
+                        </div>
+                    </CardContent>
+                </Card>
+            </section>
+
+            <section className="space-y-4 w-full">
+                <div className="flex items-center gap-2 px-1">
+                    <Globe className="w-4 h-4 text-slate-400" />
+                    <h2 className="text-sm font-bold text-slate-500 uppercase tracking-widest">Default Landing Page</h2>
+                </div>
+                <Card className="border-slate-200 shadow-sm rounded-xl overflow-hidden p-0">
+                    <CardHeader className="bg-slate-50/50 border-b border-slate-100 pt-8 pb-5">
+                        <CardTitle className="text-lg font-bold text-slate-800">After login</CardTitle>
+                        <CardDescription className="text-slate-500">
+                            Choose the first page clients and reviewers land on after signing in. Options tied to disabled monitoring sections are greyed out.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent className="px-6 py-5">
+                        <div className="space-y-2 max-w-md">
+                            <Label htmlFor="default-landing-page" className="text-sm font-bold text-slate-700">
+                                Default page
+                            </Label>
+                            <Select
+                                value={defaultLandingPage}
+                                onValueChange={handleDefaultLandingPageChange}
+                                disabled={!isEditable || sectionPending}
+                            >
+                                <SelectTrigger
+                                    id="default-landing-page"
+                                    className="w-full bg-white border-slate-200 h-11 focus:ring-blue-500/20"
+                                >
+                                    <SelectValue placeholder="Select default page" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {LANDING_PAGE_OPTIONS.map((option) => {
+                                        const sectionDisabled = option.section
+                                            ? sections[option.section] === false
+                                            : false
+                                        return (
+                                            <SelectItem
+                                                key={option.value}
+                                                value={option.value}
+                                                disabled={sectionDisabled}
+                                                className="py-3"
+                                            >
+                                                {option.label}
+                                                {sectionDisabled ? ' (disabled)' : ''}
+                                            </SelectItem>
+                                        )
+                                    })}
+                                </SelectContent>
+                            </Select>
                         </div>
                     </CardContent>
                     {sectionFeedback && (

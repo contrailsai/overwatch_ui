@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation'
 import {
   List, FileText, ShieldAlert, Settings, UserStar, LogOut, LayoutDashboard,
   ShieldCheck, GitPullRequestCreateArrow, Users, Menu, X, ScanEye, UserRoundPen,
-  Rss, Library, ChevronDown, FileStack, Megaphone, Globe,
+  Rss, Library, ChevronDown, FileStack, Megaphone, Globe, UserRoundSearch,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getEnabledSections } from '@/lib/project-sections'
@@ -205,6 +205,7 @@ export function Sidebar({ user, clientDetails, project }) {
           { name: 'Content List', href: '/cases', icon: List, show: true },
           { name: 'Review Profiles', href: '/review-profiles', icon: UserRoundPen, show: isReviewer },
           { name: 'Profile List', href: '/profiles', icon: Users, show: true },
+          { name: 'POIs', href: '/pois', icon: UserRoundSearch, show: true },
         ],
       },
       {

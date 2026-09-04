@@ -14,8 +14,6 @@ import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { DateFilterPopover } from '@/app/(dashboard)/cases/DateFilterPopover'
-import { RiskFilter } from '@/app/(dashboard)/cases/RiskFilter'
-import { StatusFilter } from '@/app/(dashboard)/cases/StatusFilter'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { getRiskLabel } from '@/app/(dashboard)/cases/riskBuckets'
 import {
@@ -425,18 +423,6 @@ function AdTableRow({ ad, isChecked, onOpen, onToggle }) {
         </span>
       </td>
       <td className="px-2 py-2.5 whitespace-nowrap align-middle hidden xl:table-cell border-b border-slate-50">
-        <span
-          className={cn(
-            'text-[10px] font-medium px-1.5 py-0.5 rounded border',
-            fields.visibility.down
-              ? 'bg-slate-100 text-slate-600 border-slate-200'
-              : 'bg-emerald-50 text-emerald-700 border-emerald-100',
-          )}
-        >
-          {fields.visibility.label}
-        </span>
-      </td>
-      <td className="px-2 py-2.5 whitespace-nowrap align-middle hidden xl:table-cell border-b border-slate-50">
         {fields.impressions.text ? (
           <span className="inline-flex items-center gap-0.5 text-[11px] text-slate-600 tabular-nums">
             <Eye className="h-3 w-3 text-slate-400" />
@@ -449,9 +435,6 @@ function AdTableRow({ ad, isChecked, onOpen, onToggle }) {
       <td className="px-2 py-2.5 whitespace-nowrap align-middle hidden lg:table-cell border-b border-slate-50">
         <span className="text-[11px] text-slate-600 tabular-nums">{fields.alertDate || '—'}</span>
       </td>
-      <td className="px-2 py-2.5 whitespace-nowrap align-middle hidden xl:table-cell border-b border-slate-50">
-        <span className="text-[11px] text-slate-600 tabular-nums">{fields.startDate || '—'}</span>
-      </td>
       <td className="px-2 sm:px-4 py-2.5 whitespace-nowrap align-middle border-b border-slate-50 text-right">
         <ArrowRight className="w-4 h-4 text-slate-300 group-hover:text-blue-600 inline-block" />
       </td>
@@ -463,7 +446,7 @@ export function AdsList({
   ads,
   project,
   initialFilters,
-  initialSort = { field: 'risk', direction: 'desc' },
+  initialSort = { field: 'reviewed_at', direction: 'desc' },
   currentPage,
   itemsPerPage,
   initialAd = null,
@@ -664,8 +647,6 @@ export function AdsList({
     (initialFilters.channel && initialFilters.channel !== 'all') ||
     initialFilters.status !== 'all' ||
     Boolean(initialFilters.searchText) ||
-    Boolean(initialFilters.start_date_from) ||
-    Boolean(initialFilters.start_date_to) ||
     Boolean(initialFilters.alert_date_from) ||
     Boolean(initialFilters.alert_date_to) ||
     (initialFilters.risk && initialFilters.risk !== 'all') ||
@@ -677,11 +658,9 @@ export function AdsList({
   const rangeTo = localAds.length === 0 ? 0 : rangeFrom + localAds.length - 1
 
   const sortLabel =
-    initialSort.field === 'start_date'
-      ? 'Start date'
-      : initialSort.field === 'reviewed_at'
-        ? 'Alert date'
-        : 'Risk'
+    initialSort.field === 'reviewed_at' || initialSort.field === 'alert_date'
+      ? 'Alert date'
+      : 'Risk'
 
   return (
     <div className="flex h-full overflow-hidden bg-[#f4f6f8]">
@@ -812,7 +791,7 @@ export function AdsList({
                   'grid gap-x-2.5 gap-y-2.5',
                   selectedAd
                     ? 'grid-cols-2'
-                    : 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6',
+                    : 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-5',
                 )}
               >
                 <div className="min-w-0">
@@ -822,26 +801,40 @@ export function AdsList({
                   />
                 </div>
 
-                <div className="min-w-0">
-                  <StatusFilter
-                    label="Status"
-                    placeholder="All status"
-                    initialStatus={initialFilters.status}
-                    onChange={(val) => handleFilterChange('status', val)}
-                    options={[
-                      { value: 'No Action', label: 'No Action' },
-                      { value: 'Flag for Takedown', label: 'Flag for Takedown' },
-                      { value: 'To Be Reviewed', label: 'To Be Reviewed' },
-                    ]}
-                  />
-                </div>
+                <FilterField label="Status">
+                  <Select
+                    value={initialFilters.status || 'all'}
+                    onValueChange={(val) => handleFilterChange('status', val)}
+                  >
+                    <SelectTrigger size="sm" className={FILTER_TRIGGER}>
+                      <SelectValue placeholder="All status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All status</SelectItem>
+                      <SelectItem value="No Action">No Action</SelectItem>
+                      <SelectItem value="Flag for Takedown">Flag for Takedown</SelectItem>
+                      <SelectItem value="To Be Reviewed">To Be Reviewed</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </FilterField>
 
-                <div className="min-w-0">
-                  <RiskFilter
-                    initialRisk={initialFilters.risk || 'all'}
-                    onChange={(val) => handleFilterChange('risk', val)}
-                  />
-                </div>
+                <FilterField label="Risk">
+                  <Select
+                    value={initialFilters.risk || 'all'}
+                    onValueChange={(val) => handleFilterChange('risk', val)}
+                  >
+                    <SelectTrigger size="sm" className={FILTER_TRIGGER}>
+                      <SelectValue placeholder="All risks" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All risks</SelectItem>
+                      <SelectItem value="high">High Risk</SelectItem>
+                      <SelectItem value="medium">Medium Risk</SelectItem>
+                      <SelectItem value="low">Low Risk</SelectItem>
+                      <SelectItem value="safe">Safe</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </FilterField>
 
                 <FilterField label="Visibility">
                   <Select
@@ -878,19 +871,6 @@ export function AdsList({
                       <SelectItem value="SLIDESHOW">Slideshow</SelectItem>
                     </SelectContent>
                   </Select>
-                </FilterField>
-
-                <FilterField label="Start date">
-                  <DateFilterPopover
-                    title="Start Date"
-                    initialFrom={initialFilters.start_date_from}
-                    initialTo={initialFilters.start_date_to}
-                    onApply={(range) => updateQueryParams({
-                      start_date_from: range?.from ? range.from.toISOString() : null,
-                      start_date_to: range?.to ? range.to.toISOString() : null,
-                      page: 1,
-                    })}
-                  />
                 </FilterField>
 
                 <FilterField label="Alert date">
@@ -930,11 +910,6 @@ export function AdsList({
                       {initialFilters.risk} risk
                     </span>
                   )}
-                  {(initialFilters.start_date_from || initialFilters.start_date_to) && (
-                    <span className="px-2 py-0.5 bg-amber-50 text-amber-700 rounded font-bold text-[10px] uppercase tracking-wider border border-amber-100">
-                      Start date
-                    </span>
-                  )}
                   {(initialFilters.alert_date_from || initialFilters.alert_date_to) && (
                     <span className="px-2 py-0.5 bg-amber-50 text-amber-700 rounded font-bold text-[10px] uppercase tracking-wider border border-amber-100">
                       Alert date
@@ -955,6 +930,8 @@ export function AdsList({
 
               <p className="text-[10px] text-slate-400">
                 Sorted by {sortLabel} ({initialSort.direction === 'asc' ? 'ascending' : 'descending'})
+                {(initialSort.field === 'reviewed_at' || initialSort.field === 'alert_date' || !initialSort.field) &&
+                  ', then channel (ingestion → feed → library)'}
               </p>
             </div>
           )}
@@ -1052,9 +1029,6 @@ export function AdsList({
                         Channel
                       </th>
                       <th scope="col" className="w-24 px-2 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider hidden xl:table-cell border-b border-slate-100">
-                        Visibility
-                      </th>
-                      <th scope="col" className="w-24 px-2 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider hidden xl:table-cell border-b border-slate-100">
                         Impr.
                       </th>
                       <th
@@ -1065,16 +1039,6 @@ export function AdsList({
                         <div className="flex items-center">
                           Alert
                           <SortIcon field="reviewed_at" />
-                        </div>
-                      </th>
-                      <th
-                        scope="col"
-                        className="w-28 px-2 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100/50 transition-colors group select-none hidden xl:table-cell border-b border-slate-100"
-                        onClick={() => handleSortChange('start_date')}
-                      >
-                        <div className="flex items-center">
-                          Start
-                          <SortIcon field="start_date" />
                         </div>
                       </th>
                       <th scope="col" className="w-12 sm:w-14 px-2 sm:px-4 py-3 text-right border-b border-slate-100" />

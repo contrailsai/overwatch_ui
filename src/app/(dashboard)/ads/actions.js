@@ -12,7 +12,10 @@ import {
   insertCaseEvent,
 } from '@/lib/ads/ad-helpers'
 import { REVIEWED_ADS_FILTER } from '@/lib/ads/reviewed-ad-filter'
-import { buildAdChannelMatchCondition } from '@/lib/ads/ad-channel-filter'
+import {
+  buildAdChannelMatchCondition,
+  buildAdChannelRankExpression,
+} from '@/lib/ads/ad-channel-filter'
 import {
   mapUiClientStatusToV3,
   buildEffectiveThreatScoreRange,
@@ -106,13 +109,6 @@ function buildAdsMatchQuery(filters = {}) {
     })
   }
 
-  if (filters.start_date_from || filters.start_date_to) {
-    const dateRange = {}
-    if (filters.start_date_from) dateRange.$gte = new Date(filters.start_date_from)
-    if (filters.start_date_to) dateRange.$lte = new Date(filters.start_date_to)
-    andConditions.push({ 'list.start_date': dateRange })
-  }
-
   if (filters.alert_date_from || filters.alert_date_to) {
     const dateRange = {}
     if (filters.alert_date_from) dateRange.$gte = new Date(filters.alert_date_from)
@@ -135,19 +131,57 @@ function buildAdsMatchQuery(filters = {}) {
   return { $and: andConditions }
 }
 
-function buildAdsSortPipeline(sort = { field: null, direction: 'desc' }) {
+/**
+ * Aggregation stages for ads list sort.
+ * Default / alert date: bucket by calendar day (ignore time), then channel
+ * priority (ingestion > feed > library).
+ */
+function buildAdsSortStages(sort = { field: null, direction: 'desc' }) {
   const dir = sort.direction === 'asc' ? 1 : -1
-  if (sort.field === 'start_date') {
-    return { 'list.start_date': dir, 'list.effective_threat_score': -1, _id: 1 }
+  const field = sort.field || 'reviewed_at'
+
+  if (field === 'sourced_at') {
+    return [{ $sort: { 'list.sourced_at': dir, 'list.effective_threat_score': -1, _id: 1 } }]
   }
-  if (sort.field === 'sourced_at') {
-    return { 'list.sourced_at': dir, 'list.effective_threat_score': -1, _id: 1 }
+  if (field === 'risk' || field === 'threat_score') {
+    return [{ $sort: { 'list.effective_threat_score': dir, 'list.reviewed_at': -1, _id: 1 } }]
   }
-  if (sort.field === 'reviewed_at' || sort.field === 'alert_date') {
-    return { 'list.reviewed_at': dir, 'list.effective_threat_score': -1, _id: 1 }
-  }
-  // risk / threat_score / default
-  return { 'list.effective_threat_score': dir, 'list.reviewed_at': -1, _id: 1 }
+
+  // reviewed_at / alert_date / default — day bucket then channel priority
+  return [
+    {
+      $addFields: {
+        _sort_alert_day: {
+          $cond: {
+            if: {
+              $in: [{ $type: '$list.reviewed_at' }, ['date', 'string']],
+            },
+            then: {
+              $dateToString: {
+                format: '%Y-%m-%d',
+                date: {
+                  $cond: {
+                    if: { $eq: [{ $type: '$list.reviewed_at' }, 'string'] },
+                    then: { $toDate: '$list.reviewed_at' },
+                    else: '$list.reviewed_at',
+                  },
+                },
+              },
+            },
+            else: null,
+          },
+        },
+        _sort_channel_rank: buildAdChannelRankExpression(),
+      },
+    },
+    {
+      $sort: {
+        _sort_alert_day: dir,
+        _sort_channel_rank: 1,
+        _id: 1,
+      },
+    },
+  ]
 }
 
 function buildAdsReportSortPipeline() {
@@ -219,7 +253,7 @@ export const getAds = traceAction('getAds', async (page = 1, limit = 25, filters
 
     const skip = (page - 1) * limit
     const query = buildAdsMatchQuery(filters)
-    const sortPipeline = buildAdsSortPipeline(sort)
+    const sortStages = buildAdsSortStages(sort)
 
     const facetResult = await collection
       .aggregate([
@@ -227,7 +261,7 @@ export const getAds = traceAction('getAds', async (page = 1, limit = 25, filters
         {
           $facet: {
             data: [
-              { $sort: sortPipeline },
+              ...sortStages,
               { $skip: skip },
               { $limit: limit },
             ],

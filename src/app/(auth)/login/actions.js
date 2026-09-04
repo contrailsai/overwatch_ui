@@ -3,6 +3,8 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/utils/supabase/server'
+import { getAuthContext } from '@/utils/auth-context'
+import { resolveDefaultLandingPage } from '@/lib/project-sections'
 import { logActionWarn, LOKI_STREAMS } from '@/utils/otel-logger'
 import { traceAction } from '@/utils/tracing'
 
@@ -41,7 +43,10 @@ export const login = traceAction(
     }
 
     revalidatePath('/', 'layout')
-    redirect('/')
+
+    const ctx = await getAuthContext()
+    const landing = resolveDefaultLandingPage(ctx?.project?.project_details)
+    redirect(landing)
   },
   { loki_stream: LOKI_STREAMS.auth },
 )

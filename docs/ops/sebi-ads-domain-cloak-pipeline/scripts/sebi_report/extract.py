@@ -27,18 +27,43 @@ from sebi_report.skip_hosts import should_skip_domain  # noqa: E402
 
 
 def iter_ad_urls(ad: dict[str, Any]) -> list[tuple[str, str]]:
-    """Return list of (url, source) where source is 'link' or 'card'."""
+    """Return list of (url, source) from content + source_payload destinations.
+
+    Sources: ``link``, ``card``, ``payload.cta``, ``payload.link.<role>``.
+    Matches UI ``getAdDestinationLinks`` (content + payload CTA/links).
+    """
     out: list[tuple[str, str]] = []
+    seen: set[str] = set()
+
+    def _add(url: Any, source: str) -> None:
+        if not isinstance(url, str):
+            return
+        u = url.strip()
+        if not u or u in seen:
+            return
+        seen.add(u)
+        out.append((u, source))
+
     content = ad.get("content") or {}
-    link = content.get("link_url")
-    if isinstance(link, str) and link.strip():
-        out.append((link.strip(), "link"))
+    _add(content.get("link_url"), "link")
     for card in content.get("cards") or []:
-        if not isinstance(card, dict):
-            continue
-        cu = card.get("link_url")
-        if isinstance(cu, str) and cu.strip():
-            out.append((cu.strip(), "card"))
+        if isinstance(card, dict):
+            _add(card.get("link_url"), "card")
+
+    # Feed / share ingest often keeps the CTA destination only on source_payload
+    # (content.link_url may be a Facebook permalink or empty).
+    payload = ad.get("source_payload") or {}
+    if isinstance(payload, dict):
+        cta = payload.get("cta") or {}
+        if isinstance(cta, dict):
+            _add(cta.get("destination_url") or cta.get("url"), "payload.cta")
+        for link in payload.get("links") or []:
+            if not isinstance(link, dict):
+                continue
+            role = str(link.get("role") or "link").strip() or "link"
+            # Prefer explicit destination_url; skip bare facebook permalinks later via skip_hosts
+            _add(link.get("destination_url") or link.get("url"), f"payload.link.{role}")
+
     return out
 
 
@@ -59,6 +84,9 @@ def extract_unique_domains(db) -> dict[str, Any]:
             "platform_ad_id": 1,
             "content.link_url": 1,
             "content.cards.link_url": 1,
+            "source_payload.cta.destination_url": 1,
+            "source_payload.cta.url": 1,
+            "source_payload.links": 1,
         },
     )
 

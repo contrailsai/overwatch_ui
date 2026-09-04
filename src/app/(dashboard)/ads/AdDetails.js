@@ -32,6 +32,7 @@ import {
   getAdSourceLinkLabel,
   getAdViewableMedia,
   getAdVisibilityLabel,
+  getCardFilmstripThumbItem,
   getDefaultMediaIndex,
   isTemplatePlaceholder,
 } from '@/lib/ads/ad-display'
@@ -410,7 +411,7 @@ export default function AdDetailPanel({
                     setActiveCard(i)
                     setActiveMediaIndex(getDefaultMediaIndex(getAdViewableMedia(ad, cards[i])))
                   }}
-                  getThumbItem={(_, i) => cards[i]?.media?.[0]}
+                  getThumbItem={(_, i) => getCardFilmstripThumbItem(ad, i)}
                 />
               )}
               {mediaNav.kind === 'media' && (

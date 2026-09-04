@@ -45,6 +45,97 @@ export function getFirstAdMediaS3Url(ad) {
   return media[0]?.s3_url || null
 }
 
+/**
+ * Copy s3_url / thumbnail_s3_url from flattened content.media onto cards[].media
+ * when ingest left card media with only CDN original_url.
+ * Skips role=thumbnail (page/list chrome). Pure, O(cards + flat media).
+ */
+export function hydrateCardsMediaFromFlat(cards = [], flatMedia = []) {
+  if (!Array.isArray(cards) || cards.length === 0) return cards || []
+
+  const byCardIndex = new Map()
+  for (const m of flatMedia || []) {
+    if (!m || String(m.role || '').toLowerCase() === 'thumbnail') continue
+    const idx = m.card_index
+    if (idx == null || !Number.isFinite(Number(idx))) continue
+    const key = Number(idx)
+    if (!byCardIndex.has(key)) byCardIndex.set(key, [])
+    byCardIndex.get(key).push(m)
+  }
+
+  return cards.map((card, cardIndex) => {
+    const sources = [...(byCardIndex.get(cardIndex) || [])]
+    const cardMedia = Array.isArray(card?.media) ? card.media : []
+
+    if (cardMedia.length === 0) {
+      if (sources.length === 0) return card
+      return {
+        ...card,
+        media: sources.map((m) => ({
+          ...m,
+          card_index: m.card_index ?? cardIndex,
+        })),
+      }
+    }
+
+    const used = new Set()
+    const hydrated = cardMedia.map((item) => {
+      if (item?.s3_url) return { ...item, card_index: item.card_index ?? cardIndex }
+
+      let matchIdx = -1
+      const orig = item?.original_url
+      if (orig) {
+        matchIdx = sources.findIndex((s, i) => !used.has(i) && s.original_url === orig)
+      }
+      if (matchIdx < 0) {
+        const wantType = String(item?.type || '').toLowerCase()
+        matchIdx = sources.findIndex((s, i) => {
+          if (used.has(i)) return false
+          if (!wantType) return true
+          return String(s.type || '').toLowerCase() === wantType
+        })
+      }
+      if (matchIdx < 0) {
+        matchIdx = sources.findIndex((_, i) => !used.has(i))
+      }
+      if (matchIdx < 0) return { ...item, card_index: item.card_index ?? cardIndex }
+
+      used.add(matchIdx)
+      const src = sources[matchIdx]
+      return {
+        ...item,
+        card_index: item.card_index ?? cardIndex,
+        s3_url: src.s3_url || item.s3_url || null,
+        thumbnail_s3_url: src.thumbnail_s3_url || item.thumbnail_s3_url || null,
+        type: item.type || src.type || null,
+        role: item.role || src.role || null,
+      }
+    })
+
+    return { ...card, media: hydrated }
+  })
+}
+
+function isThumbnailRole(m) {
+  return String(m?.role || '').toLowerCase() === 'thumbnail'
+}
+
+function isSignedImageMedia(m) {
+  if (!m?.signedUrl) return false
+  const t = String(m?.type || '').toLowerCase()
+  if (t === 'video') return false
+  if (t === 'image') return true
+  return !/\.(mp4|webm|mov)(\?|$)/i.test(String(m.s3_url || m.signedUrl || ''))
+}
+
+/** Prefer card creative images over page thumbnail for list/fallback URL. */
+function pickFirstSignedImageUrl(signedMedia = []) {
+  const creative =
+    signedMedia.find((m) => isSignedImageMedia(m) && !isThumbnailRole(m))?.signedUrl || null
+  if (creative) return creative
+  return signedMedia.find((m) => isSignedImageMedia(m))?.signedUrl || null
+}
+
 async function signUniqueS3Urls(urls = []) {
   const unique = [...new Set(urls.filter(Boolean))]
   const entries = await Promise.all(
@@ -147,7 +238,7 @@ export async function normalizeAdForUi(ad, _db = null) {
   if (!ad) return null
 
   const media = getAdMedia(ad)
-  const cardsRaw = ad.content?.cards || []
+  const cardsRaw = hydrateCardsMediaFromFlat(ad.content?.cards || [], media)
   const advertiser = ad.advertiser_snapshot || {}
 
   const urlsToSign = [
@@ -159,19 +250,8 @@ export async function normalizeAdForUi(ad, _db = null) {
   const signedByUrl = await signUniqueS3Urls(urlsToSign)
 
   const signedMedia = applySignedMedia(media, signedByUrl)
-  // Prefer an image thumb URL so list <img> never receives a video URL
-  const firstImageSigned =
-    signedMedia.find((m) => String(m?.type || '').toLowerCase() === 'image' && m.signedUrl)
-      ?.signedUrl || null
-  const firstSigned =
-    firstImageSigned ||
-    signedMedia.find((m) => {
-      if (!m.signedUrl) return false
-      const t = String(m?.type || '').toLowerCase()
-      if (t === 'video') return false
-      return !/\.(mp4|webm|mov)(\?|$)/i.test(String(m.s3_url || m.signedUrl || ''))
-    })?.signedUrl ||
-    null
+  // Prefer card creative over page thumbnail; never prefer a video URL for <img>
+  const firstSigned = pickFirstSignedImageUrl(signedMedia)
 
   const cards = cardsRaw.map((card, cardIndex) => {
     const cardMedia = applySignedMedia(
