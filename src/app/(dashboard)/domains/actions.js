@@ -56,6 +56,13 @@ function buildDomainsMatchQuery(filters = {}) {
     andConditions.push({ 'workflow.visibility_status': 'down' })
   }
 
+  if (filters.alert_date_from || filters.alert_date_to) {
+    const dateRange = {}
+    if (filters.alert_date_from) dateRange.$gte = new Date(filters.alert_date_from)
+    if (filters.alert_date_to) dateRange.$lte = new Date(filters.alert_date_to)
+    andConditions.push({ 'list.reviewed_at': dateRange })
+  }
+
   if (andConditions.length > 0) {
     query.$and = andConditions
   }

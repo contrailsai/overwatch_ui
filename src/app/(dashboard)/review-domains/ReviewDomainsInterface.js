@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { getRiskLabel } from '@/app/(dashboard)/cases/riskBuckets'
+import { DateFilterPopover } from '@/components/DateFilterPopover'
 import { domainScreenshotUrl, isDomainOnline, collectDomainViolations } from '@/lib/domains/domain-display'
 import { getDomainById } from './actions'
 import ReviewDomainForm from './ReviewDomainDetails'
@@ -42,7 +43,7 @@ const FILTER_TRIGGER =
 
 function FilterField({ label, children, className }) {
   return (
-    <div className={cn('space-y-0.5 min-w-0', className)}>
+    <div className={cn('space-y-0.5 min-w-[140px] flex-1', className)}>
       <Label className={FILTER_LABEL}>{label}</Label>
       {children}
     </div>
@@ -299,6 +300,8 @@ export function ReviewDomainsInterface({
     || Boolean(initialFilters.search)
     || activeOnly
     || (initialFilters.risk && initialFilters.risk !== 'all')
+    || Boolean(initialFilters.sourcingDateStart)
+    || Boolean(initialFilters.sourcingDateEnd)
   )
 
   const clearFilters = () => {
@@ -448,7 +451,7 @@ export function ReviewDomainsInterface({
                   </Button>
                 )}
                 {!selectedDomain && (
-                  <div className="relative flex-1 min-w-[180px] max-w-sm">
+                  <div className="relative flex-1 min-w-[180px] max-w-xl">
                     <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
                     <input
                       type="text"
@@ -520,10 +523,7 @@ export function ReviewDomainsInterface({
                 </div>
               )}
               {showFilters && (
-                <div className={cn(
-                  'grid gap-x-2.5 gap-y-2.5 pt-1',
-                  selectedDomain ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4',
-                )}>
+                <div className="flex flex-wrap gap-x-2.5 gap-y-2.5 pt-1 animate-in fade-in slide-in-from-top-1 duration-200">
                   <FilterField label="Review status">
                     <Select
                       value={initialFilters.status || 'pending'}
@@ -571,6 +571,26 @@ export function ReviewDomainsInterface({
                       </SelectContent>
                     </Select>
                   </FilterField>
+
+                  <FilterField label="Sourced date" className="min-w-[160px]">
+                    <DateFilterPopover
+                      title="Sourced date"
+                      triggerClassName="h-8 w-full bg-slate-50 border-slate-200 hover:bg-slate-50 px-2.5"
+                      initialFrom={initialFilters.sourcingDateStart}
+                      initialTo={initialFilters.sourcingDateEnd}
+                      onApply={(range) =>
+                        updateQueryParams({
+                          sourcingDateStart: range?.from
+                            ? format(range.from, "yyyy-MM-dd'T'HH:mm:ssXXX")
+                            : null,
+                          sourcingDateEnd: range?.to
+                            ? format(range.to, "yyyy-MM-dd'T'HH:mm:ssXXX")
+                            : null,
+                          page: 1,
+                        })
+                      }
+                    />
+                  </FilterField>
                 </div>
               )}
             </div>
@@ -582,6 +602,14 @@ export function ReviewDomainsInterface({
                     <Globe className="w-6 h-6 opacity-30" />
                   </div>
                   <p className="text-sm font-semibold text-slate-600">No domains in this queue</p>
+                  <p className="text-xs text-slate-400 mt-1 max-w-[240px]">
+                    Try adjusting or clearing filters to see more results.
+                  </p>
+                  {hasActiveFilter && (
+                    <Button variant="outline" size="sm" onClick={clearFilters} className="mt-4 h-8 text-xs">
+                      <X className="w-3.5 h-3.5 mr-1.5" /> Clear filters
+                    </Button>
+                  )}
                 </div>
               ) : selectedDomain ? (
                 <ul className="divide-y divide-slate-100">

@@ -18,6 +18,7 @@ import {
   domainHasCloaking,
   collectDomainViolations,
 } from '@/lib/domains/domain-display'
+import { DateFilterPopover } from '@/components/DateFilterPopover'
 import { getDomainById } from './actions'
 import DomainDetailPanel from './DomainDetails'
 
@@ -47,7 +48,7 @@ const FILTER_TRIGGER =
 
 function FilterField({ label, children, className }) {
   return (
-    <div className={cn('space-y-0.5 min-w-0', className)}>
+    <div className={cn('space-y-0.5 min-w-[140px] flex-1', className)}>
       <Label className={FILTER_LABEL}>{label}</Label>
       {children}
     </div>
@@ -464,6 +465,8 @@ export function DomainsList({
     initialFilters.status !== 'all'
     || Boolean(initialFilters.searchText)
     || (initialFilters.risk && initialFilters.risk !== 'all')
+    || Boolean(initialFilters.alert_date_from)
+    || Boolean(initialFilters.alert_date_to)
     || activeOnly
   )
 
@@ -542,7 +545,7 @@ export function DomainsList({
                     onChange={setSearchInput}
                     onSubmit={handleSearchSubmit}
                     onClear={() => { setSearchInput(''); updateQueryParams({ search: null, page: 1 }) }}
-                    className="flex-1 min-w-[180px] max-w-sm"
+                    className="flex-1 min-w-[180px] max-w-xl"
                   />
                 )}
                 <div className="flex items-center gap-2 shrink-0">
@@ -583,10 +586,7 @@ export function DomainsList({
               )}
 
               {showFilters && (
-                <div className={cn(
-                  'grid gap-x-2.5 gap-y-2.5 pt-1',
-                  compact ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-2 sm:grid-cols-3',
-                )}>
+                <div className="flex flex-wrap gap-x-2.5 gap-y-2.5 pt-1 animate-in fade-in slide-in-from-top-1 duration-200">
                   <FilterField label="Status">
                     <Select
                       value={initialFilters.status || 'all'}
@@ -633,6 +633,20 @@ export function DomainsList({
                         ))}
                       </SelectContent>
                     </Select>
+                  </FilterField>
+
+                  <FilterField label="Alert date" className="min-w-[160px]">
+                    <DateFilterPopover
+                      title="Alert date"
+                      triggerClassName="h-8 w-full bg-slate-50 border-slate-200 hover:bg-slate-50 px-2.5"
+                      initialFrom={initialFilters.alert_date_from}
+                      initialTo={initialFilters.alert_date_to}
+                      onApply={(range) => updateQueryParams({
+                        alert_date_from: range?.from ? range.from.toISOString() : null,
+                        alert_date_to: range?.to ? range.to.toISOString() : null,
+                        page: 1,
+                      })}
+                    />
                   </FilterField>
                 </div>
               )}
