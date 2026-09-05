@@ -334,10 +334,25 @@ export const submitAdReview = traceAction('submitAdReview', async (_project, _cl
       payload: { review_details },
     })
 
+    // Keep this payload plain / Flight-serializable (no raw Mongo subdocs).
     return {
       success: true,
       updatedFields: {
         review_details,
+        workflow: {
+          review_status: 'reviewed',
+          client_status: existingAd.workflow?.client_status || 'alerted',
+        },
+        list: {
+          review_threat_score: effectiveScore,
+          effective_threat_score: effectiveScore,
+          risk_rank: riskRank,
+          reviewed_at: reviewedAt.toISOString(),
+          threat_types: review_details.threat_types,
+          violation_flags: review_details.threat_types,
+        },
+        content_reviewed_by: clientDetails.email,
+        score: effectiveScore,
         processed: true,
         processed_at: new Date().toISOString(),
       },

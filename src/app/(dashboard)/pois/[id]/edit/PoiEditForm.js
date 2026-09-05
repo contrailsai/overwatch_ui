@@ -74,6 +74,9 @@ export function PoiEditForm({ poi: initialPoi }) {
     setError('')
     setUploading(true)
     try {
+      if (!file.type?.startsWith('image/')) {
+        throw new Error('Only image files are allowed')
+      }
       const init = await initPoiImageUpload(initialPoi._id, {
         fileName: file.name,
         contentType: file.type,

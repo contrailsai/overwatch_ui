@@ -225,8 +225,8 @@ export const getPoiAnalytics = traceAction('getPoiAnalytics', async (poiId, rang
 
     return {
       preset,
-      from: from.toISOString(),
-      to: to.toISOString(),
+      from: from ? from.toISOString() : null,
+      to: to ? to.toISOString() : null,
       totalInRange,
       platforms: platformRows.map((r) => ({
         platform: r._id || 'unknown',

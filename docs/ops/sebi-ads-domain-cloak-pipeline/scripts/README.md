@@ -74,8 +74,37 @@ Add new unlock pairs to both:
 - [`../known_cloak_params.txt`](../known_cloak_params.txt) (reference list)
 - [`sebi_report/cloak_tokens.py`](sebi_report/cloak_tokens.py) `KNOWN_CLOAK_PAIRS` (used by probe)
 
+## Bulk-review pending ads on reviewed domains
+
+Reviews **pending** ads (library + feed by default) whose destination domain already has
+`workflow.review_status: reviewed`. Also reviews linked Ad_profiles.
+
+```bash
+# Dry-run first
+./bulk_review_reviewed_domains.sh --start 2026-09-03 --end 2026-09-05
+
+# Write reviews
+./bulk_review_reviewed_domains.sh --start 2026-09-03 --end 2026-09-05 --apply
+
+# Today only
+./bulk_review_reviewed_domains.sh --today --apply
+
+# One domain
+./bulk_review_reviewed_domains.sh --start 2026-09-03 --end 2026-09-05 --domains ilnkarip.com --apply
+```
+
+Equivalent CLI:
+
+```bash
+"$PIPELINE_ROOT/.venv/bin/python" cli.py bulk-review-reviewed-domains \
+  --db SEBI-Data-Search --start 2026-09-03 --end 2026-09-05 --apply
+```
+
+Artifact: `out/bulk_review_reviewed_domains_result.json`.
+
 ## Subcommands
 
-`extract`, `apply`, `analyze-intel`, `cloak-probe`, `list-probe-targets`, `run-new`, `bulk-review-cloak`.
+`extract`, `apply`, `analyze-intel`, `cloak-probe`, `list-probe-targets`, `run-new`,
+`bulk-review-cloak`, `bulk-review-reviewed-domains`.
 
 See parent [README.md](../README.md) for the full pipeline story.

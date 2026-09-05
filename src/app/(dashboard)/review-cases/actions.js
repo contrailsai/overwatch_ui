@@ -20,8 +20,10 @@ import { removePostFromAllTopics } from '@/lib/feeds/topic-membership'
 import { normalizeS3Post } from '@/lib/posts/pipeline-helpers'
 import { COLLECTIONS, postsCollection, postEmbeddingsCollection } from '@/utils/mongodb/collections'
 import {
+  buildPostStatsForUi,
   buildTakedownInfoForUi,
   buildEffectiveThreatScoreRange,
+  getPostEngagementMetrics,
   getPostMedia,
   insertCaseEvent,
   ONLINE_VISIBILITY_VALUES,
@@ -44,15 +46,7 @@ async function normalizeReviewS3Post(post, db = null) {
     taken_at: normalized.posted_date
       ? Math.floor(new Date(normalized.posted_date).getTime() / 1000)
       : null,
-    stats: {
-      like_count: post?.engagement?.likes || post?.stats?.like_count || 0,
-      comment_count: post?.engagement?.comments || post?.stats?.comment_count || 0,
-      view_count: post?.engagement?.views || post?.stats?.view_count || 0,
-      share_count: post?.engagement?.shares || post?.stats?.share_count || 0,
-      retweet_count: post?.engagement?.retweets || 0,
-      quote_count: post?.engagement?.quotes || 0,
-      reply_count: post?.engagement?.replies || 0,
-    },
+    stats: buildPostStatsForUi(post),
     url: post.original_url || post.url || normalized.original_url || '',
   }
 }
@@ -617,36 +611,39 @@ export const getAllPostsForExport = traceAction('getAllPostsForExport', async (_
       return Number.isNaN(d.getTime()) ? '' : d.toISOString()
     }
 
-    const processedPosts = posts.map(post => ({
-      _id: { $oid: post._id.toString() },
-      code: post.code || post.platform_post_id || post.post_id || '',
-      content: post.content?.caption || post.content || post.caption || '',
-      created_at: { $date: toExportDate(post.system?.created_at || post.created_at || post.metadata?.created_at) },
-      engagement: {
-        likes: post.engagement?.likes ?? post.stats?.like_count ?? 0,
-        comments: post.engagement?.comments ?? post.stats?.comment_count ?? 0,
-        shares: post.engagement?.shares ?? post.stats?.share_count ?? 0,
-        retweets: post.engagement?.retweets ?? post.stats?.retweet_count ?? 0,
-        quotes: post.engagement?.quotes ?? post.stats?.quote_count ?? 0,
-        replies: post.engagement?.replies ?? post.stats?.reply_count ?? 0,
-        views: post.engagement?.views ?? post.stats?.view_count ?? 0,
-        posted_at: { $date: toExportDate(post.list?.posted_at || post.engagement?.posted_at || post.metadata?.posted_date) }
-      },
-      media_urls: post.content?.media || post.media_urls || post.post_content?.media_urls || [],
-      platform: post.platform ? post.platform.toLowerCase() : '',
-      profile: {
-        platform_user_id: post.author_snapshot?.platform_user_id || post.profile?.platform_user_id || null,
-        username: post.author_snapshot?.username || post.profile?.username || post.author?.username || '',
-        display_name: post.author_snapshot?.display_name || post.profile?.display_name || post.author?.name || '',
-        profile_url: post.author_snapshot?.profile_url || post.profile?.profile_url || post.author?.url || '',
-        is_verified: post.author_snapshot?.is_verified || post.profile?.is_verified || false
-      },
-      sourcing_date: { $date: toExportDate(post.list?.sourced_at || post.sourcing_date || post.metadata?.sourcing_date) },
-      url: post.original_url || post.url || '',
-      result_origin: post.result_origin && typeof post.result_origin === 'object' ? post.result_origin : {},
-      analysis_results: post.analysis_results || {},
-      review_details: post.review_details || {}
-    }))
+    const processedPosts = posts.map(post => {
+      const engagement = getPostEngagementMetrics(post)
+      return {
+        _id: { $oid: post._id.toString() },
+        code: post.code || post.platform_post_id || post.post_id || '',
+        content: post.content?.caption || post.content || post.caption || '',
+        created_at: { $date: toExportDate(post.system?.created_at || post.created_at || post.metadata?.created_at) },
+        engagement: {
+          likes: engagement.likes,
+          comments: engagement.comments,
+          shares: engagement.shares,
+          retweets: engagement.retweets,
+          quotes: engagement.quotes,
+          replies: engagement.replies,
+          views: engagement.views,
+          posted_at: { $date: toExportDate(post.list?.posted_at || post.engagement?.posted_at || post.metadata?.posted_date) }
+        },
+        media_urls: post.content?.media || post.media_urls || post.post_content?.media_urls || [],
+        platform: post.platform ? post.platform.toLowerCase() : '',
+        profile: {
+          platform_user_id: post.author_snapshot?.platform_user_id || post.profile?.platform_user_id || null,
+          username: post.author_snapshot?.username || post.profile?.username || post.author?.username || '',
+          display_name: post.author_snapshot?.display_name || post.profile?.display_name || post.author?.name || '',
+          profile_url: post.author_snapshot?.profile_url || post.profile?.profile_url || post.author?.url || '',
+          is_verified: post.author_snapshot?.is_verified || post.profile?.is_verified || false
+        },
+        sourcing_date: { $date: toExportDate(post.list?.sourced_at || post.sourcing_date || post.metadata?.sourcing_date) },
+        url: post.original_url || post.url || '',
+        result_origin: post.result_origin && typeof post.result_origin === 'object' ? post.result_origin : {},
+        analysis_results: post.analysis_results || {},
+        review_details: post.review_details || {}
+      }
+    })
 
     // Strip BSON types / non-JSON values so the server action response serializes reliably
     return JSON.parse(JSON.stringify({ posts: processedPosts }))

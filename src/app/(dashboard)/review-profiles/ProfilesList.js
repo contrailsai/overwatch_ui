@@ -749,7 +749,7 @@ function ProfileDetailPanel({ profile, profiles = [], project, isOpen, onClose, 
                                                                     rel="noreferrer"
                                                                     className={caseLinkClass}
                                                                 >
-                                                                    Inspect Case
+                                                                    Review Case
                                                                     <ArrowRight className="w-2.5 h-2.5 opacity-40 group-hover/link:opacity-100 group-hover/link:translate-x-0.5 transition-all" />
                                                                 </a>
                                                             ) : (

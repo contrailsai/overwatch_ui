@@ -119,6 +119,12 @@ export default function ReviewAdForm({
   const [state, formAction, isPending] = useActionState(submitBound, initialState)
 
   const [localAd, setLocalAd] = useState(ad)
+  const [isReviewed, setIsReviewed] = useState(
+    () =>
+      ad?.workflow?.review_status === 'reviewed' ||
+      Boolean(ad?.content_reviewed_by) ||
+      Object.keys(ad?.review_details || {}).length > 0,
+  )
   const [showSuccess, setShowSuccess] = useState(false)
   const [activeCard, setActiveCard] = useState(0)
   const [activeMediaIndex, setActiveMediaIndex] = useState(0)
@@ -158,6 +164,12 @@ export default function ReviewAdForm({
 
   useEffect(() => {
     setLocalAd(ad)
+    setIsReviewed(
+      ad?.workflow?.review_status === 'reviewed' ||
+      Boolean(ad?.content_reviewed_by) ||
+      Object.keys(ad?.review_details || {}).length > 0,
+    )
+    setShowSuccess(false)
     setActiveCard(0)
     setActiveMediaIndex(getDefaultMediaIndex(getAdViewableMedia(ad)))
     setEditingContent(false)
@@ -200,33 +212,53 @@ export default function ReviewAdForm({
       if (!cancelled) setDomainsByHost(map || {})
     })
     return () => { cancelled = true }
-  }, [ad, project_details, project])
+    // Only reset when navigating to a different ad — not when the same ad's
+    // reference updates after submit (that would clobber reviewed UI state).
+  }, [ad?._id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (state?.success) {
-      setShowSuccess(true)
-      const updated = {
-        ...localAd,
-        review_details: state.updatedFields?.review_details,
+    if (!state?.success || !state?.updatedFields) return undefined
+
+    setIsReviewed(true)
+    setShowSuccess(true)
+    const fields = state.updatedFields
+    const adId = localAd?._id
+
+    const mergeReviewed = (prev) => {
+      if (!prev) return prev
+      return {
+        ...prev,
+        review_details: fields.review_details ?? prev.review_details,
         workflow: {
-          ...(localAd.workflow || {}),
+          ...(prev.workflow || {}),
+          ...(fields.workflow || {}),
           review_status: 'reviewed',
         },
         list: {
-          ...(localAd.list || {}),
-          review_threat_score: state.updatedFields?.review_details?.threat_score,
-          effective_threat_score: state.updatedFields?.review_details?.threat_score,
+          ...(prev.list || {}),
+          ...(fields.list || {}),
         },
-        score: state.updatedFields?.review_details?.threat_score,
-        content_reviewed_by: clientDetails?.email,
+        content_reviewed_by: fields.content_reviewed_by ?? clientDetails?.email ?? prev.content_reviewed_by,
+        score: fields.score ?? fields.review_details?.threat_score ?? prev.score,
+        processed: true,
+        processed_at: fields.processed_at ?? prev.processed_at,
       }
-      setLocalAd(updated)
-      setSelectedAd?.(updated)
-      setAds?.((prev) => prev.map((a) => (a._id === updated._id ? { ...a, ...updated } : a)))
-      const t = setTimeout(() => setShowSuccess(false), 2000)
-      return () => clearTimeout(t)
     }
-  }, [state?.success]) // eslint-disable-line react-hooks/exhaustive-deps
+
+    setLocalAd(mergeReviewed)
+    setSelectedAd?.((prev) => {
+      if (!prev || String(prev._id) !== String(adId)) return prev
+      return mergeReviewed(prev)
+    })
+    if (adId) {
+      setAds?.((prevAds) =>
+        prevAds.map((a) => (String(a._id) === String(adId) ? mergeReviewed(a) : a)),
+      )
+    }
+
+    const t = setTimeout(() => setShowSuccess(false), 3000)
+    return () => clearTimeout(t)
+  }, [state]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!toast) return
@@ -599,8 +631,11 @@ export default function ReviewAdForm({
     .map((item) => (typeof item === 'string' ? item : item?.name || item?.code))
     .filter(Boolean)
 
-  const hasReview = localAd?.workflow?.review_status === 'reviewed'
-    || localAd?.review_details?.threat_score != null
+  const hasReview =
+    isReviewed ||
+    localAd?.workflow?.review_status === 'reviewed' ||
+    Boolean(localAd?.content_reviewed_by) ||
+    Object.keys(localAd?.review_details || {}).length > 0
 
   return (
     <div className="flex flex-col flex-1 min-h-0 h-full overflow-hidden relative">
@@ -647,6 +682,11 @@ export default function ReviewAdForm({
             <Badge variant="outline" className="text-[10px] shrink-0 capitalize">
               {localAd.platform}
             </Badge>
+            {hasReview && (
+              <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 gap-1 text-[10px] shrink-0">
+                <CheckCircle className="w-3 h-3" /> Reviewed
+              </Badge>
+            )}
             {formatLabel && (
               <span
                 className="text-[11px] text-slate-500 shrink-0"
@@ -1577,13 +1617,26 @@ export default function ReviewAdForm({
               <p className="text-sm text-rose-600">{state.error}</p>
             )}
 
-            <div className="flex flex-wrap gap-2 pb-4 pt-2 border-t border-slate-100">
-              <Button type="submit" disabled={isPending} className="gap-1.5 min-w-[140px]">
+            <div className="relative flex flex-wrap gap-2 pb-4 pt-2 border-t border-slate-100">
+              {showSuccess && (
+                <div className="absolute -top-12 left-1/2 -translate-x-1/2 bg-emerald-100 border border-emerald-300 text-slate-700 text-xs font-bold px-4 py-2 rounded-full shadow shadow-emerald-200 flex items-center gap-2 animate-in slide-in-from-bottom-2 fade-in zoom-in duration-200 whitespace-nowrap">
+                  <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
+                  Review saved successfully!
+                </div>
+              )}
+              <Button
+                type="submit"
+                disabled={isPending}
+                className={cn(
+                  'gap-1.5 min-w-[140px]',
+                  hasReview && !isPending && 'bg-emerald-600 hover:bg-emerald-700',
+                )}
+              >
                 {isPending ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
-                ) : showSuccess ? (
+                ) : (
                   <CheckCircle className="h-4 w-4" />
-                ) : null}
+                )}
                 {hasReview ? 'Update Review' : 'Submit Review'}
               </Button>
             </div>

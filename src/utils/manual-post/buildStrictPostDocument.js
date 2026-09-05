@@ -215,6 +215,18 @@ export function buildStrictPostDocument(data, s3Stored, updatedBy) {
       media: mediaList,
       language: getFlexible(data, ['language', 'post_content.language']) ?? null,
       post_type: getFlexible(data, ['post_type', 'post_content.post_type'], 'post'),
+      engagement: {
+        likes,
+        comments,
+        shares,
+        views,
+        retweets:
+          Number.parseInt(String(getFlexible(data, ['engagement.retweets', 'retweets'], 0) ?? 0), 10) || 0,
+        quotes:
+          Number.parseInt(String(getFlexible(data, ['engagement.quotes', 'quotes'], 0) ?? 0), 10) || 0,
+        replies:
+          Number.parseInt(String(getFlexible(data, ['engagement.replies', 'replies'], 0) ?? 0), 10) || 0,
+      },
     },
     author_snapshot: {
       platform_user_id: platformUserId ?? null,
