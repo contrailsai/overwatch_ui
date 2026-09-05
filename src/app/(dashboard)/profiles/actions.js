@@ -8,6 +8,7 @@ import { getSignedImageUrl } from '@/utils/aws/s3'
 import { requireAuthContext } from '@/utils/auth-context'
 import { logActionError, LOKI_STREAMS } from '@/utils/otel-logger'
 import { withReviewedThreatScoreFilter } from '@/lib/posts/reviewed-post-filter'
+import { resolvePoiDateRange } from '@/lib/pois/poi-helpers'
 import { postsCollection, profilesCollection } from '@/utils/mongodb/collections'
 import {
   buildNormalizedPostForUi,
@@ -16,6 +17,24 @@ import {
   insertCaseEvent,
   mapUiClientStatusToV3,
 } from '@/utils/mongodb/v3-schema'
+
+function parseObjectId(id) {
+  if (!id || !ObjectId.isValid(id)) return null
+  return new ObjectId(id)
+}
+
+/** Reviewed posts for a profile, optionally constrained to a date range on posted_at ?? sourced_at. */
+function buildProfilePostMatch(profileOid, { from = null, to = null } = {}) {
+  const match = withReviewedThreatScoreFilter({ profile_id: profileOid })
+  if (from || to) {
+    const dateExpr = { $ifNull: ['$list.posted_at', '$list.sourced_at'] }
+    const bounds = []
+    if (from) bounds.push({ $gte: [dateExpr, from] })
+    if (to) bounds.push({ $lte: [dateExpr, to] })
+    match.$and = [...(match.$and || []), { $expr: { $and: bounds } }]
+  }
+  return match
+}
 
 export async function normalized_S3_post(post, db = null) {
   const s3UrlToSign = getFirstMediaS3Url(post)
@@ -180,6 +199,213 @@ export const getProfiles = traceAction('getProfiles', async (page = 1, limit = 2
         logActionError({ loki_stream: LOKI_STREAMS.profiles, app_action: 'getProfiles', message: 'getProfiles failed' }, e)
         console.error('getProfiles MongoDB Error:', e)
         return { profiles: [], totalCount: 0, page: 1, totalPages: 0 }
+    }
+})
+
+export const getProfileById = traceAction('getProfileById', async (profileId) => {
+    try {
+        const oid = parseObjectId(profileId)
+        if (!oid) return { profile: null, error: 'Invalid profile id' }
+
+        const { dbName } = await requireAuthContext()
+        const client = await clientPromise
+        const db = client.db(dbName)
+        const doc = await profilesCollection(db).findOne({ _id: oid })
+        if (!doc) return { profile: null, error: 'Profile not found' }
+
+        let signedProfilePic = null
+        const picS3 = doc.enrichment?.profile_pic_s3 || doc.metadata?.s3_url
+        if (picS3) {
+            signedProfilePic = await getSignedImageUrl(picS3)
+        }
+
+        return {
+            profile: buildNormalizedProfileForUi(doc, { signedProfilePic }),
+        }
+    } catch (e) {
+        logActionError({ loki_stream: LOKI_STREAMS.profiles, app_action: 'getProfileById', message: 'getProfileById failed' }, e)
+        return { profile: null, error: e.message }
+    }
+})
+
+export const getProfileAnalytics = traceAction('getProfileAnalytics', async (profileId, range = {}) => {
+    try {
+        const oid = parseObjectId(profileId)
+        if (!oid) {
+            return { error: 'Invalid profile id', riskRanks: [], violations: [], timeline: [], totalInRange: 0 }
+        }
+
+        const { dbName } = await requireAuthContext()
+        const client = await clientPromise
+        const db = client.db(dbName)
+        const { from, to, preset } = resolvePoiDateRange(range)
+        const match = buildProfilePostMatch(oid, { from, to })
+        const posts = postsCollection(db)
+
+        const [riskRows, violationRows, timelineRows, totalInRange] = await Promise.all([
+            posts
+                .aggregate([
+                    { $match: match },
+                    {
+                        $group: {
+                            _id: {
+                                $toLower: {
+                                    $ifNull: ['$list.risk_rank', 'unknown'],
+                                },
+                            },
+                            count: { $sum: 1 },
+                        },
+                    },
+                    { $sort: { count: -1 } },
+                ])
+                .toArray(),
+            posts
+                .aggregate([
+                    { $match: match },
+                    {
+                        $project: {
+                            threats: {
+                                $cond: [
+                                    { $gt: [{ $size: { $ifNull: ['$list.threat_types', []] } }, 0] },
+                                    '$list.threat_types',
+                                    { $ifNull: ['$review_details.threat_types', []] },
+                                ],
+                            },
+                        },
+                    },
+                    { $unwind: { path: '$threats', preserveNullAndEmptyArrays: false } },
+                    {
+                        $group: {
+                            _id: { $toLower: { $trim: { input: { $toString: '$threats' } } } },
+                            count: { $sum: 1 },
+                        },
+                    },
+                    { $sort: { count: -1 } },
+                    { $limit: 12 },
+                ])
+                .toArray(),
+            posts
+                .aggregate([
+                    { $match: match },
+                    {
+                        $project: {
+                            day: {
+                                $dateToString: {
+                                    format: '%Y-%m-%d',
+                                    date: { $ifNull: ['$list.posted_at', '$list.sourced_at'] },
+                                },
+                            },
+                        },
+                    },
+                    { $match: { day: { $ne: null } } },
+                    { $group: { _id: '$day', count: { $sum: 1 } } },
+                    { $sort: { _id: 1 } },
+                ])
+                .toArray(),
+            posts.countDocuments(match),
+        ])
+
+        return {
+            preset,
+            from: from ? from.toISOString() : null,
+            to: to ? to.toISOString() : null,
+            totalInRange,
+            riskRanks: riskRows.map((r) => ({
+                rank: r._id === 'mid' ? 'medium' : (r._id || 'unknown'),
+                count: r.count,
+            })),
+            violations: violationRows.map((r) => ({
+                type: r._id || 'unknown',
+                count: r.count,
+            })),
+            timeline: timelineRows.map((r) => ({
+                date: r._id,
+                count: r.count,
+            })),
+        }
+    } catch (e) {
+        logActionError({ loki_stream: LOKI_STREAMS.profiles, app_action: 'getProfileAnalytics', message: 'getProfileAnalytics failed' }, e)
+        return { error: e.message, riskRanks: [], violations: [], timeline: [], totalInRange: 0 }
+    }
+})
+
+export const getProfilePosts = traceAction('getProfilePosts', async (profileId, range = {}, limit = 24) => {
+    try {
+        const oid = parseObjectId(profileId)
+        if (!oid) return { posts: [], error: 'Invalid profile id' }
+
+        const { dbName } = await requireAuthContext()
+        const client = await clientPromise
+        const db = client.db(dbName)
+        const { from, to } = resolvePoiDateRange(range)
+        const match = buildProfilePostMatch(oid, { from, to })
+        const safeLimit = Math.min(Math.max(Number(limit) || 24, 1), 48)
+
+        const docs = await postsCollection(db)
+            .find(match)
+            .sort({ 'list.posted_at': -1, 'list.sourced_at': -1 })
+            .limit(safeLimit)
+            .toArray()
+
+        const posts = await Promise.all(
+            docs.map(async (post) => {
+                const s3Url = getFirstMediaS3Url(post)
+                const signedImageUrl = s3Url ? await getSignedImageUrl(s3Url) : null
+                const normalized = buildNormalizedPostForUi(post, { signedImageUrl })
+                return {
+                    _id: normalized._id || post._id?.toString(),
+                    platform: normalized.platform || post.platform,
+                    caption: normalized.caption || post.content?.caption || '',
+                    signedImageUrl,
+                    original_url: post.original_url || normalized.original_url || null,
+                    sourced_at: post.list?.sourced_at
+                        ? new Date(post.list.sourced_at).toISOString()
+                        : null,
+                    posted_at: post.list?.posted_at
+                        ? new Date(post.list.posted_at).toISOString()
+                        : null,
+                    threat_types: post.list?.threat_types || post.review_details?.threat_types || [],
+                    effective_threat_score:
+                        post.list?.effective_threat_score ??
+                        post.list?.review_threat_score ??
+                        post.list?.ai_threat_score ??
+                        normalized.score ??
+                        null,
+                    author: {
+                        username: post.author_snapshot?.username || normalized.user?.username || null,
+                        display_name: post.author_snapshot?.display_name || normalized.user?.full_name || null,
+                    },
+                }
+            })
+        )
+
+        return { posts }
+    } catch (e) {
+        logActionError({ loki_stream: LOKI_STREAMS.profiles, app_action: 'getProfilePosts', message: 'getProfilePosts failed' }, e)
+        return { posts: [], error: e.message }
+    }
+})
+
+/** Lightweight IDs for PDF/DOCX profile reports — all reviewed cases, not date-filtered. */
+export const getProfileCaseIds = traceAction('getProfileCaseIds', async (profileId) => {
+    try {
+        const oid = parseObjectId(profileId)
+        if (!oid) return []
+
+        const { dbName } = await requireAuthContext()
+        const client = await clientPromise
+        const db = client.db(dbName)
+        const query = withReviewedThreatScoreFilter({ profile_id: oid })
+        const docs = await postsCollection(db)
+            .find(query)
+            .project({ _id: 1 })
+            .sort({ 'list.reviewed_at': -1 })
+            .toArray()
+
+        return docs.map((d) => ({ _id: d._id.toString() }))
+    } catch (e) {
+        logActionError({ loki_stream: LOKI_STREAMS.profiles, app_action: 'getProfileCaseIds', message: 'getProfileCaseIds failed' }, e)
+        return []
     }
 })
 

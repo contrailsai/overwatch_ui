@@ -10,6 +10,7 @@ import {
   getAuthorSnapshot,
   getFirstMediaS3Url,
   getPostCaption,
+  getPostEngagementMetrics,
   getPostMedia,
   isSchemaV3,
   mapV3ClientStatusToUi,
@@ -49,28 +50,27 @@ export function getFirstMediaUrl(post) {
 }
 
 export function getLikes(post) {
-  return post.engagement?.likes || post.stats?.like_count || post.stats?.likes || 0
+  return getPostEngagementMetrics(post).likes
 }
 
 export function getComments(post) {
-  return post.engagement?.comments || post.stats?.comment_count || post.stats?.comments || post.stats?.replies || 0
+  return getPostEngagementMetrics(post).comments
 }
 
 export function getShares(post) {
-  return post.engagement?.shares || post.stats?.shares || 0
+  return getPostEngagementMetrics(post).shares
 }
 
 export function getRetweets(post) {
-  return post.engagement?.retweets || post.stats?.retweets || 0
+  return getPostEngagementMetrics(post).retweets
 }
 
 export function getQuotes(post) {
-  return post.engagement?.quotes || post.stats?.quotes || 0
+  return getPostEngagementMetrics(post).quotes
 }
 
 export function getViews(post) {
-  const views = post.engagement?.views || post.stats?.view_count || post.stats?.views
-  return typeof views === 'string' ? parseInt(views, 10) : views
+  return getPostEngagementMetrics(post).views
 }
 
 export function getPostedAt(post) {

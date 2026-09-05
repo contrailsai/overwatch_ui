@@ -117,6 +117,92 @@ export function getAuthorSnapshot(post) {
   }
 }
 
+function toEngagementCount(value, fallback = 0) {
+  if (value == null || value === '') return fallback
+  const n = typeof value === 'string' ? Number.parseInt(value, 10) : Number(value)
+  return Number.isFinite(n) ? n : fallback
+}
+
+/**
+ * Resolve raw engagement counts across v3 + legacy shapes.
+ * Preference (future-canonical first):
+ *   content.engagement → list.engagement (object) → top-level engagement →
+ *   flat list.* counts → stats.*
+ * Score stays on list.engagement_score.
+ */
+export function getPostEngagementMetrics(post) {
+  const contentEng =
+    post?.content?.engagement && typeof post.content.engagement === 'object'
+      ? post.content.engagement
+      : null
+  const listEng =
+    post?.list?.engagement && typeof post.list.engagement === 'object'
+      ? post.list.engagement
+      : null
+  const legacyEng =
+    post?.engagement && typeof post.engagement === 'object' ? post.engagement : null
+  const stats = post?.stats && typeof post.stats === 'object' ? post.stats : null
+  const list = post?.list && typeof post.list === 'object' ? post.list : null
+
+  const fromNested = (...keys) => {
+    for (const source of [contentEng, listEng, legacyEng]) {
+      if (!source) continue
+      for (const key of keys) {
+        if (source[key] != null && source[key] !== '') return source[key]
+      }
+    }
+    return undefined
+  }
+
+  return {
+    likes: toEngagementCount(
+      fromNested('likes', 'like_count') ?? list?.likes ?? stats?.like_count ?? stats?.likes
+    ),
+    comments: toEngagementCount(
+      fromNested('comments', 'comment_count') ??
+        list?.comments ??
+        stats?.comment_count ??
+        stats?.comments ??
+        stats?.replies
+    ),
+    shares: toEngagementCount(
+      fromNested('shares', 'share_count') ?? list?.shares ?? stats?.share_count ?? stats?.shares
+    ),
+    views: toEngagementCount(
+      fromNested('views', 'view_count') ?? list?.views ?? stats?.view_count ?? stats?.views
+    ),
+    retweets: toEngagementCount(
+      fromNested('retweets', 'retweet_count') ?? list?.retweets ?? stats?.retweet_count ?? stats?.retweets
+    ),
+    quotes: toEngagementCount(
+      fromNested('quotes', 'quote_count') ?? list?.quotes ?? stats?.quote_count ?? stats?.quotes
+    ),
+    replies: toEngagementCount(
+      fromNested('replies', 'reply_count') ?? list?.replies ?? stats?.reply_count ?? stats?.replies
+    ),
+    bookmarks: toEngagementCount(
+      fromNested('bookmarks', 'bookmark_count') ?? list?.bookmarks ?? stats?.bookmark_count ?? stats?.bookmarks
+    ),
+    engagement_score:
+      list?.engagement_score ?? fromNested('engagement_score') ?? stats?.engagement_score ?? null,
+  }
+}
+
+/** UI `stats` shape used by cases / review-cases detail panels. */
+export function buildPostStatsForUi(post) {
+  const metrics = getPostEngagementMetrics(post)
+  return {
+    like_count: metrics.likes,
+    comment_count: metrics.comments,
+    share_count: metrics.shares,
+    view_count: metrics.views,
+    retweet_count: metrics.retweets,
+    quote_count: metrics.quotes,
+    reply_count: metrics.replies,
+    engagement_score: metrics.engagement_score,
+  }
+}
+
 export function buildTakedownInfoForUi(post) {
   const takedown = post?.takedown || {}
   const workflowStatus = post?.workflow?.takedown_status || takedown.status
@@ -234,13 +320,7 @@ export function buildNormalizedPostForUi(post, { updateHistory = [], signedImage
     takedown_info: buildTakedownInfoForUi(post),
     analysis_results: serializeForClient(post?.analysis_results) ?? null,
     client_notes: serializeForClient(post?.client_notes) ?? [],
-    stats: {
-      like_count: post?.engagement?.likes || post?.stats?.like_count || 0,
-      comment_count: post?.engagement?.comments || post?.stats?.comment_count || 0,
-      share_count: post?.engagement?.shares || post?.stats?.share_count || 0,
-      view_count: post?.engagement?.views || post?.stats?.view_count || 0,
-      engagement_score: post?.list?.engagement_score ?? null,
-    },
+    stats: buildPostStatsForUi(post),
     cluster_id: post?.list?.cluster_id
       ? post.list.cluster_id.toString()
       : post?.cluster_id
@@ -263,7 +343,12 @@ function buildProfileMetadataForUi(profile, signedProfilePic = null) {
     follower_count: profile?.list?.follower_count ?? legacyMetadata.follower_count ?? null,
     location: profile?.list?.location ?? legacyMetadata.location ?? null,
     s3_url: enrichment.profile_pic_s3 || legacyMetadata.s3_url || null,
-    profile_pic: signedProfilePic,
+    // Prefer signed S3; fall back to platform CDN / legacy URL when no S3 object exists
+    profile_pic:
+      signedProfilePic ||
+      enrichment.profile_pic ||
+      legacyMetadata.profile_pic ||
+      null,
     biography: enrichment.biography ?? legacyMetadata.biography ?? null,
     following_count: enrichment.following_count ?? legacyMetadata.following_count ?? null,
     media_count: enrichment.media_count ?? legacyMetadata.media_count ?? profile?.list?.post_count ?? null,

@@ -54,10 +54,14 @@ export function buildPoiPostMatch(poi, { from, to } = {}) {
 
 /**
  * Resolve a date range from UI presets / custom bounds.
- * @returns {{ from: Date, to: Date, preset: string }}
+ * @returns {{ from: Date | null, to: Date | null, preset: string }}
  */
 export function resolvePoiDateRange({ preset = '7d', from = null, to = null } = {}) {
   const now = new Date()
+
+  if (preset === 'all' || preset === 'all_time') {
+    return { from: null, to: null, preset: 'all' }
+  }
 
   if (preset === 'custom' && from) {
     let start = new Date(from)
@@ -78,6 +82,7 @@ export function resolvePoiDateRange({ preset = '7d', from = null, to = null } = 
     return { from: start, to: endDate, preset: 'custom' }
   }
 
+  // legacy bookmark support
   if (preset === '24h') {
     return { from: new Date(now.getTime() - 86400000), to: now, preset: '24h' }
   }

@@ -40,7 +40,7 @@ export default async function PoiDetailPage({ params, searchParams }) {
   const [analytics, profilesRes, postsRes] = await Promise.all([
     getPoiAnalytics(id, range),
     getPoiProfiles(id, range, 20),
-    getPoiRecentPosts(id, range, 12),
+    getPoiRecentPosts(id, range, 24),
   ])
 
   const isReviewer = clientDetails?.permission === 'reviewer'

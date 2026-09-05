@@ -1,19 +1,8 @@
 'use client'
 
-import { useEffect, useMemo, useState, useTransition } from 'react'
+import { useMemo } from 'react'
 import Link from 'next/link'
-import { useRouter, usePathname, useSearchParams } from 'next/navigation'
-import {
-  ArrowLeft,
-  Pencil,
-  Facebook,
-  Instagram,
-  Youtube,
-  Globe,
-  ExternalLink,
-  CalendarIcon,
-  X,
-} from 'lucide-react'
+import { ArrowLeft, Pencil } from 'lucide-react'
 import {
   PieChart,
   Pie,
@@ -28,14 +17,18 @@ import {
   AreaChart,
   Area,
 } from 'recharts'
-import { format, eachDayOfInterval, parseISO } from 'date-fns'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { Calendar } from '@/components/ui/calendar'
 import PageHeader from '@/components/PageHeader'
-import { Twitter, Reddit } from '@/utils/icons'
+import { DateRangeControls } from '@/components/analytics/DateRangeControls'
+import {
+  PostCard,
+  PlatformIcon,
+  platformLabel,
+  formatViolation,
+} from '@/components/analytics/PostCard'
+import { fillTimeline } from '@/components/analytics/fillTimeline'
 
 const PLATFORM_COLORS = {
   instagram: '#e1306c',
@@ -64,52 +57,6 @@ const TIER_STYLES = {
   other: 'bg-slate-100 text-slate-600 border-slate-200',
 }
 
-function useIsMobile() {
-  const [isMobile, setIsMobile] = useState(false)
-  useEffect(() => {
-    const check = () => setIsMobile(window.innerWidth < 768)
-    check()
-    window.addEventListener('resize', check)
-    return () => window.removeEventListener('resize', check)
-  }, [])
-  return isMobile
-}
-
-function PlatformIcon({ platform, className }) {
-  const p = platform?.toLowerCase()
-  if (p === 'instagram') return <Instagram className={cn('w-3.5 h-3.5 text-pink-500', className)} />
-  if (p === 'facebook') return <Facebook className={cn('w-3.5 h-3.5 text-blue-600', className)} />
-  if (p === 'x' || p === 'twitter') {
-    return (
-      <span className="w-3.5 h-3.5 inline-flex">
-        <Twitter className={cn('max-w-3.5 max-h-3.5 text-slate-900', className)} />
-      </span>
-    )
-  }
-  if (p === 'reddit') {
-    return (
-      <span className="w-3.5 h-3.5 inline-flex">
-        <Reddit className={cn('max-w-3.5 max-h-3.5', className)} />
-      </span>
-    )
-  }
-  if (p === 'youtube') return <Youtube className={cn('w-3.5 h-3.5 text-red-500', className)} />
-  return <Globe className={cn('w-3.5 h-3.5 text-slate-400', className)} />
-}
-
-function platformLabel(p) {
-  if (!p) return 'Unknown'
-  const k = String(p).toLowerCase()
-  if (k === 'x') return 'X'
-  return k.charAt(0).toUpperCase() + k.slice(1)
-}
-
-function formatViolation(name) {
-  return String(name || 'unknown')
-    .replace(/_/g, ' ')
-    .replace(/\b\w/g, (c) => c.toUpperCase())
-}
-
 function PoiAvatar({ poi, size = 'lg' }) {
   const src = poi.image?.signed_url
   const initial = (poi.display_name || '?').charAt(0).toUpperCase()
@@ -133,296 +80,6 @@ function PoiAvatar({ poi, size = 'lg' }) {
     >
       {initial}
     </div>
-  )
-}
-
-function DateRangeControls({ preset, from, to }) {
-  const router = useRouter()
-  const pathname = usePathname()
-  const searchParams = useSearchParams()
-  const [isPending, startTransition] = useTransition()
-  const [isPickerOpen, setIsPickerOpen] = useState(false)
-  const [hoveredDate, setHoveredDate] = useState(null)
-  const isMobile = useIsMobile()
-
-  const [internalRange, setInternalRange] = useState(() => ({
-    from: from ? new Date(from) : undefined,
-    to: to ? new Date(to) : undefined,
-  }))
-
-  const handleOpenChange = (open) => {
-    if (open) {
-      setInternalRange({
-        from: from ? new Date(from) : undefined,
-        to: to ? new Date(to) : undefined,
-      })
-    }
-    setIsPickerOpen(open)
-  }
-
-  const apply = (next) => {
-    const params = new URLSearchParams(searchParams.toString())
-    if (next.preset === 'custom' && next.from) {
-      params.set('range', 'custom')
-      params.set('from', next.from)
-      if (next.to) params.set('to', next.to)
-      else params.delete('to')
-    } else {
-      params.set('range', next.preset)
-      params.delete('from')
-      params.delete('to')
-    }
-    startTransition(() => {
-      router.push(`${pathname}?${params.toString()}`)
-    })
-  }
-
-  const applyRange = (range) => {
-    if (!range?.from || !range?.to) return
-    apply({
-      preset: 'custom',
-      from: format(range.from, 'yyyy-MM-dd'),
-      to: format(range.to, 'yyyy-MM-dd'),
-    })
-    setIsPickerOpen(false)
-  }
-
-  const handleSelect = (range, selectedDay) => {
-    if (!selectedDay) return
-
-    if (!internalRange?.from || (internalRange?.from && internalRange?.to)) {
-      setInternalRange({ from: selectedDay, to: undefined })
-      return
-    }
-
-    let newFrom = internalRange.from
-    let newTo = selectedDay
-    if (newTo < newFrom) {
-      newFrom = selectedDay
-      newTo = internalRange.from
-    }
-
-    const newRange = { from: newFrom, to: newTo }
-    setInternalRange(newRange)
-    applyRange(newRange)
-  }
-
-  const customLabel =
-    preset === 'custom' && from && to
-      ? `${format(new Date(from), 'MMM d')} – ${format(new Date(to), 'MMM d')}`
-      : 'Custom'
-
-  const pillBase =
-    'h-9 px-4 rounded-full text-sm font-semibold transition-colors whitespace-nowrap inline-flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-60'
-  const pillActive = 'bg-primary text-primary-foreground border border-primary'
-  const pillIdle = 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50'
-
-  return (
-    <div className="flex items-center gap-2 flex-wrap" role="group" aria-label="Filter by date range">
-      {[
-        { id: '24h', label: '24H', fullLabel: '24 Hours' },
-        { id: '7d', label: '7D', fullLabel: '7 Days' },
-      ].map((opt) => (
-        <button
-          key={opt.id}
-          type="button"
-          disabled={isPending}
-          onClick={() => apply({ preset: opt.id })}
-          aria-pressed={preset === opt.id}
-          className={cn(pillBase, preset === opt.id ? pillActive : pillIdle)}
-        >
-          <span className="md:hidden">{opt.label}</span>
-          <span className="hidden md:inline">{opt.fullLabel}</span>
-        </button>
-      ))}
-
-      <Popover open={isPickerOpen} onOpenChange={handleOpenChange}>
-        <PopoverTrigger asChild>
-          <button
-            type="button"
-            aria-pressed={preset === 'custom'}
-            className={cn(pillBase, preset === 'custom' ? pillActive : pillIdle)}
-          >
-            <CalendarIcon className="w-3.5 h-3.5" />
-            <span className="truncate max-w-[140px]">{customLabel}</span>
-          </button>
-        </PopoverTrigger>
-        <PopoverContent
-          className="w-auto p-0 max-w-[100vw] rounded-md border border-slate-200 shadow-md overflow-hidden"
-          align={isMobile ? 'center' : 'end'}
-          sideOffset={6}
-        >
-          <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-slate-50/80">
-            <div className="text-sm">
-              <p className="font-bold uppercase tracking-wider text-slate-400 text-[10px] mb-0.5">Range</p>
-              <p className="font-semibold text-slate-900">
-                {internalRange?.from ? (
-                  internalRange.to ? (
-                    <>
-                      {format(internalRange.from, 'MMM d, yyyy')} –{' '}
-                      {format(internalRange.to, 'MMM d, yyyy')}
-                    </>
-                  ) : (
-                    <>
-                      {format(internalRange.from, 'MMM d, yyyy')} –{' '}
-                      <span className="text-slate-400">end…</span>
-                    </>
-                  )
-                ) : (
-                  <span className="text-slate-400">Tap a start date</span>
-                )}
-              </p>
-            </div>
-            {internalRange?.from ? (
-              <button
-                type="button"
-                onClick={() => setInternalRange({ from: undefined, to: undefined })}
-                className="p-1.5 rounded hover:bg-slate-200/60 text-slate-400 hover:text-slate-700 transition-colors"
-                aria-label="Reset selection"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            ) : null}
-          </div>
-          <Calendar
-            initialFocus
-            mode="range"
-            defaultMonth={internalRange?.from}
-            selected={internalRange}
-            onSelect={handleSelect}
-            onDayMouseEnter={(day) => setHoveredDate(day)}
-            onDayMouseLeave={() => setHoveredDate(null)}
-            numberOfMonths={isMobile ? 1 : 2}
-            disabled={(date) => date > new Date()}
-            className="rounded-none border-none p-3 w-full md:[--cell-size:--spacing(10)]"
-            modifiers={{
-              hoverRange: (date) => {
-                if (!internalRange?.from || internalRange?.to || !hoveredDate) return false
-                const min = internalRange.from < hoveredDate ? internalRange.from : hoveredDate
-                const max = internalRange.from > hoveredDate ? internalRange.from : hoveredDate
-                return date > min && date < max
-              },
-              hoverRangeEnd: (date) => {
-                if (!internalRange?.from || internalRange?.to || !hoveredDate) return false
-                return date.getTime() === hoveredDate.getTime() && hoveredDate > internalRange.from
-              },
-              hoverRangeStart: (date) => {
-                if (!internalRange?.from || internalRange?.to || !hoveredDate) return false
-                return date.getTime() === hoveredDate.getTime() && hoveredDate < internalRange.from
-              },
-              fromDateHover: (date) => {
-                if (!internalRange?.from || internalRange?.to || !hoveredDate) return false
-                return (
-                  date.getTime() === internalRange.from.getTime() &&
-                  hoveredDate.getTime() !== internalRange.from.getTime()
-                )
-              },
-            }}
-            modifiersClassNames={{
-              hoverRange: 'bg-primary/10 text-primary !rounded-none',
-              hoverRangeStart: 'bg-primary/10 text-primary !rounded-l-md !rounded-r-none',
-              hoverRangeEnd: 'bg-primary/10 text-primary !rounded-r-md !rounded-l-none',
-              fromDateHover:
-                internalRange?.from < hoveredDate
-                  ? '!rounded-l-md !rounded-r-none'
-                  : '!rounded-r-md !rounded-l-none',
-            }}
-          />
-        </PopoverContent>
-      </Popover>
-    </div>
-  )
-}
-
-function fillTimeline(timeline, fromIso, toIso) {
-  const byDay = new Map((timeline || []).map((r) => [r.date, r.count]))
-  if (!fromIso || !toIso) {
-    return (timeline || []).map((r) => ({
-      date: r.date,
-      label: format(parseISO(r.date), 'MMM d'),
-      count: r.count,
-    }))
-  }
-  let start
-  let end
-  try {
-    start = parseISO(fromIso.slice(0, 10))
-    end = parseISO(toIso.slice(0, 10))
-  } catch {
-    return []
-  }
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) return []
-
-  return eachDayOfInterval({ start, end }).map((day) => {
-    const key = format(day, 'yyyy-MM-dd')
-    return {
-      date: key,
-      label: format(day, 'MMM d'),
-      count: byDay.get(key) || 0,
-    }
-  })
-}
-
-function PostCard({ post }) {
-  return (
-    <li className="bg-white border border-slate-200 rounded-xl overflow-hidden hover:border-slate-300 transition-colors">
-      <Link href={`/cases?case_id=${post._id}`} className="block">
-        {post.signedImageUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={post.signedImageUrl}
-            alt=""
-            className="h-28 w-full object-cover bg-slate-100"
-          />
-        ) : (
-          <div className="h-16 w-full bg-slate-100 flex items-center justify-center text-slate-400 text-xs">
-            No media
-          </div>
-        )}
-        <div className="p-2.5 space-y-1.5">
-          <div className="flex items-center justify-between gap-2">
-            <span className="inline-flex items-center gap-1 text-xs text-slate-500">
-              <PlatformIcon platform={post.platform} />
-              {platformLabel(post.platform)}
-            </span>
-            {post.effective_threat_score != null ? (
-              <span className="text-xs font-semibold tabular-nums text-slate-700">
-                {Math.round(post.effective_threat_score)}
-              </span>
-            ) : null}
-          </div>
-          <p className="text-xs sm:text-sm text-slate-700 line-clamp-2">
-            {post.caption || 'No caption'}
-          </p>
-          <div className="flex flex-wrap gap-1">
-            {(post.threat_types || []).slice(0, 2).map((t) => (
-              <Badge key={t} variant="outline" className="text-[10px] capitalize">
-                {formatViolation(t)}
-              </Badge>
-            ))}
-          </div>
-          <div className="flex items-center justify-between text-[11px] text-slate-400 pt-0.5">
-            <span className="truncate">
-              {post.author?.display_name || post.author?.username || '—'}
-            </span>
-            {post.original_url ? (
-              <span
-                role="link"
-                tabIndex={0}
-                onClick={(e) => {
-                  e.preventDefault()
-                  e.stopPropagation()
-                  window.open(post.original_url, '_blank', 'noopener,noreferrer')
-                }}
-                className="inline-flex items-center gap-0.5 hover:text-slate-600"
-              >
-                Source <ExternalLink className="h-3 w-3" />
-              </span>
-            ) : null}
-          </div>
-        </div>
-      </Link>
-    </li>
   )
 }
 
@@ -458,22 +115,20 @@ export function PoiOverview({ poi, analytics, profiles, posts, range, isReviewer
 
   const profileBlock = (
     <section className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-      <div className="px-5 py-4 border-b border-slate-100">
-        <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500">
+      <div className="px-3 py-2.5 border-b border-slate-100">
+        <h2 className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
           Top Posting Profiles
         </h2>
       </div>
       {profiles.length === 0 ? (
-        <p className="text-sm text-slate-400 px-5 py-8 text-center">No profiles in this range</p>
+        <p className="text-xs text-slate-400 px-3 py-6 text-center">No profiles in this range</p>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-xs">
             <thead>
-              <tr className="text-left text-xs uppercase tracking-wider text-slate-400 border-b border-slate-100">
-                <th className="px-5 py-3 font-medium">Profile</th>
-                <th className="px-3 py-3 font-medium">Platform</th>
-                <th className="px-3 py-3 font-medium text-right">Posts</th>
-                <th className="px-5 py-3 font-medium text-right">Engagement</th>
+              <tr className="text-left text-[10px] uppercase tracking-wider text-slate-400 border-b border-slate-100">
+                <th className="px-3 py-2 font-medium">Profile</th>
+                <th className="px-2 py-2 font-medium text-right">Posts</th>
               </tr>
             </thead>
             <tbody>
@@ -482,24 +137,30 @@ export function PoiOverview({ poi, analytics, profiles, posts, range, isReviewer
                   key={`${p.profile_id || p.username}-${i}`}
                   className="border-b border-slate-50 last:border-0"
                 >
-                  <td className="px-5 py-3">
-                    <div className="font-medium text-slate-900 truncate max-w-[180px]">
-                      {p.display_name || p.username}
-                    </div>
-                    {p.username && p.display_name !== p.username ? (
-                      <div className="text-xs text-slate-400 truncate">@{p.username}</div>
-                    ) : null}
+                  <td className="px-3 py-2">
+                    {p.profile_id ? (
+                      <Link href={`/profiles/${p.profile_id}`} className="block min-w-0 hover:underline">
+                        <div className="font-medium text-slate-900 truncate max-w-[140px]">
+                          {p.display_name || p.username}
+                        </div>
+                        <div className="text-[10px] text-slate-400 truncate inline-flex items-center gap-1">
+                          <PlatformIcon platform={p.platform} className="w-3 h-3" />
+                          {platformLabel(p.platform)}
+                        </div>
+                      </Link>
+                    ) : (
+                      <>
+                        <div className="font-medium text-slate-900 truncate max-w-[140px]">
+                          {p.display_name || p.username}
+                        </div>
+                        <div className="text-[10px] text-slate-400 truncate inline-flex items-center gap-1">
+                          <PlatformIcon platform={p.platform} className="w-3 h-3" />
+                          {platformLabel(p.platform)}
+                        </div>
+                      </>
+                    )}
                   </td>
-                  <td className="px-3 py-3">
-                    <span className="inline-flex items-center gap-1.5 text-slate-600">
-                      <PlatformIcon platform={p.platform} />
-                      {platformLabel(p.platform)}
-                    </span>
-                  </td>
-                  <td className="px-3 py-3 text-right tabular-nums text-slate-700">{p.posts}</td>
-                  <td className="px-5 py-3 text-right tabular-nums text-slate-500">
-                    {(p.engagement || 0).toLocaleString()}
-                  </td>
+                  <td className="px-2 py-2 text-right tabular-nums text-slate-700">{p.posts}</td>
                 </tr>
               ))}
             </tbody>
@@ -510,17 +171,17 @@ export function PoiOverview({ poi, analytics, profiles, posts, range, isReviewer
   )
 
   const graphsBlock = (
-    <div className="space-y-4">
-      <div className="bg-white border border-slate-200 rounded-xl p-5">
-        <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-4">
+    <div className="space-y-3">
+      <div className="bg-white border border-slate-200 rounded-xl p-3">
+        <h2 className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">
           Content Trend
         </h2>
         {timelineData.length === 0 || timelineData.every((d) => d.count === 0) ? (
-          <p className="text-sm text-slate-400 py-10 text-center">No posts in this range</p>
+          <p className="text-xs text-slate-400 py-6 text-center">No posts in this range</p>
         ) : (
-          <div className="h-44">
+          <div className="h-28">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={timelineData} margin={{ left: 0, right: 8, top: 8, bottom: 0 }}>
+              <AreaChart data={timelineData} margin={{ left: 0, right: 4, top: 4, bottom: 0 }}>
                 <defs>
                   <linearGradient id="poiPostsFill" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="var(--primary)" stopOpacity={0.35} />
@@ -530,14 +191,14 @@ export function PoiOverview({ poi, analytics, profiles, posts, range, isReviewer
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                 <XAxis
                   dataKey="label"
-                  tick={{ fontSize: 10, fill: '#64748b' }}
+                  tick={{ fontSize: 9, fill: '#64748b' }}
                   interval="preserveStartEnd"
                   minTickGap={28}
                 />
                 <YAxis
                   allowDecimals={false}
-                  width={32}
-                  tick={{ fontSize: 10, fill: '#64748b' }}
+                  width={24}
+                  tick={{ fontSize: 9, fill: '#64748b' }}
                 />
                 <Tooltip
                   formatter={(value) => [value, 'Posts']}
@@ -556,88 +217,86 @@ export function PoiOverview({ poi, analytics, profiles, posts, range, isReviewer
         )}
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="bg-white border border-slate-200 rounded-xl p-5">
-          <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-4">
-            Platform Breakdown
-          </h2>
-          {platformData.length === 0 ? (
-            <p className="text-sm text-slate-400 py-10 text-center">No posts in this range</p>
-          ) : (
-            <div className="flex items-center gap-3">
-              <div className="h-36 w-36 shrink-0">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={platformData}
-                      dataKey="value"
-                      nameKey="name"
-                      innerRadius={36}
-                      outerRadius={58}
-                      paddingAngle={2}
-                    >
-                      {platformData.map((entry) => (
-                        <Cell key={entry.name} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      formatter={(value, name) => [
-                        `${value} (${totalPlatform ? Math.round((value / totalPlatform) * 100) : 0}%)`,
-                        name,
-                      ]}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-              <ul className="space-y-1.5 flex-1 min-w-0">
-                {platformData.map((p) => (
-                  <li key={p.name} className="flex items-center justify-between text-xs gap-2">
-                    <span className="flex items-center gap-1.5 text-slate-700 min-w-0">
-                      <span
-                        className="h-2 w-2 rounded-full shrink-0"
-                        style={{ background: p.color }}
-                      />
-                      <span className="truncate">{p.name}</span>
-                    </span>
-                    <span className="tabular-nums text-slate-500 shrink-0">
-                      {p.value} · {totalPlatform ? Math.round((p.value / totalPlatform) * 100) : 0}%
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
-
-        <div className="bg-white border border-slate-200 rounded-xl p-5">
-          <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-4">
-            Risk & Violation Breakdown
-          </h2>
-          {violationData.length === 0 ? (
-            <p className="text-sm text-slate-400 py-10 text-center">No violations in this range</p>
-          ) : (
-            <div className="h-44">
+      <div className="bg-white border border-slate-200 rounded-xl p-3">
+        <h2 className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">
+          Platform Breakdown
+        </h2>
+        {platformData.length === 0 ? (
+          <p className="text-xs text-slate-400 py-6 text-center">No posts in this range</p>
+        ) : (
+          <div className="flex items-center gap-2">
+            <div className="h-28 w-28 shrink-0">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={violationData} layout="vertical" margin={{ left: 4, right: 8 }}>
-                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e8f0" />
-                  <XAxis type="number" allowDecimals={false} tick={{ fontSize: 10, fill: '#64748b' }} />
-                  <YAxis
-                    type="category"
-                    dataKey="name"
-                    width={96}
-                    tick={{ fontSize: 10, fill: '#475569' }}
-                  />
-                  <Tooltip />
-                  <Bar dataKey="count" radius={[0, 4, 4, 0]}>
-                    {violationData.map((entry) => (
-                      <Cell key={entry.name} fill={entry.fill} />
+                <PieChart>
+                  <Pie
+                    data={platformData}
+                    dataKey="value"
+                    nameKey="name"
+                    innerRadius={28}
+                    outerRadius={44}
+                    paddingAngle={2}
+                  >
+                    {platformData.map((entry) => (
+                      <Cell key={entry.name} fill={entry.color} />
                     ))}
-                  </Bar>
-                </BarChart>
+                  </Pie>
+                  <Tooltip
+                    formatter={(value, name) => [
+                      `${value} (${totalPlatform ? Math.round((value / totalPlatform) * 100) : 0}%)`,
+                      name,
+                    ]}
+                  />
+                </PieChart>
               </ResponsiveContainer>
             </div>
-          )}
-        </div>
+            <ul className="space-y-1 flex-1 min-w-0">
+              {platformData.map((p) => (
+                <li key={p.name} className="flex items-center justify-between text-[11px] gap-2">
+                  <span className="flex items-center gap-1.5 text-slate-700 min-w-0">
+                    <span
+                      className="h-2 w-2 rounded-full shrink-0"
+                      style={{ background: p.color }}
+                    />
+                    <span className="truncate">{p.name}</span>
+                  </span>
+                  <span className="tabular-nums text-slate-500 shrink-0">
+                    {p.value} · {totalPlatform ? Math.round((p.value / totalPlatform) * 100) : 0}%
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+
+      <div className="bg-white border border-slate-200 rounded-xl p-3">
+        <h2 className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">
+          Risk & Violation Breakdown
+        </h2>
+        {violationData.length === 0 ? (
+          <p className="text-xs text-slate-400 py-6 text-center">No violations in this range</p>
+        ) : (
+          <div className="h-28">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={violationData} layout="vertical" margin={{ left: 0, right: 4 }}>
+                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e8f0" />
+                <XAxis type="number" allowDecimals={false} tick={{ fontSize: 9, fill: '#64748b' }} />
+                <YAxis
+                  type="category"
+                  dataKey="name"
+                  width={72}
+                  tick={{ fontSize: 9, fill: '#475569' }}
+                />
+                <Tooltip />
+                <Bar dataKey="count" radius={[0, 4, 4, 0]}>
+                  {violationData.map((entry) => (
+                    <Cell key={entry.name} fill={entry.fill} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -652,9 +311,9 @@ export function PoiOverview({ poi, analytics, profiles, posts, range, isReviewer
           No recent posts in this range
         </div>
       ) : (
-        <ul className="grid grid-cols-2 gap-3">
+        <ul className="columns-1 sm:columns-2 xl:columns-3 gap-3 [column-fill:_balance]">
           {posts.map((post) => (
-            <PostCard key={post._id} post={post} />
+            <PostCard key={post._id} post={post} href={`/cases?case_id=${post._id}`} />
           ))}
         </ul>
       )}
@@ -662,8 +321,16 @@ export function PoiOverview({ poi, analytics, profiles, posts, range, isReviewer
   )
 
   const infoCard = (
-    <section className="bg-white border border-slate-200 rounded-xl p-5">
-      <div className="flex items-start gap-4">
+    <section className="relative bg-white border border-slate-200 rounded-xl p-5">
+      {isReviewer ? (
+        <Button asChild size="sm" className="absolute top-4 right-4 z-10">
+          <Link href={`/pois/${poi._id}/edit`}>
+            <Pencil className="h-3.5 w-3.5 mr-1.5" />
+            Edit
+          </Link>
+        </Button>
+      ) : null}
+      <div className={cn('flex items-start gap-4', isReviewer && 'pr-20')}>
         <PoiAvatar poi={poi} />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
@@ -681,14 +348,6 @@ export function PoiOverview({ poi, analytics, profiles, posts, range, isReviewer
           <p className="text-xs text-slate-400 mt-2 tabular-nums">
             {inRangeCount.toLocaleString()} posts in range
           </p>
-          {isReviewer ? (
-            <Button asChild size="sm" className="mt-3">
-              <Link href={`/pois/${poi._id}/edit`}>
-                <Pencil className="h-3.5 w-3.5 mr-1.5" />
-                Edit
-              </Link>
-            </Button>
-          ) : null}
         </div>
       </div>
     </section>
@@ -740,19 +399,17 @@ export function PoiOverview({ poi, analytics, profiles, posts, range, isReviewer
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-        {/* Info + Summary: stacked on mobile, 2-col on md+ */}
         <div className="grid gap-4 md:grid-cols-2 animate-in fade-in duration-500">
           {infoCard}
           {summaryCard}
         </div>
 
-        {/* Desktop: graphs+profiles | recent posts. Mobile: linear */}
         <div className="flex flex-col lg:flex-row gap-6 animate-in fade-in duration-500 [animation-delay:80ms]">
-          <div className="flex-1 min-w-0 space-y-4 order-1">
+          <div className="lg:w-[40%] shrink-0 space-y-3 order-2 lg:order-1">
             {graphsBlock}
-            <div className="order-2 lg:order-none">{profileBlock}</div>
+            {profileBlock}
           </div>
-          <div className="lg:w-[380px] xl:w-[420px] shrink-0 order-3 lg:order-2">
+          <div className="flex-1 min-w-0 order-1 lg:order-2">
             {recentPostsBlock}
           </div>
         </div>

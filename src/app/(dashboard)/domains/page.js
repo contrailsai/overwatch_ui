@@ -26,6 +26,8 @@ export default async function DomainsPage({ searchParams }) {
         risk: resolvedParams.risk || 'all',
         searchText: resolvedParams.search || '',
         visibility_status: resolvedParams.visibility_status || 'all',
+        alert_date_from: resolvedParams.alert_date_from || null,
+        alert_date_to: resolvedParams.alert_date_to || null,
     }
 
     const sort = {

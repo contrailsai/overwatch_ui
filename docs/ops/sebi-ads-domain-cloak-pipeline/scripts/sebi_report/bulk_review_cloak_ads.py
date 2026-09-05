@@ -138,6 +138,42 @@ def load_scam_domains(db: Database, *, cloak_unlocked_only: bool = True) -> set[
     return names
 
 
+def load_reviewed_domains(
+    db: Database,
+    *,
+    domain_names: set[str] | None = None,
+) -> dict[str, dict[str, Any]]:
+    """Domains already marked reviewed (workflow.review_status == reviewed)."""
+    query: dict[str, Any] = {"workflow.review_status": "reviewed"}
+    if domain_names:
+        query["domain_name"] = {"$in": sorted(domain_names)}
+
+    out: dict[str, dict[str, Any]] = {}
+    for doc in db["Domains"].find(
+        query,
+        {
+            "domain_name": 1,
+            "list.ai_threat_score": 1,
+            "list.content_category": 1,
+            "analysis_results.content_classification.category": 1,
+            "analysis_results.cloak_probe.unlocked": 1,
+        },
+    ):
+        name = doc.get("domain_name")
+        if not isinstance(name, str) or not name.strip():
+            continue
+        name = name.strip()
+        ar = doc.get("analysis_results") or {}
+        out[name] = {
+            "domain_id": str(doc["_id"]),
+            "unlocked": (ar.get("cloak_probe") or {}).get("unlocked"),
+            "category": (ar.get("content_classification") or {}).get("category")
+            or (doc.get("list") or {}).get("content_category"),
+            "ai_threat_score": (doc.get("list") or {}).get("ai_threat_score"),
+        }
+    return out
+
+
 # Ad_profiles review shape (Review Ad Profiles UI).
 PROFILE_REVIEW_TEMPLATE = {
     "risk": "high",
@@ -411,6 +447,161 @@ def run_bulk_review_cloak_ads(
         end=end,
         only_pending=only_pending,
         cloak_unlocked_only=cloak_unlocked_only,
+    )
+    apply_result = apply_bulk_reviews(
+        db,
+        collected["targets"],
+        reviewer_email=reviewer_email,
+        dry_run=dry_run,
+    )
+    profile_apply: dict[str, Any] | None = None
+    if with_profiles:
+        profile_apply = apply_bulk_profile_reviews(
+            db,
+            collected.get("unique_profile_ids") or [],
+            dry_run=dry_run,
+        )
+    return {
+        "ok": True,
+        "date_range": {"start": start.isoformat(), "end_exclusive": end.isoformat()},
+        "dry_run": dry_run,
+        "with_profiles": with_profiles,
+        **collected,
+        "apply": apply_result,
+        "profile_apply": profile_apply,
+    }
+
+
+DEFAULT_CHANNELS = ("library", "feed")
+
+
+def collect_pending_on_reviewed_domains(
+    db: Database,
+    *,
+    start: datetime,
+    end: datetime,
+    only_pending: bool = True,
+    channels: set[str] | None = None,
+    domain_filter: set[str] | None = None,
+) -> dict[str, Any]:
+    """Pending ads in range whose destination domain is already reviewed."""
+    allowed_channels = channels or set(DEFAULT_CHANNELS)
+    reviewed = load_reviewed_domains(db, domain_names=domain_filter)
+    reviewed_names = set(reviewed.keys())
+
+    query: dict[str, Any] = {"list.sourced_at": {"$gte": start, "$lt": end}}
+    if only_pending:
+        query["workflow.review_status"] = {"$ne": "reviewed"}
+
+    projection = {
+        "_id": 1,
+        "platform_ad_id": 1,
+        "original_url": 1,
+        "channel": 1,
+        "ingestion": 1,
+        "submitted_url": 1,
+        "content.link_url": 1,
+        "content.cards.link_url": 1,
+        "source_payload.cta": 1,
+        "source_payload.links": 1,
+        "workflow.review_status": 1,
+        "list.sourced_at": 1,
+        "ad_profile_id": 1,
+    }
+
+    stats: dict[str, Any] = {
+        "total_in_range": 0,
+        "already_reviewed": 0,
+        "no_reviewed_domain": 0,
+        "skipped_channel": 0,
+        "matched": 0,
+        "by_channel": {},
+        "by_day": {},
+        "by_domain": {},
+    }
+    targets: list[dict[str, Any]] = []
+
+    for ad in db["Ads"].find(query, projection):
+        stats["total_in_range"] += 1
+        channel = ad_channel(ad)
+        if channel not in allowed_channels:
+            stats["skipped_channel"] += 1
+            continue
+
+        hit_domains: set[str] = set()
+        sample_url: str | None = None
+        for raw_url, _ in iter_ad_urls(ad):
+            norm = normalize_url(raw_url) or raw_url
+            domain_name = canonicalize_domain_name(norm)
+            if not domain_name or domain_name not in reviewed_names:
+                continue
+            hit_domains.add(domain_name)
+            if sample_url is None:
+                sample_url = norm
+
+        if not hit_domains:
+            stats["no_reviewed_domain"] += 1
+            continue
+
+        status = (ad.get("workflow") or {}).get("review_status") or "unknown"
+        if only_pending and status == "reviewed":
+            stats["already_reviewed"] += 1
+            continue
+
+        stats["matched"] += 1
+        stats["by_channel"][channel] = stats["by_channel"].get(channel, 0) + 1
+        sourced = (ad.get("list") or {}).get("sourced_at")
+        day = sourced.strftime("%Y-%m-%d") if hasattr(sourced, "strftime") else "none"
+        stats["by_day"][day] = stats["by_day"].get(day, 0) + 1
+        for name in hit_domains:
+            stats["by_domain"][name] = stats["by_domain"].get(name, 0) + 1
+
+        profile_id = ad.get("ad_profile_id")
+        targets.append(
+            {
+                "ad_id": str(ad["_id"]),
+                "ad_profile_id": str(profile_id) if profile_id else None,
+                "platform_ad_id": ad.get("platform_ad_id"),
+                "channel": channel,
+                "domains": sorted(hit_domains),
+                "sample_url": sample_url,
+                "sourced_at": str(sourced),
+                "review_status_before": status,
+            }
+        )
+
+    profile_ids = sorted({t["ad_profile_id"] for t in targets if t.get("ad_profile_id")})
+    return {
+        "mode": "pending_on_reviewed_domains",
+        "channels": sorted(allowed_channels),
+        "domain_filter": sorted(domain_filter) if domain_filter else None,
+        "reviewed_domains_loaded": len(reviewed),
+        "reviewed_domains": reviewed,
+        "stats": stats,
+        "targets": targets,
+        "unique_profile_ids": profile_ids,
+    }
+
+
+def run_bulk_review_pending_on_reviewed_domains(
+    db: Database,
+    *,
+    start: datetime,
+    end: datetime,
+    dry_run: bool = True,
+    reviewer_email: str = DEFAULT_REVIEWER,
+    only_pending: bool = True,
+    with_profiles: bool = True,
+    channels: set[str] | None = None,
+    domain_filter: set[str] | None = None,
+) -> dict[str, Any]:
+    collected = collect_pending_on_reviewed_domains(
+        db,
+        start=start,
+        end=end,
+        only_pending=only_pending,
+        channels=channels,
+        domain_filter=domain_filter,
     )
     apply_result = apply_bulk_reviews(
         db,

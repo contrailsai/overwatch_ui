@@ -34,7 +34,11 @@ from domain_analyzer.cloak_probe import run_cloak_probe_batch  # noqa: E402
 from domain_analyzer.probe_targets import list_probe_targets, write_probe_targets  # noqa: E402
 from sebi_report.apply import apply_empty_frames, load_unique_domains  # noqa: E402
 from sebi_report.analyze_intel import run_intel_batch  # noqa: E402
-from sebi_report.bulk_review_cloak_ads import run_bulk_review_cloak_ads, write_bulk_review_artifact  # noqa: E402
+from sebi_report.bulk_review_cloak_ads import (  # noqa: E402
+    run_bulk_review_cloak_ads,
+    run_bulk_review_pending_on_reviewed_domains,
+    write_bulk_review_artifact,
+)
 from sebi_report.extract import extract_unique_domains, write_extract_artifacts  # noqa: E402
 
 
@@ -400,6 +404,44 @@ def _resolve_bulk_review_dates(args: argparse.Namespace) -> tuple[datetime, date
     return start, end
 
 
+def _summarize_bulk_review(result: dict[str, Any]) -> dict[str, Any]:
+    summary: dict[str, Any] = {
+        "ok": result.get("ok"),
+        "dry_run": result.get("dry_run"),
+        "mode": result.get("mode"),
+        "date_range": result.get("date_range"),
+        "with_profiles": result.get("with_profiles"),
+        "stats": result.get("stats"),
+        "ads_to_review": len(result.get("targets") or []),
+        "profiles_to_review": len(result.get("unique_profile_ids") or []),
+        "apply_ads": {
+            k: result["apply"][k]
+            for k in ("dry_run", "reviewer_email", "skipped", "errors")
+            if k in result.get("apply", {})
+        },
+    }
+    for key in ("would_update", "updated"):
+        if key in result.get("apply", {}):
+            summary["apply_ads"][key] = result["apply"][key]
+    if result.get("profile_apply"):
+        summary["apply_profiles"] = {
+            k: result["profile_apply"][k]
+            for k in ("dry_run", "skipped", "errors")
+            if k in result["profile_apply"]
+        }
+        for key in ("would_update", "updated"):
+            if key in result["profile_apply"]:
+                summary["apply_profiles"][key] = result["profile_apply"][key]
+    if "cloak_unlocked_only" in result:
+        summary["cloak_unlocked_only"] = result["cloak_unlocked_only"]
+        summary["scam_domains_loaded"] = result.get("scam_domains_loaded")
+    if "reviewed_domains_loaded" in result:
+        summary["reviewed_domains_loaded"] = result["reviewed_domains_loaded"]
+        summary["channels"] = result.get("channels")
+        summary["domain_filter"] = result.get("domain_filter")
+    return summary
+
+
 def cmd_bulk_review_cloak(args: argparse.Namespace) -> int:
     """Bulk-review library ads (+ profiles) landing on cloak-unlocked scam domains."""
     _set_db(args.db)
@@ -422,35 +464,42 @@ def cmd_bulk_review_cloak(args: argparse.Namespace) -> int:
         )
         out_path = Path(args.out) / "bulk_review_cloak_result.json"
         write_bulk_review_artifact(result, out_path)
-        summary = {
-            "ok": result.get("ok"),
-            "dry_run": result.get("dry_run"),
-            "date_range": result.get("date_range"),
-            "cloak_unlocked_only": result.get("cloak_unlocked_only"),
-            "with_profiles": result.get("with_profiles"),
-            "stats": result.get("stats"),
-            "scam_domains_loaded": result.get("scam_domains_loaded"),
-            "ads_to_review": len(result.get("targets") or []),
-            "profiles_to_review": len(result.get("unique_profile_ids") or []),
-            "apply_ads": {
-                k: result["apply"][k]
-                for k in ("dry_run", "reviewer_email", "skipped", "errors")
-                if k in result.get("apply", {})
-            },
-        }
-        for key in ("would_update", "updated"):
-            if key in result.get("apply", {}):
-                summary["apply_ads"][key] = result["apply"][key]
-        if result.get("profile_apply"):
-            summary["apply_profiles"] = {
-                k: result["profile_apply"][k]
-                for k in ("dry_run", "skipped", "errors")
-                if k in result["profile_apply"]
-            }
-            for key in ("would_update", "updated"):
-                if key in result["profile_apply"]:
-                    summary["apply_profiles"][key] = result["profile_apply"][key]
-        print(json.dumps(summary, indent=2))
+        print(json.dumps(_summarize_bulk_review(result), indent=2))
+        print(f"wrote {out_path}")
+    finally:
+        close_connection()
+    return 0
+
+
+def cmd_bulk_review_reviewed_domains(args: argparse.Namespace) -> int:
+    """Bulk-review pending ads that land on already-reviewed Domains."""
+    _set_db(args.db)
+    start, end = _resolve_bulk_review_dates(args)
+    if end <= start:
+        print("--end must be after --start", file=sys.stderr)
+        return 1
+
+    channels = {c.strip() for c in (args.channels or "library,feed").split(",") if c.strip()}
+    domain_filter = None
+    if args.domains:
+        domain_filter = {d.strip() for d in args.domains.split(",") if d.strip()}
+
+    db = connect_to_database()
+    try:
+        result = run_bulk_review_pending_on_reviewed_domains(
+            db,
+            start=start,
+            end=end,
+            dry_run=not args.apply,
+            reviewer_email=args.reviewer,
+            only_pending=not args.include_reviewed,
+            with_profiles=not args.ads_only,
+            channels=channels,
+            domain_filter=domain_filter,
+        )
+        out_path = Path(args.out) / "bulk_review_reviewed_domains_result.json"
+        write_bulk_review_artifact(result, out_path)
+        print(json.dumps(_summarize_bulk_review(result), indent=2))
         print(f"wrote {out_path}")
     finally:
         close_connection()
@@ -596,6 +645,46 @@ def main(argv: list[str] | None = None) -> int:
         help="Also match Domains with scam category but no cloak unlock (default: unlocked only)",
     )
     p_review.set_defaults(func=cmd_bulk_review_cloak)
+
+    p_rev_dom = sub.add_parser(
+        "bulk-review-reviewed-domains",
+        help="Bulk-review pending ads whose landing domain is already reviewed (dry-run by default)",
+    )
+    _add_common(p_rev_dom)
+    p_rev_dom.add_argument(
+        "--today",
+        action="store_true",
+        help="Review ads sourced today (overrides --start/--end)",
+    )
+    p_rev_dom.add_argument("--start", default=None, help="Inclusive start date (YYYY-MM-DD, list.sourced_at)")
+    p_rev_dom.add_argument(
+        "--end",
+        default=None,
+        help="Exclusive end date (YYYY-MM-DD). E.g. 2026-09-05 includes all of Sep 3–4.",
+    )
+    p_rev_dom.add_argument("--apply", action="store_true", help="Write reviews to Mongo (default: dry-run)")
+    p_rev_dom.add_argument("--reviewer", default="sebi-reviewer@contrails.ai")
+    p_rev_dom.add_argument(
+        "--include-reviewed",
+        action="store_true",
+        help="Include ads already marked reviewed (default: pending only)",
+    )
+    p_rev_dom.add_argument(
+        "--ads-only",
+        action="store_true",
+        help="Review ads only; skip linked Ad_profiles",
+    )
+    p_rev_dom.add_argument(
+        "--channels",
+        default="library,feed",
+        help="Comma-separated channels to include (default: library,feed)",
+    )
+    p_rev_dom.add_argument(
+        "--domains",
+        default=None,
+        help="Optional comma-separated domain_name allowlist (default: all reviewed Domains)",
+    )
+    p_rev_dom.set_defaults(func=cmd_bulk_review_reviewed_domains)
 
     args = parser.parse_args(argv)
     if args.cmd == "apply" and not args.from_file:

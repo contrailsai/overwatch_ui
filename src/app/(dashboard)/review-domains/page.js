@@ -41,6 +41,8 @@ export default async function ReviewDomainsPage({ searchParams }) {
     search: resolvedParams?.search || '',
     visibility_status: resolvedParams?.visibility_status || 'all',
     risk: resolvedParams?.risk || 'all',
+    sourcingDateStart: resolvedParams?.sourcingDateStart || null,
+    sourcingDateEnd: resolvedParams?.sourcingDateEnd || null,
   }
 
   const initialSort = {

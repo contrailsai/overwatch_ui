@@ -420,7 +420,34 @@ export function ReviewAdsInterface({
   }, [initialAds])
 
   useEffect(() => {
-    if (initialAd) setSelectedAd(initialAd)
+    if (!initialAd) return
+    setSelectedAd((prev) => {
+      if (!prev || String(prev._id) !== String(initialAd._id)) return initialAd
+
+      const prevReviewed =
+        prev.workflow?.review_status === 'reviewed' || Boolean(prev.content_reviewed_by)
+      const nextReviewed =
+        initialAd.workflow?.review_status === 'reviewed' || Boolean(initialAd.content_reviewed_by)
+
+      // Keep optimistic reviewed client state if the refreshed snapshot is still pending
+      if (prevReviewed && !nextReviewed) return prev
+
+      return {
+        ...prev,
+        ...initialAd,
+        workflow: {
+          ...(prev.workflow || {}),
+          ...(initialAd.workflow || {}),
+          ...(prevReviewed || nextReviewed ? { review_status: 'reviewed' } : {}),
+        },
+        list: {
+          ...(prev.list || {}),
+          ...(initialAd.list || {}),
+        },
+        review_details: initialAd.review_details ?? prev.review_details,
+        content_reviewed_by: initialAd.content_reviewed_by ?? prev.content_reviewed_by,
+      }
+    })
   }, [initialAd])
 
   useEffect(() => {

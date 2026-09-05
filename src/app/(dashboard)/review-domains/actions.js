@@ -54,6 +54,13 @@ function buildReviewDomainsMatchQuery(filters = {}) {
     })
   }
 
+  if (filters.sourcingDateStart || filters.sourcingDateEnd) {
+    const dateRange = {}
+    if (filters.sourcingDateStart) dateRange.$gte = new Date(filters.sourcingDateStart)
+    if (filters.sourcingDateEnd) dateRange.$lte = new Date(filters.sourcingDateEnd)
+    andConditions.push({ 'list.first_seen_at': dateRange })
+  }
+
   if (andConditions.length > 0) query.$and = andConditions
   return query
 }

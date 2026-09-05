@@ -11,6 +11,7 @@ In S3 → bucket → **Permissions** → **Cross-origin resource sharing (CORS)*
   {
     "AllowedOrigins": [
       "http://localhost:3000",
+      "http://localhost:3001",
       "https://YOUR_PRODUCTION_DOMAIN",
       "https://YOUR_PREVIEW_DOMAIN.vercel.app"
     ],
