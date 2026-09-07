@@ -29,6 +29,7 @@ import {
   formatViolation,
 } from '@/components/analytics/PostCard'
 import { fillTimeline } from '@/components/analytics/fillTimeline'
+import { DEFAULT_INFORMATICS_RANGE_PRESET } from '@/lib/pois/poi-helpers'
 
 const PLATFORM_COLORS = {
   instagram: '#e1306c',
@@ -435,7 +436,7 @@ export function PoiOverview({ poi, analytics, profiles = [], posts = [], aigcPos
           Back to POIs
         </Link>
         <DateRangeControls
-          preset={range.preset || '7d'}
+          preset={range.preset || DEFAULT_INFORMATICS_RANGE_PRESET}
           from={range.from}
           to={range.to}
         />

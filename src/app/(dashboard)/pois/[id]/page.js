@@ -10,6 +10,7 @@ import {
   getPoiAigcPosts,
 } from '../actions'
 import { PoiOverview } from './PoiOverview'
+import { DEFAULT_INFORMATICS_RANGE_PRESET } from '@/lib/pois/poi-helpers'
 
 export async function generateMetadata({ params }) {
   const { id } = await params
@@ -28,7 +29,7 @@ export default async function PoiDetailPage({ params, searchParams }) {
 
   const { id } = await params
   const resolved = await searchParams
-  const preset = resolved.range || '7d'
+  const preset = resolved.range || DEFAULT_INFORMATICS_RANGE_PRESET
   const from = resolved.from || null
   const to = resolved.to || null
   const range = { preset, from, to }

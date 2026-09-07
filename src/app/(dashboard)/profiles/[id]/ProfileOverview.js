@@ -49,6 +49,7 @@ import { Badge } from '@/components/ui/badge'
 import { Textarea } from '@/components/ui/textarea'
 import NotificationsBell from '@/components/NotificationsBell'
 import { DateRangeControls } from '@/components/analytics/DateRangeControls'
+import { DEFAULT_INFORMATICS_RANGE_PRESET } from '@/lib/pois/poi-helpers'
 import {
   PostCard,
   PlatformIcon,
@@ -685,7 +686,7 @@ export function ProfileOverview({ profile, project, analytics, posts, reportCase
           ) : null}
         </div>
         <DateRangeControls
-          preset={range.preset || 'all'}
+          preset={range.preset || DEFAULT_INFORMATICS_RANGE_PRESET}
           from={range.from}
           to={range.to}
         />

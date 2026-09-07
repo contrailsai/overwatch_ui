@@ -4,6 +4,9 @@ export const POI_TIERS = ['primary', 'secondary', 'other']
 
 export const MAX_POI_RANGE_DAYS = 90
 
+/** Flip to `'30d'` once informatics volume is high enough. */
+export const DEFAULT_INFORMATICS_RANGE_PRESET = 'all'
+
 export function normalizePoiNameKey(raw) {
   return String(raw || '')
     .trim()
@@ -253,11 +256,23 @@ export function compareAigcPosts(a, b) {
  * Resolve a date range from UI presets / custom bounds.
  * @returns {{ from: Date | null, to: Date | null, preset: string }}
  */
-export function resolvePoiDateRange({ preset = '7d', from = null, to = null } = {}) {
+export function resolvePoiDateRange({
+  preset = DEFAULT_INFORMATICS_RANGE_PRESET,
+  from = null,
+  to = null,
+} = {}) {
   const now = new Date()
 
   if (preset === 'all' || preset === 'all_time') {
     return { from: null, to: null, preset: 'all' }
+  }
+
+  if (preset === '30d') {
+    return { from: new Date(now.getTime() - 30 * 86400000), to: now, preset: '30d' }
+  }
+
+  if (preset === '7d') {
+    return { from: new Date(now.getTime() - 7 * 86400000), to: now, preset: '7d' }
   }
 
   if (preset === 'custom' && from) {
@@ -284,8 +299,10 @@ export function resolvePoiDateRange({ preset = '7d', from = null, to = null } = 
     return { from: new Date(now.getTime() - 86400000), to: now, preset: '24h' }
   }
 
-  // default 7d
-  return { from: new Date(now.getTime() - 7 * 86400000), to: now, preset: '7d' }
+  if (preset !== DEFAULT_INFORMATICS_RANGE_PRESET) {
+    return resolvePoiDateRange({ preset: DEFAULT_INFORMATICS_RANGE_PRESET })
+  }
+  return { from: null, to: null, preset: 'all' }
 }
 
 export function serializePoiForClient(poi, extra = {}) {
