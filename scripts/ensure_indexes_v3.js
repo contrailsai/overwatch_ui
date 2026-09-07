@@ -589,6 +589,18 @@ async function ensureIndexesV3(db, log = console.log) {
     { name: 'status_tier_post_count' },
     'pois: status + tier + post_count'
   )
+  await ok(
+    pois,
+    { merged_into_name: 1 },
+    { name: 'merged_into_name' },
+    'pois: merged_into_name (alias parent FK)'
+  )
+  await ok(
+    pois,
+    { merged_into: 1 },
+    { name: 'merged_into' },
+    'pois: merged_into (alias parent id)'
+  )
 
   if (failed > 0) {
     throw new Error(`v3 indexes incomplete: ${failed} index(es) failed`)

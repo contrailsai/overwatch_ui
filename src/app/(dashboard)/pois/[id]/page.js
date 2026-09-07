@@ -1,4 +1,4 @@
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import { getClientandProjectDetails } from '@/app/(dashboard)/actions'
 import { isSectionEnabled } from '@/lib/project-sections'
 import { DisabledSectionFallback } from '@/components/DisabledSectionFallback'
@@ -7,8 +7,10 @@ import {
   getPoiAnalytics,
   getPoiProfiles,
   getPoiRecentPosts,
+  getPoiAigcPosts,
 } from '../actions'
 import { PoiOverview } from './PoiOverview'
+import { DEFAULT_INFORMATICS_RANGE_PRESET } from '@/lib/pois/poi-helpers'
 
 export async function generateMetadata({ params }) {
   const { id } = await params
@@ -27,7 +29,7 @@ export default async function PoiDetailPage({ params, searchParams }) {
 
   const { id } = await params
   const resolved = await searchParams
-  const preset = resolved.range || '7d'
+  const preset = resolved.range || DEFAULT_INFORMATICS_RANGE_PRESET
   const from = resolved.from || null
   const to = resolved.to || null
   const range = { preset, from, to }
@@ -36,11 +38,15 @@ export default async function PoiDetailPage({ params, searchParams }) {
   if (!poi) {
     notFound()
   }
+  if (poi.merged_into && String(poi.merged_into) !== String(poi._id)) {
+    redirect(`/pois/${poi.merged_into}`)
+  }
 
-  const [analytics, profilesRes, postsRes] = await Promise.all([
+  const [analytics, profilesRes, postsRes, aigcRes] = await Promise.all([
     getPoiAnalytics(id, range),
     getPoiProfiles(id, range, 20),
     getPoiRecentPosts(id, range, 24),
+    getPoiAigcPosts(id, range, 60),
   ])
 
   const isReviewer = clientDetails?.permission === 'reviewer'
@@ -49,8 +55,9 @@ export default async function PoiDetailPage({ params, searchParams }) {
     <PoiOverview
       poi={poi}
       analytics={analytics}
-      profiles={profilesRes.profiles || []}
-      posts={postsRes.posts || []}
+      profiles={profilesRes?.profiles || []}
+      posts={postsRes?.posts || []}
+      aigcPosts={aigcRes?.posts || []}
       range={{ preset, from, to }}
       isReviewer={isReviewer}
     />

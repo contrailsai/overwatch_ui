@@ -16,7 +16,7 @@ import {
   ChevronLeft, ChevronRight, Smile, TrendingDown, TriangleAlert,
   Youtube, Instagram, Facebook, UserPlus, Check,
   AlertOctagon, ChevronDown,
-  DownloadIcon, ShieldAlert, MoreHorizontal
+  DownloadIcon, ShieldAlert, MoreHorizontal, Scale
 } from 'lucide-react'
 
 import { Twitter, Reddit } from '@/utils/icons'
@@ -151,34 +151,19 @@ function ListSelectionBar({
 }
 
 function BulkActionMenu({
-  allowDoTakedown,
   isBulkTakedownProcessing,
   isBulkNoActionProcessing,
-  isBulkFlagProcessing,
-  onDoTakedown,
+  onPlatformTakedown,
+  onI4cTakedown,
+  onReportInternal,
   onNoAction,
-  onFlagForTakedown,
 }) {
-  const anyProcessing = isBulkTakedownProcessing || isBulkNoActionProcessing || isBulkFlagProcessing
+  const anyProcessing = isBulkTakedownProcessing || isBulkNoActionProcessing
 
   const itemBase = "w-full flex items-center gap-2.5 px-2.5 py-3 min-h-11 rounded-lg text-xs font-bold text-left transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
 
   return (
     <div className="flex flex-col gap-1">
-      {allowDoTakedown && (
-        <button
-          type="button"
-          onClick={onDoTakedown}
-          disabled={anyProcessing}
-          className={cn(itemBase, "text-rose-700 hover:bg-rose-50")}
-        >
-          {isBulkTakedownProcessing
-            ? <Loader2 className="w-4 h-4 animate-spin text-rose-600" />
-            : <ShieldAlert className="w-4 h-4 text-rose-600" />}
-          <span className="flex-1">Do Takedown</span>
-        </button>
-      )}
-
       <button
         type="button"
         onClick={onNoAction}
@@ -191,19 +176,41 @@ function BulkActionMenu({
         <span className="flex-1">No Action</span>
       </button>
 
-      {!allowDoTakedown && (
-        <button
-          type="button"
-          onClick={onFlagForTakedown}
-          disabled={anyProcessing}
-          className={cn(itemBase, "text-orange-700 hover:bg-orange-50")}
-        >
-          {isBulkFlagProcessing
-            ? <Loader2 className="w-4 h-4 animate-spin text-orange-600" />
-            : <FlagTriangleLeft className="w-4 h-4 text-orange-600" />}
-          <span className="flex-1">Flag for Takedown</span>
-        </button>
-      )}
+      <button
+        type="button"
+        onClick={onPlatformTakedown}
+        disabled={anyProcessing}
+        className={cn(itemBase, "text-rose-700 hover:bg-rose-50")}
+      >
+        {isBulkTakedownProcessing
+          ? <Loader2 className="w-4 h-4 animate-spin text-rose-600" />
+          : <ShieldAlert className="w-4 h-4 text-rose-600" />}
+        <span className="flex-1">Platform takedown</span>
+      </button>
+
+      <button
+        type="button"
+        onClick={onI4cTakedown}
+        disabled={anyProcessing}
+        className={cn(itemBase, "text-indigo-700 hover:bg-indigo-50")}
+      >
+        {isBulkTakedownProcessing
+          ? <Loader2 className="w-4 h-4 animate-spin text-indigo-600" />
+          : <Scale className="w-4 h-4 text-indigo-600" />}
+        <span className="flex-1">I4C takedown</span>
+      </button>
+
+      <button
+        type="button"
+        onClick={onReportInternal}
+        disabled={anyProcessing}
+        className={cn(itemBase, "text-slate-700 hover:bg-slate-50")}
+      >
+        {isBulkTakedownProcessing
+          ? <Loader2 className="w-4 h-4 animate-spin text-slate-600" />
+          : <Siren className="w-4 h-4 text-slate-600" />}
+        <span className="flex-1">Report Internal</span>
+      </button>
     </div>
   )
 }
@@ -244,8 +251,7 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
   const [showBulkNoActionConfirm, setShowBulkNoActionConfirm] = useState(false)
   const [isBulkNoActionProcessing, setIsBulkNoActionProcessing] = useState(false)
 
-  const [showBulkFlagConfirm, setShowBulkFlagConfirm] = useState(false)
-  const [isBulkFlagProcessing, setIsBulkFlagProcessing] = useState(false)
+  const [pendingTakedownChannel, setPendingTakedownChannel] = useState('platform')
 
   const [actionMenuOpen, setActionMenuOpen] = useState(false)
   const [mobileActionMenuOpen, setMobileActionMenuOpen] = useState(false)
@@ -431,7 +437,7 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
     if (postIds.length === 0) return
 
     setIsBulkTakedownProcessing(true)
-    trackClientClick('bulk_do_takedown', { page: 'CasesList', count: postIds.length })
+    trackClientClick('bulk_do_takedown', { page: 'CasesList', count: postIds.length, takedown_channel: pendingTakedownChannel })
     try {
       const result = await initiateTakedown(postIds, clientDetails.email)
       if (result.success) {
@@ -511,13 +517,10 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
       successVerb: 'Marked No Action for'
     })
 
-  const handleBulkFlagForTakedown = () =>
-    applyBulkClientStatus('Flag for Takedown', {
-      setProcessing: setIsBulkFlagProcessing,
-      closeDialog: () => setShowBulkFlagConfirm(false),
-      trackEvent: 'bulk_flag_for_takedown',
-      successVerb: 'Flagged for takedown:'
-    })
+  const openBulkTakedown = (channel) => {
+    setPendingTakedownChannel(channel)
+    setShowBulkTakedownConfirm(true)
+  }
 
   // Check if all items on the *current page* are selected for the header checkbox
   const isAllCurrentPageSelected = mergedPosts.length > 0 && mergedPosts.every(post => !!selectedCases[post._id])
@@ -656,20 +659,23 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
     totalCount,
     isBulkTakedownProcessing,
     isBulkNoActionProcessing,
-    isBulkFlagProcessing,
     actionMenuOpen,
     setActionMenuOpen,
-    onBulkTakedown: () => {
+    onBulkPlatformTakedown: () => {
       setActionMenuOpen(false)
-      setShowBulkTakedownConfirm(true)
+      openBulkTakedown('platform')
+    },
+    onBulkI4cTakedown: () => {
+      setActionMenuOpen(false)
+      openBulkTakedown('i4c')
+    },
+    onBulkReportInternal: () => {
+      setActionMenuOpen(false)
+      openBulkTakedown('report_internal')
     },
     onBulkNoAction: () => {
       setActionMenuOpen(false)
       setShowBulkNoActionConfirm(true)
-    },
-    onBulkFlag: () => {
-      setActionMenuOpen(false)
-      setShowBulkFlagConfirm(true)
     },
     BulkActionMenu,
     clearFilters,
@@ -757,7 +763,7 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                         <PopoverTrigger asChild>
                           <Button
                             size="sm"
-                            disabled={isBulkTakedownProcessing || isBulkNoActionProcessing || isBulkFlagProcessing}
+                            disabled={isBulkTakedownProcessing || isBulkNoActionProcessing}
                             className="h-7 px-2.5 text-[10px] font-bold text-white bg-red-500 hover:bg-red-600 shrink-0"
                           >
                             Action ({isAllFilterSelected ? totalCount : selectedCount})
@@ -766,13 +772,12 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                         </PopoverTrigger>
                         <PopoverContent align="start" className="min-w-[140px] p-1 z-50">
                           <BulkActionMenu
-                            allowDoTakedown={allowDoTakedown}
                             isBulkTakedownProcessing={isBulkTakedownProcessing}
                             isBulkNoActionProcessing={isBulkNoActionProcessing}
-                            isBulkFlagProcessing={isBulkFlagProcessing}
-                            onDoTakedown={() => { setMobileActionMenuOpen(false); setShowBulkTakedownConfirm(true) }}
+                            onPlatformTakedown={() => { setMobileActionMenuOpen(false); openBulkTakedown('platform') }}
+                            onI4cTakedown={() => { setMobileActionMenuOpen(false); openBulkTakedown('i4c') }}
+                            onReportInternal={() => { setMobileActionMenuOpen(false); openBulkTakedown('report_internal') }}
                             onNoAction={() => { setMobileActionMenuOpen(false); setShowBulkNoActionConfirm(true) }}
-                            onFlagForTakedown={() => { setMobileActionMenuOpen(false); setShowBulkFlagConfirm(true) }}
                           />
                         </PopoverContent>
                       </Popover>
@@ -1751,57 +1756,6 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                 <CheckCircle className="w-4 h-4 mr-2" />
               )}
               Confirm No Action
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Bulk Flag for Takedown Confirmation Dialog */}
-      <Dialog
-        open={showBulkFlagConfirm}
-        onOpenChange={(open) => {
-          if (!isBulkFlagProcessing) setShowBulkFlagConfirm(open)
-        }}
-      >
-        <DialogContent className="sm:max-w-md rounded-2xl">
-          <DialogHeader>
-            <div className="flex items-center gap-3">
-              <div className="shrink-0 p-2 rounded-xl bg-orange-50 text-orange-600 border border-orange-100">
-                <FlagTriangleLeft className="w-5 h-5" />
-              </div>
-              <DialogTitle className="text-lg font-black text-slate-800">
-                Flag for Takedown
-              </DialogTitle>
-            </div>
-            <DialogDescription className="pt-2 text-sm text-slate-600 leading-relaxed">
-              You&apos;re about to flag{' '}
-              <span className="font-bold text-slate-900">
-                {isAllFilterSelected ? totalCount : selectedCount}{' '}
-                {(isAllFilterSelected ? totalCount : selectedCount) === 1 ? 'case' : 'cases'}
-              </span>{' '}
-              as <span className="font-bold text-slate-900">Flag for Takedown</span>. The takedown team will pick these up for review.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="flex flex-row justify-end gap-2 pt-2">
-            <Button
-              variant="outline"
-              onClick={() => setShowBulkFlagConfirm(false)}
-              disabled={isBulkFlagProcessing}
-              className="cursor-pointer"
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleBulkFlagForTakedown}
-              disabled={isBulkFlagProcessing}
-              className="bg-orange-600 hover:bg-orange-700 text-white font-bold cursor-pointer"
-            >
-              {isBulkFlagProcessing ? (
-                <Loader2 className="w-4 h-4 animate-spin mr-2" />
-              ) : (
-                <FlagTriangleLeft className="w-4 h-4 mr-2" />
-              )}
-              Confirm Flag
             </Button>
           </DialogFooter>
         </DialogContent>

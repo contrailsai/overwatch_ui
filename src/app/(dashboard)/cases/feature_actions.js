@@ -13,6 +13,7 @@ import { requireAuthContext, requireRole } from '@/utils/auth-context'
 import { logActionError, LOKI_STREAMS } from '@/utils/otel-logger'
 import { postsCollection } from '@/utils/mongodb/collections'
 import { insertCaseEvent } from '@/utils/mongodb/v3-schema'
+import { syncPoisFromReview } from '@/lib/pois/sync-pois-from-review'
 
 // ADD NOTE
 export const addReviewNote = traceAction('addReviewNote', async (caseId, noteText) => {
@@ -204,6 +205,18 @@ export const submitCaseReview = traceAction('submitCaseReview', async (_project,
             summary: 'client edited case review details',
             payload: { review_details },
         })
+
+        await syncPoisFromReview({
+            db,
+            prevNames: prevReview?.poi_names || [],
+            nextNames: review_details.poi_names,
+        }).catch((err) =>
+            logActionError({
+                loki_stream: LOKI_STREAMS.cases,
+                app_action: 'syncPoisFromReview',
+                message: 'POI sync failed',
+            }, err)
+        )
 
         // 3. Update Supabase Metrics
         const currentReviewData = {

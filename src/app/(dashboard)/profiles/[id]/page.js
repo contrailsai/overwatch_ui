@@ -9,6 +9,7 @@ import {
   getProfileCaseIds,
 } from '../actions'
 import { ProfileOverview } from './ProfileOverview'
+import { DEFAULT_INFORMATICS_RANGE_PRESET } from '@/lib/pois/poi-helpers'
 
 export async function generateMetadata({ params }) {
   const { id } = await params
@@ -28,7 +29,7 @@ export default async function ProfileDetailPage({ params, searchParams }) {
 
   const { id } = await params
   const resolved = await searchParams
-  const preset = resolved.range || 'all'
+  const preset = resolved.range || DEFAULT_INFORMATICS_RANGE_PRESET
   const from = resolved.from || null
   const to = resolved.to || null
   const range = { preset, from, to }

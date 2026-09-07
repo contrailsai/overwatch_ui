@@ -16,6 +16,7 @@ import {
 } from '@/lib/feeds/resolve-feed-posts'
 import { normalizeS3Post } from '@/lib/posts/pipeline-helpers'
 import { buildPoiTopicsGraph } from '@/lib/feeds/build-poi-topics-graph'
+import { parentPoiFilter } from '@/lib/pois/poi-helpers'
 import { poisCollection, topicsCollection } from '@/utils/mongodb/collections'
 import { toPostObjectIds } from '@/lib/feeds/resolve-feed-posts'
 
@@ -112,7 +113,7 @@ export async function getPoiTopicsGraph() {
         })
         .toArray(),
       poisCollection(db)
-        .find({}, { projection: { display_name: 1, name: 1, post_count: 1 } })
+        .find(parentPoiFilter(), { projection: { display_name: 1, name: 1, post_count: 1 } })
         .toArray(),
     ])
 

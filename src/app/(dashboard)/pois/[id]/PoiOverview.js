@@ -1,8 +1,8 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, Pencil } from 'lucide-react'
+import { ArrowLeft, Pencil, Sparkles } from 'lucide-react'
 import {
   PieChart,
   Pie,
@@ -29,6 +29,7 @@ import {
   formatViolation,
 } from '@/components/analytics/PostCard'
 import { fillTimeline } from '@/components/analytics/fillTimeline'
+import { DEFAULT_INFORMATICS_RANGE_PRESET } from '@/lib/pois/poi-helpers'
 
 const PLATFORM_COLORS = {
   instagram: '#e1306c',
@@ -83,7 +84,9 @@ function PoiAvatar({ poi, size = 'lg' }) {
   )
 }
 
-export function PoiOverview({ poi, analytics, profiles, posts, range, isReviewer }) {
+export function PoiOverview({ poi, analytics, profiles = [], posts = [], aigcPosts = [], range = {}, isReviewer }) {
+  const [showDeepfakes, setShowDeepfakes] = useState(false)
+  const displayedPosts = showDeepfakes ? aigcPosts : posts
   const platformData = useMemo(
     () =>
       (analytics?.platforms || []).map((p) => ({
@@ -303,17 +306,37 @@ export function PoiOverview({ poi, analytics, profiles, posts, range, isReviewer
 
   const recentPostsBlock = (
     <section>
-      <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3 px-1">
-        Recent Posts
-      </h2>
-      {posts.length === 0 ? (
+      <div className="flex items-center justify-between gap-3 mb-3 px-1">
+        <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500">
+          Recent Posts
+        </h2>
+        <Button
+          type="button"
+          size="sm"
+          variant={showDeepfakes ? 'default' : 'outline'}
+          className="h-7 px-2.5 text-[11px]"
+          onClick={() => setShowDeepfakes((v) => !v)}
+          aria-pressed={showDeepfakes}
+        >
+          <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+          Deepfakes
+          {aigcPosts.length > 0 ? (
+            <span className="ml-1.5 tabular-nums opacity-80">{aigcPosts.length}</span>
+          ) : null}
+        </Button>
+      </div>
+      {displayedPosts.length === 0 ? (
         <div className="bg-white border border-slate-200 rounded-xl px-5 py-8 text-center text-sm text-slate-400">
-          No recent posts in this range
+          {showDeepfakes ? 'No AI-generated posts in this range' : 'No recent posts in this range'}
         </div>
       ) : (
         <ul className="columns-1 sm:columns-2 xl:columns-3 gap-3 [column-fill:_balance]">
-          {posts.map((post) => (
-            <PostCard key={post._id} post={post} href={`/cases?case_id=${post._id}`} />
+          {displayedPosts.map((post, idx) => (
+            <PostCard
+              key={post?._id || post?.original_url || `poi-post-${idx}`}
+              post={post}
+              href={post?._id ? `/cases?case_id=${post._id}` : undefined}
+            />
           ))}
         </ul>
       )}
@@ -348,6 +371,27 @@ export function PoiOverview({ poi, analytics, profiles, posts, range, isReviewer
           <p className="text-xs text-slate-400 mt-2 tabular-nums">
             {inRangeCount.toLocaleString()} posts in range
           </p>
+          {(poi.linked_aliases || []).length > 0 || (poi.alias_poi_names || []).length > 0 ? (
+            <div className="mt-3">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                Also known as
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {(poi.linked_aliases?.length
+                  ? poi.linked_aliases
+                  : (poi.alias_poi_names || []).map((name) => ({ name, display_name: name }))
+                ).map((alias) => (
+                  <Badge
+                    key={alias._id || alias.name}
+                    variant="outline"
+                    className="text-xs font-normal text-slate-600 border-slate-200 bg-slate-50"
+                  >
+                    {alias.display_name || alias.name}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </div>
       </div>
     </section>
@@ -392,7 +436,7 @@ export function PoiOverview({ poi, analytics, profiles, posts, range, isReviewer
           Back to POIs
         </Link>
         <DateRangeControls
-          preset={range.preset || '7d'}
+          preset={range.preset || DEFAULT_INFORMATICS_RANGE_PRESET}
           from={range.from}
           to={range.to}
         />

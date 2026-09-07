@@ -9,7 +9,7 @@ import EditForm from "./EditForm"
 import { format } from "date-fns"
 import { useEffect, useState } from 'react'
 import {
-    X, User, Heart, MessageCircle, Share2, AlertTriangle,
+    X, User, Heart, MessageCircle, Share2,
     Activity, BadgeCheck, Quote, ShieldAlert, CheckCircle,
     ExternalLink, Calendar, Info, Siren, Eye, Link as LinkIcon,
     ChevronLeft, ChevronRight, History, Facebook, Instagram, Youtube,
@@ -57,23 +57,6 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
     const [showIdentical, setShowIdentical] = useState(false);
 
     const [isEditing, setIsEditing] = useState(false);
-
-    let allowDoTakedown = false;
-    try {
-        if (project && project.project_details) {
-            const details = project.project_details;
-            if (details.do_takedowns === true || details.do_takedowns === undefined) {
-                allowDoTakedown = true;
-            } else {
-                allowDoTakedown = false;
-            }
-        } else {
-            allowDoTakedown = true;
-        }
-    } catch (e) {
-        console.error(e)
-        allowDoTakedown = true;
-    }
 
     useEffect(() => {
         setAssignedEmail(post?.assigned_to || "");
@@ -280,9 +263,9 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
     else if (post.review_details?.reviewed_at)
         alert_date = format(new Date(post.review_details.reviewed_at), "dd/MM/yyyy");
 
-    const handleTakedown = async () => {
-        setIsProcessing('takedown');
-        trackClientClick('do_takedown', { page: 'CaseDetailPanel' });
+    const handleTakedown = async (channel) => {
+        setIsProcessing(channel);
+        trackClientClick('do_takedown', { page: 'CaseDetailPanel', takedown_channel: channel });
         try {
             const result = await initiateTakedown([post._id], clientDetails.email);
             if (result.success) {
@@ -316,7 +299,7 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
 
     const handleUpdateStatus = async (status) => {
         setIsProcessing(status);
-        trackClientClick(status === 'No Action' ? 'no_action_case' : 'flag_for_takedown', { page: 'CaseDetailPanel' });
+        trackClientClick('no_action_case', { page: 'CaseDetailPanel' });
         try {
             const result = await updateClientStatus(post._id, status, clientDetails.email);
             if (result.success) {
@@ -1080,12 +1063,12 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
 
                                         </div>
                                     ) : (
-                                        <div className="w-full flex flex-col gap-2.5 sm:flex-row sm:gap-4 py-2 px-0 sm:px-0">
+                                        <div className="w-full grid grid-cols-2 gap-2.5 py-2 px-0">
                                             <Button
                                                 onClick={() => { if (clientStatus !== 'No Action' && clientStatus !== 'Pass') handleUpdateStatus('No Action') }}
-                                                disabled={isProcessing === 'No Action'}
+                                                disabled={!!isProcessing}
                                                 className={cn(
-                                                    "flex-1 min-h-12 font-bold text-white transition-all duration-200 shadow-emerald-900/20 bg-emerald-500",
+                                                    "w-full min-h-12 font-bold text-white transition-all duration-200 shadow-emerald-900/20 bg-emerald-500",
                                                     (clientStatus === 'No Action' || clientStatus === 'Pass') ? "opacity-100 cursor-default ring-2 ring-emerald-600 ring-offset-2" : "opacity-50 hover:opacity-100 cursor-pointer hover:bg-emerald-600"
                                                 )}
                                             >
@@ -1093,32 +1076,29 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
                                                 No Action
                                             </Button>
                                             <Button
-                                                onClick={() => { if (clientStatus !== 'Flag for Takedown') handleUpdateStatus('Flag for Takedown') }}
-                                                disabled={isProcessing === 'Flag for Takedown'}
-                                                className={cn(
-                                                    "flex-1 min-h-12 font-bold text-white transition-all duration-200",
-                                                    allowDoTakedown ? "shadow-amber-900/20 bg-amber-500" : "shadow-rose-900/20 bg-rose-600",
-                                                    clientStatus === 'Flag for Takedown'
-                                                        ? cn("opacity-100 cursor-default ring-2 ring-offset-2", allowDoTakedown ? "ring-amber-600" : "ring-rose-700")
-                                                        : cn("opacity-50 hover:opacity-100 cursor-pointer", allowDoTakedown ? "hover:bg-amber-600" : "hover:bg-rose-700")
-                                                )}
+                                                onClick={() => handleTakedown('platform')}
+                                                disabled={!!isProcessing}
+                                                className="w-full min-h-12 font-bold text-white transition-all duration-200 shadow-rose-900/20 bg-rose-600 opacity-50 hover:opacity-100 cursor-pointer hover:bg-rose-700"
                                             >
-                                                {isProcessing === 'Flag for Takedown' ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <AlertTriangle className="w-4 h-4 mr-2" />}
-                                                Flag for Takedown
+                                                {isProcessing === 'platform' ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <ShieldAlert className="w-4 h-4 mr-2" />}
+                                                Platform takedown
                                             </Button>
-                                            {allowDoTakedown && (
-                                                <Button
-                                                    onClick={handleTakedown}
-                                                    disabled={isProcessing === 'takedown'}
-                                                    className={cn(
-                                                        "flex-1 min-h-12 font-bold text-white transition-all duration-200 shadow-rose-900/20 bg-rose-600",
-                                                        cn("opacity-50 hover:opacity-100 cursor-pointer hover:bg-rose-700", clientStatus === 'To Be Reviewed' ? "opacity-100" : "")
-                                                    )}
-                                                >
-                                                    {isProcessing === 'takedown' ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <ShieldAlert className="w-4 h-4 mr-2" />}
-                                                    Do Takedown
-                                                </Button>
-                                            )}
+                                            <Button
+                                                onClick={() => handleTakedown('i4c')}
+                                                disabled={!!isProcessing}
+                                                className="w-full min-h-12 font-bold text-white transition-all duration-200 shadow-indigo-900/20 bg-indigo-600 opacity-50 hover:opacity-100 cursor-pointer hover:bg-indigo-700"
+                                            >
+                                                {isProcessing === 'i4c' ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Scale className="w-4 h-4 mr-2" />}
+                                                I4C takedown
+                                            </Button>
+                                            <Button
+                                                onClick={() => handleTakedown('report_internal')}
+                                                disabled={!!isProcessing}
+                                                className="w-full min-h-12 font-bold text-white transition-all duration-200 shadow-slate-900/20 bg-slate-600 opacity-50 hover:opacity-100 cursor-pointer hover:bg-slate-700"
+                                            >
+                                                {isProcessing === 'report_internal' ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Siren className="w-4 h-4 mr-2" />}
+                                                Report Internal
+                                            </Button>
                                         </div>
                                     )}
                                 </div>

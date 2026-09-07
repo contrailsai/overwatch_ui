@@ -264,8 +264,13 @@ export function PoiEditForm({ poi: initialPoi }) {
                   placeholder="Comma-separated alternate names"
                 />
                 <p className="text-[11px] text-slate-400">
-                  Stored for matching. Merge-into-another-POI UI comes in a later iteration.
+                  Spelling variants for post matching. To attach another POI as an alias, use Connect on the POIs list.
                 </p>
+                {(initialPoi.linked_aliases || []).length > 0 ? (
+                  <p className="text-[11px] text-slate-500">
+                    Linked POIs: {initialPoi.linked_aliases.map((a) => a.display_name || a.name).join(', ')}
+                  </p>
+                ) : null}
               </div>
             </div>
           </section>

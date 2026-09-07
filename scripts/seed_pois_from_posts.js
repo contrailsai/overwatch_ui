@@ -153,6 +153,8 @@ async function main() {
         is_shell: false,
         status: 'active',
         merged_into: null,
+        merged_into_name: null,
+        alias_poi_names: [],
         created_at: now,
         updated_at: now,
       }
@@ -178,8 +180,6 @@ async function main() {
         setFields.meta = { title: '', organization: '', state: '', notes: '' }
       }
       if (existing.summary == null) setFields.summary = ''
-      if (existing.status == null) setFields.status = 'active'
-      if (existing.merged_into === undefined) setFields.merged_into = null
       if (existing.is_shell == null) setFields.is_shell = false
     } else {
       // Fill missing informatics fields without clobbering human edits
@@ -190,8 +190,16 @@ async function main() {
       if (!existing.meta) {
         setFields.meta = { title: '', organization: '', state: '', notes: '' }
       }
+    }
+
+    const alreadyMerged = existing.status === 'merged' || existing.merged_into || existing.merged_into_name
+    if (!alreadyMerged) {
       if (existing.status == null) setFields.status = 'active'
       if (existing.merged_into === undefined) setFields.merged_into = null
+      if (existing.merged_into_name === undefined) setFields.merged_into_name = null
+    }
+    if (!Array.isArray(existing.alias_poi_names) && !alreadyMerged) {
+      setFields.alias_poi_names = []
     }
 
     console.log(`UPDATE ${existing.display_name || displayName} (posts=${postCount})`)

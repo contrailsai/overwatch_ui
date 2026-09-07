@@ -19,6 +19,7 @@ import {
 import { removePostFromAllTopics } from '@/lib/feeds/topic-membership'
 import { normalizeS3Post } from '@/lib/posts/pipeline-helpers'
 import { COLLECTIONS, postsCollection, postEmbeddingsCollection } from '@/utils/mongodb/collections'
+import { syncPoisFromReview } from '@/lib/pois/sync-pois-from-review'
 import {
   buildPostStatsForUi,
   buildTakedownInfoForUi,
@@ -871,6 +872,18 @@ export const submitCaseReview = traceAction('submitCaseReview', async (_project,
       summary: 'Case Alerted',
       payload: { review_details, takedown_info },
     })
+
+    await syncPoisFromReview({
+      db,
+      prevNames: prevReview?.poi_names || [],
+      nextNames: review_details.poi_names,
+    }).catch((err) =>
+      logActionError({
+        loki_stream: LOKI_STREAMS.review_cases,
+        app_action: 'syncPoisFromReview',
+        message: 'POI sync failed',
+      }, err)
+    )
 
     // 3. Update Supabase Metrics
     const currentReviewData = {
