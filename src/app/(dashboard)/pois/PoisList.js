@@ -9,6 +9,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Loader2,
+  Link2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -21,6 +22,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { updatePoiTier } from './actions'
+import { ConnectPoiDrawer } from './ConnectPoiDrawer'
 
 const TIER_TABS = [
   { id: 'all', label: 'All' },
@@ -63,6 +65,7 @@ export function PoisList({ initialData, initialTier, initialSearch, isReviewer }
   const [searchInput, setSearchInput] = useState(initialSearch || '')
   const [tierBusyId, setTierBusyId] = useState(null)
   const [optimisticTiers, setOptimisticTiers] = useState({})
+  const [connectOpen, setConnectOpen] = useState(false)
 
   const serverPois = initialData?.pois || []
   const pois = serverPois.map((p) =>
@@ -148,15 +151,23 @@ export function PoisList({ initialData, initialTier, initialSearch, isReviewer }
             })}
           </div>
 
-          <form onSubmit={onSearchSubmit} className="relative w-full sm:w-72">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-            <input
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              placeholder="Search POIs…"
-              className="w-full h-9 pl-9 pr-3 rounded-md border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10"
-            />
-          </form>
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <form onSubmit={onSearchSubmit} className="relative w-full sm:w-72">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <input
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                placeholder="Search POIs…"
+                className="w-full h-9 pl-9 pr-3 rounded-md border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10"
+              />
+            </form>
+            {isReviewer ? (
+              <Button type="button" variant="outline" className="h-9 shrink-0" onClick={() => setConnectOpen(true)}>
+                <Link2 className="h-4 w-4 mr-1.5" />
+                Connect
+              </Button>
+            ) : null}
+          </div>
         </div>
         <p className="text-xs text-slate-500">
           {total.toLocaleString()} POI{total === 1 ? '' : 's'}
@@ -194,6 +205,11 @@ export function PoisList({ initialData, initialTier, initialSearch, isReviewer }
                         </h2>
                         {poi.meta?.title ? (
                           <p className="text-xs text-slate-500 truncate mt-0.5">{poi.meta.title}</p>
+                        ) : null}
+                        {(poi.alias_poi_names || []).length > 0 ? (
+                          <p className="text-[11px] text-slate-400 truncate mt-0.5">
+                            {poi.alias_poi_names.length} alias{poi.alias_poi_names.length === 1 ? '' : 'es'}
+                          </p>
                         ) : null}
                       </Link>
                       <Badge
@@ -263,6 +279,14 @@ export function PoisList({ initialData, initialTier, initialSearch, isReviewer }
             <ChevronRight className="h-4 w-4 ml-1" />
           </Button>
         </div>
+      ) : null}
+
+      {isReviewer ? (
+        <ConnectPoiDrawer
+          open={connectOpen}
+          onOpenChange={setConnectOpen}
+          onConnected={() => router.refresh()}
+        />
       ) : null}
     </div>
   )

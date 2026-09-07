@@ -20,9 +20,17 @@ import {
 import {
   POI_TIERS,
   buildPoiPostMatch,
+  buildPoiAigcPostMatch,
+  compareAigcPosts,
+  isAigcPost,
   resolvePoiDateRange,
   serializePoiForClient,
   normalizePoiNameKey,
+  isPoiMerged,
+  parentPoiFilter,
+  poiTextSearchOr,
+  mergeAliasFieldsIntoParent,
+  uniquePoiStrings,
 } from '@/lib/pois/poi-helpers'
 
 async function signPoiImage(poi) {
@@ -38,6 +46,73 @@ async function signPoiImage(poi) {
 function parseObjectId(id) {
   if (!id || !ObjectId.isValid(id)) return null
   return new ObjectId(id)
+}
+
+function escapeSearchRe(raw) {
+  return new RegExp(String(raw || '').trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i')
+}
+
+async function parentIdsFromAliasSearch(collection, re) {
+  const aliasHits = await collection
+    .find(
+      {
+        status: 'merged',
+        $or: poiTextSearchOr(re),
+      },
+      { projection: { merged_into: 1, merged_into_name: 1 } }
+    )
+    .limit(200)
+    .toArray()
+
+  const ids = []
+  const names = []
+  const seenIds = new Set()
+  const seenNames = new Set()
+  for (const hit of aliasHits) {
+    if (hit.merged_into) {
+      const key = hit.merged_into.toString()
+      if (!seenIds.has(key)) {
+        seenIds.add(key)
+        ids.push(hit.merged_into)
+      }
+    }
+    const name = String(hit.merged_into_name || '').trim()
+    if (name && !seenNames.has(name)) {
+      seenNames.add(name)
+      names.push(name)
+    }
+  }
+  return { ids, names }
+}
+
+async function linkedAliasesForParent(collection, poi) {
+  if (!poi?._id || isPoiMerged(poi)) return []
+  const docs = await collection
+    .find(
+      {
+        _id: { $ne: poi._id },
+        $or: [
+          { merged_into: poi._id },
+          ...(poi.name ? [{ merged_into_name: poi.name }] : []),
+        ],
+      },
+      { projection: { name: 1, display_name: 1 } }
+    )
+    .sort({ display_name: 1 })
+    .toArray()
+
+  return docs.map((doc) => ({
+    _id: doc._id.toString(),
+    name: doc.name || '',
+    display_name: doc.display_name || doc.name || '',
+  }))
+}
+
+async function serializeSignedPoi(doc, extra = {}) {
+  return serializePoiForClient(doc, {
+    signedImageUrl: await signPoiImage(doc),
+    ...extra,
+  })
 }
 
 export const getPois = traceAction('getPois', async ({
@@ -56,23 +131,19 @@ export const getPois = traceAction('getPois', async ({
     const safePage = Math.max(Number(page) || 1, 1)
     const skip = (safePage - 1) * safeLimit
 
-    const query = {
-      status: { $ne: 'merged' },
-      merged_into: null,
-    }
+    const query = parentPoiFilter()
 
     if (tier && tier !== 'all' && POI_TIERS.includes(tier)) {
       query.tier = tier
     }
 
     if (search && String(search).trim()) {
-      const re = new RegExp(String(search).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i')
+      const re = escapeSearchRe(search)
+      const { ids: aliasParentIds, names: aliasParentNames } = await parentIdsFromAliasSearch(collection, re)
       query.$or = [
-        { display_name: re },
-        { name: re },
-        { aliases: re },
-        { 'meta.title': re },
-        { summary: re },
+        ...poiTextSearchOr(re),
+        ...(aliasParentIds.length ? [{ _id: { $in: aliasParentIds } }] : []),
+        ...(aliasParentNames.length ? [{ name: { $in: aliasParentNames } }] : []),
       ]
     }
 
@@ -86,13 +157,11 @@ export const getPois = traceAction('getPois', async ({
         .toArray(),
     ])
 
-    const pois = await Promise.all(
-      docs.map(async (doc) => serializePoiForClient(doc, { signedImageUrl: await signPoiImage(doc) }))
-    )
+    const pois = await Promise.all(docs.map((doc) => serializeSignedPoi(doc)))
 
     const tierCounts = await collection
       .aggregate([
-        { $match: { status: { $ne: 'merged' }, merged_into: null } },
+        { $match: parentPoiFilter() },
         { $group: { _id: '$tier', count: { $sum: 1 } } },
       ])
       .toArray()
@@ -138,11 +207,13 @@ export const getPoiById = traceAction('getPoiById', async (poiId) => {
     if (!oid) return { poi: null, error: 'Invalid POI id' }
 
     const client = await clientPromise
-    const doc = await poisCollection(client.db(dbName)).findOne({ _id: oid })
+    const collection = poisCollection(client.db(dbName))
+    const doc = await collection.findOne({ _id: oid })
     if (!doc) return { poi: null, error: 'POI not found' }
 
+    const linkedAliases = await linkedAliasesForParent(collection, doc)
     return {
-      poi: serializePoiForClient(doc, { signedImageUrl: await signPoiImage(doc) }),
+      poi: await serializeSignedPoi(doc, { linkedAliases }),
     }
   } catch (e) {
     logActionError({
@@ -311,6 +382,44 @@ export const getPoiProfiles = traceAction('getPoiProfiles', async (poiId, range 
   }
 })
 
+async function serializePoiPostCard(post) {
+  const s3Url = getFirstMediaS3Url(post)
+  let signedImageUrl = null
+  if (s3Url) {
+    try {
+      signedImageUrl = await getSignedImageUrl(s3Url)
+    } catch {
+      signedImageUrl = null
+    }
+  }
+  const normalized = buildNormalizedPostForUi(post, { signedImageUrl })
+  return {
+    _id: normalized._id || post._id?.toString(),
+    platform: normalized.platform || post.platform,
+    caption: normalized.caption || post.content?.caption || '',
+    signedImageUrl,
+    original_url: post.original_url || normalized.original_url || null,
+    sourced_at: post.list?.sourced_at
+      ? new Date(post.list.sourced_at).toISOString()
+      : null,
+    posted_at: post.list?.posted_at
+      ? new Date(post.list.posted_at).toISOString()
+      : null,
+    threat_types: post.list?.threat_types || post.review_details?.threat_types || [],
+    is_aigc: isAigcPost(post),
+    effective_threat_score:
+      post.list?.effective_threat_score ??
+      post.list?.review_threat_score ??
+      post.list?.ai_threat_score ??
+      normalized.score ??
+      null,
+    author: {
+      username: post.author_snapshot?.username || normalized.user?.username || null,
+      display_name: post.author_snapshot?.display_name || normalized.user?.full_name || null,
+    },
+  }
+}
+
 export const getPoiRecentPosts = traceAction('getPoiRecentPosts', async (poiId, range = {}, limit = 12) => {
   try {
     const { dbName } = await requireAuthContext()
@@ -332,37 +441,7 @@ export const getPoiRecentPosts = traceAction('getPoiRecentPosts', async (poiId, 
       .limit(safeLimit)
       .toArray()
 
-    const posts = await Promise.all(
-      docs.map(async (post) => {
-        const s3Url = getFirstMediaS3Url(post)
-        const signedImageUrl = s3Url ? await getSignedImageUrl(s3Url) : null
-        const normalized = buildNormalizedPostForUi(post, { signedImageUrl })
-        return {
-          _id: normalized._id || post._id?.toString(),
-          platform: normalized.platform || post.platform,
-          caption: normalized.caption || post.content?.caption || '',
-          signedImageUrl,
-          original_url: post.original_url || normalized.original_url || null,
-          sourced_at: post.list?.sourced_at
-            ? new Date(post.list.sourced_at).toISOString()
-            : null,
-          posted_at: post.list?.posted_at
-            ? new Date(post.list.posted_at).toISOString()
-            : null,
-          threat_types: post.list?.threat_types || post.review_details?.threat_types || [],
-          effective_threat_score:
-            post.list?.effective_threat_score ??
-            post.list?.review_threat_score ??
-            post.list?.ai_threat_score ??
-            normalized.score ??
-            null,
-          author: {
-            username: post.author_snapshot?.username || normalized.user?.username || null,
-            display_name: post.author_snapshot?.display_name || normalized.user?.full_name || null,
-          },
-        }
-      })
-    )
+    const posts = await Promise.all(docs.map(serializePoiPostCard))
 
     return { posts }
   } catch (e) {
@@ -370,6 +449,42 @@ export const getPoiRecentPosts = traceAction('getPoiRecentPosts', async (poiId, 
       loki_stream: LOKI_STREAMS.profiles,
       app_action: 'getPoiRecentPosts',
       message: 'pois.getPoiRecentPosts failed',
+    }, e)
+    return { posts: [], error: e.message }
+  }
+})
+
+export const getPoiAigcPosts = traceAction('getPoiAigcPosts', async (poiId, range = {}, limit = 60) => {
+  try {
+    const { dbName } = await requireAuthContext()
+    const oid = parseObjectId(poiId)
+    if (!oid) return { posts: [], error: 'Invalid POI id' }
+
+    const client = await clientPromise
+    const db = client.db(dbName)
+    const poi = await poisCollection(db).findOne({ _id: oid })
+    if (!poi) return { posts: [], error: 'POI not found' }
+
+    const { from, to } = resolvePoiDateRange(range)
+    const match = buildPoiAigcPostMatch(poi, { from, to })
+    const safeLimit = Math.min(Math.max(Number(limit) || 60, 1), 60)
+    const fetchCap = Math.min(safeLimit * 2, 120)
+
+    const docs = await postsCollection(db)
+      .find(match)
+      .sort({ 'list.sourced_at': -1 })
+      .limit(fetchCap)
+      .toArray()
+
+    docs.sort(compareAigcPosts)
+    const posts = await Promise.all(docs.slice(0, safeLimit).map(serializePoiPostCard))
+
+    return { posts }
+  } catch (e) {
+    logActionError({
+      loki_stream: LOKI_STREAMS.profiles,
+      app_action: 'getPoiAigcPosts',
+      message: 'pois.getPoiAigcPosts failed',
     }, e)
     return { posts: [], error: e.message }
   }
@@ -383,7 +498,14 @@ export const updatePoiTier = traceAction('updatePoiTier', async (poiId, tier) =>
     if (!POI_TIERS.includes(tier)) return { success: false, error: 'Invalid tier' }
 
     const client = await clientPromise
-    const result = await poisCollection(client.db(dbName)).updateOne(
+    const collection = poisCollection(client.db(dbName))
+    const existing = await collection.findOne({ _id: oid })
+    if (!existing) return { success: false, error: 'POI not found' }
+    if (isPoiMerged(existing)) {
+      return { success: false, error: 'Merged alias POIs cannot be edited. Open the parent POI instead.' }
+    }
+
+    const result = await collection.updateOne(
       { _id: oid },
       { $set: { tier, updated_at: new Date() } }
     )
@@ -410,6 +532,9 @@ export const updatePoi = traceAction('updatePoi', async (poiId, payload = {}) =>
     const collection = poisCollection(client.db(dbName))
     const existing = await collection.findOne({ _id: oid })
     if (!existing) return { success: false, error: 'POI not found' }
+    if (isPoiMerged(existing)) {
+      return { success: false, error: 'Merged alias POIs cannot be edited. Open the parent POI instead.' }
+    }
 
     const setFields = { updated_at: new Date() }
 
@@ -456,9 +581,10 @@ export const updatePoi = traceAction('updatePoi', async (poiId, payload = {}) =>
 
     await collection.updateOne({ _id: oid }, { $set: setFields })
     const updated = await collection.findOne({ _id: oid })
+    const linkedAliases = await linkedAliasesForParent(collection, updated)
     return {
       success: true,
-      poi: serializePoiForClient(updated, { signedImageUrl: await signPoiImage(updated) }),
+      poi: await serializeSignedPoi(updated, { linkedAliases }),
     }
   } catch (e) {
     logActionError({
@@ -481,8 +607,11 @@ export const initPoiImageUpload = traceAction('initPoiImageUpload', async (poiId
     if (validationError) return { success: false, error: validationError }
 
     const client = await clientPromise
-    const exists = await poisCollection(client.db(dbName)).findOne({ _id: oid }, { projection: { _id: 1 } })
+    const exists = await poisCollection(client.db(dbName)).findOne({ _id: oid }, { projection: { _id: 1, status: 1, merged_into: 1, merged_into_name: 1 } })
     if (!exists) return { success: false, error: 'POI not found' }
+    if (isPoiMerged(exists)) {
+      return { success: false, error: 'Merged alias POIs cannot be edited. Open the parent POI instead.' }
+    }
 
     const sanitizedFileName = sanitizeUploadFileName(fileName)
     const s3Key = `poi-images/${dbName}/${poiId}/${Date.now()}-${sanitizedFileName}`
@@ -524,6 +653,12 @@ export const confirmPoiImageUpload = traceAction('confirmPoiImageUpload', async 
 
     const client = await clientPromise
     const collection = poisCollection(client.db(dbName))
+    const existing = await collection.findOne({ _id: oid })
+    if (!existing) return { success: false, error: 'POI not found' }
+    if (isPoiMerged(existing)) {
+      return { success: false, error: 'Merged alias POIs cannot be edited. Open the parent POI instead.' }
+    }
+
     const result = await collection.updateOne(
       { _id: oid },
       {
@@ -536,15 +671,165 @@ export const confirmPoiImageUpload = traceAction('confirmPoiImageUpload', async 
     if (result.matchedCount === 0) return { success: false, error: 'POI not found' }
 
     const updated = await collection.findOne({ _id: oid })
+    const linkedAliases = await linkedAliasesForParent(collection, updated)
     return {
       success: true,
-      poi: serializePoiForClient(updated, { signedImageUrl: await signPoiImage(updated) }),
+      poi: await serializeSignedPoi(updated, { linkedAliases }),
     }
   } catch (e) {
     logActionError({
       loki_stream: LOKI_STREAMS.profiles,
       app_action: 'confirmPoiImageUpload',
       message: 'pois.confirmPoiImageUpload failed',
+    }, e)
+    return { success: false, error: e.message }
+  }
+})
+
+export const searchPoisForConnect = traceAction('searchPoisForConnect', async ({
+  query = '',
+  excludeId = null,
+  limit = 20,
+} = {}) => {
+  try {
+    const { dbName } = await requireRole(['reviewer'])
+    const client = await clientPromise
+    const collection = poisCollection(client.db(dbName))
+    const safeLimit = Math.min(Math.max(Number(limit) || 20, 1), 30)
+    const excludeOid = parseObjectId(excludeId)
+
+    const filter = parentPoiFilter()
+    if (excludeOid) filter._id = { $ne: excludeOid }
+
+    const trimmed = String(query || '').trim()
+    if (trimmed) {
+      const re = escapeSearchRe(trimmed)
+      const { ids: aliasParentIds, names: aliasParentNames } = await parentIdsFromAliasSearch(collection, re)
+      filter.$or = [
+        ...poiTextSearchOr(re),
+        ...(aliasParentIds.length ? [{ _id: { $in: aliasParentIds } }] : []),
+        ...(aliasParentNames.length ? [{ name: { $in: aliasParentNames } }] : []),
+      ]
+    }
+
+    const docs = await collection
+      .find(filter, {
+        projection: {
+          name: 1,
+          display_name: 1,
+          tier: 1,
+          post_count: 1,
+          meta: 1,
+          image: 1,
+          alias_poi_names: 1,
+        },
+      })
+      .sort({ post_count: -1, display_name: 1 })
+      .limit(safeLimit)
+      .toArray()
+
+    const pois = await Promise.all(docs.map((doc) => serializeSignedPoi(doc)))
+    return { pois }
+  } catch (e) {
+    logActionError({
+      loki_stream: LOKI_STREAMS.profiles,
+      app_action: 'searchPoisForConnect',
+      message: 'pois.searchPoisForConnect failed',
+    }, e)
+    return { pois: [], error: e.message }
+  }
+})
+
+export const connectPoiAsAlias = traceAction('connectPoiAsAlias', async (aliasId, parentId) => {
+  try {
+    const { dbName } = await requireRole(['reviewer'])
+    const aliasOid = parseObjectId(aliasId)
+    const parentOid = parseObjectId(parentId)
+    if (!aliasOid || !parentOid) return { success: false, error: 'Invalid POI id' }
+    if (aliasOid.equals(parentOid)) {
+      return { success: false, error: 'Choose two different POIs' }
+    }
+
+    const client = await clientPromise
+    const db = client.db(dbName)
+    const collection = poisCollection(db)
+
+    const [alias, parent] = await Promise.all([
+      collection.findOne({ _id: aliasOid }),
+      collection.findOne({ _id: parentOid }),
+    ])
+    if (!alias || !parent) return { success: false, error: 'POI not found' }
+    if (isPoiMerged(parent)) {
+      return { success: false, error: 'Parent must be a canonical POI, not an alias' }
+    }
+    if (isPoiMerged(alias)) {
+      return { success: false, error: 'That POI is already an alias of another parent' }
+    }
+
+    const parentName = parent.name || normalizePoiNameKey(parent.display_name)
+    if (!parentName) return { success: false, error: 'Parent POI is missing a name key' }
+
+    const children = await collection
+      .find({
+        _id: { $nin: [aliasOid, parentOid] },
+        $or: [
+          { merged_into: aliasOid },
+          ...(alias.name ? [{ merged_into_name: alias.name }] : []),
+        ],
+      })
+      .toArray()
+
+    const subtree = [alias, ...children]
+    let working = { ...parent }
+    for (const node of subtree) {
+      working = { ...working, ...mergeAliasFieldsIntoParent(working, node) }
+    }
+
+    const parentNameKey = normalizePoiNameKey(parentName)
+    working.alias_poi_names = uniquePoiStrings(
+      (working.alias_poi_names || []).filter((n) => normalizePoiNameKey(n) !== parentNameKey)
+    )
+
+    const now = new Date()
+    const parentSet = {
+      summary: working.summary || '',
+      image: working.image || { s3_url: null, s3_key: null },
+      meta: working.meta || { title: '', organization: '', state: '', notes: '' },
+      aliases: working.aliases || [],
+      topics: working.topics || [],
+      topic_count: working.topic_count || 0,
+      alias_poi_names: working.alias_poi_names,
+      updated_at: now,
+    }
+
+    const match = buildPoiPostMatch({ ...parent, ...parentSet })
+    parentSet.post_count = await postsCollection(db).countDocuments(match)
+
+    await collection.updateOne({ _id: parentOid }, { $set: parentSet })
+    await collection.updateMany(
+      { _id: { $in: subtree.map((n) => n._id) } },
+      {
+        $set: {
+          status: 'merged',
+          merged_into: parentOid,
+          merged_into_name: parentName,
+          alias_poi_names: [],
+          updated_at: now,
+        },
+      }
+    )
+
+    const updated = await collection.findOne({ _id: parentOid })
+    const linkedAliases = await linkedAliasesForParent(collection, updated)
+    return {
+      success: true,
+      poi: await serializeSignedPoi(updated, { linkedAliases }),
+    }
+  } catch (e) {
+    logActionError({
+      loki_stream: LOKI_STREAMS.profiles,
+      app_action: 'connectPoiAsAlias',
+      message: 'pois.connectPoiAsAlias failed',
     }, e)
     return { success: false, error: e.message }
   }

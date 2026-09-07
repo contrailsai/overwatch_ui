@@ -110,10 +110,10 @@ export function CasesFilterPanel({
   totalCount,
   isBulkTakedownProcessing,
   isBulkNoActionProcessing,
-  isBulkFlagProcessing,
-  onBulkTakedown,
+  onBulkPlatformTakedown,
+  onBulkI4cTakedown,
+  onBulkReportInternal,
   onBulkNoAction,
-  onBulkFlag,
   BulkActionMenu,
   clearFilters,
   hideSearch = false,
@@ -717,8 +717,7 @@ export function CasesFilterPanel({
                         <Button
                           disabled={
                             isBulkTakedownProcessing ||
-                            isBulkNoActionProcessing ||
-                            isBulkFlagProcessing
+                            isBulkNoActionProcessing
                           }
                           className={cn(
                             'h-9 font-bold text-white shadow-sm transition-all flex items-center justify-between gap-2',
@@ -744,13 +743,12 @@ export function CasesFilterPanel({
                         className="min-w-[150px] p-1 rounded-md border border-slate-200 shadow-lg"
                       >
                         <BulkActionMenu
-                          allowDoTakedown={allowDoTakedown}
                           isBulkTakedownProcessing={isBulkTakedownProcessing}
                           isBulkNoActionProcessing={isBulkNoActionProcessing}
-                          isBulkFlagProcessing={isBulkFlagProcessing}
-                          onDoTakedown={onBulkTakedown}
+                          onPlatformTakedown={onBulkPlatformTakedown}
+                          onI4cTakedown={onBulkI4cTakedown}
+                          onReportInternal={onBulkReportInternal}
                           onNoAction={onBulkNoAction}
-                          onFlagForTakedown={onBulkFlag}
                         />
                       </PopoverContent>
                     </Popover>

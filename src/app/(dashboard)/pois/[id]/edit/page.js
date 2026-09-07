@@ -28,6 +28,9 @@ export default async function PoiEditPage({ params }) {
   const { id } = await params
   const { poi } = await getPoiById(id)
   if (!poi) notFound()
+  if (poi.merged_into && String(poi.merged_into) !== String(poi._id)) {
+    redirect(`/pois/${poi.merged_into}/edit`)
+  }
 
   return <PoiEditForm poi={poi} />
 }

@@ -1,4 +1,4 @@
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import { getClientandProjectDetails } from '@/app/(dashboard)/actions'
 import { isSectionEnabled } from '@/lib/project-sections'
 import { DisabledSectionFallback } from '@/components/DisabledSectionFallback'
@@ -7,6 +7,7 @@ import {
   getPoiAnalytics,
   getPoiProfiles,
   getPoiRecentPosts,
+  getPoiAigcPosts,
 } from '../actions'
 import { PoiOverview } from './PoiOverview'
 
@@ -36,11 +37,15 @@ export default async function PoiDetailPage({ params, searchParams }) {
   if (!poi) {
     notFound()
   }
+  if (poi.merged_into && String(poi.merged_into) !== String(poi._id)) {
+    redirect(`/pois/${poi.merged_into}`)
+  }
 
-  const [analytics, profilesRes, postsRes] = await Promise.all([
+  const [analytics, profilesRes, postsRes, aigcRes] = await Promise.all([
     getPoiAnalytics(id, range),
     getPoiProfiles(id, range, 20),
     getPoiRecentPosts(id, range, 24),
+    getPoiAigcPosts(id, range, 60),
   ])
 
   const isReviewer = clientDetails?.permission === 'reviewer'
@@ -49,8 +54,9 @@ export default async function PoiDetailPage({ params, searchParams }) {
     <PoiOverview
       poi={poi}
       analytics={analytics}
-      profiles={profilesRes.profiles || []}
-      posts={postsRes.posts || []}
+      profiles={profilesRes?.profiles || []}
+      posts={postsRes?.posts || []}
+      aigcPosts={aigcRes?.posts || []}
       range={{ preset, from, to }}
       isReviewer={isReviewer}
     />

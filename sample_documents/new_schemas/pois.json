@@ -5,6 +5,7 @@
   "name": "mukesh ambani",
   "display_name": "Mukesh Ambani",
   "aliases": [],
+  "alias_poi_names": [],
   "tier": "other",
   "summary": "",
   "image": {
@@ -27,6 +28,7 @@
   "is_shell": false,
   "status": "active",
   "merged_into": null,
+  "merged_into_name": null,
   "created_at": {
     "$date": "2026-07-03T10:00:00.000Z"
   },
