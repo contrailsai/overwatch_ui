@@ -124,11 +124,10 @@ export function AdProfilesList({ profiles, project, initialFilters, initialSort 
                 params.set(key, value)
             }
         })
-        if (!newParams.page) params.delete('page')
         router.push(`${pathname}?${params.toString()}`)
     }, [router, pathname, searchParams])
 
-    const handleFilterChange = (key, value) => updateQueryParams({ [key]: value })
+    const handleFilterChange = (key, value) => updateQueryParams({ [key]: value, page: 1 })
     const handlePageChange = (newPage) => newPage >= 1 && newPage <= totalPages && updateQueryParams({ page: newPage })
     const handleSortChange = (field) => {
         const direction = (initialSort.field === field && initialSort.direction === 'desc') ? 'asc' : 'desc'

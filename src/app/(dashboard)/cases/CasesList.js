@@ -45,6 +45,14 @@ import {
 // import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { cn } from "@/lib/utils"
+import {
+  planQueueMove,
+  pickQueueEdge,
+  queueHasPrev,
+  queueHasNext,
+  clientStatusMatchesFilter,
+  idsEqual,
+} from '@/lib/list-queue-nav'
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import ReportGenerate from '@/components/ReportGenerate'
 import { useIsMobile, useIsSmallScreen } from '@/hooks/use-media-query'
@@ -234,6 +242,7 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
   const [selectedPost, setSelectedPost] = useState(initialCase || null)
   const [updatedCases, setUpdatedCases] = useState({})
   const postRefs = useRef({})
+  const pendingSelectRef = useRef(null)
 
   const [selectedCases, setSelectedCases] = useState({})
   const selectedCount = Object.keys(selectedCases).length
@@ -279,9 +288,9 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
   const handleSearchApply = () => {
     const val = searchTerm.trim();
     if (val) {
-      updateQueryParams({ semantic_search: val, similar_to: null, search_type: null });
+      updateQueryParams({ semantic_search: val, similar_to: null, search_type: null, page: 1 });
     } else {
-      updateQueryParams({ semantic_search: null });
+      updateQueryParams({ semantic_search: null, page: 1 });
     }
   }
 
@@ -298,10 +307,6 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
         params.set(key, value)
       }
     })
-    // Reset page on filter/sort change unless explicitly setting page
-    if (!newParams.page) {
-      params.delete('page')
-    }
     startTransition(() => {
       router.push(`${pathname}?${params.toString()}`)
     })
@@ -309,7 +314,7 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
 
   const handleFilterChange = (key, value) => {
     const paramKey = key === 'client_status' ? 'status' : key
-    updateQueryParams({ [paramKey]: value })
+    updateQueryParams({ [paramKey]: value, page: 1 })
   }
 
   const handleSortChange = (field) => {
@@ -317,6 +322,7 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
     updateQueryParams({
       sortField: field,
       sortDirection: direction,
+      page: 1,
     })
   }
 
@@ -335,6 +341,23 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
 
   useEffect(() => {
     setMergedPosts(cases?.posts || [])
+  }, [cases?.posts])
+
+  useEffect(() => {
+    const edge = pendingSelectRef.current
+    if (!edge) return
+    const list = cases?.posts || []
+    if (!list.length) return
+    pendingSelectRef.current = null
+    const item = pickQueueEdge(list, edge)
+    if (item) {
+      setSelectedPost(item)
+      setTimeout(() => {
+        postRefs.current[item._id]?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }, 0)
+    } else {
+      setSelectedPost(null)
+    }
   }, [cases?.posts])
 
   const handleUpdatePost = useCallback((updatedPost) => {
@@ -530,24 +553,55 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
   const navigatePost = useCallback((direction) => {
     if (!selectedPost) return
 
-    const currentIndex = mergedPosts.findIndex(p => p._id === selectedPost._id)
-    if (currentIndex === -1) return
+    const status = updatedCases[selectedPost._id] || selectedPost.client_status
+    const dropCurrent = !clientStatusMatchesFilter(status, initialFilters.client_status)
+    const plan = planQueueMove({
+      list: mergedPosts,
+      selectedId: selectedPost._id,
+      dir: direction,
+      page: currentPage,
+      totalPages,
+      dropCurrent,
+    })
 
-    const nextIndex = direction === 'next' ? currentIndex + 1 : currentIndex - 1
-
-    if (nextIndex >= 0 && nextIndex < mergedPosts.length) {
-      const nextPost = mergedPosts[nextIndex]
-      setSelectedPost(nextPost)
-
-      // Scroll into view
-      setTimeout(() => {
-        const el = postRefs.current[nextPost._id]
-        if (el) {
-          el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-        }
-      }, 0)
+    if (dropCurrent) {
+      setUpdatedCases((prev) => {
+        const next = { ...prev }
+        delete next[selectedPost._id]
+        return next
+      })
     }
-  }, [selectedPost, mergedPosts])
+
+    if (plan.replaced) setMergedPosts(plan.list)
+
+    if (plan.type === 'item' && plan.item) {
+      setSelectedPost(plan.item)
+      setTimeout(() => {
+        postRefs.current[plan.item._id]?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }, 0)
+      return
+    }
+
+    if (plan.type === 'page') {
+      pendingSelectRef.current = plan.edge
+      updateQueryParams({ page: plan.page, case_id: null })
+      return
+    }
+
+    if (plan.type === 'close') {
+      setSelectedPost(null)
+      if (searchParams.has('case_id')) updateQueryParams({ case_id: null })
+    }
+  }, [
+    selectedPost,
+    mergedPosts,
+    updatedCases,
+    initialFilters.client_status,
+    currentPage,
+    totalPages,
+    updateQueryParams,
+    searchParams,
+  ])
 
   // Keyboard navigation
   useEffect(() => {
@@ -1639,6 +1693,12 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
         isOpen={!!selectedPost}
         isMobileLayout={isMobile}
         onClose={() => {
+          const status = selectedPost
+            ? (updatedCases[selectedPost._id] || selectedPost.client_status)
+            : null
+          if (selectedPost && !clientStatusMatchesFilter(status, initialFilters.client_status)) {
+            setMergedPosts((prev) => prev.filter((p) => !idsEqual(p._id, selectedPost._id)))
+          }
           setSelectedPost(null)
 
           if (searchParams.has('case_id')) {
@@ -1653,8 +1713,16 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
         onUpdateStatus={(id, status) => setUpdatedCases(prev => ({ ...prev, [id]: status }))}
         onShowToast={showToast}
         onNavigate={navigatePost}
-        hasPrev={mergedPosts.findIndex(p => p._id === selectedPost?._id) > 0}
-        hasNext={mergedPosts.findIndex(p => p._id === selectedPost?._id) < mergedPosts.length - 1}
+        hasPrev={queueHasPrev({
+          selectedIndex: mergedPosts.findIndex((p) => idsEqual(p._id, selectedPost?._id)),
+          page: currentPage,
+        })}
+        hasNext={queueHasNext({
+          selectedIndex: mergedPosts.findIndex((p) => idsEqual(p._id, selectedPost?._id)),
+          listLength: mergedPosts.length,
+          page: currentPage,
+          totalPages,
+        })}
         onUpdatePost={handleUpdatePost}
         projectEmails={projectEmails}
       />

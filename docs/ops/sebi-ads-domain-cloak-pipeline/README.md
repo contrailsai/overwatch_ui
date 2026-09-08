@@ -129,7 +129,7 @@ Known unlock tokens: [`known_cloak_params.txt`](./known_cloak_params.txt).
 | [`scripts/sebi_report/skip_hosts.py`](./scripts/sebi_report/skip_hosts.py) | Social / CDN / major-brand skip list |
 | [`scripts/sebi_report/apply.py`](./scripts/sebi_report/apply.py) | Empty Domains upsert + M2M links |
 | [`scripts/sebi_report/analyze_intel.py`](./scripts/sebi_report/analyze_intel.py) | Batch call `domain_analyzer.pipeline.analyze_one(..., intel_only=True)` |
-| [`scripts/sebi_report/cloak_tokens.py`](./scripts/sebi_report/cloak_tokens.py) | Known `pEl8X` / `ad_name` / `adset_name` pairs |
+| [`scripts/sebi_report/cloak_tokens.py`](./scripts/sebi_report/cloak_tokens.py) | Re-export of `domain_analyzer.cloak_tokens` (`pEl8X` / `utm_creative` / `ad_name` / `adset_name` pairs) |
 | [`scripts/sebi_report/cloak_probe.py`](./scripts/sebi_report/cloak_probe.py) | Playwright bare+tokens; S3 screenshot/media; Mongo write |
 
 Also see:

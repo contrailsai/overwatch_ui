@@ -109,6 +109,7 @@ export default function ReviewAdForm({
   hasNext,
   setAds,
   setSelectedAd,
+  onReviewComplete,
 }) {
   const { project_details } = project
   const projectLabels = project_details?.labels || []
@@ -246,6 +247,10 @@ export default function ReviewAdForm({
     }
 
     setLocalAd(mergeReviewed)
+    if (onReviewComplete) {
+      onReviewComplete(mergeReviewed(localAd))
+      return undefined
+    }
     setSelectedAd?.((prev) => {
       if (!prev || String(prev._id) !== String(adId)) return prev
       return mergeReviewed(prev)

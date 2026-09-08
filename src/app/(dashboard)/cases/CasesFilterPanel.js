@@ -128,9 +128,9 @@ export function CasesFilterPanel({
       const current = searchParams.get('semantic_search') || ''
       if (val === current) return
       if (val) {
-        updateQueryParams({ semantic_search: val, similar_to: null, search_type: null })
+        updateQueryParams({ semantic_search: val, similar_to: null, search_type: null, page: 1 })
       } else if (current) {
-        updateQueryParams({ semantic_search: null })
+        updateQueryParams({ semantic_search: null, page: 1 })
       }
     }, 600)
     return () => clearTimeout(timer)
@@ -185,7 +185,7 @@ export function CasesFilterPanel({
     activeChips.push({
       label: 'Alert date',
       onRemove: () =>
-        updateQueryParams({ alert_from: null, alert_to: null, processed_from: null, processed_to: null }),
+        updateQueryParams({ alert_from: null, alert_to: null, processed_from: null, processed_to: null, page: 1 }),
     })
   }
   if (initialFilters.published_from || initialFilters.published_to) {
@@ -197,6 +197,7 @@ export function CasesFilterPanel({
           published_to: null,
           original_date_from: null,
           original_date_to: null,
+          page: 1,
         }),
     })
   }
@@ -268,6 +269,7 @@ export function CasesFilterPanel({
                     : null,
                   processed_from: null,
                   processed_to: null,
+                  page: 1,
                 })
               }
             />
@@ -290,6 +292,7 @@ export function CasesFilterPanel({
                     : null,
                   processed_from: null,
                   processed_to: null,
+                  page: 1,
                 })
               }
             />
@@ -314,6 +317,7 @@ export function CasesFilterPanel({
                     : null,
                   original_date_from: null,
                   original_date_to: null,
+                  page: 1,
                 })
               }
             />
@@ -336,6 +340,7 @@ export function CasesFilterPanel({
                     : null,
                   original_date_from: null,
                   original_date_to: null,
+                  page: 1,
                 })
               }
             />
@@ -501,7 +506,7 @@ export function CasesFilterPanel({
               <button
                 type="button"
                 onClick={() =>
-                  updateQueryParams({ similar_to: null, search_type: null })
+                  updateQueryParams({ similar_to: null, search_type: null, page: 1 })
                 }
                 className="ml-0.5"
                 aria-label="Clear similarity filter"
@@ -517,7 +522,7 @@ export function CasesFilterPanel({
               {(searchParams.get('semantic_search')?.length ?? 0) > 24 ? '…' : ''}
               <button
                 type="button"
-                onClick={() => updateQueryParams({ semantic_search: null })}
+                onClick={() => updateQueryParams({ semantic_search: null, page: 1 })}
                 className="ml-0.5"
                 aria-label="Clear text search"
               >
@@ -549,6 +554,7 @@ export function CasesFilterPanel({
                     similar_to: id,
                     search_type: 'text',
                     semantic_search: null,
+                    page: 1,
                   })
               }}
               className={cn(
@@ -577,6 +583,7 @@ export function CasesFilterPanel({
                     similar_to: id,
                     search_type: 'image',
                     semantic_search: null,
+                    page: 1,
                   })
               }}
               className={cn(
@@ -806,6 +813,7 @@ export function CasesFilterPanel({
                               similar_to: id,
                               search_type: 'text',
                               semantic_search: null,
+                              page: 1,
                             })
                         }}
                         className={cn(
@@ -834,6 +842,7 @@ export function CasesFilterPanel({
                               similar_to: id,
                               search_type: 'image',
                               semantic_search: null,
+                              page: 1,
                             })
                         }}
                         className={cn(

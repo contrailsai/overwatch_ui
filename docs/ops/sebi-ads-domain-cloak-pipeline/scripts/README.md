@@ -72,7 +72,7 @@ Re-probe domains that failed under the old desktop profile:
 Add new unlock pairs to both:
 
 - [`../known_cloak_params.txt`](../known_cloak_params.txt) (reference list)
-- [`sebi_report/cloak_tokens.py`](sebi_report/cloak_tokens.py) `KNOWN_CLOAK_PAIRS` (used by probe)
+- `Data_pipeline_test/domain_analyzer/cloak_tokens.py` `KNOWN_CLOAK_PAIRS` (canonical list used by probe; [`sebi_report/cloak_tokens.py`](sebi_report/cloak_tokens.py) re-exports it)
 
 ## Bulk-review pending ads on reviewed domains
 
