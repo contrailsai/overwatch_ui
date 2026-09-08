@@ -24,7 +24,7 @@ function ExportProgress({ statusText, className }) {
         <div className="flex items-center gap-1.5 min-w-0">
           <Loader2 className="w-3 h-3 text-blue-600 animate-spin shrink-0" />
           <span className="text-[10px] font-bold text-blue-700 uppercase tracking-wide truncate">
-            {hasPct ? `Exporting ${pct}%` : 'Preparing export…'}
+            {hasPct ? 'Exporting' : 'Preparing export…'}
           </span>
         </div>
         {hasPct && (
@@ -68,6 +68,7 @@ export default function ReportGenerate({
   entityLabel = 'cases',
   entityType,
   analyticsPage = 'CasesList',
+  className,
 }) {
   const idPrefix = useId()
   const availableFormats = useMemo(
@@ -123,45 +124,42 @@ export default function ReportGenerate({
 
   if (toolbar) {
     return (
-      <div className="flex shrink-0 flex-col gap-1.5 min-w-0">
-        <div className={cn('flex shrink-0 flex-wrap items-center gap-2', isLoading && 'opacity-60')}>
-          <div className="flex items-center gap-0.5 rounded-lg border border-slate-200 bg-slate-50 p-0.5">
-            {availableFormats.map((f) => (
-              <button
-                key={f.id}
-                type="button"
-                onClick={() => setSelectedFormat(f.id)}
-                disabled={isLoading}
-                title={f.downloadLabel}
-                aria-label={f.downloadLabel}
-                className={cn(
-                  'rounded-md px-2.5 py-1.5 text-[10px] font-bold transition-all cursor-pointer whitespace-nowrap',
-                  activeFormatId === f.id
-                    ? 'bg-white text-blue-600 shadow-sm'
-                    : 'text-slate-500 hover:text-slate-700'
-                )}
-              >
-                {f.compactLabel}
-              </button>
-            ))}
-          </div>
-          <Button
-            size="sm"
-            onClick={handleDownload}
-            disabled={isLoading}
-            title="Download report"
-            className="h-9 gap-1.5 bg-blue-600 px-3 text-white hover:bg-blue-700 border border-blue-600"
-          >
-            {showProgress ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
+      <div className={cn('flex shrink-0 flex-col gap-1.5 min-w-0 max-w-[280px]', className)}>
+        {showProgress ? (
+          <ExportProgress statusText={currentState.statusText} className="px-0.5 w-full" />
+        ) : (
+          <div className="flex w-full min-w-0 items-center gap-2">
+            <div className="flex min-w-0 items-center gap-0.5 rounded-lg border border-slate-200 bg-slate-50 p-0.5">
+              {availableFormats.map((f) => (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => setSelectedFormat(f.id)}
+                  disabled={isLoading}
+                  title={f.downloadLabel}
+                  aria-label={f.downloadLabel}
+                  className={cn(
+                    'rounded-md px-2 py-1 text-[10px] font-bold transition-all cursor-pointer whitespace-nowrap',
+                    activeFormatId === f.id
+                      ? 'bg-white text-blue-600 shadow-sm'
+                      : 'text-slate-500 hover:text-slate-700'
+                  )}
+                >
+                  {f.compactLabel}
+                </button>
+              ))}
+            </div>
+            <Button
+              size="sm"
+              onClick={handleDownload}
+              disabled={isLoading}
+              title="Download report"
+              className="h-8 gap-1.5 bg-blue-600 px-2.5 text-white hover:bg-blue-700 border border-blue-600 shrink-0"
+            >
               <DownloadIcon className="w-4 h-4" />
-            )}
-            <span className="text-xs font-bold">{showProgress ? 'Exporting' : 'Export'}</span>
-          </Button>
-        </div>
-        {showProgress && (
-          <ExportProgress statusText={currentState.statusText} className="px-0.5" />
+              <span className="text-xs font-bold">Export</span>
+            </Button>
+          </div>
         )}
         {hiddenExportButtons}
       </div>
@@ -170,53 +168,45 @@ export default function ReportGenerate({
 
   if (compact) {
     return (
-      <div className="shrink-0 flex flex-col gap-1.5 min-w-0 w-full max-w-full">
-        <div className="flex items-center gap-1 min-w-0">
-          <div
-            className={cn(
-              'flex items-center gap-0.5 bg-slate-100 p-0.5 rounded-lg border border-slate-200 min-w-0',
-              isLoading && 'opacity-60 pointer-events-none'
-            )}
-          >
-            {availableFormats.map((f) => (
-              <button
-                key={f.id}
-                type="button"
-                onClick={() => setSelectedFormat(f.id)}
-                disabled={isLoading}
-                title={f.downloadLabel}
-                aria-label={f.downloadLabel}
-                className={cn(
-                  'px-1.5 py-1 rounded-md text-[9px] font-bold leading-tight text-center transition-all cursor-pointer whitespace-nowrap',
-                  activeFormatId === f.id
-                    ? 'bg-white text-blue-600 shadow-sm'
-                    : 'text-slate-500'
-                )}
-              >
-                {f.compactLabel}
-              </button>
-            ))}
-          </div>
-          <Button
-            size="icon"
-            variant="ghost"
-            onClick={handleDownload}
-            disabled={isLoading}
-            title={showProgress ? 'Exporting report…' : 'Download report'}
-            className="h-8 w-8 shrink-0 bg-blue-600 hover:bg-blue-700 text-white rounded-lg border border-blue-600"
-          >
-            {showProgress ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <DownloadIcon className="w-4 h-4" />
-            )}
-          </Button>
-        </div>
-        {showProgress && (
+      <div className="shrink-0 flex items-center gap-1 w-auto">
+        {showProgress ? (
           <ExportProgress
             statusText={currentState.statusText}
-            className="rounded-lg border border-blue-100 bg-blue-50 px-2 py-1.5"
+            className="rounded-lg border border-blue-100 bg-blue-50 px-2 py-1.5 min-w-[140px] max-w-[200px]"
           />
+        ) : (
+          <>
+            <div className="flex items-center gap-0.5 bg-slate-100 p-0.5 rounded-lg border border-slate-200">
+              {availableFormats.map((f) => (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => setSelectedFormat(f.id)}
+                  disabled={isLoading}
+                  title={f.downloadLabel}
+                  aria-label={f.downloadLabel}
+                  className={cn(
+                    'px-1.5 py-1 rounded-md text-[9px] font-bold leading-tight text-center transition-all cursor-pointer whitespace-nowrap',
+                    activeFormatId === f.id
+                      ? 'bg-white text-blue-600 shadow-sm'
+                      : 'text-slate-500'
+                  )}
+                >
+                  {f.compactLabel}
+                </button>
+              ))}
+            </div>
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={handleDownload}
+              disabled={isLoading}
+              title="Download report"
+              className="h-8 w-8 shrink-0 bg-blue-600 hover:bg-blue-700 text-white rounded-lg border border-blue-600"
+            >
+              <DownloadIcon className="w-4 h-4" />
+            </Button>
+          </>
         )}
         {hiddenExportButtons}
       </div>

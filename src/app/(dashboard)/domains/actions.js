@@ -2,13 +2,25 @@
 
 import clientPromise from '@/utils/mongodb/client'
 import { ObjectId } from 'mongodb'
-import { traceAction } from '@/utils/tracing'
+import { traceAction, recordClickMetric } from '@/utils/tracing'
 import { requireAuthContext } from '@/utils/auth-context'
 import { logActionError, LOKI_STREAMS } from '@/utils/otel-logger'
 import { domainsCollection } from '@/utils/mongodb/collections'
 import { insertCaseEvent, mapUiClientStatusToV3 } from '@/utils/mongodb/v3-schema'
-import { normalizeDomainForUi, DOMAIN_LIST_PROJECTION, DOMAIN_DETAIL_PROJECTION } from '@/lib/domains/domain-helpers'
+import { updateClientReviewedMetrics } from '@/utils/supabase/metrics'
+import { isOpenClientStatus, platformForEntity, reviewDateStr } from '@/lib/analytics/dims'
+import { normalizeDomainForUi, DOMAIN_LIST_PROJECTION, DOMAIN_DETAIL_PROJECTION, REVIEWED_DOMAINS_FILTER } from '@/lib/domains/domain-helpers'
 import { toDestinationDomainSummary } from '@/lib/domains/domain-display'
+
+const DOMAINS_TRACE = { loki_stream: LOKI_STREAMS.domains }
+
+export const trackClientClick = traceAction(
+  'trackClientClick',
+  async (buttonName, attributes = {}) => {
+    recordClickMetric(buttonName, attributes)
+  },
+  DOMAINS_TRACE,
+)
 
 function escapeRegex(text) {
   return String(text).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -69,6 +81,50 @@ function buildDomainsMatchQuery(filters = {}) {
 
   return query
 }
+
+function buildDomainsReportSortPipeline() {
+  return { 'list.effective_threat_score': -1, 'list.reviewed_at': -1, _id: 1 }
+}
+
+/** Order domain IDs for report export (risk → reviewed_at → _id). */
+export const orderDomainIdsForReport = traceAction('orderDomainIdsForReport', async (domainIds = []) => {
+  try {
+    if (!domainIds?.length) return []
+
+    const { dbName } = await requireAuthContext()
+    const objectIds = domainIds
+      .filter((id) => id != null && String(id) !== '')
+      .map((id) => {
+        try {
+          return new ObjectId(id)
+        } catch {
+          return null
+        }
+      })
+      .filter(Boolean)
+
+    if (objectIds.length === 0) return []
+
+    const client = await clientPromise
+    const collection = domainsCollection(client.db(dbName))
+
+    const docs = await collection.aggregate([
+      { $match: { _id: { $in: objectIds }, ...REVIEWED_DOMAINS_FILTER } },
+      { $sort: buildDomainsReportSortPipeline() },
+      { $project: { _id: 1 } },
+    ]).toArray()
+
+    return docs.map((d) => d._id.toString())
+  } catch (e) {
+    logActionError({
+      loki_stream: LOKI_STREAMS.domains,
+      app_action: 'orderDomainIdsForReport',
+      message: 'orderDomainIdsForReport failed',
+    }, e)
+    console.error('orderDomainIdsForReport Error:', e)
+    return []
+  }
+})
 
 export const getDomains = traceAction('getDomains', async (page = 1, limit = 25, filters = {}, sort = { field: null, direction: 'desc' }) => {
   try {
@@ -185,6 +241,7 @@ export const getDomainsByNames = traceAction('getDomainsByNames', async (names =
         'review_details.threat_types': 1,
         'review_details.legal_codes': 1,
         'review_details.category': 1,
+        'review_details.client_visible_variant_keys': 1,
       })
       .toArray()
 
@@ -231,9 +288,12 @@ export const getDomainById = traceAction('getDomainById_client', async (domainId
 export const updateDomainClientStatus = traceAction('updateDomainClientStatus', async (domainId, status) => {
   try {
     if (!domainId) return { success: false, error: 'Missing domain ID' }
-    const { dbName, clientDetails } = await requireAuthContext()
+    const { dbName, clientDetails, project } = await requireAuthContext()
     const client = await clientPromise
     const db = client.db(dbName)
+
+    const existing = await domainsCollection(db).findOne({ _id: new ObjectId(domainId) })
+    if (!existing) return { success: false, error: 'Domain not found' }
 
     const result = await domainsCollection(db).updateOne(
       { _id: new ObjectId(domainId) },
@@ -254,6 +314,27 @@ export const updateDomainClientStatus = traceAction('updateDomainClientStatus', 
         summary: `Domain client status changed to ${status}`,
         payload: { ui_status: status, v1_status: mapUiClientStatusToV3(status) },
       })
+
+      const previousStatus = existing.workflow?.client_status
+      await updateClientReviewedMetrics(
+        { project_name: project?.project_name || clientDetails.project_name },
+        {
+          risk_score: existing.list?.effective_threat_score ?? existing.review_details?.threat_score,
+          client_status: status,
+          platform: platformForEntity('domain', existing),
+        },
+        isOpenClientStatus(previousStatus) ? null : {
+          risk_score: existing.list?.effective_threat_score ?? existing.review_details?.threat_score,
+          client_status: previousStatus,
+          platform: platformForEntity('domain', existing),
+        },
+        { entityType: 'domain', reviewDate: reviewDateStr(existing) },
+      ).catch((err) => logActionError({
+        loki_stream: LOKI_STREAMS.domains,
+        app_action: 'updateDomainClientStatus',
+        message: 'Failed to update client metrics',
+      }, err))
+
       return { success: true }
     }
     return { success: false, error: 'Domain not found' }

@@ -134,7 +134,8 @@ discovery: {
   // shipped module key without bumping schema_version.
   // Shipped keys (see domain-analyzer PRD): whois, dns, ssl, hosting,
   // reputation, content_classification, page_text, tech_stack, redirect_chain,
-  // screenshot, capture, media, raw.
+  // screenshot, capture, media, cloak_probe, raw.
+  // cloak_probe lander shape: docs/ops/sebi-ads-domain-cloak-pipeline/SCHEMA.md
   analysis_results: {
     whois: { … },                 // registrar, created_at, expires_at, registrant_country, privacy_protected
     dns: { … },                   // a/aaaa/mx/ns/txt records, nameservers
@@ -159,6 +160,7 @@ discovery: {
       videos: [{ source_url, s3_url, content_type, bytes, sha256 }],
       skipped: [{ source_url, reason }]
     },
+    cloak_probe: { … },           // bare + token landers; variants[].label is the client/PDF key
     raw: { … }                    // optional trimmed raw analyzer payload
   },
 
@@ -167,6 +169,7 @@ discovery: {
     reasoning, reviewer_comments,
     is_parked, is_placeholder,
     poi_names: [], legal_codes: [],
+    client_visible_variant_keys: [], // cloak variant.label values; empty/missing = all differing landers
     reviewed_at
   },
 
@@ -215,9 +218,9 @@ ESR (equality → sort → range). Created by `scripts/ensure_indexes_v3.js`.
 
 | Route | Status |
 |-------|--------|
-| `/domains` | Shell — client list (reviewed domains), minimal columns, detail panel dumps `analysis_results` as-is |
-| `/review-domains` | Shell — reviewer queue (pending analysis/review), minimal review action (category + threat score + notes) |
+| `/domains` | Client list of reviewed domains; filmstrip / cloak badge / visit URL / site-facts use `client_visible_variant_keys`; PDF Sum / PDF Det export (`entityType: 'domains'`) |
+| `/review-domains` | Reviewer queue; verdict form plus **Client-visible landers** picker under the filmstrip |
 
-Analyzer integration (writing `analysis_results` + `workflow.analysis_status`) is specified in [`docs/prd/domain-analyzer-module.md`](../prd/domain-analyzer-module.md). Until that service ships, seed fixtures (`scripts/seed_newzonic_domain.js`) so `/review-domains` has pages to review. `/domains` only lists documents with `workflow.review_status: "reviewed"`.
+Analyzer integration (writing `analysis_results` + `workflow.analysis_status`) is specified in [`docs/prd/domain-analyzer-module.md`](../prd/domain-analyzer-module.md). Until that service ships, seed fixtures (`scripts/seed_newzonic_domain.js`) so `/review-domains` has pages to review. `/domains` only lists documents with `workflow.review_status: "reviewed"`. Domain PDF Lambda wiring: [`docs/prd/overwatch-pdf-service-domains.md`](../prd/overwatch-pdf-service-domains.md).
 
 Production `screenshot.s3_url` / `media.*.s3_url` must be full `amazonaws.com` HTTPS URLs so `getSignedImageUrl` can sign them. Leading `/` paths are fixture-only.

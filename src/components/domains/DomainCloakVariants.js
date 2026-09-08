@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ChevronDown, ChevronLeft, ChevronRight, ChevronUp,
   ExternalLink, Image as ImageIcon, Play,
@@ -15,7 +15,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
-import { uniqueCloakVariants } from '@/lib/domains/domain-display'
+import { uniqueCloakVariants, cloakVariantKey } from '@/lib/domains/domain-display'
 
 function tabLabel(v) {
   if (v.label === 'bare') return 'Bare'
@@ -58,6 +58,7 @@ export function DomainCloakVariants({
   variants = [],
   primaryScreenshotUrl = null,
   className,
+  onActiveChange,
 }) {
   const list = useMemo(() => uniqueCloakVariants(variants), [variants])
 
@@ -73,12 +74,22 @@ export function DomainCloakVariants({
   const [showPageText, setShowPageText] = useState(false)
   const [viewerOpen, setViewerOpen] = useState(false)
   const [viewerIndex, setViewerIndex] = useState(0)
+  const onActiveChangeRef = useRef(onActiveChange)
+
+  useEffect(() => {
+    onActiveChangeRef.current = onActiveChange
+  }, [onActiveChange])
 
   useEffect(() => {
     setActive(defaultIndex)
     setShowPageText(false)
     setViewerOpen(false)
   }, [defaultIndex, list.length])
+
+  useEffect(() => {
+    const current = list[Math.min(active, Math.max(list.length - 1, 0))] || list[0]
+    onActiveChangeRef.current?.(current ? cloakVariantKey(current) : '')
+  }, [active, list])
 
   useEffect(() => {
     setViewerOpen(false)

@@ -9,6 +9,8 @@
  *     → getReportDownloadUrl (server) → browser download
  *
  * PDF/DOCX React document templates remain under @/components/pdf and @/components/docx.
+ * Domain PDFs: SummaryDomainsReportDocument, DetailedDomainsReportDocument, SingleDomainDocument.
+ * SQS payload for domains includes entityType: 'domains', domainIds, variantKeysByDomainId.
  */
 
 export { REPORT_FORMATS, getRealtimeChannelPrefix, getFileExtension, getFormatLabel } from './constants'

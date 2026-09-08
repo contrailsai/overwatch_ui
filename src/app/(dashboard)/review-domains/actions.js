@@ -6,6 +6,8 @@ import { traceAction } from '@/utils/tracing'
 import { requireRole } from '@/utils/auth-context'
 import { logActionError, LOKI_STREAMS } from '@/utils/otel-logger'
 import { domainsCollection } from '@/utils/mongodb/collections'
+import { updateDailyMetrics } from '@/utils/supabase/metrics'
+import { caseReviewMetricArgs } from '@/lib/analytics/dims'
 import { insertCaseEvent } from '@/utils/mongodb/v3-schema'
 import { normalizeDomainForUi, riskRankFromScore, DOMAIN_LIST_PROJECTION, DOMAIN_DETAIL_PROJECTION } from '@/lib/domains/domain-helpers'
 import { buildEffectiveThreatScoreRange } from '@/utils/mongodb/v3-schema'
@@ -143,7 +145,7 @@ export const getDomainById = traceAction('getDomainById', async (domainId) => {
 
 export const submitDomainReview = traceAction('submitDomainReview', async (_project, _clientDetails, prevState, formData) => {
   try {
-    const { dbName, clientDetails } = await requireRole(['reviewer'])
+    const { dbName, clientDetails, project } = await requireRole(['reviewer'])
     const domainId = formData.get('mongo_id')
     if (!domainId) return { success: false, error: 'Missing domain ID' }
 
@@ -156,6 +158,9 @@ export const submitDomainReview = traceAction('submitDomainReview', async (_proj
     const flags = {}
     const threat_types = []
     const legal_codes = []
+    const client_visible_variant_keys = formData.getAll('visible_variant')
+      .map((v) => String(v || '').trim())
+      .filter(Boolean)
 
     for (const [key, value] of formData.entries()) {
       if (key.startsWith('flag_')) {
@@ -196,6 +201,7 @@ export const submitDomainReview = traceAction('submitDomainReview', async (_proj
       name_present: ['on', 'yes', 'true'].includes(String(formData.get('name_present') || '').toLowerCase()),
       is_parked: formData.get('is_parked') === 'on',
       is_placeholder: formData.get('is_parked') === 'on',
+      client_visible_variant_keys,
       reviewed_at: existing.review_details?.reviewed_at || new Date().toISOString(),
     }
 
@@ -229,6 +235,23 @@ export const submitDomainReview = traceAction('submitDomainReview', async (_proj
       summary: 'Domain reviewed by reviewer',
       payload: { review_details },
     })
+
+    const prevReview = existing.review_details
+    const isPreviouslyReviewed = existing.workflow?.review_status === 'reviewed'
+      || (prevReview && prevReview.threat_score !== undefined)
+    const { reviewData, previousReviewData, options } = caseReviewMetricArgs(
+      'domain',
+      existing,
+      review_details,
+      isPreviouslyReviewed ? prevReview : null,
+    )
+    await updateDailyMetrics(project, reviewData, previousReviewData, options).catch((err) =>
+      logActionError({
+        loki_stream: LOKI_STREAMS.review_domains,
+        app_action: 'submitDomainReview',
+        message: 'Background metrics update failed',
+      }, err)
+    )
 
     const updated = await collection.findOne(
       { _id: new ObjectId(domainId) },

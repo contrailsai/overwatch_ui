@@ -18,6 +18,7 @@ import { Separator } from '@/components/ui/separator'
 import { cn } from '@/lib/utils'
 import { DomainAnalysisResults } from '@/components/domains/DomainAnalysisResults'
 import { DomainCloakVariants } from '@/components/domains/DomainCloakVariants'
+import { ClientVisibleLandersPicker } from '@/components/domains/ClientVisibleLandersPicker'
 import {
   buildDomainReviewFormDefaults,
   applyDomainScamReviewPresets,
@@ -86,6 +87,9 @@ export default function ReviewDomainForm({
   const [simpleReportText, setSimpleReportText] = useState(defaults.simpleReportText)
   const [reviewerComments, setReviewerComments] = useState(domain?.review_details?.reviewer_comments || '')
   const [visibilityOnline, setVisibilityOnline] = useState(isDomainOnline(domain))
+  const [visibleVariantKeys, setVisibleVariantKeys] = useState(
+    () => domain?.review_details?.client_visible_variant_keys || [],
+  )
 
   useEffect(() => {
     setLocalDomain(domain)
@@ -101,6 +105,7 @@ export default function ReviewDomainForm({
     setSimpleReportText(d.simpleReportText)
     setReviewerComments(domain?.review_details?.reviewer_comments || '')
     setVisibilityOnline(isDomainOnline(domain))
+    setVisibleVariantKeys(domain?.review_details?.client_visible_variant_keys || [])
   }, [domain, project_details])
 
   useEffect(() => {
@@ -265,10 +270,18 @@ export default function ReviewDomainForm({
       <div className="flex-1 min-h-0 overflow-y-auto lg:overflow-hidden flex flex-col lg:flex-row lg:divide-x divide-slate-200">
         <div className="shrink-0 lg:flex-1 lg:min-w-0 lg:min-h-0 lg:overflow-y-auto p-4 space-y-4 bg-white">
           {(localDomain.cloakVariants?.length > 0) ? (
-            <DomainCloakVariants
-              variants={localDomain.cloakVariants}
-              primaryScreenshotUrl={screenshotUrl}
-            />
+            <>
+              <DomainCloakVariants
+                variants={localDomain.cloakVariants}
+                primaryScreenshotUrl={screenshotUrl}
+              />
+              <ClientVisibleLandersPicker
+                variants={localDomain.cloakVariants}
+                selectedKeys={visibleVariantKeys}
+                onChange={setVisibleVariantKeys}
+                primaryScreenshotUrl={screenshotUrl}
+              />
+            </>
           ) : (
             <div className="rounded-xl overflow-hidden border border-slate-200 bg-slate-100">
               {screenshotUrl ? (
@@ -343,6 +356,9 @@ export default function ReviewDomainForm({
           <input type="hidden" name="is_aigc" value="off" />
           <input type="hidden" name="is_parked" value="off" />
           <input type="hidden" name="visibility_status" value={visibilityOnline ? 'up' : 'down'} />
+          {visibleVariantKeys.map((key) => (
+            <input key={key} type="hidden" name="visible_variant" value={key} />
+          ))}
 
           <section className="space-y-3">
             <div className="flex items-center justify-between gap-2">
