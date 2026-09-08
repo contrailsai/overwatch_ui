@@ -2,6 +2,27 @@
 
 export const POI_TIERS = ['primary', 'secondary', 'other']
 
+/** primary → secondary → other, then post_count desc. */
+export function poiListSortStages() {
+  return [
+    {
+      $addFields: {
+        _tierRank: {
+          $switch: {
+            branches: [
+              { case: { $eq: ['$tier', 'primary'] }, then: 0 },
+              { case: { $eq: ['$tier', 'secondary'] }, then: 1 },
+            ],
+            default: 2,
+          },
+        },
+      },
+    },
+    { $sort: { _tierRank: 1, post_count: -1, display_name: 1 } },
+    { $project: { _tierRank: 0 } },
+  ]
+}
+
 export const MAX_POI_RANGE_DAYS = 90
 
 /** Flip to `'30d'` once informatics volume is high enough. */
