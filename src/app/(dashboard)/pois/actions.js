@@ -31,6 +31,7 @@ import {
   poiTextSearchOr,
   mergeAliasFieldsIntoParent,
   uniquePoiStrings,
+  poiListSortStages,
 } from '@/lib/pois/poi-helpers'
 
 async function signPoiImage(poi) {
@@ -150,10 +151,12 @@ export const getPois = traceAction('getPois', async ({
     const [total, docs] = await Promise.all([
       collection.countDocuments(query),
       collection
-        .find(query)
-        .sort({ post_count: -1, display_name: 1 })
-        .skip(skip)
-        .limit(safeLimit)
+        .aggregate([
+          { $match: query },
+          ...poiListSortStages(),
+          { $skip: skip },
+          { $limit: safeLimit },
+        ])
         .toArray(),
     ])
 
@@ -713,19 +716,22 @@ export const searchPoisForConnect = traceAction('searchPoisForConnect', async ({
     }
 
     const docs = await collection
-      .find(filter, {
-        projection: {
-          name: 1,
-          display_name: 1,
-          tier: 1,
-          post_count: 1,
-          meta: 1,
-          image: 1,
-          alias_poi_names: 1,
+      .aggregate([
+        { $match: filter },
+        ...poiListSortStages(),
+        {
+          $project: {
+            name: 1,
+            display_name: 1,
+            tier: 1,
+            post_count: 1,
+            meta: 1,
+            image: 1,
+            alias_poi_names: 1,
+          },
         },
-      })
-      .sort({ post_count: -1, display_name: 1 })
-      .limit(safeLimit)
+        { $limit: safeLimit },
+      ])
       .toArray()
 
     const pois = await Promise.all(docs.map((doc) => serializeSignedPoi(doc)))
