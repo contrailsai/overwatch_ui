@@ -185,7 +185,42 @@ function mediaPosterUrl(item, { allowS3 = false } = {}) {
 }
 
 function isThumbnailRole(m) {
-  return String(m?.role || '').toLowerCase() === 'thumbnail'
+  const role = String(m?.role || '').toLowerCase()
+  if (role === 'thumbnail') return true
+  return String(m?.type || '').toLowerCase() === 'thumbnail'
+}
+
+function isPlayableImage(m) {
+  if (!m) return false
+  if (mediaTypeOf(m) === 'video') return false
+  return Boolean(mediaPlayableUrl(m))
+}
+
+function isVideoDisplayFormat(ad) {
+  const raw = String(ad?.list?.display_format || ad?.content?.display_format || '').toUpperCase()
+  return raw === 'VIDEO' || raw === 'SINGLE_VIDEO' || raw === 'MULTI_VIDEOS'
+}
+
+/** Video still: thumbnail before the video, then video poster, then any role=thumbnail still. */
+function pickVideoPreviewThumb(media) {
+  const firstVideoIdx = media.findIndex((m) => mediaTypeOf(m) === 'video')
+  const prefix = firstVideoIdx > 0 ? media.slice(0, firstVideoIdx) : []
+
+  const roleInPrefix = prefix.find((m) => isThumbnailRole(m) && isPlayableImage(m))
+  if (roleInPrefix) return { kind: 'image', url: mediaPlayableUrl(roleInPrefix) }
+
+  const videoWithPoster = media.find(
+    (m) => mediaTypeOf(m) === 'video' && mediaPosterUrl(m),
+  )
+  if (videoWithPoster) return { kind: 'image', url: mediaPosterUrl(videoWithPoster) }
+
+  const roleThumb = media.find((m) => isThumbnailRole(m) && isPlayableImage(m))
+  if (roleThumb) return { kind: 'image', url: mediaPlayableUrl(roleThumb) }
+
+  const stillBefore = prefix.find((m) => isPlayableImage(m))
+  if (stillBefore) return { kind: 'image', url: mediaPlayableUrl(stillBefore) }
+
+  return null
 }
 
 function resolveMediaCandidates(ad, card = null) {
@@ -259,13 +294,11 @@ export function getAdViewableMedia(ad, card = null) {
   return items
 }
 
-/** Default filmstrip index — thumbnail / first image first. */
+/** Default filmstrip index — stored thumbnail still, else the first asset (not a later extra image). */
 export function getDefaultMediaIndex(viewableMedia) {
   if (!Array.isArray(viewableMedia) || viewableMedia.length === 0) return 0
-  const thumbIdx = viewableMedia.findIndex((m) => m.role === 'thumbnail')
+  const thumbIdx = viewableMedia.findIndex((m) => isThumbnailRole(m))
   if (thumbIdx >= 0) return thumbIdx
-  const imageIdx = viewableMedia.findIndex((m) => m.type === 'image')
-  if (imageIdx >= 0) return imageIdx
   return 0
 }
 
@@ -321,31 +354,28 @@ function flattenAdMedia(ad) {
 }
 
 /**
- * List thumb: prefer first image signed URL; if only video exists, kind=video (no url for <img>).
+ * List thumb: for video ads use the stored thumbnail/poster; otherwise first creative image.
+ * Page-chrome `role=thumbnail` is skipped on image/carousel ads.
  * @returns {{ kind: 'image' | 'video' | 'none', url?: string }}
  */
 export function getAdListThumb(ad) {
   const media = flattenAdMedia(ad)
-  // Prefer card/creative image over page thumbnail (avatar)
-  const creativeImage = media.find(
-    (m) => !isThumbnailRole(m) && mediaTypeOf(m) === 'image' && mediaPlayableUrl(m),
-  )
+  const hasVideo = media.some((m) => mediaTypeOf(m) === 'video')
+
+  if (hasVideo || isVideoDisplayFormat(ad)) {
+    const videoThumb = pickVideoPreviewThumb(media)
+    if (videoThumb) return videoThumb
+    if (hasVideo) return { kind: 'video' }
+  }
+
+  const creativeImage = media.find((m) => !isThumbnailRole(m) && isPlayableImage(m))
   if (creativeImage) {
     return { kind: 'image', url: mediaPlayableUrl(creativeImage) }
   }
-  const thumbImage = media.find(
-    (m) => mediaTypeOf(m) === 'image' && mediaPlayableUrl(m),
-  )
+  const thumbImage = media.find((m) => isPlayableImage(m))
   if (thumbImage) {
     return { kind: 'image', url: mediaPlayableUrl(thumbImage) }
   }
-  const videoWithPoster = media.find(
-    (m) => mediaTypeOf(m) === 'video' && mediaPosterUrl(m),
-  )
-  if (videoWithPoster) {
-    return { kind: 'image', url: mediaPosterUrl(videoWithPoster) }
-  }
-  const hasVideo = media.some((m) => mediaTypeOf(m) === 'video')
   if (hasVideo) return { kind: 'video' }
   // Legacy: signedImageUrl may be an image; never treat unknown video-like as image
   if (ad?.signedImageUrl) {
