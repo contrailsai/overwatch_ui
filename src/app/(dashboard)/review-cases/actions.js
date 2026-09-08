@@ -6,6 +6,7 @@ import { getSignedImageUrl, deleteFileFromS3, getSignedUploadUrl, headS3Object, 
 import { validateReviewImageMeta, sanitizeUploadFileName, validateS3HeadSize, REVIEW_IMAGE_MAX_BYTES } from '@/utils/aws/upload-validation'
 import { sendContentModerationSqsMessage } from '@/utils/aws/sqs'
 import { updateDailyMetrics } from '@/utils/supabase/metrics'
+import { caseReviewMetricArgs } from '@/lib/analytics/dims'
 import { markClientRequestedLinksEnlisted } from '@/utils/clientRequestedLinks/server'
 import { sendEmail } from '@/utils/email'
 import { traceAction } from '@/utils/tracing'
@@ -890,12 +891,18 @@ export const submitCaseReview = traceAction('submitCaseReview', async (_project,
       threat_score: review_details.threat_score,
       threat_types: review_details.threat_types,
       is_aigc: review_details.is_aigc,
-      // takedown metrics are now handled in cases/actions.js
       platform: existingPost.platform ? existingPost.platform.toLowerCase() : 'instagram'
     }
 
+    const { options } = caseReviewMetricArgs(
+      'post',
+      existingPost,
+      review_details,
+      isPreviouslyReviewed ? prevReview : null,
+    )
+
     // update the metrics for the analytics dashboard (important)
-    await updateDailyMetrics(project, currentReviewData, previousReviewData).catch(err =>
+    await updateDailyMetrics(project, currentReviewData, previousReviewData, options).catch(err =>
       logActionError({
         loki_stream: LOKI_STREAMS.review_cases,
         app_action: 'submitCaseReview',

@@ -667,7 +667,8 @@ export const updateClientStatus = traceAction('updateClientStatus', async (caseI
     await updateClientReviewedMetricsBatch(
       { project_name: authContext.clientDetails.project_name },
       posts,
-      status
+      status,
+      { entityType: 'post' },
     ).catch(err => logActionError({
       loki_stream: LOKI_STREAMS.cases,
       app_action: 'updateClientStatus',

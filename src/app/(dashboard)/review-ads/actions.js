@@ -19,6 +19,8 @@ import { traceAction } from '@/utils/tracing'
 import { requireRole } from '@/utils/auth-context'
 import { logActionError, LOKI_STREAMS } from '@/utils/otel-logger'
 import { adsCollection } from '@/utils/mongodb/collections'
+import { updateDailyMetrics } from '@/utils/supabase/metrics'
+import { caseReviewMetricArgs } from '@/lib/analytics/dims'
 import {
   normalizeAdForUi,
   fetchAdUpdateHistory,
@@ -247,7 +249,7 @@ export const getAdUpdateHistory = traceAction('getAdUpdateHistory', async (adId)
 })
 
 export const submitAdReview = traceAction('submitAdReview', async (_project, _client_details, prevState, formData) => {
-  const { dbName, clientDetails } = await requireRole(['reviewer'])
+  const { dbName, clientDetails, project } = await requireRole(['reviewer'])
   const mongoId = formData.get('mongo_id')
 
   if (!mongoId) {
@@ -333,6 +335,23 @@ export const submitAdReview = traceAction('submitAdReview', async (_project, _cl
       summary: 'Ad reviewed and alerted',
       payload: { review_details },
     })
+
+    const prevReview = existingAd.review_details
+    const isPreviouslyReviewed = existingAd.workflow?.review_status === 'reviewed'
+      || (prevReview && prevReview.threat_score !== undefined)
+    const { reviewData, previousReviewData, options } = caseReviewMetricArgs(
+      'ad',
+      existingAd,
+      review_details,
+      isPreviouslyReviewed ? prevReview : null,
+    )
+    await updateDailyMetrics(project, reviewData, previousReviewData, options).catch((err) =>
+      logActionError({
+        loki_stream: LOKI_STREAMS.review_ads,
+        app_action: 'submitAdReview',
+        message: 'Background metrics update failed',
+      }, err)
+    )
 
     // Keep this payload plain / Flight-serializable (no raw Mongo subdocs).
     return {

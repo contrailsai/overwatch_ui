@@ -1,16 +1,11 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import {
-    PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
-    LineChart, Line, XAxis, YAxis, CartesianGrid,
-    AreaChart, Area, BarChart, Bar,
-} from 'recharts'
-import {
-    LayoutDashboard, CalendarIcon, X, Activity,
-    CheckCircle2, PlusCircle, Clock, XCircle,
-    ArrowUpRight, ArrowDownRight, Library, Files, TrendingUp, Layers
+    LayoutDashboard, CalendarIcon, X,
+    CheckCircle2, PlusCircle, XCircle,
+    ArrowUpRight, ArrowDownRight,
 } from 'lucide-react'
 import Sparkline from './Sparkline'
 import { cn } from '@/lib/utils'
@@ -18,17 +13,10 @@ import PageHeader from '@/components/PageHeader'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Calendar } from '@/components/ui/calendar'
 import { format } from 'date-fns'
+import { AnalyticsModule } from '@/components/analytics/modules/charts'
+import { moduleSpanClass, kpiCopy } from '@/lib/analytics/packModules'
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
 const fmt = (n) => (n ?? 0).toLocaleString()
-
-const platformLabel = (p) => {
-    if (!p) return ''
-    const k = String(p).toLowerCase()
-    if (k === 'x') return 'X'
-    if (k === 'website' || k === 'web') return 'Web'
-    return k.charAt(0).toUpperCase() + k.slice(1)
-}
 
 function useIsMobile() {
     const [isMobile, setIsMobile] = useState(false)
@@ -41,31 +29,6 @@ function useIsMobile() {
     return isMobile
 }
 
-const PLATFORM_COLORS = {
-    instagram: '#e1306c',
-    facebook: '#1877f2',
-    x: '#0f172a',
-    twitter: '#1da1f2',
-    youtube: '#ff0000',
-    website: '#8b5cf6',
-    web: '#8b5cf6',
-    tiktok: '#010101',
-    unknown: '#94a3b8',
-    reddit: '#ff4500',
-}
-
-const DECISION_COLORS = {
-    'No Action': '#0f172a',
-    'Flagged': '#ef4444',
-    'Takedown': '#a855f7',
-}
-
-const CATEGORY_LINE_PALETTE = ['#2563eb', '#06b6d4', '#a855f7', '#f97316', '#10b981', '#eab308', '#ec4899']
-
-const formatCategoryLabel = (name) =>
-    String(name || '').replace(/_/g, '-').replace(/\s+/g, '-').toUpperCase()
-
-// ─── Date Filter ─────────────────────────────────────────────────────────────
 function DateFilter({ active, from, to }) {
     const router = useRouter()
     const pathname = usePathname()
@@ -238,67 +201,6 @@ function DateFilter({ active, from, to }) {
     )
 }
 
-// ─── Custom Tooltip ──────────────────────────────────────────────────────────
-const ChartTooltip = ({ active, payload, label, colors = {}, uppercase = false, nameFormatter }) => {
-    if (!active || !payload?.length) return null
-    return (
-        <div className="bg-white text-slate-900 text-sm rounded-md px-3 py-2.5 shadow-md border border-slate-200 min-w-[160px]">
-            {label && <p className="text-slate-400 font-bold mb-2 uppercase tracking-wider text-[10px]">{label}</p>}
-            {payload.map((p, i) => {
-                const rawColor = p.color || p.stroke || p.fill || p.payload?.fill || p.payload?.color
-                const color = (rawColor === 'none' || rawColor === 'transparent') ? (colors[p.name] || '#cbd5e1') : (rawColor || '#cbd5e1')
-                const displayName = nameFormatter
-                    ? nameFormatter(p.name)
-                    : p.name === 'value' ? 'Cases' : platformLabel(p.name)
-                return (
-                    <div key={i} className="flex items-center gap-2.5 py-0.5">
-                        <span className="w-2 h-2 rounded-full shrink-0" style={{ background: color }} />
-                        <span className={cn(
-                            'flex-1 truncate',
-                            uppercase
-                                ? 'text-slate-600 font-semibold uppercase tracking-wider text-[11px]'
-                                : 'text-slate-500 font-medium',
-                        )}>{displayName}</span>
-                        <span className="font-bold text-slate-900 tabular-nums">{fmt(p.value)}</span>
-                    </div>
-                )
-            })}
-        </div>
-    )
-}
-
-// ─── Section Label ───────────────────────────────────────────────────────────
-function SectionLabel({ children }) {
-    return (
-        <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500">
-            {children}
-        </span>
-    )
-}
-
-// ─── Empty State ─────────────────────────────────────────────────────────────
-function Empty({ h = 200, msg = 'No data detected' }) {
-    return (
-        <div className="flex flex-col items-center justify-center text-slate-300" style={{ height: h }}>
-            <div className="p-3 bg-slate-50 border border-slate-100 rounded-md mb-3">
-                <Activity className="w-6 h-6 opacity-50" aria-hidden="true" />
-            </div>
-            <p className="text-sm font-bold tracking-tight text-slate-500">{msg}</p>
-            <p className="text-[11px] font-medium text-slate-400 mt-0.5">Try changing the date range</p>
-        </div>
-    )
-}
-
-// ─── Card shell ─────────────────────────────────────────────────────────────
-function Card({ className, children }) {
-    return (
-        <div className={cn('bg-white border border-slate-200 rounded-2xl p-5 md:p-6', className)}>
-            {children}
-        </div>
-    )
-}
-
-// ─── Trend Pill ─────────────────────────────────────────────────────────────
 function TrendPill({ delta }) {
     if (delta == null) return null
     const isUp = delta > 0
@@ -321,7 +223,7 @@ function TrendPill({ delta }) {
     )
 }
 
-function KpiCard({ icon: Icon, label, value, delta, sparkData, color = '#3b82f6' }) {
+function KpiCard({ icon: Icon, label, value, delta, sparkData, color = '#3b82f6', split }) {
     return (
         <div className="bg-white border border-slate-200 rounded-2xl p-5 transition-all duration-300 group">
             <div className="flex justify-between items-start">
@@ -332,13 +234,16 @@ function KpiCard({ icon: Icon, label, value, delta, sparkData, color = '#3b82f6'
                     <Sparkline data={sparkData} color={color} />
                 </div>
             </div>
-            
+
             <div className="mt-4 flex items-baseline justify-between gap-2">
                 <div>
                     <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{label}</p>
                     <p className="text-2xl font-black text-slate-900 tracking-tight tabular-nums leading-none mt-1.5">
                         {fmt(value)}
                     </p>
+                    {split ? (
+                        <p className="text-[10px] font-semibold text-slate-400 tabular-nums mt-1.5">{split}</p>
+                    ) : null}
                 </div>
                 <TrendPill delta={delta} />
             </div>
@@ -346,38 +251,28 @@ function KpiCard({ icon: Icon, label, value, delta, sparkData, color = '#3b82f6'
     )
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-// Main Dashboard
-// ═════════════════════════════════════════════════════════════════════════════
 export function DashboardContent({ data }) {
     const {
         days = 1,
         from,
         to,
+        types = ['post'],
+        modules = [],
+        kpiCopy: copyFromServer,
         clientTracker = {},
-        riskDistribution = [],
-        categoryDistribution = [],
-        categoryLineData = [],
-        topCategoryNames = [],
-        platformLineData = [],
-        platforms = [],
-        platformColors: dbPlatformColors = {},
+        seriesByModule = {},
     } = data ?? {}
 
+    const copy = copyFromServer || kpiCopy(types)
     const {
         totalReviewed = 0,
-        totalSafe = 0,
-        totalFlagForTakedown = 0,
         totalTakedown = 0,
-        totalPending = 0,
         totalCasesDiscovered = 0,
         deltas = {},
+        split = null,
         dailyKpiData = [],
     } = clientTracker
 
-    const mergedPlatformColors = { ...PLATFORM_COLORS, ...dbPlatformColors }
-
-    // Sub-header label
     const overviewLabel = days === 1
         ? '1-day overview'
         : days === 'custom'
@@ -386,72 +281,11 @@ export function DashboardContent({ data }) {
 
     const lastUpdated = format(new Date(), 'd MMM yyyy')
 
-    // Aggregate platform totals from line data → Source Distribution
-    const platformDistribution = platforms
-        .map(p => ({
-            name: p,
-            value: platformLineData.reduce((s, day) => s + (day[p] || 0), 0),
-            color: mergedPlatformColors[p] || '#94a3b8',
-        }))
-        .filter(p => p.value > 0)
-        .sort((a, b) => b.value - a.value)
-
-    const platformTotal = platformDistribution.reduce((s, p) => s + p.value, 0)
-
-    // Risk Breakdown
-    const riskTotal = riskDistribution.reduce((s, r) => s + r.value, 0)
-
-    // Decisions
-    const decisionData = [
-        { name: 'No Action', value: totalSafe, color: DECISION_COLORS['No Action'] },
-        { name: 'Flagged', value: totalFlagForTakedown, color: DECISION_COLORS['Flagged'] },
-        { name: 'Takedown', value: totalTakedown, color: DECISION_COLORS['Takedown'] },
-    ]
-    const decisionTotal = decisionData.reduce((s, d) => s + d.value, 0)
-    const decisionFiltered = decisionData.filter(d => d.value > 0)
-
-    // Daily Discovery — total cases per day (sum across platforms)
-    const dailyDiscovery = platformLineData.map(d => ({
-        date: d.date,
-        value: platforms.reduce((s, p) => s + (d[p] || 0), 0),
-    }))
-    const peakDiscovery = dailyDiscovery.reduce((m, d) => Math.max(m, d.value), 0)
-    const totalDiscovery = dailyDiscovery.reduce((s, d) => s + d.value, 0)
-    const avgDiscovery = dailyDiscovery.length > 0 ? Math.round(totalDiscovery / dailyDiscovery.length) : 0
-
-    // Daily Alerted Categories — color map by index
-    const categoryColors = topCategoryNames.reduce((acc, name, i) => {
-        acc[name] = CATEGORY_LINE_PALETTE[i % CATEGORY_LINE_PALETTE.length]
-        return acc
-    }, {})
-    const totalCategoryAlerts = categoryLineData.reduce(
-        (s, d) => s + topCategoryNames.reduce((rs, n) => rs + (d[n] || 0), 0),
-        0,
-    )
-
-    const categoryNamesKey = topCategoryNames.join('\0')
-    const [hiddenCategories, setHiddenCategories] = useState(() => new Set())
-
-    useEffect(() => {
-        setHiddenCategories(new Set())
-    }, [categoryNamesKey])
-
-    const toggleCategoryLine = useCallback((name) => {
-        setHiddenCategories((prev) => {
-            const next = new Set(prev)
-            if (next.has(name)) next.delete(name)
-            else next.add(name)
-            return next
-        })
-    }, [])
-
     return (
         <div className="flex-1 flex flex-col h-full overflow-hidden bg-slate-50">
             <PageHeader Icon={LayoutDashboard} title="Analytics" />
 
             <main className="overflow-auto px-4 md:px-6 py-4 md:py-6 pb-20 space-y-4">
-
-                {/* ── Sub-header: overview info + date filter ─────────── */}
                 <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                     <p className="text-sm font-medium text-slate-500">
                         <span className="text-slate-700 font-semibold">{overviewLabel}</span>
@@ -461,435 +295,46 @@ export function DashboardContent({ data }) {
                     <DateFilter active={days} from={from} to={to} />
                 </div>
 
-                {/* ── Row 1: 4 KPI cards ───────────────────────────────── */}
-                <section className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <section className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <KpiCard
                         icon={CheckCircle2}
-                        label="Cases Reviewed"
+                        label={copy.reviewed}
                         value={totalReviewed}
                         delta={deltas.totalReviewed}
+                        split={split?.reviewed}
                         sparkData={dailyKpiData.map(d => ({ value: d.reviewed, date: d.date }))}
                         color="#10b981"
                     />
                     <KpiCard
                         icon={PlusCircle}
-                        label="New Cases"
+                        label={copy.discovered}
                         value={totalCasesDiscovered}
                         delta={deltas.totalCasesDiscovered}
+                        split={split?.discovered}
                         sparkData={dailyKpiData.map(d => ({ value: d.discovered, date: d.date }))}
                         color="#3b82f6"
                     />
                     <KpiCard
-                        icon={Clock}
-                        label="Pending Review"
-                        value={totalPending}
-                        delta={deltas.totalPending}
-                        sparkData={dailyKpiData.map(d => ({ value: d.pending, date: d.date }))}
-                        color="#f59e0b"
-                    />
-                    <KpiCard
                         icon={XCircle}
-                        label="Takedown Count"
+                        label={copy.takedown}
                         value={totalTakedown}
                         delta={deltas.totalTakedown}
+                        split={split?.takedown}
                         sparkData={dailyKpiData.map(d => ({ value: d.takedown, date: d.date }))}
                         color="#ef4444"
                     />
                 </section>
 
-                {/* ── Row 2: Scanning Trends (2/3) + Source Distribution (1/3) ── */}
-                <section className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-
-                    {/* Cases by Platform */}
-                    <Card className="lg:col-span-2 flex flex-col">
-                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                            <div className="inline-flex items-center gap-2">
-                                <Layers className="w-3.5 h-3.5 text-blue-500" strokeWidth={2.5} />
-                                <SectionLabel>Cases by Platform</SectionLabel>
-                            </div>
-                            <div className="flex flex-wrap gap-1.5 sm:justify-end">
-                                {platforms.map(p => (
-                                    <div
-                                        key={p}
-                                        className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-slate-100 border border-slate-200/60"
-                                    >
-                                        <span
-                                            className="w-2 h-2 rounded-full shrink-0"
-                                            style={{ backgroundColor: mergedPlatformColors[p] }}
-                                        />
-                                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-700">
-                                            {platformLabel(p)}
-                                        </span>
-                                    </div>
-                                ))}
-                            </div>
+                <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {modules.map((mod) => (
+                        <div key={mod.id} className={moduleSpanClass(mod.size)}>
+                            <AnalyticsModule
+                                id={mod.id}
+                                series={seriesByModule[mod.id]}
+                                scannedLabel={copy.scanned}
+                            />
                         </div>
-
-                        {platformLineData.length === 0 || platforms.length === 0 ? (
-                            <Empty h={300} />
-                        ) : (
-                            <div className="flex-1 min-h-[300px] mt-6 -ml-2">
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <BarChart
-                                        data={platformLineData}
-                                        margin={{ top: 10, right: 10, left: 0, bottom: 5 }}
-                                        barCategoryGap="22%"
-                                    >
-                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                                        <XAxis
-                                            dataKey="date"
-                                            tick={{ fontSize: 10, fontWeight: 600, fill: '#94a3b8' }}
-                                            tickLine={false}
-                                            axisLine={false}
-                                            dy={6}
-                                            interval="preserveStartEnd"
-                                        />
-                                        <YAxis
-                                            tick={{ fontSize: 10, fontWeight: 600, fill: '#94a3b8' }}
-                                            tickLine={false}
-                                            axisLine={false}
-                                            width={32}
-                                            allowDecimals={false}
-                                        />
-                                        <Tooltip
-                                            content={<ChartTooltip colors={mergedPlatformColors} />}
-                                            cursor={{ fill: 'rgba(148, 163, 184, 0.08)' }}
-                                        />
-                                        {platforms.map((p, i) => (
-                                            <Bar
-                                                key={p}
-                                                dataKey={p}
-                                                name={p}
-                                                stackId="cases"
-                                                fill={mergedPlatformColors[p]}
-                                                radius={i === platforms.length - 1 ? [3, 3, 0, 0] : 0}
-                                            />
-                                        ))}
-                                    </BarChart>
-                                </ResponsiveContainer>
-                            </div>
-                        )}
-                    </Card>
-
-                    {/* Source Distribution */}
-                    <Card className="flex flex-col">
-                        <SectionLabel>Source Distribution</SectionLabel>
-
-                        {platformTotal === 0 ? (
-                            <Empty h={300} />
-                        ) : (
-                            <div className="flex-1 flex flex-col">
-                                <div className="relative w-full flex-1 min-h-[240px] mt-3">
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        <PieChart>
-                                            <Pie
-                                                data={platformDistribution}
-                                                cx="50%" cy="50%"
-                                                innerRadius="58%" outerRadius="86%"
-                                                paddingAngle={2}
-                                                dataKey="value"
-                                                cornerRadius={3}
-                                                stroke="none"
-                                            >
-                                                {platformDistribution.map((entry, idx) => (
-                                                    <Cell key={`src-${idx}`} fill={entry.color} />
-                                                ))}
-                                            </Pie>
-                                            <Tooltip content={<ChartTooltip colors={mergedPlatformColors} />} />
-                                        </PieChart>
-                                    </ResponsiveContainer>
-                                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                                        <p className="text-3xl font-black text-slate-900 tabular-nums leading-none">
-                                            {fmt(platformTotal)}
-                                        </p>
-                                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mt-1.5">
-                                            Total
-                                        </p>
-                                    </div>
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-x-4 gap-y-2.5 mt-6">
-                                    {platformDistribution.map(p => (
-                                        <div key={p.name} className="flex items-center justify-between gap-2 text-sm">
-                                            <div className="flex items-center gap-2 min-w-0">
-                                                <span className="w-2 h-2 rounded-full shrink-0" style={{ background: p.color }} />
-                                                <span className="text-slate-700 font-medium truncate">{platformLabel(p.name)}</span>
-                                            </div>
-                                            <span className="text-slate-900 font-bold tabular-nums">{fmt(p.value)}</span>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-                    </Card>
-                </section>
-
-                {/* ── Row 3: Risk Breakdown ────────────────── */}
-                <section>
-                    <Card>
-                        <SectionLabel>Risk Breakdown</SectionLabel>
-
-                        {riskTotal === 0 ? (
-                            <div className="h-2 bg-slate-100 rounded-full mt-4" />
-                        ) : (
-                            <>
-                                <div className="flex h-2 overflow-hidden rounded-full bg-slate-100 mt-4">
-                                    {riskDistribution.filter(r => r.value > 0).map(r => (
-                                        <div
-                                            key={r.name}
-                                            className="h-full transition-all duration-500"
-                                            style={{ width: `${(r.value / riskTotal) * 100}%`, backgroundColor: r.fill }}
-                                            title={`${r.name}: ${fmt(r.value)}`}
-                                        />
-                                    ))}
-                                </div>
-                                <div className="flex flex-wrap gap-x-6 gap-y-2 mt-4">
-                                    {riskDistribution.map(r => (
-                                        <div key={r.name} className="flex items-center gap-2 text-sm">
-                                            <span className="w-2 h-2 rounded-full" style={{ background: r.fill }} />
-                                            <span className="text-slate-700 font-medium">{r.name}</span>
-                                            <span className="text-slate-900 font-bold tabular-nums">{fmt(r.value)}</span>
-                                        </div>
-                                    ))}
-                                </div>
-                            </>
-                        )}
-                    </Card>
-                </section>
-
-                {/* ── Row 4: Discovery Trend + Review Decisions ── */}
-
-                <section className="grid grid-cols-1 lg:grid-cols-4 md:grid-cols-2 gap-4 ">
-
-                    {/* Discovery Trend */}
-                    <Card className="flex flex-col">
-                        <div className="flex items-start justify-between gap-3">
-                            <div className="flex flex-col">
-                                <div className="flex items-center gap-1.5">
-                                    <TrendingUp className="w-3.5 h-3.5 text-emerald-500" strokeWidth={2.5} />
-                                    <SectionLabel>Discovery Trend</SectionLabel>
-                                </div>
-                                <span className="text-[11px] font-semibold text-sky-600 mt-1.5">
-                                    Cases scanned per day
-                                </span>
-                            </div>
-                            <div className="text-right">
-                                <p className="text-2xl font-black text-slate-900 tabular-nums leading-none">
-                                    {fmt(totalDiscovery)}
-                                </p>
-                                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mt-1">
-                                    Total
-                                </p>
-                            </div>
-                        </div>
-
-                        <div className="mt-3 flex items-center gap-3 text-[11px]">
-                            <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-slate-50 border border-slate-100">
-                                <span className="font-medium text-slate-500">Peak</span>
-                                <span className="font-bold text-slate-900 tabular-nums">{fmt(peakDiscovery)}</span>
-                            </div>
-                            <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-slate-50 border border-slate-100">
-                                <span className="font-medium text-slate-500">Avg/day</span>
-                                <span className="font-bold text-slate-900 tabular-nums">{fmt(avgDiscovery)}</span>
-                            </div>
-                        </div>
-
-                        {totalDiscovery === 0 ? (
-                            <Empty h={260} />
-                        ) : (
-                            <div className="flex-1 min-h-[260px] mt-4 -ml-2">
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <AreaChart data={dailyDiscovery} margin={{ top: 10, right: 16, left: 0, bottom: 5 }}>
-                                        <defs>
-                                            <linearGradient id="discoveryFill" x1="0" y1="0" x2="0" y2="1">
-                                                <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.28} />
-                                                <stop offset="100%" stopColor="#3b82f6" stopOpacity={0} />
-                                            </linearGradient>
-                                        </defs>
-                                        <CartesianGrid strokeDasharray="2 4" vertical={false} stroke="#e2e8f0" />
-                                        <XAxis
-                                            dataKey="date"
-                                            tick={{ fontSize: 10, fontWeight: 600, fill: '#94a3b8' }}
-                                            tickLine={false}
-                                            axisLine={false}
-                                            dy={8}
-                                            minTickGap={24}
-                                        />
-                                        <YAxis
-                                            tick={{ fontSize: 10, fontWeight: 600, fill: '#94a3b8' }}
-                                            tickLine={false}
-                                            axisLine={false}
-                                            width={32}
-                                            allowDecimals={false}
-                                            tickCount={5}
-                                        />
-                                        <Tooltip
-                                            content={<ChartTooltip nameFormatter={() => 'Cases'} />}
-                                            cursor={{ stroke: '#94a3b8', strokeWidth: 1 }}
-                                        />
-                                        <Area
-                                            type="linear"
-                                            dataKey="value"
-                                            name="value"
-                                            stroke="#3b82f6"
-                                            strokeWidth={1.5}
-                                            fill="url(#discoveryFill)"
-                                            dot={{ r: 2.5, fill: '#3b82f6', strokeWidth: 0 }}
-                                            activeDot={{ r: 4, strokeWidth: 2, stroke: '#fff', fill: '#3b82f6' }}
-                                        />
-                                    </AreaChart>
-                                </ResponsiveContainer>
-                            </div>
-                        )}
-                    </Card>
-
-                    {/* Review Decisions */}
-                    <Card className="flex flex-col">
-                        <SectionLabel>Review Decisions</SectionLabel>
-
-                        {decisionTotal === 0 ? (
-                            <Empty h={300} />
-                        ) : (
-                            <div className="flex-1 flex flex-col">
-                                <div className="relative w-full flex-1 min-h-[220px] mt-3">
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        <PieChart>
-                                            <Pie
-                                                data={decisionFiltered}
-                                                cx="50%" cy="50%"
-                                                innerRadius="58%" outerRadius="86%"
-                                                paddingAngle={2}
-                                                dataKey="value"
-                                                cornerRadius={3}
-                                                stroke="none"
-                                            >
-                                                {decisionFiltered.map((entry, idx) => (
-                                                    <Cell key={`dec-${idx}`} fill={entry.color} />
-                                                ))}
-                                            </Pie>
-                                            <Tooltip content={<ChartTooltip />} />
-                                        </PieChart>
-                                    </ResponsiveContainer>
-                                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                                        <p className="text-3xl font-black text-slate-900 tabular-nums leading-none">
-                                            {fmt(decisionTotal)}
-                                        </p>
-                                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mt-1.5">
-                                            Total
-                                        </p>
-                                    </div>
-                                </div>
-
-                                <div className="space-y-2.5 mt-6">
-                                    {decisionData.map(d => (
-                                        <div key={d.name} className="flex items-center justify-between gap-2 text-sm">
-                                            <div className="flex items-center gap-2 min-w-0">
-                                                <span className="w-2 h-2 rounded-full shrink-0" style={{ background: d.color }} />
-                                                <span className="text-slate-700 font-medium truncate">{d.name}</span>
-                                            </div>
-                                            <span className="text-slate-900 font-bold tabular-nums">{fmt(d.value)}</span>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-                    </Card>
-
-
-                    {/* ── Row 5: Daily Alerted Categories (full width line chart) ── */}
-                    <Card className="flex flex-col md:col-span-2 lg:col-span-2">
-                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-                            <div className="flex flex-col">
-                                <div className="flex items-center gap-1.5">
-                                    <TrendingUp className="w-3.5 h-3.5 text-emerald-500" strokeWidth={2.5} />
-                                    <SectionLabel>Daily Alerted Categories</SectionLabel>
-                                </div>
-                                <span className="text-[11px] font-semibold text-sky-600 mt-1.5">
-                                    Top categories over time
-                                </span>
-                            </div>
-                            <div className="flex flex-wrap gap-x-4 gap-y-2 sm:justify-end">
-                                {topCategoryNames.map(c => {
-                                    const hidden = hiddenCategories.has(c)
-                                    return (
-                                        <button
-                                            key={c}
-                                            type="button"
-                                            onClick={() => toggleCategoryLine(c)}
-                                            title={hidden ? 'Show series' : 'Hide series'}
-                                            aria-pressed={!hidden}
-                                            className={cn(
-                                                'flex items-center gap-1.5 max-w-[180px] rounded-md px-0.5 -mx-0.5 transition-opacity cursor-pointer',
-                                                'hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60',
-                                                hidden && 'opacity-35',
-                                            )}
-                                        >
-                                            <span
-                                                className={cn(
-                                                    'w-2 h-2 rounded-full shrink-0',
-                                                    hidden && '!bg-slate-300',
-                                                )}
-                                                style={hidden ? undefined : { backgroundColor: categoryColors[c] }}
-                                            />
-                                            <span
-                                                className={cn(
-                                                    'text-[11px] font-bold tracking-wider uppercase truncate',
-                                                    hidden ? 'text-slate-400 line-through decoration-slate-300' : 'text-slate-700',
-                                                )}
-                                            >
-                                                {formatCategoryLabel(c)}
-                                            </span>
-                                        </button>
-                                    )
-                                })}
-                            </div>
-                        </div>
-
-                        {categoryLineData.length === 0 || topCategoryNames.length === 0 || totalCategoryAlerts === 0 ? (
-                            <Empty h={320} />
-                        ) : (
-                            <div className="h-[320px] mt-4 -ml-2">
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <LineChart data={categoryLineData} margin={{ top: 10, right: 16, left: 0, bottom: 5 }}>
-                                        <CartesianGrid strokeDasharray="2 4" vertical={false} stroke="#e2e8f0" />
-                                        <XAxis
-                                            dataKey="date"
-                                            tick={{ fontSize: 10, fontWeight: 600, fill: '#94a3b8' }}
-                                            tickLine={false}
-                                            axisLine={false}
-                                            dy={8}
-                                            minTickGap={24}
-                                        />
-                                        <YAxis
-                                            tick={{ fontSize: 10, fontWeight: 600, fill: '#94a3b8' }}
-                                            tickLine={false}
-                                            axisLine={false}
-                                            width={32}
-                                            allowDecimals={false}
-                                            tickCount={5}
-                                        />
-                                        <Tooltip
-                                            content={<ChartTooltip colors={categoryColors} uppercase nameFormatter={formatCategoryLabel} />}
-                                            cursor={{ stroke: '#94a3b8', strokeWidth: 1 }}
-                                        />
-                                        {topCategoryNames.map(c => (
-                                            <Line
-                                                key={c}
-                                                type="linear"
-                                                dataKey={c}
-                                                name={c}
-                                                hide={hiddenCategories.has(c)}
-                                                stroke={categoryColors[c]}
-                                                strokeWidth={1.5}
-                                                dot={{ r: 2.5, fill: categoryColors[c], strokeWidth: 0 }}
-                                                activeDot={{ r: 4, strokeWidth: 2, stroke: '#fff', fill: categoryColors[c] }}
-                                            />
-                                        ))}
-                                    </LineChart>
-                                </ResponsiveContainer>
-                            </div>
-                        )}
-                    </Card>
+                    ))}
                 </section>
             </main>
         </div>

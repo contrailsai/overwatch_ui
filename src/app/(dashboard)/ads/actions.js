@@ -6,6 +6,8 @@ import { traceAction, recordClickMetric } from '@/utils/tracing'
 import { requireAuthContext } from '@/utils/auth-context'
 import { logActionError, LOKI_STREAMS } from '@/utils/otel-logger'
 import { adsCollection } from '@/utils/mongodb/collections'
+import { updateClientReviewedMetrics } from '@/utils/supabase/metrics'
+import { isOpenClientStatus, platformForEntity, reviewDateStr } from '@/lib/analytics/dims'
 import {
   normalizeAdForUi,
   ONLINE_VISIBILITY_VALUES,
@@ -319,9 +321,12 @@ export const getAdById = traceAction('getAdById', async (adId) => {
 export const updateAdClientStatus = traceAction('updateAdClientStatus', async (adId, status) => {
   try {
     if (!adId) return { success: false, error: 'Missing ad ID' }
-    const { dbName, clientDetails } = await requireAuthContext()
+    const { dbName, clientDetails, project } = await requireAuthContext()
     const client = await clientPromise
     const db = client.db(dbName)
+
+    const existing = await adsCollection(db).findOne({ _id: new ObjectId(adId), ...REVIEWED_ADS_FILTER })
+    if (!existing) return { success: false, error: 'Ad not found' }
 
     const result = await adsCollection(db).updateOne(
       { _id: new ObjectId(adId), ...REVIEWED_ADS_FILTER },
@@ -342,6 +347,27 @@ export const updateAdClientStatus = traceAction('updateAdClientStatus', async (a
         summary: `Ad client status changed to ${status}`,
         payload: { ui_status: status, v3_status: mapUiClientStatusToV3(status) },
       })
+
+      const previousStatus = existing.workflow?.client_status
+      await updateClientReviewedMetrics(
+        { project_name: project?.project_name || clientDetails.project_name },
+        {
+          risk_score: existing.list?.effective_threat_score ?? existing.review_details?.threat_score,
+          client_status: status,
+          platform: platformForEntity('ad', existing),
+        },
+        isOpenClientStatus(previousStatus) ? null : {
+          risk_score: existing.list?.effective_threat_score ?? existing.review_details?.threat_score,
+          client_status: previousStatus,
+          platform: platformForEntity('ad', existing),
+        },
+        { entityType: 'ad', reviewDate: reviewDateStr(existing) },
+      ).catch((err) => logActionError({
+        loki_stream: LOKI_STREAMS.ads,
+        app_action: 'updateAdClientStatus',
+        message: 'Failed to update client metrics',
+      }, err))
+
       return { success: true }
     }
     return { success: false, error: 'Ad not found' }

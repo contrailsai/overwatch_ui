@@ -2,23 +2,25 @@
 /**
  * Supabase Analytics Syncer
  *
- * Reads MongoDB posts (and optionally Ads) collections to recompute
- * daily_case_metrics and daily_reviewed_metrics in Supabase so that
- * the analytics dashboard reflects the actual state of reviewed
- * documents — especially after bulk-insert pipelines that bypass
- * the normal review UI (which normally triggers incremental updates).
+ * One rebuild path for Posts, Ads, and Domains. Per tenant it detects which
+ * collections exist and have reviewed docs, then writes separate entity_type
+ * rows keyed by review/alert date (list.reviewed_at in IST) — never sourced_at
+ * or first_seen_at. Project section flags are ignored; the dashboard hides
+ * disabled types.
  *
  * Usage:
- *   node scripts/sync-supabase-metrics.js                         # dry-run all projects
- *   node scripts/sync-supabase-metrics.js --apply                 # write to Supabase
- *   node scripts/sync-supabase-metrics.js --project Ambani        # single project
+ *   node scripts/sync-supabase-metrics.js
+ *   node scripts/sync-supabase-metrics.js --dry-run
+ *   node scripts/sync-supabase-metrics.js --apply
  *   node scripts/sync-supabase-metrics.js --project Ambani --apply
- *   node scripts/sync-supabase-metrics.js --since 2026-08-01      # only sync from date
+ *   node scripts/sync-supabase-metrics.js --since 2026-08-01 --apply
+ *   node scripts/sync-supabase-metrics.js --rebuild --project SEBI --apply
+ *   node scripts/sync-supabase-metrics.js --types ad,domain --apply
  *
  * Env vars required:
- *   MONGO_URI                — MongoDB connection string
- *   NEXT_PUBLIC_SUPABASE_URL — Supabase project URL
- *   SUPABASE_SERVICE_ROLE_KEY — Supabase service-role key (bypasses RLS)
+ *   MONGO_URI
+ *   NEXT_PUBLIC_SUPABASE_URL
+ *   SUPABASE_SERVICE_ROLE_KEY
  */
 
 const dotenv = require('dotenv')
@@ -28,9 +30,9 @@ dotenv.config({ path: path.resolve(__dirname, '..', '.env.local') })
 const { MongoClient } = require('mongodb')
 const { createClient } = require('@supabase/supabase-js')
 
-// ── CLI args ────────────────────────────────────────────────
 const args = process.argv.slice(2)
 const DRY_RUN = !args.includes('--apply')
+const REBUILD = args.includes('--rebuild')
 const PROJECT_FILTER = (() => {
   const idx = args.indexOf('--project')
   return idx !== -1 ? args[idx + 1] : null
@@ -40,14 +42,29 @@ const SINCE_DATE = (() => {
   return idx !== -1 ? args[idx + 1] : null
 })()
 
-// ── Connections ─────────────────────────────────────────────
+const ENTITY_SOURCES = [
+  { collection: 'Posts', entityType: 'post', section: 'posts' },
+  { collection: 'Ads', entityType: 'ad', section: 'ads' },
+  { collection: 'Domains', entityType: 'domain', section: 'domains' },
+]
+const VALID_TYPES = new Set(ENTITY_SOURCES.map((s) => s.entityType))
+
+const TYPE_FILTER = (() => {
+  const idx = args.indexOf('--types')
+  if (idx === -1) return ENTITY_SOURCES.map((s) => s.entityType)
+  const parsed = String(args[idx + 1] || '')
+    .split(',')
+    .map((s) => s.trim().toLowerCase())
+    .filter((t) => VALID_TYPES.has(t))
+  return parsed.length ? parsed : ENTITY_SOURCES.map((s) => s.entityType)
+})()
+
 const mongo = new MongoClient(process.env.MONGO_URI)
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY,
 )
 
-// ── Risk helpers (mirrors src/utils/supabase/metrics.js) ────
 function riskRank(score) {
   if (score == null || Number.isNaN(Number(score))) return null
   const n = Number(score)
@@ -59,303 +76,471 @@ function riskRank(score) {
 
 function clientActionKey(status) {
   if (!status) return null
-  const s = status.toLowerCase()
+  const s = String(status).toLowerCase().replace(/_/g, ' ').trim()
   if (s.includes('no action') || s.includes('no-action') || s === 'pass') return 'no-action'
-  if (s === 'flag_for_takedown' || s === 'flag for takedown') return 'Flag for Takedown'
-  if (s === 'takedown' || s === 'do_takedown' || s === 'takedown action') return 'Takedown'
+  if (s.includes('flag for takedown')) return 'Flag for Takedown'
+  if (s === 'takedown' || s === 'do takedown' || s === 'takedown action' || s === 'do_takedown') return 'Takedown'
   return null
 }
 
-// ── Aggregation ─────────────────────────────────────────────
+function isOpenClientStatus(status) {
+  if (!status) return true
+  const ui = String(status).toLowerCase()
+  return ui === 'to be reviewed' || ui === 'open' || ui === 'alerted'
+}
 
-/**
- * Aggregates posts (or Ads) into daily_case_metrics shape.
- * One row per (date, platform, project_name).
- *
- * "date" = list.reviewed_at (the date the review was submitted).
- * For daily_case_metrics this is when the case was *reviewed* (created by
- * the reviewer flow in the UI). We use list.reviewed_at because the
- * existing metrics.js updateDailyMetrics is called at review-submit time.
- */
-async function aggregateCaseMetrics(db, collection, projectName, sinceDate) {
-  const matchStage = { 'workflow.review_status': 'reviewed' }
-  if (sinceDate) {
-    matchStage['list.reviewed_at'] = { $gte: new Date(sinceDate) }
+const METRIC_TIMEZONE = 'Asia/Kolkata'
+
+function toDateStr(value, timeZone = METRIC_TIMEZONE) {
+  if (!value) return null
+  const d = value instanceof Date ? value : new Date(value)
+  if (Number.isNaN(d.getTime())) return null
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(d)
+}
+
+function normalizeDimValue(value) {
+  if (value == null) return null
+  const s = String(value).trim()
+  if (!s) return null
+  return s.toLowerCase().replace(/\s+/g, '_')
+}
+
+function boolBucket(value) {
+  return value ? 'true' : 'false'
+}
+
+function platformForDoc(entityType, doc) {
+  if (entityType === 'domain') return 'web'
+  return String(doc.platform || (entityType === 'ad' ? 'meta' : 'unknown')).toLowerCase() || 'unknown'
+}
+
+function reviewDate(doc) {
+  return toDateStr(doc.list?.reviewed_at || doc.review_details?.reviewed_at)
+}
+
+function inferAdChannel(doc) {
+  const stored = doc.channel
+  if (stored === 'ingestion' || stored === 'library' || stored === 'feed') return stored
+  if (stored === 'ads_library') return 'library'
+  if (doc.submitted_url) return 'ingestion'
+  const ingestionType = String(doc.ingestion?.type || '')
+  if (ingestionType === 'facebook_share_post' || ingestionType === 'client_request' || ingestionType === 'client_requested_link') {
+    return 'ingestion'
+  }
+  const url = String(doc.original_url || doc.ingestion?.source_url || '')
+  if (/\/ads\/library/i.test(url)) return 'library'
+  return 'feed'
+}
+
+function cloakBucket(doc) {
+  const probe = doc.analysis_results?.cloak_probe
+  const variants = Array.isArray(probe?.variants) ? probe.variants : []
+  if (probe?.unlocked === true || doc.discovery?.cloak_unlocked || doc.isCloaked) return 'unlocked'
+  if (variants.some((v) => v?.label !== 'bare' && v?.differs_from_bare)) return 'unlocked'
+  if (probe || variants.length) return 'none'
+  return 'unknown'
+}
+
+function whoisAgeBucket(doc) {
+  const created = doc.analysis_results?.whois?.created_at
+  const analyzed = doc.list?.last_analyzed_at || doc.list?.first_seen_at
+  if (!created) return 'unknown'
+  const createdAt = new Date(created)
+  const analyzedAt = analyzed ? new Date(analyzed) : new Date()
+  if (Number.isNaN(createdAt.getTime()) || Number.isNaN(analyzedAt.getTime())) return 'unknown'
+  const days = Math.max(0, Math.round((analyzedAt.getTime() - createdAt.getTime()) / 86400000))
+  if (days <= 7) return '0-7d'
+  if (days <= 30) return '8-30d'
+  if (days <= 90) return '31-90d'
+  return '90d+'
+}
+
+function extractDimValues(entityType, doc) {
+  const values = {}
+  const push = (dim, value) => {
+    const normalized = normalizeDimValue(value)
+    if (!normalized) return
+    if (!values[dim]) values[dim] = []
+    if (!values[dim].includes(normalized)) values[dim].push(normalized)
   }
 
-  const pipeline = [
-    { $match: matchStage },
-    {
-      $group: {
-        _id: {
-          date: { $dateToString: { format: '%Y-%m-%d', date: '$list.reviewed_at' } },
-          platform: { $toLower: { $ifNull: ['$platform', 'unknown'] } },
-        },
-        total_cases: { $sum: 1 },
-        risk_high: { $sum: { $cond: [{ $gt: ['$list.effective_threat_score', 95] }, 1, 0] } },
-        risk_medium: { $sum: { $cond: [{ $and: [{ $gt: ['$list.effective_threat_score', 75] }, { $lte: ['$list.effective_threat_score', 95] }] }, 1, 0] } },
-        risk_low: { $sum: { $cond: [{ $and: [{ $gt: ['$list.effective_threat_score', 40] }, { $lte: ['$list.effective_threat_score', 75] }] }, 1, 0] } },
-        risk_safe: { $sum: { $cond: [{ $or: [{ $lte: ['$list.effective_threat_score', 40] }, { $eq: ['$list.effective_threat_score', null] }] }, 1, 0] } },
-        // Collect threat_types for category counting
-        all_threat_types: { $push: '$list.threat_types' },
-      },
-    },
-    { $sort: { '_id.date': 1 } },
-  ]
+  const score = doc.list?.effective_threat_score ?? doc.review_details?.threat_score ?? doc.list?.review_threat_score
+  const risk = doc.list?.risk_rank || riskRank(score)
+  if (risk) push('risk_rank', risk)
 
-  const rows = await db.collection(collection).aggregate(pipeline).toArray()
+  const threatTypes = doc.list?.threat_types || doc.review_details?.threat_types || []
+  if (Array.isArray(threatTypes)) {
+    threatTypes.filter((t) => typeof t === 'string').forEach((t) => push('threat_type', t))
+  }
 
-  return rows.map(row => {
-    // Flatten and count categories
+  const legalCodes = doc.review_details?.legal_codes
+    || doc.list?.legal_codes
+    || doc.analysis_results?.legal_codes
+    || []
+  if (Array.isArray(legalCodes)) {
+    legalCodes.forEach((item) => {
+      const raw = typeof item === 'string' ? item : (item?.code || item?.name)
+      if (raw) push('legal_code', raw)
+    })
+  }
+
+  const action = clientActionKey(doc.workflow?.client_status || doc.client_status)
+  if (action) push('client_status', action)
+
+  if (entityType === 'post') {
+    push('platform', platformForDoc('post', doc))
+    push('post_type', doc.content?.post_type || doc.list?.post_type || 'post')
+    push('language', doc.content?.language || doc.list?.language)
+    push('poi_detected', boolBucket(Boolean(doc.list?.poi_detected || (doc.review_details?.poi_names || []).length)))
+    push('is_aigc', boolBucket(Boolean(doc.review_details?.is_aigc || doc.analysis_results?.is_aigc)))
+  }
+
+  if (entityType === 'ad') {
+    push('display_format', doc.list?.display_format || doc.content?.display_format)
+    push('channel', inferAdChannel(doc))
+    push('is_active', boolBucket(doc.list?.is_active !== false && doc.ad_delivery?.is_active !== false))
+    push('cta_type', doc.content?.cta_type)
+    const publishers = doc.list?.publisher_platforms || doc.ad_delivery?.publisher_platforms || []
+    if (Array.isArray(publishers)) publishers.forEach((p) => push('publisher_platform', p))
+  }
+
+  if (entityType === 'domain') {
+    push('category', doc.list?.category || doc.review_details?.category)
+    push('hosting_country', doc.list?.hosting_country)
+    push('hosting_provider', doc.list?.hosting_provider)
+    push('registrar', doc.list?.registrar)
+    push('visibility_status', doc.workflow?.visibility_status || 'unknown')
+    if (doc.list?.ssl_valid != null) push('ssl_valid', boolBucket(doc.list.ssl_valid))
+    if (doc.list?.is_reachable != null) push('is_reachable', boolBucket(doc.list.is_reachable))
+    push('cloak', cloakBucket(doc))
+    push('discovery_source', doc.discovery?.first_entity_type || 'unknown')
+    push('whois_age_bucket', whoisAgeBucket(doc))
+  }
+
+  return values
+}
+
+function emptyRisk() {
+  return { high: 0, medium: 0, low: 0, safe: 0 }
+}
+
+function emptyReviewed() {
+  return { 'no-action': 0, 'Flag for Takedown': 0, Takedown: 0 }
+}
+
+function caseRowKey(date, platform) {
+  return `${date}::${platform}`
+}
+
+function dimRowKey(date, dim, value) {
+  return `${date}::${dim}::${value}`
+}
+
+function sectionFlags(projectDetails) {
+  const raw = projectDetails?.sections || {}
+  return {
+    posts: raw.posts !== false,
+    ads: raw.ads !== false,
+    domains: raw.domains !== false,
+  }
+}
+
+async function detectSources(db, collNames) {
+  const detected = []
+  for (const source of ENTITY_SOURCES) {
+    if (!TYPE_FILTER.includes(source.entityType)) {
+      console.log(`  ${source.collection}: filtered by --types, skip`)
+      continue
+    }
+    if (!collNames.has(source.collection)) {
+      console.log(`  ${source.collection}: collection missing, skip`)
+      continue
+    }
+    const reviewed = await db.collection(source.collection).countDocuments(
+      { 'workflow.review_status': 'reviewed' },
+      { limit: 1 },
+    )
+    if (!reviewed) {
+      console.log(`  ${source.collection}: no reviewed docs, skip`)
+      continue
+    }
+    detected.push(source)
+  }
+  return detected
+}
+
+async function aggregateCollection(db, source, projectName, sinceDate) {
+  const match = { 'workflow.review_status': 'reviewed' }
+  if (sinceDate) {
+    match['list.reviewed_at'] = { $gte: new Date(sinceDate) }
+  }
+
+  const projection = {
+    platform: 1,
+    channel: 1,
+    submitted_url: 1,
+    original_url: 1,
+    ingestion: 1,
+    workflow: 1,
+    list: 1,
+    content: 1,
+    review_details: 1,
+    analysis_results: 1,
+    discovery: 1,
+    ad_delivery: 1,
+  }
+
+  const caseRows = new Map()
+  const reviewedRows = new Map()
+  const dimRows = new Map()
+
+  const cursor = db.collection(source.collection).find(match, { projection }).batchSize(500)
+
+  for await (const doc of cursor) {
+    const platform = platformForDoc(source.entityType, doc)
+    const reviewedOn = reviewDate(doc)
+    if (!reviewedOn) continue
+    const score = doc.list?.effective_threat_score ?? doc.review_details?.threat_score ?? doc.list?.review_threat_score
+    const rk = riskRank(score) || 'safe'
     const categories = {}
-    for (const arr of row.all_threat_types) {
-      if (!Array.isArray(arr)) continue
-      for (const t of arr) {
-        if (typeof t !== 'string') continue
-        const key = t.toLowerCase().replace(/ /g, '_')
-        categories[key] = (categories[key] || 0) + 1
+    const threatTypes = Array.isArray(doc.list?.threat_types)
+      ? doc.list.threat_types
+      : (Array.isArray(doc.review_details?.threat_types) ? doc.review_details.threat_types : [])
+    for (const t of threatTypes) {
+      if (typeof t !== 'string') continue
+      const key = t.toLowerCase().replace(/ /g, '_')
+      categories[key] = (categories[key] || 0) + 1
+    }
+
+    if (doc.review_details?.is_aigc || doc.analysis_results?.is_aigc) {
+      categories.aigc = (categories.aigc || 0) + 1
+    }
+
+    const cKey = caseRowKey(reviewedOn, platform)
+    const row = caseRows.get(cKey) || {
+      date: reviewedOn,
+      platform,
+      project_name: projectName,
+      entity_type: source.entityType,
+      total_cases: 0,
+      risk: emptyRisk(),
+      categories: {},
+    }
+    row.total_cases += 1
+    row.risk[rk] = (row.risk[rk] || 0) + 1
+    Object.entries(categories).forEach(([k, v]) => {
+      row.categories[k] = (row.categories[k] || 0) + v
+    })
+    caseRows.set(cKey, row)
+
+    const dimValues = extractDimValues(source.entityType, doc)
+    Object.entries(dimValues).forEach(([dim, vals]) => {
+      vals.forEach((value) => {
+        const dKey = dimRowKey(reviewedOn, dim, value)
+        const dRow = dimRows.get(dKey) || {
+          date: reviewedOn,
+          project_name: projectName,
+          entity_type: source.entityType,
+          dim,
+          value,
+          count: 0,
+        }
+        dRow.count += 1
+        dimRows.set(dKey, dRow)
+      })
+    })
+
+    const clientStatus = doc.workflow?.client_status || doc.client_status
+    if (clientStatus && !isOpenClientStatus(clientStatus)) {
+      const rKey = caseRowKey(reviewedOn, platform)
+      const row = reviewedRows.get(rKey) || {
+        date: reviewedOn,
+        platform,
+        project_name: projectName,
+        entity_type: source.entityType,
+        total_reviewed: 0,
+        risk: emptyRisk(),
+        reviewed: emptyReviewed(),
       }
+      row.total_reviewed += 1
+      row.risk[rk] = (row.risk[rk] || 0) + 1
+      const ak = clientActionKey(clientStatus)
+      if (ak) row.reviewed[ak] = (row.reviewed[ak] || 0) + 1
+      reviewedRows.set(rKey, row)
     }
-
-    return {
-      date: row._id.date,
-      platform: row._id.platform,
-      project_name: projectName,
-      total_cases: row.total_cases,
-      risk: {
-        high: row.risk_high,
-        medium: row.risk_medium,
-        low: row.risk_low,
-        safe: row.risk_safe,
-      },
-      categories,
-    }
-  })
-}
-
-/**
- * Aggregates posts (or Ads) into daily_reviewed_metrics shape.
- * Tracks client actions (no-action / flag / takedown) grouped by date of
- * client_status change. We use list.reviewed_at as the date proxy.
- */
-async function aggregateReviewedMetrics(db, collection, projectName, sinceDate) {
-  const matchStage = {
-    'workflow.review_status': 'reviewed',
-    'workflow.client_status': { $nin: [null, 'open'] },
-  }
-  if (sinceDate) {
-    matchStage['list.reviewed_at'] = { $gte: new Date(sinceDate) }
   }
 
-  const pipeline = [
-    { $match: matchStage },
-    {
-      $group: {
-        _id: {
-          date: { $dateToString: { format: '%Y-%m-%d', date: '$list.reviewed_at' } },
-          platform: { $toLower: { $ifNull: ['$platform', 'unknown'] } },
-        },
-        docs: {
-          $push: {
-            score: '$list.effective_threat_score',
-            client_status: '$workflow.client_status',
-          },
-        },
-      },
-    },
-    { $sort: { '_id.date': 1 } },
-  ]
-
-  const rows = await db.collection(collection).aggregate(pipeline).toArray()
-
-  return rows.map(row => {
-    const risk = { safe: 0, low: 0, medium: 0, high: 0 }
-    const reviewed = { 'no-action': 0, 'Flag for Takedown': 0, 'Takedown': 0 }
-    let total = 0
-
-    for (const doc of row.docs) {
-      total++
-      const rk = riskRank(doc.score)
-      if (rk) risk[rk]++
-      const ak = clientActionKey(doc.client_status)
-      if (ak) reviewed[ak]++
-    }
-
-    return {
-      date: row._id.date,
-      platform: row._id.platform,
-      project_name: projectName,
-      total_reviewed: total,
-      risk,
-      reviewed,
-    }
-  })
+  return {
+    caseRows: [...caseRows.values()].filter((r) => r.date),
+    reviewedRows: [...reviewedRows.values()].filter((r) => r.date),
+    dimRows: [...dimRows.values()].filter((r) => r.date),
+  }
 }
 
-// ── Supabase upsert ─────────────────────────────────────────
-
-async function upsertMetrics(table, rows) {
-  if (!rows.length) return { inserted: 0, updated: 0 }
-
-  let inserted = 0
-  let updated = 0
-
-  for (const row of rows) {
-    // Check if row exists
-    const { data: existing } = await supabase
+async function upsertRows(table, rows, conflictColumns) {
+  if (!rows.length) return { upserted: 0 }
+  const chunkSize = 200
+  let upserted = 0
+  for (let i = 0; i < rows.length; i += chunkSize) {
+    const chunk = rows.slice(i, i + chunkSize)
+    const { error } = await supabase
       .from(table)
-      .select('id')
-      .eq('date', row.date)
-      .eq('platform', row.platform)
-      .eq('project_name', row.project_name)
-      .maybeSingle()
-
-    if (existing) {
-      const { error } = await supabase
-        .from(table)
-        .update(row)
-        .eq('id', existing.id)
-      if (error) throw new Error(`Update ${table} id=${existing.id}: ${error.message}`)
-      updated++
-    } else {
-      const { error } = await supabase
-        .from(table)
-        .insert(row)
-      if (error) throw new Error(`Insert ${table}: ${error.message}`)
-      inserted++
-    }
+      .upsert(chunk, { onConflict: conflictColumns })
+    if (error) throw new Error(`Upsert ${table}: ${error.message}`)
+    upserted += chunk.length
   }
-
-  return { inserted, updated }
+  return { upserted }
 }
 
-// ── Main ────────────────────────────────────────────────────
+async function assertAnalyticsSchema() {
+  const { error: caseErr } = await supabase
+    .from('daily_case_metrics')
+    .select('entity_type')
+    .limit(1)
+  if (caseErr) {
+    throw new Error(
+      `Analytics schema not applied (${caseErr.message}). Run supabase/scripts/add-entity-type-and-metric-dims.sql on the Overwatch project, then retry.`,
+    )
+  }
+
+  const { error: dimErr } = await supabase
+    .from('daily_metric_dims')
+    .select('id')
+    .limit(1)
+  if (dimErr) {
+    throw new Error(
+      `daily_metric_dims missing (${dimErr.message}). Run supabase/scripts/add-entity-type-and-metric-dims.sql on the Overwatch project, then retry.`,
+    )
+  }
+}
+
+async function deleteProjectMetrics(projectName, entityTypes) {
+  const tables = ['daily_case_metrics', 'daily_reviewed_metrics', 'daily_metric_dims']
+  for (const table of tables) {
+    let query = supabase.from(table).delete().eq('project_name', projectName)
+    if (entityTypes?.length) query = query.in('entity_type', entityTypes)
+    const { error } = await query
+    if (error) throw new Error(`Delete ${table}: ${error.message}`)
+  }
+}
 
 async function main() {
+  if (!process.env.MONGO_URI || !process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    throw new Error('Missing MONGO_URI / NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY')
+  }
+
   await mongo.connect()
   console.log('Connected to MongoDB')
+  await assertAnalyticsSchema()
 
-  // Fetch projects from Supabase
-  let projectQuery = supabase.from('project').select('project_name, mongo_db_map')
+  let projectQuery = supabase.from('project').select('project_name, mongo_db_map, project_details')
   if (PROJECT_FILTER) {
-    projectQuery = projectQuery.eq('project_name', PROJECT_FILTER)
+    projectQuery = PROJECT_FILTER.includes('-')
+      ? projectQuery.eq('project_name', PROJECT_FILTER)
+      : projectQuery.or(`project_name.eq.${PROJECT_FILTER},project_name.ilike.${PROJECT_FILTER}-%`)
   }
   const { data: projects, error: projErr } = await projectQuery
   if (projErr) throw new Error(`Failed to fetch projects: ${projErr.message}`)
 
-  console.log(`\nFound ${projects.length} project(s) to sync${SINCE_DATE ? ` (since ${SINCE_DATE})` : ''}\n`)
+  console.log(
+    `\nFound ${projects.length} project(s)`
+    + `${SINCE_DATE ? ` since ${SINCE_DATE}` : ''}`
+    + `${REBUILD ? ' [rebuild]' : ''}`
+    + ` types=${TYPE_FILTER.join(',')}`
+    + ` (section flags ignored)\n`,
+  )
 
   for (const proj of projects) {
-    const { project_name, mongo_db_map } = proj
+    const { project_name, mongo_db_map, project_details } = proj
     if (!mongo_db_map) {
       console.log(`⏭  ${project_name}: no mongo_db_map, skipping`)
       continue
     }
 
+    const flags = sectionFlags(project_details)
+    const flagLabel = ENTITY_SOURCES
+      .map((s) => `${s.entityType}:${flags[s.section] ? 'on' : 'off'}`)
+      .join(' ')
     console.log(`\n── ${project_name} (${mongo_db_map}) ──`)
+    console.log(`  UI sections ${flagLabel} — syncing all detected types`)
+
     const db = mongo.db(mongo_db_map)
+    const collNames = new Set((await db.listCollections().toArray()).map((c) => c.name))
+    const sources = await detectSources(db, collNames)
 
-    // Check which collections exist
-    const collNames = (await db.listCollections().toArray()).map(c => c.name)
-    const hasPosts = collNames.includes('Posts')
-    const hasAds = collNames.includes('Ads')
-
-    // Aggregate case metrics from Posts
-    let caseRows = []
-    let reviewedRows = []
-
-    if (hasPosts) {
-      const postCases = await aggregateCaseMetrics(db, 'Posts', project_name, SINCE_DATE)
-      const postReviewed = await aggregateReviewedMetrics(db, 'Posts', project_name, SINCE_DATE)
-      caseRows.push(...postCases)
-      reviewedRows.push(...postReviewed)
-      console.log(`  Posts: ${postCases.length} case-metric rows, ${postReviewed.length} reviewed-metric rows`)
-    }
-
-    if (hasAds) {
-      const adCases = await aggregateCaseMetrics(db, 'Ads', project_name, SINCE_DATE)
-      const adReviewed = await aggregateReviewedMetrics(db, 'Ads', project_name, SINCE_DATE)
-      // Merge ads into same rows (same date/platform key gets combined)
-      for (const adRow of adCases) {
-        const existing = caseRows.find(r => r.date === adRow.date && r.platform === adRow.platform)
-        if (existing) {
-          existing.total_cases += adRow.total_cases
-          existing.risk.high += adRow.risk.high
-          existing.risk.medium += adRow.risk.medium
-          existing.risk.low += adRow.risk.low
-          existing.risk.safe += adRow.risk.safe
-          Object.entries(adRow.categories).forEach(([k, v]) => {
-            existing.categories[k] = (existing.categories[k] || 0) + v
-          })
-        } else {
-          caseRows.push(adRow)
-        }
-      }
-      for (const adRow of adReviewed) {
-        const existing = reviewedRows.find(r => r.date === adRow.date && r.platform === adRow.platform)
-        if (existing) {
-          existing.total_reviewed += adRow.total_reviewed
-          Object.entries(adRow.risk).forEach(([k, v]) => { existing.risk[k] += v })
-          Object.entries(adRow.reviewed).forEach(([k, v]) => { existing.reviewed[k] += v })
-        } else {
-          reviewedRows.push(adRow)
-        }
-      }
-      console.log(`  Ads:   ${adCases.length} case-metric rows, ${adReviewed.length} reviewed-metric rows`)
-    }
-
-    if (!hasPosts && !hasAds) {
-      console.log(`  No Posts/Ads collections found, skipping`)
-      console.log(`  Available collections: ${collNames.join(', ')}`)
+    if (!sources.length) {
+      console.log(`  No reviewed Posts/Ads/Domains found`)
+      console.log(`  Available: ${[...collNames].join(', ') || '(none)'}`)
       continue
     }
 
-    // Filter out rows with null date (docs missing reviewed_at)
-    caseRows = caseRows.filter(r => r.date)
-    reviewedRows = reviewedRows.filter(r => r.date)
+    const allCaseRows = []
+    const allReviewedRows = []
+    const allDimRows = []
+    const syncedTypes = []
 
-    console.log(`  Total: ${caseRows.length} case rows, ${reviewedRows.length} reviewed rows`)
+    for (const source of sources) {
+      const result = await aggregateCollection(db, source, project_name, SINCE_DATE)
+      console.log(
+        `  ${source.collection}: ${result.caseRows.length} case rows, ${result.reviewedRows.length} reviewed rows, ${result.dimRows.length} dim rows`
+        + `${flags[source.section] ? '' : ' (section disabled in UI)'}`,
+      )
+      if (!result.caseRows.length && !result.reviewedRows.length && !result.dimRows.length) {
+        continue
+      }
+      allCaseRows.push(...result.caseRows)
+      allReviewedRows.push(...result.reviewedRows)
+      allDimRows.push(...result.dimRows)
+      syncedTypes.push(source.entityType)
+    }
+
+    if (!syncedTypes.length) {
+      console.log(`  Detected collections but no dated metric rows`)
+      continue
+    }
+
+    const totalCases = allCaseRows.reduce((s, r) => s + r.total_cases, 0)
+    const totalReviewed = allReviewedRows.reduce((s, r) => s + r.total_reviewed, 0)
+    console.log(`  Total: ${allCaseRows.length} case / ${allReviewedRows.length} reviewed / ${allDimRows.length} dim | docs ${totalCases} cases, ${totalReviewed} decided`)
 
     if (DRY_RUN) {
-      const totalCases = caseRows.reduce((s, r) => s + r.total_cases, 0)
-      const totalReviewed = reviewedRows.reduce((s, r) => s + r.total_reviewed, 0)
-      console.log(`  Would sync: ${totalCases} total cases, ${totalReviewed} total reviewed`)
-
-      if (caseRows.length > 0) {
-        const dates = caseRows.map(r => r.date).sort()
-        console.log(`  Date range: ${dates[0]} -> ${dates[dates.length - 1]}`)
-
-        // Per-platform breakdown
-        const byPlatform = {}
-        for (const r of caseRows) {
-          byPlatform[r.platform] = (byPlatform[r.platform] || 0) + r.total_cases
-        }
-        console.log(`  Per-platform cases:`)
-        for (const [p, count] of Object.entries(byPlatform).sort((a, b) => b[1] - a[1])) {
-          console.log(`    ${p}: ${count}`)
-        }
-      }
-
-      if (reviewedRows.length > 0) {
-        const byAction = { 'no-action': 0, 'Flag for Takedown': 0, 'Takedown': 0 }
-        for (const r of reviewedRows) {
-          Object.entries(r.reviewed).forEach(([k, v]) => { byAction[k] = (byAction[k] || 0) + v })
-        }
-        console.log(`  Review decisions: no-action=${byAction['no-action']}, flagged=${byAction['Flag for Takedown']}, takedown=${byAction['Takedown']}`)
-      }
-    } else {
-      const caseResult = await upsertMetrics('daily_case_metrics', caseRows)
-      const reviewedResult = await upsertMetrics('daily_reviewed_metrics', reviewedRows)
-      console.log(`  ✅ daily_case_metrics: ${caseResult.inserted} inserted, ${caseResult.updated} updated`)
-      console.log(`  ✅ daily_reviewed_metrics: ${reviewedResult.inserted}, ${reviewedResult.updated} updated`)
+      console.log('  Dry run — pass --apply to write')
+      continue
     }
+
+    if (REBUILD) {
+      await deleteProjectMetrics(project_name, syncedTypes)
+      console.log(`  Deleted existing metric rows for ${syncedTypes.join(', ')}`)
+    }
+
+    const caseResult = await upsertRows(
+      'daily_case_metrics',
+      allCaseRows,
+      'date,platform,project_name,entity_type',
+    )
+    const reviewedResult = await upsertRows(
+      'daily_reviewed_metrics',
+      allReviewedRows,
+      'date,platform,project_name,entity_type',
+    )
+    const dimResult = await upsertRows(
+      'daily_metric_dims',
+      allDimRows,
+      'date,project_name,entity_type,dim,value',
+    )
+    console.log(`  Upserted case=${caseResult.upserted} reviewed=${reviewedResult.upserted} dims=${dimResult.upserted}`)
   }
 
-  console.log(`\n${DRY_RUN ? '🔍 DRY RUN complete. Pass --apply to write.' : '✅ Sync complete.'}`)
+  console.log(`\n${DRY_RUN ? 'DRY RUN complete. Pass --apply to write.' : 'Sync complete.'}`)
 }
 
 main()
-  .catch(err => {
+  .catch((err) => {
     console.error('Fatal error:', err)
     process.exit(1)
   })

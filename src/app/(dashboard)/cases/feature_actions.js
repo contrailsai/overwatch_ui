@@ -5,10 +5,9 @@ import clientPromise from '@/utils/mongodb/client'
 import { getSignedImageUrl } from '@/utils/aws/s3'
 import { sendSlackNotification } from '@/utils/slack'
 import { updateDailyMetrics } from '@/utils/supabase/metrics'
+import { caseReviewMetricArgs } from '@/lib/analytics/dims'
 import { ObjectId } from 'mongodb'
-// import { getClientandProjectDetails } from '@/app/(dashboard)/actions'
 import { traceAction, recordClickMetric } from '@/utils/tracing'
-import { metadata } from '../layout'
 import { requireAuthContext, requireRole } from '@/utils/auth-context'
 import { logActionError, LOKI_STREAMS } from '@/utils/otel-logger'
 import { postsCollection } from '@/utils/mongodb/collections'
@@ -223,11 +222,17 @@ export const submitCaseReview = traceAction('submitCaseReview', async (_project,
             threat_score: review_details.threat_score,
             threat_types: review_details.threat_types,
             is_aigc: review_details.is_aigc,
-            // takedown metrics are now handled in cases/actions.js
             platform: existingPost.platform ? existingPost.platform.toLowerCase() : 'instagram'
         }
 
-        await updateDailyMetrics(project, currentReviewData, previousReviewData).catch(err =>
+        const { options } = caseReviewMetricArgs(
+            'post',
+            existingPost,
+            review_details,
+            isPreviouslyReviewed ? prevReview : null,
+        )
+
+        await updateDailyMetrics(project, currentReviewData, previousReviewData, options).catch(err =>
             logActionError({
                 loki_stream: LOKI_STREAMS.cases,
                 app_action: 'submitCaseReview',
