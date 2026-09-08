@@ -12,20 +12,74 @@ export function uniqueCloakVariants(variants = []) {
   })
 }
 
-export function domainHasCloaking(domain) {
-  const variants = domain?.cloakVariants
-    || domain?.analysis_results?.cloak_probe?.variants
-    || []
-  return uniqueCloakVariants(variants).some((v) => v.label !== 'bare' && v.differs_from_bare)
+/** Stable id for a cloak variant (review selection + PDF hash). */
+export function cloakVariantKey(variant) {
+  if (!variant) return ''
+  return String(variant.label || variant.param || '').trim()
 }
 
-/** Unlocked scam lander URL (with params), or null if none. */
+function rawCloakVariants(domain) {
+  return domain?.cloakVariants
+    || domain?.analysis_results?.cloak_probe?.variants
+    || []
+}
+
+function selectedVariantKeySet(domain) {
+  const keys = domain?.review_details?.client_visible_variant_keys
+  if (!Array.isArray(keys) || keys.length === 0) return null
+  const set = new Set(keys.map((k) => String(k || '').trim()).filter(Boolean))
+  return set.size > 0 ? set : null
+}
+
+/**
+ * Differing landers the client may see.
+ * Empty / missing `client_visible_variant_keys` ⇒ all unique variants.
+ * Stale keys that match nothing fall back to all.
+ */
+export function clientVisibleCloakVariants(domain, variants) {
+  const all = uniqueCloakVariants(variants || rawCloakVariants(domain))
+  const want = selectedVariantKeySet(domain)
+  if (!want) return all
+  const filtered = all.filter((v) => want.has(cloakVariantKey(v)))
+  return filtered.length > 0 ? filtered : all
+}
+
+export function domainHasCloaking(domain) {
+  const visible = clientVisibleCloakVariants(domain)
+  if (visible.some((v) => v.label !== 'bare' && v.differs_from_bare)) return true
+  if (visible.length > 0) return false
+  return Boolean(domain?.discovery?.cloak_unlocked || domain?.isCloaked)
+}
+
+/**
+ * Lander used for a detailed PDF: preferred filmstrip key if still client-visible,
+ * else first visible scam that differs from bare, else first visible (usually Bare).
+ */
+export function resolveReportLander(domain, preferredKey) {
+  const visible = clientVisibleCloakVariants(domain)
+  const want = String(preferredKey || '').trim()
+  if (want) {
+    const hit = visible.find((v) => cloakVariantKey(v) === want)
+    if (hit) return hit
+  }
+  const scam = visible.find((v) => v?.kind === 'scam' && v?.differs_from_bare)
+  if (scam) return scam
+  return visible[0] || null
+}
+
+export function resolveReportVariantKey(domain, preferredKey) {
+  return cloakVariantKey(resolveReportLander(domain, preferredKey))
+}
+
+/** Unlocked scam lander URL (with params), or null if none. Prefers client-visible. */
 export function domainUnlockedScamUrl(domain) {
-  const probe = domain?.analysis_results?.cloak_probe
-  const bestUnlocked = uniqueCloakVariants(probe?.variants || []).find(
+  const bestUnlocked = clientVisibleCloakVariants(domain).find(
     (v) => v?.kind === 'scam' && v?.differs_from_bare && v?.url,
   )
   if (bestUnlocked?.url) return bestUnlocked.url
+
+  // Reviewer curated a subset with no visible scam lander — do not leak discovery URLs.
+  if (selectedVariantKeySet(domain)) return null
 
   const variantUrls = domain?.discovery?.variant_urls || []
   const unlockedVariant = variantUrls.find((v) => v?.kind === 'scam' && v?.url)

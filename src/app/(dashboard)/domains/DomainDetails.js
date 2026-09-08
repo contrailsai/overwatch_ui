@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import { addDomainClientNote, updateDomainClientStatus } from './actions'
 import {
@@ -23,6 +23,7 @@ import {
   hrefForDomainOccurrence,
   isScamDisplayLabel,
   collectDomainViolations,
+  clientVisibleCloakVariants,
 } from '@/lib/domains/domain-display'
 
 const getRiskBadge = (risk) => {
@@ -120,6 +121,7 @@ export default function DomainDetailPanel({
   const [clientStatus, setClientStatus] = useState('To Be Reviewed')
   const [showProcessed, setShowProcessed] = useState(false)
   const [showSiteFacts, setShowSiteFacts] = useState(false)
+  const [activeVariantKey, setActiveVariantKey] = useState('')
 
   useEffect(() => {
     if (!domain) return
@@ -128,6 +130,20 @@ export default function DomainDetailPanel({
     setNoteText('')
     setShowSiteFacts(false)
   }, [domain?._id])
+
+  const visibleCloakVariants = useMemo(
+    () => (domain ? clientVisibleCloakVariants(domain) : []),
+    [domain],
+  )
+  const clientAnalysisResults = useMemo(() => {
+    if (!domain?.analysis_results) return domain?.analysis_results
+    const cloak = domain.analysis_results.cloak_probe
+    if (!cloak) return domain.analysis_results
+    return {
+      ...domain.analysis_results,
+      cloak_probe: { ...cloak, variants: visibleCloakVariants },
+    }
+  }, [domain, visibleCloakVariants])
 
   if (!domain) return null
 
@@ -182,7 +198,7 @@ export default function DomainDetailPanel({
 
   return (
     <div className="flex flex-col flex-1 min-h-0 h-full overflow-hidden relative">
-      <div className="shrink-0 bg-white border-b border-slate-200 px-4 py-3 flex items-center gap-3">
+      <div className="shrink-0 bg-white border-b border-slate-200 px-4 py-3 flex items-center gap-3 flex-wrap">
         <div className="hidden lg:flex items-center gap-1">
           <Button variant="ghost" size="icon" disabled={!hasPrev} onClick={() => onNavigate?.(-1)}>
             <ChevronLeft className="h-4 w-4" />
@@ -227,19 +243,29 @@ export default function DomainDetailPanel({
             )}
           </div>
         </div>
-        <Button variant="ghost" size="icon" onClick={onClose} className="hidden lg:inline-flex">
-          <X className="h-4 w-4" />
-        </Button>
+        <div className="shrink-0 flex items-center gap-1 flex-nowrap">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onClose}
+            title="Close domain"
+            aria-label="Close domain"
+            className="h-8 w-8 shrink-0"
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
 
       {/* Cases/Ads-style: evidence (left) | analysis (right) on lg+ */}
       <div className="flex-1 min-h-0 overflow-y-auto lg:overflow-hidden flex flex-col lg:flex-row lg:divide-x divide-slate-200">
         {/* COLUMN 2 — Domain evidence */}
         <div className="flex-none lg:flex-1 lg:min-w-0 lg:overflow-y-auto p-4 space-y-4 bg-slate-50/50">
-          {(domain.cloakVariants?.length > 0) ? (
+          {(visibleCloakVariants.length > 0) ? (
             <DomainCloakVariants
-              variants={domain.cloakVariants}
+              variants={visibleCloakVariants}
               primaryScreenshotUrl={screenshotUrl}
+              onActiveChange={setActiveVariantKey}
             />
           ) : (
             <div className="rounded-xl overflow-hidden border border-slate-200 bg-slate-100">
@@ -302,7 +328,7 @@ export default function DomainDetailPanel({
                   </a>
                 )}
                 <div className="pt-1">
-                  <DomainAnalysisResults analysisResults={domain.analysis_results} />
+                  <DomainAnalysisResults analysisResults={clientAnalysisResults} />
                 </div>
               </div>
             )}

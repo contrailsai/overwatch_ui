@@ -13,9 +13,13 @@ import {
 } from '@/utils/mongodb/v3-schema'
 import { RISK_THRESHOLDS } from '@/app/(dashboard)/cases/riskBuckets'
 import { getSignedImageUrl } from '@/utils/aws/s3'
-import { uniqueCloakVariants } from '@/lib/domains/domain-display'
+import { uniqueCloakVariants, clientVisibleCloakVariants } from '@/lib/domains/domain-display'
 
 export { insertCaseEvent }
+
+export const REVIEWED_DOMAINS_FILTER = {
+  'workflow.review_status': 'reviewed',
+}
 
 /** Projection for reviewer/client domain lists — keep one screenshot, drop heavy analysis blobs. */
 export const DOMAIN_LIST_PROJECTION = {
@@ -27,6 +31,11 @@ export const DOMAIN_LIST_PROJECTION = {
   content_reviewed_by: 1,
   discovery: 1,
   'analysis_results.screenshot': 1,
+  'analysis_results.cloak_probe.variants.label': 1,
+  'analysis_results.cloak_probe.variants.param': 1,
+  'analysis_results.cloak_probe.variants.kind': 1,
+  'analysis_results.cloak_probe.variants.url': 1,
+  'analysis_results.cloak_probe.variants.differs_from_bare': 1,
   system: 1,
   ingestion: 1,
 }
@@ -63,6 +72,11 @@ export const DOMAIN_DETAIL_PROJECTION = {
 
   'analysis_results.ssl.issuer': 1,
   'analysis_results.ssl.is_valid': 1,
+  'analysis_results.ssl.valid_from': 1,
+  'analysis_results.ssl.valid_to': 1,
+  'analysis_results.ssl.not_before': 1,
+  'analysis_results.ssl.not_after': 1,
+  'analysis_results.ssl.expires_at': 1,
 
   'analysis_results.hosting.provider': 1,
   'analysis_results.hosting.country': 1,
@@ -84,6 +98,7 @@ export const DOMAIN_DETAIL_PROJECTION = {
 
   'analysis_results.screenshot.s3_url': 1,
   'analysis_results.screenshot.url': 1,
+  'analysis_results.screenshot.captured_at': 1,
 
   'analysis_results.cloak_probe.unlocked': 1,
   'analysis_results.cloak_probe.variants.label': 1,
@@ -95,6 +110,7 @@ export const DOMAIN_DETAIL_PROJECTION = {
   'analysis_results.cloak_probe.variants.differs_from_bare': 1,
   'analysis_results.cloak_probe.variants.screenshot.s3_url': 1,
   'analysis_results.cloak_probe.variants.screenshot.url': 1,
+  'analysis_results.cloak_probe.variants.screenshot.captured_at': 1,
   'analysis_results.cloak_probe.variants.media.images.s3_url': 1,
   'analysis_results.cloak_probe.variants.media.images.alt': 1,
   'analysis_results.cloak_probe.variants.media.videos.s3_url': 1,
@@ -225,8 +241,15 @@ async function normalizeDomainListItem(domain) {
   const discovery = domain.discovery || {}
   const occurrences = Array.isArray(discovery.occurrences) ? discovery.occurrences : []
   const screenshotUrl = await resolveScreenshotUrl(domain.analysis_results?.screenshot)
-
-  return {
+  const review_details = serializeForClient(domain.review_details) ?? null
+  const cloakVariants = uniqueCloakVariants((domain.analysis_results?.cloak_probe?.variants || []).map((v) => ({
+    label: v?.label || null,
+    param: v?.param || null,
+    kind: v?.kind || null,
+    url: v?.url || null,
+    differs_from_bare: Boolean(v?.differs_from_bare),
+  })))
+  const listItem = {
     _id: domain._id.toString(),
     schema_version: domain.schema_version ?? 1,
     domain_name: domain.domain_name || null,
@@ -255,7 +278,7 @@ async function normalizeDomainListItem(domain) {
     analysis_results: domain.analysis_results?.screenshot
       ? { screenshot: serializeForClient(domain.analysis_results.screenshot) }
       : null,
-    review_details: serializeForClient(domain.review_details) ?? null,
+    review_details,
     analysis_correction_request: null,
     takedown: null,
     client_notes: [],
@@ -264,13 +287,17 @@ async function normalizeDomainListItem(domain) {
     content_reviewed_by: domain.content_reviewed_by || null,
     update_history: [],
     screenshotUrl,
-    cloakVariants: [],
+    cloakVariants,
     cloakCreatives: [],
-    uniqueLanderCount: 0,
-    unlockedLanderCount: 0,
-    isCloaked: Boolean(discovery.cloak_unlocked),
+    uniqueLanderCount: cloakVariants.length,
+    unlockedLanderCount: cloakVariants.filter((v) => v.label !== 'bare' && v.differs_from_bare).length,
+    isCloaked: false,
     ...buildDomainAliases(domain, discovery, occurrences),
   }
+  listItem.isCloaked = clientVisibleCloakVariants(listItem).some(
+    (v) => v.label !== 'bare' && v.differs_from_bare,
+  )
+  return listItem
 }
 
 /**
@@ -338,7 +365,7 @@ export async function normalizeDomainForUi(domain, options = {}) {
 
   const unlockedCount = uniqueVariants.filter((v) => v.label !== 'bare' && v.differs_from_bare).length
 
-  return {
+  const fullItem = {
     _id: domain._id.toString(),
     schema_version: domain.schema_version ?? 1,
     domain_name: domain.domain_name || null,
@@ -373,7 +400,11 @@ export async function normalizeDomainForUi(domain, options = {}) {
     cloakCreatives: [],
     uniqueLanderCount: uniqueVariants.length,
     unlockedLanderCount: unlockedCount,
-    isCloaked: unlockedCount > 0,
+    isCloaked: false,
     ...buildDomainAliases(domain, discovery, occurrences),
   }
+  fullItem.isCloaked = clientVisibleCloakVariants(fullItem).some(
+    (v) => v.label !== 'bare' && v.differs_from_bare,
+  )
+  return fullItem
 }

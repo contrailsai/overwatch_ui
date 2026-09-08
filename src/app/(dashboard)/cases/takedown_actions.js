@@ -95,7 +95,8 @@ export const initiateTakedown = traceAction('initiateTakedown', async (caseIds, 
         await updateClientReviewedMetricsBatch(
             { project_name: clientDetails.project_name },
             posts,
-            'Takedown'
+            'Takedown',
+            { entityType: 'post' },
         ).catch(err => logActionError({
             loki_stream: LOKI_STREAMS.cases,
             app_action: 'initiateTakedown',

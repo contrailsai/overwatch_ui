@@ -13,9 +13,12 @@ import { REPORT_FORMATS, REPORT_TYPES } from '@/features/reports/constants'
 import { logActionError, LOKI_STREAMS } from '@/utils/otel-logger'
 import { orderPostIdsForReport } from '@/app/(dashboard)/cases/actions'
 import { orderAdIdsForReport } from '@/app/(dashboard)/ads/actions'
+import { orderDomainIdsForReport } from '@/app/(dashboard)/domains/actions'
 import { REVIEWED_THREAT_SCORE_FILTER } from '@/lib/posts/reviewed-post-filter'
 import { REVIEWED_ADS_FILTER } from '@/lib/ads/reviewed-ad-filter'
-import { adsCollection, postsCollection as getPostsCollection } from '@/utils/mongodb/collections'
+import { REVIEWED_DOMAINS_FILTER } from '@/lib/domains/domain-helpers'
+import { adsCollection, postsCollection as getPostsCollection, domainsCollection } from '@/utils/mongodb/collections'
+import { resolveReportVariantKey } from '@/lib/domains/domain-display'
 
 const OBJECT_ID_HEX = /^[a-fA-F0-9]{24}$/
 
@@ -61,7 +64,7 @@ export const getReportDownloadUrl = traceAction('getReportDownloadUrl', async (j
 
 /**
  * Create or reuse a report generation job and dispatch Lambda via SQS.
- * @param {{ posts: Array<{_id: string}>, project?: object, profile?: object, reportType: string, reportFormat?: 'pdf'|'docx', entityType?: 'posts'|'ads' }} input
+ * @param {{ posts: Array<{_id: string, reportVariantKey?: string}>, project?: object, profile?: object, reportType: string, reportFormat?: 'pdf'|'docx', entityType?: 'posts'|'ads'|'domains' }} input
  */
 export const getOrCreateReportJob = traceAction('getOrCreateReportJob', async ({
   posts,
@@ -72,25 +75,30 @@ export const getOrCreateReportJob = traceAction('getOrCreateReportJob', async ({
   entityType = 'posts',
 }) => {
   const isAdsReport = entityType === 'ads'
-  const entityNoun = isAdsReport ? 'ad' : 'post'
+  const isDomainsReport = entityType === 'domains'
+  const entityNoun = isDomainsReport ? 'domain' : (isAdsReport ? 'ad' : 'post')
 
   if (reportFormat === REPORT_FORMATS.DOCX && reportType === REPORT_TYPES.SUMMARY) {
     throw new Error('DOCX reports do not support Summary report type')
+  }
+
+  if (isDomainsReport && reportFormat === REPORT_FORMATS.DOCX) {
+    throw new Error('DOCX reports are not supported for domains')
   }
 
   if (reportType === REPORT_TYPES.SIMPLE_PROFILE && reportFormat !== REPORT_FORMATS.DOCX) {
     throw new Error('SimpleProfile is only supported with reportFormat docx')
   }
 
-  if (isAdsReport && (reportType === REPORT_TYPES.PROFILE || reportType === REPORT_TYPES.SIMPLE_PROFILE)) {
-    throw new Error('Profile reports are not supported for ads')
+  if ((isAdsReport || isDomainsReport) && (reportType === REPORT_TYPES.PROFILE || reportType === REPORT_TYPES.SIMPLE_PROFILE)) {
+    throw new Error('Profile reports are not supported for this entity type')
   }
 
   const supabase = await createClient()
   const { user, project: resolvedProject, dbName } = await requireAuthContext()
 
   const entityIds = posts.map((p) => p._id)
-  const profileId = isAdsReport ? '' : String(profile?._id ?? profile?.id ?? '')
+  const profileId = (isAdsReport || isDomainsReport) ? '' : String(profile?._id ?? profile?.id ?? '')
 
   if (reportType === REPORT_TYPES.SIMPLE_PROFILE && !profileId) {
     throw new Error('Profile is required for SimpleProfile report generation')
@@ -124,8 +132,54 @@ export const getOrCreateReportJob = traceAction('getOrCreateReportJob', async ({
   }
 
   let reportObjectIds = objectIds
+  let variantKeysByDomainId = {}
 
-  if (isAdsReport) {
+  if (isDomainsReport) {
+    const domainsCol = domainsCollection(db)
+    const validated = await domainsCol
+      .find({ _id: { $in: objectIds } }, { projection: { _id: 1 } })
+      .toArray()
+
+    if (validated.length !== objectIds.length) {
+      throw new Error('Some requested domains do not belong to your project scope')
+    }
+
+    const reviewed = await domainsCol
+      .find({ _id: { $in: objectIds }, ...REVIEWED_DOMAINS_FILTER }, { projection: { _id: 1 } })
+      .toArray()
+
+    if (reviewed.length !== objectIds.length) {
+      const unreviewedCount = objectIds.length - reviewed.length
+      throw new Error(
+        `${unreviewedCount} domain(s) are not reviewed and cannot be included in report generation`
+      )
+    }
+    reportObjectIds = reviewed.map((d) => d._id)
+
+    const preferredById = Object.fromEntries(
+      (posts || []).map((p) => [String(p._id), String(p.reportVariantKey || '').trim()]),
+    )
+    const landerDocs = await domainsCol
+      .find(
+        { _id: { $in: reportObjectIds } },
+        {
+          projection: {
+            review_details: 1,
+            'analysis_results.cloak_probe.variants.label': 1,
+            'analysis_results.cloak_probe.variants.param': 1,
+            'analysis_results.cloak_probe.variants.kind': 1,
+            'analysis_results.cloak_probe.variants.url': 1,
+            'analysis_results.cloak_probe.variants.differs_from_bare': 1,
+          },
+        },
+      )
+      .toArray()
+
+    for (const doc of landerDocs) {
+      const id = String(doc._id)
+      variantKeysByDomainId[id] = resolveReportVariantKey(doc, preferredById[id])
+    }
+  } else if (isAdsReport) {
     const adsCol = adsCollection(db)
     const validatedAds = await adsCol
       .find({ _id: { $in: objectIds } }, { projection: { _id: 1 } })
@@ -184,12 +238,18 @@ export const getOrCreateReportJob = traceAction('getOrCreateReportJob', async ({
 
   const reportEntityIds = reportObjectIds.map((id) => id.toString())
 
-  const orderedEntityIds = isAdsReport
-    ? await orderAdIdsForReport(reportEntityIds)
-    : await orderPostIdsForReport(reportEntityIds)
+  const orderedEntityIds = isDomainsReport
+    ? await orderDomainIdsForReport(reportEntityIds)
+    : isAdsReport
+      ? await orderAdIdsForReport(reportEntityIds)
+      : await orderPostIdsForReport(reportEntityIds)
   if (orderedEntityIds.length !== reportEntityIds.length) {
     throw new Error(`Some requested ${entityNoun}s could not be ordered for report generation`)
   }
+
+  const hashExtra = isDomainsReport
+    ? orderedEntityIds.map((id) => `${id}=${variantKeysByDomainId[id] || ''}`).sort().join('|')
+    : ''
 
   const hash = generateReportHash(
     resolvedProject?.project_name || 'unknown',
@@ -197,7 +257,8 @@ export const getOrCreateReportJob = traceAction('getOrCreateReportJob', async ({
     reportType,
     profileId,
     reportFormat,
-    isAdsReport ? 'ads' : 'posts'
+    isDomainsReport ? 'domains' : isAdsReport ? 'ads' : 'posts',
+    hashExtra,
   )
 
   const resolved = await resolveExistingReportJob(supabase, hash, user.id)
@@ -237,7 +298,20 @@ export const getOrCreateReportJob = traceAction('getOrCreateReportJob', async ({
     throw new Error('Failed to create report job record: ' + insertError.message)
   }
 
-  const sqsPayload = isAdsReport
+  const sqsPayload = isDomainsReport
+    ? {
+        projectId: resolvedProject?.project_name || 'unknown',
+        entityType: 'domains',
+        domainIds: orderedEntityIds,
+        variantKeysByDomainId,
+        database_name: dbName,
+        reportType,
+        reportFormat,
+        project: resolvedProject,
+        profile: null,
+        jobId: newJob.id,
+      }
+    : isAdsReport
     ? {
         projectId: resolvedProject?.project_name || 'unknown',
         entityType: 'ads',

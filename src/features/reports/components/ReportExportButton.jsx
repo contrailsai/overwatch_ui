@@ -11,7 +11,7 @@ import { REPORT_EXPORT_PRESETS } from '@/features/reports/client/presets'
 
 /**
  * Configurable export button driven by {@link REPORT_EXPORT_PRESETS}.
- * @param {{ preset: keyof typeof REPORT_EXPORT_PRESETS, posts: Array, project: object, className?: string, onStateChange?: (state: {loading: boolean, statusText: string}) => void, entityType?: 'posts'|'ads' }} props
+ * @param {{ preset: keyof typeof REPORT_EXPORT_PRESETS, posts: Array, project: object, className?: string, onStateChange?: (state: {loading: boolean, statusText: string}) => void, entityType?: 'posts'|'ads'|'domains' }} props
  */
 export function ReportExportButton({ preset, posts, project, className, onStateChange, entityType }) {
   const config = REPORT_EXPORT_PRESETS[preset]

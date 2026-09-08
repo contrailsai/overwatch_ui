@@ -6,6 +6,7 @@
  */
 import { createClient } from '@/utils/supabase/server'
 import { logActionError, logActionWarn, LOKI_STREAMS } from '@/utils/otel-logger'
+import { clientActionKey, reviewDateStr, riskRankFromScore, todayDateStr } from '@/lib/analytics/dims'
 
 const DUPLICATE_KEY_CODE = '23505'
 const MISSING_RPC_CODE = 'PGRST202'
@@ -67,15 +68,91 @@ function mergeJsonCounters(existing = {}, deltas = {}) {
   return merged
 }
 
-async function fetchDailyMetricRow(supabase, table, { date, platform, project_name }) {
-  return fetchRowWithRetry(() => supabase
+async function fetchDailyMetricRow(supabase, table, { date, platform, project_name, entity_type }) {
+  let query = supabase
     .from(table)
     .select('*')
     .eq('date', date)
     .eq('platform', platform)
     .eq('project_name', project_name)
     .order('id', { ascending: true })
+    .limit(1)
+  if (entity_type) query = query.eq('entity_type', entity_type)
+  return fetchRowWithRetry(() => query)
+}
+
+async function fetchDimRow(supabase, key) {
+  return fetchRowWithRetry(() => supabase
+    .from('daily_metric_dims')
+    .select('*')
+    .eq('date', key.date)
+    .eq('project_name', key.project_name)
+    .eq('entity_type', key.entity_type)
+    .eq('dim', key.dim)
+    .eq('value', key.value)
+    .order('id', { ascending: true })
     .limit(1))
+}
+
+async function upsertDimRowOnce({ supabase, key, delta }) {
+  const applyUpdate = async (existing) => {
+    const { error: updateError } = await supabase
+      .from('daily_metric_dims')
+      .update({ count: Math.max(0, (existing.count || 0) + delta) })
+      .eq('id', existing.id)
+    if (updateError) throw updateError
+  }
+
+  const existing = await fetchDimRow(supabase, key)
+  if (existing) {
+    await applyUpdate(existing)
+    return
+  }
+
+  const { error: insertError } = await supabase
+    .from('daily_metric_dims')
+    .insert({
+      date: key.date,
+      project_name: key.project_name,
+      entity_type: key.entity_type,
+      dim: key.dim,
+      value: key.value,
+      count: Math.max(0, delta),
+    })
+
+  if (insertError) {
+    if (isDuplicateKeyError(insertError)) {
+      const retryExisting = await fetchDimRow(supabase, key)
+      if (retryExisting) {
+        await applyUpdate(retryExisting)
+        return
+      }
+    }
+    throw insertError
+  }
+}
+
+async function upsertMetricDims(supabase, { date, project_name, entity_type, dims }) {
+  if (!dims?.length || !date || !project_name || !entity_type) return
+  await Promise.all(dims.map((entry) => {
+    if (!entry?.dim || entry.value == null || entry.value === '' || !entry.delta) return Promise.resolve()
+    return runWithUpsertRetries(() => upsertDimRowOnce({
+      supabase,
+      key: {
+        date,
+        project_name,
+        entity_type,
+        dim: entry.dim,
+        value: entry.value,
+      },
+      delta: entry.delta,
+    }))
+  }))
+}
+
+function normalizeEntityType(value) {
+  if (value === 'ad' || value === 'domain' || value === 'post') return value
+  return 'post'
 }
 
 async function fetchClientLogRow(supabase, { client_id, project_name, date }) {
@@ -236,10 +313,11 @@ async function upsertDailyMetricRow(params) {
   return runWithUpsertRetries(() => upsertDailyMetricRowOnce(params))
 }
 
-export async function updateDailyMetrics(project, reviewData, previousReviewData = null) {
+export async function updateDailyMetrics(project, reviewData, previousReviewData = null, options = {}) {
   const supabase = await createClient()
-  const date = new Date().toISOString().split('T')[0] // YYYY-MM-DD
-  const platform = reviewData.platform || 'unknown'
+  const entity_type = normalizeEntityType(options.entityType || reviewData.entity_type)
+  const date = options.reviewDate || options.sourcedDate || todayDateStr()
+  const platform = reviewData.platform || (entity_type === 'domain' ? 'web' : 'unknown')
   const project_name = project?.project_name
 
   if (!project_name) {
@@ -253,22 +331,10 @@ export async function updateDailyMetrics(project, reviewData, previousReviewData
     return
   }
 
-  // Helper to determine risk bucket
-  // Safe: 0-40, Low: 40-75, Mid: 76-95, High: 96-100 (based on ReviewDetails.js)
-  const getRiskBucket = (score) => {
-    if (score === undefined || score === null) return null
-    if (score > 95) return 'high'
-    if (score > 75) return 'medium'
-    if (score > 40) return 'low'
-    return 'safe'
-  }
-
-  // Calculate deltas for JSON fields
   const riskDeltas = { safe: 0, low: 0, medium: 0, high: 0 }
   const categoryDeltas = {}
 
-  // 1. Add current review data
-  const currentRiskBucket = getRiskBucket(reviewData.threat_score)
+  const currentRiskBucket = riskRankFromScore(reviewData.threat_score)
   if (currentRiskBucket) riskDeltas[currentRiskBucket]++
 
   const currentTypes = Array.isArray(reviewData.threat_types)
@@ -286,10 +352,9 @@ export async function updateDailyMetrics(project, reviewData, previousReviewData
 
   let totalDelta = 1
 
-  // 2. Subtract previous review data if it's an update
   if (previousReviewData) {
-    totalDelta = 0 // Net change 0 for total if updating
-    const prevRiskBucket = getRiskBucket(previousReviewData.threat_score)
+    totalDelta = 0
+    const prevRiskBucket = riskRankFromScore(previousReviewData.threat_score)
     if (prevRiskBucket) riskDeltas[prevRiskBucket]--
 
     const prevTypes = Array.isArray(previousReviewData.threat_types)
@@ -306,7 +371,7 @@ export async function updateDailyMetrics(project, reviewData, previousReviewData
     }
   }
 
-  const key = { date, platform, project_name }
+  const key = { date, platform, project_name, entity_type }
 
   try {
     await upsertDailyMetricRow({
@@ -328,6 +393,7 @@ export async function updateDailyMetrics(project, reviewData, previousReviewData
           date,
           platform,
           project_name,
+          entity_type,
           total_cases: Math.max(0, totalDelta),
           risk: initialRisk,
           categories: initialCategories,
@@ -338,6 +404,20 @@ export async function updateDailyMetrics(project, reviewData, previousReviewData
         risk: mergeJsonCounters(existing.risk || { safe: 0, low: 0, medium: 0, high: 0 }, riskDeltas),
         categories: mergeJsonCounters(existing.categories || {}, categoryDeltas),
       }),
+    })
+
+    await upsertMetricDims(supabase, {
+      date,
+      project_name,
+      entity_type,
+      dims: options.dims,
+    }).catch((err) => {
+      logActionError({
+        loki_stream: LOKI_STREAMS.shared,
+        app_caller: 'supabase/metrics',
+        app_action: 'updateDailyMetrics',
+        message: 'Failed to update daily_metric_dims',
+      }, err)
     })
   } catch (err) {
     logActionError({
@@ -354,10 +434,11 @@ export async function updateDailyMetrics(project, reviewData, previousReviewData
  * Updates the client reviewed metrics in Supabase.
  * Tracks client decisions: 'no-action', 'Flag for Takedown', 'Takedown'
  */
-export async function updateClientReviewedMetrics(project, reviewData, previousReviewData = null) {
+export async function updateClientReviewedMetrics(project, reviewData, previousReviewData = null, options = {}) {
   const supabase = await createClient()
-  const date = new Date().toISOString().split('T')[0]
-  const platform = reviewData.platform || 'unknown'
+  const entity_type = normalizeEntityType(options.entityType || reviewData.entity_type)
+  const date = options.reviewDate || todayDateStr()
+  const platform = reviewData.platform || (entity_type === 'domain' ? 'web' : 'unknown')
   const project_name = project?.project_name
 
   if (!project_name) {
@@ -372,7 +453,7 @@ export async function updateClientReviewedMetrics(project, reviewData, previousR
   }
 
   const { riskDeltas, actionDeltas, totalDelta } = computeClientReviewedDeltas(reviewData, previousReviewData)
-  const key = { date, platform, project_name }
+  const key = { date, platform, project_name, entity_type }
 
   try {
     await upsertDailyMetricRow({
@@ -394,6 +475,7 @@ export async function updateClientReviewedMetrics(project, reviewData, previousR
           date,
           platform,
           project_name,
+          entity_type,
           total_reviewed: Math.max(0, totalDelta),
           risk: initialRisk,
           reviewed: initialAction,
@@ -428,13 +510,7 @@ function computeClientReviewedDeltas(reviewData, previousReviewData = null) {
     return 'safe'
   }
 
-  const getActionKey = (status) => {
-    if (!status) return null
-    if (status.toLowerCase().includes('no action') || status.toLowerCase().includes('no-action')) return 'no-action'
-    if (status === 'Flag for Takedown') return 'Flag for Takedown'
-    if (status === 'Takedown' || status === 'do_takedown' || status === 'Takedown Action') return 'Takedown'
-    return null
-  }
+  const getActionKey = (status) => clientActionKey(status)
 
   const riskDeltas = { safe: 0, low: 0, medium: 0, high: 0 }
   const actionDeltas = { 'no-action': 0, 'Flag for Takedown': 0, 'Takedown': 0 }
@@ -474,39 +550,44 @@ function accumulateClientReviewedDeltas(target, reviewData, previousReviewData =
 /**
  * Batch update client reviewed metrics grouped by platform.
  */
-export async function updateClientReviewedMetricsBatch(project, posts, targetStatus) {
+export async function updateClientReviewedMetricsBatch(project, posts, targetStatus, options = {}) {
   if (!posts?.length) return
 
+  const entity_type = normalizeEntityType(options.entityType)
   const platformBuckets = new Map()
 
   for (const post of posts) {
-    const platform = post?.platform?.toLowerCase() || 'unknown'
+    const platform = post?.platform?.toLowerCase() || (entity_type === 'domain' ? 'web' : 'unknown')
+    const date = reviewDateStr(post) || options.reviewDate || todayDateStr()
+    const bucketKey = `${date}::${platform}`
+    const previousStatus = post.workflow?.client_status || post.client_status
     const currentReviewData = {
-      risk_score: post.review_details?.threat_score || 0,
+      risk_score: post.review_details?.threat_score || post.list?.effective_threat_score || 0,
       client_status: targetStatus,
       platform,
     }
-    const previousReviewData = post.client_status && post.client_status !== 'To Be Reviewed'
+    const previousReviewData = previousStatus && !['To Be Reviewed', 'open', 'alerted'].includes(previousStatus)
       ? {
-          risk_score: post.review_details?.threat_score || 0,
-          client_status: post.client_status,
+          risk_score: post.review_details?.threat_score || post.list?.effective_threat_score || 0,
+          client_status: previousStatus,
           platform,
         }
       : null
 
-    if (!platformBuckets.has(platform)) {
-      platformBuckets.set(platform, {
+    if (!platformBuckets.has(bucketKey)) {
+      platformBuckets.set(bucketKey, {
+        date,
+        platform,
         riskDeltas: { safe: 0, low: 0, medium: 0, high: 0 },
         actionDeltas: { 'no-action': 0, 'Flag for Takedown': 0, 'Takedown': 0 },
         totalDelta: 0,
       })
     }
 
-    accumulateClientReviewedDeltas(platformBuckets.get(platform), currentReviewData, previousReviewData)
+    accumulateClientReviewedDeltas(platformBuckets.get(bucketKey), currentReviewData, previousReviewData)
   }
 
   const supabase = await createClient()
-  const date = new Date().toISOString().split('T')[0]
   const project_name = project?.project_name
 
   if (!project_name) {
@@ -520,8 +601,9 @@ export async function updateClientReviewedMetricsBatch(project, posts, targetSta
     return
   }
 
-  await Promise.all([...platformBuckets.entries()].map(async ([platform, deltas]) => {
-    const key = { date, platform, project_name }
+  await Promise.all([...platformBuckets.values()].map(async (deltas) => {
+    const { date, platform } = deltas
+    const key = { date, platform, project_name, entity_type }
 
     try {
       await upsertDailyMetricRow({
@@ -543,6 +625,7 @@ export async function updateClientReviewedMetricsBatch(project, posts, targetSta
             date,
             platform,
             project_name,
+            entity_type,
             total_reviewed: Math.max(0, deltas.totalDelta),
             risk: initialRisk,
             reviewed: initialAction,

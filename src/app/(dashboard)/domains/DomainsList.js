@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useEffect, useTransition, useRef } from 'react'
+import { useState, useCallback, useEffect, useTransition, useRef, useMemo } from 'react'
 import {
   Globe, Search, X, ChevronLeft, ChevronRight, Loader2,
   CheckCircle, ClockFading, Info, Siren, ArrowUpDown, ArrowUp, ArrowDown, ArrowRight, Filter,
@@ -19,8 +19,9 @@ import {
   collectDomainViolations,
 } from '@/lib/domains/domain-display'
 import { DateFilterPopover } from '@/components/DateFilterPopover'
-import { getDomainById } from './actions'
+import { getDomainById, trackClientClick } from './actions'
 import DomainDetailPanel from './DomainDetails'
+import ReportGenerate from '@/components/ReportGenerate'
 import {
   planQueueMove,
   pickQueueEdge,
@@ -85,11 +86,27 @@ const getStatusConfig = (status) => {
   return { label: status, color: 'text-slate-600 bg-slate-50 border-slate-200', icon: Info }
 }
 
-function DomainListRow({ domain, isActive, onOpen, compact }) {
+function SelectionCheckbox({ checked, onChange, ariaLabel, className }) {
+  return (
+    <input
+      type="checkbox"
+      checked={checked}
+      onChange={onChange}
+      onClick={(e) => e.stopPropagation()}
+      className={cn(
+        'w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer',
+        className,
+      )}
+      aria-label={ariaLabel}
+    />
+  )
+}
+
+function DomainListRow({ domain, isActive, isChecked, onOpen, onToggle, compact }) {
   const risk = getRiskBadge(domain.risk_rank || domain.list?.risk_rank)
   const thumb = domainScreenshotUrl(domain)
   const online = isDomainOnline(domain)
-  const cloaked = domain.isCloaked || domainHasCloaking(domain) || domain.discovery?.cloak_unlocked
+  const cloaked = domainHasCloaking(domain)
   const adCount = domain.occurrence_count ?? 0
   const statusCfg = getStatusConfig(domain.client_status)
   const StatusIcon = statusCfg.icon
@@ -97,18 +114,32 @@ function DomainListRow({ domain, isActive, onOpen, compact }) {
 
   return (
     <li>
-      <button
-        type="button"
+      <div
+        role="button"
+        tabIndex={0}
         data-queue-id={domain._id}
         onClick={() => onOpen(domain)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            onOpen(domain)
+          }
+        }}
         className={cn(
-          'w-full text-left flex gap-2.5 transition-colors duration-150',
+          'w-full text-left flex gap-2.5 transition-colors duration-150 cursor-pointer',
           compact ? 'px-3 py-2.5' : 'px-4 py-3',
           isActive
             ? 'bg-blue-50/90 border-l-2 border-l-blue-600'
             : 'hover:bg-slate-50/80 border-l-2 border-l-transparent',
+          isChecked && !isActive && 'bg-slate-50',
         )}
       >
+        <SelectionCheckbox
+          checked={Boolean(isChecked)}
+          onChange={() => onToggle?.(domain)}
+          ariaLabel={`Select ${domain.domain_name}`}
+          className="mt-1 shrink-0"
+        />
         <div className={cn(
           'rounded-lg border border-slate-200/80 bg-slate-100 overflow-hidden shrink-0',
           compact ? 'h-11 w-11' : 'h-14 w-14',
@@ -176,7 +207,7 @@ function DomainListRow({ domain, isActive, onOpen, compact }) {
             )}
           </div>
         </div>
-      </button>
+      </div>
     </li>
   )
 }
@@ -198,11 +229,11 @@ function DomainRiskCell({ risk }) {
   )
 }
 
-function DomainTableRow({ domain, onOpen }) {
+function DomainTableRow({ domain, isChecked, onOpen, onToggle }) {
   const risk = getRiskBadge(domain.risk_rank || domain.list?.risk_rank)
   const thumb = domainScreenshotUrl(domain)
   const online = isDomainOnline(domain)
-  const cloaked = domain.isCloaked || domainHasCloaking(domain) || domain.discovery?.cloak_unlocked
+  const cloaked = domainHasCloaking(domain)
   const adCount = domain.occurrence_count ?? 0
   const statusCfg = getStatusConfig(domain.client_status)
   const StatusIcon = statusCfg.icon
@@ -211,6 +242,13 @@ function DomainTableRow({ domain, onOpen }) {
 
   return (
     <tr data-queue-id={domain._id} onClick={() => onOpen(domain)} className="transition-all cursor-pointer group hover:bg-slate-50">
+      <td className="px-2 sm:px-3 whitespace-nowrap align-middle border-b border-slate-50 w-10">
+        <SelectionCheckbox
+          checked={Boolean(isChecked)}
+          onChange={() => onToggle?.(domain)}
+          ariaLabel={`Select ${domain.domain_name}`}
+        />
+      </td>
       <td className="px-2 sm:px-3 whitespace-nowrap align-middle hidden sm:table-cell border-b border-slate-50">
         <DomainRiskCell risk={risk} />
       </td>
@@ -340,6 +378,10 @@ export function DomainsList({
   const [detailError, setDetailError] = useState(null)
   const [listCollapsed, setListCollapsed] = useState(false)
   const [showFilters, setShowFilters] = useState(false)
+  const [selectedDomains, setSelectedDomains] = useState({})
+  const [summaryState, setSummaryState] = useState({ loading: false, statusText: '' })
+  const [detailedPdfState, setDetailedPdfState] = useState({ loading: false, statusText: '' })
+  const [detailedDocxState, setDetailedDocxState] = useState({ loading: false, statusText: '' })
   const detailRequestId = useRef(0)
   const pendingSelectRef = useRef(null)
   const [, startTransition] = useTransition()
@@ -512,6 +554,59 @@ export function DomainsList({
     return <ArrowDown className="w-3.5 h-3.5 text-blue-600 ml-1.5" />
   }
 
+  const selectedPostsArray = useMemo(() => Object.values(selectedDomains), [selectedDomains])
+  const selectedCount = selectedPostsArray.length
+  const isAllCurrentPageSelected = localDomains.length > 0 && localDomains.every((d) => !!selectedDomains[d._id])
+
+  const toggleDomainSelected = (domain) => {
+    setSelectedDomains((prev) => {
+      const next = { ...prev }
+      if (next[domain._id]) delete next[domain._id]
+      else next[domain._id] = { _id: domain._id }
+      return next
+    })
+  }
+
+  const handleToggleSelectAllCurrentPage = () => {
+    if (isAllCurrentPageSelected) {
+      setSelectedDomains((prev) => {
+        const next = { ...prev }
+        localDomains.forEach((d) => { delete next[d._id] })
+        return next
+      })
+      return
+    }
+    setSelectedDomains((prev) => {
+      const next = { ...prev }
+      localDomains.forEach((d) => {
+        next[d._id] = { _id: d._id }
+      })
+      return next
+    })
+  }
+
+  const showToast = (message) => {
+    if (typeof window !== 'undefined') window.alert(message)
+  }
+
+  const reportGenerateProps = {
+    selectedPostsArray,
+    selectedCount,
+    summaryState,
+    detailedPdfState,
+    detailedDocxState,
+    setSummaryState,
+    setDetailedPdfState,
+    setDetailedDocxState,
+    showToast,
+    trackClientClick,
+    project,
+    formatIds: ['summary-pdf', 'detailed-pdf'],
+    entityLabel: 'domains',
+    entityType: 'domains',
+    analyticsPage: 'DomainsList',
+  }
+
   const hasActiveFilter = (
     initialFilters.status !== 'all'
     || Boolean(initialFilters.searchText)
@@ -600,6 +695,11 @@ export function DomainsList({
                   />
                 )}
                 <div className="flex items-center gap-2 shrink-0">
+                  {selectedCount > 0 && (
+                    <span className="inline-flex items-center text-[10px] font-bold bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded shrink-0">
+                      {selectedCount} selected
+                    </span>
+                  )}
                   {hasActiveFilter && (
                     <Button
                       variant="ghost"
@@ -635,6 +735,15 @@ export function DomainsList({
                   className="w-full"
                 />
               )}
+
+              <div className="w-full min-w-0">
+                <ReportGenerate
+                  {...reportGenerateProps}
+                  toolbar
+                  showLabel={false}
+                  className="w-full max-w-none"
+                />
+              </div>
 
               {showFilters && (
                 <div className="flex flex-wrap gap-x-2.5 gap-y-2.5 pt-1 animate-in fade-in slide-in-from-top-1 duration-200">
@@ -726,7 +835,9 @@ export function DomainsList({
                       key={domain._id}
                       domain={domain}
                       isActive={selectedDomain?._id === domain._id}
+                      isChecked={!!selectedDomains[domain._id]}
                       onOpen={openDomain}
+                      onToggle={toggleDomainSelected}
                       compact={compact}
                     />
                   ))}
@@ -739,7 +850,9 @@ export function DomainsList({
                         key={domain._id}
                         domain={domain}
                         isActive={false}
+                        isChecked={!!selectedDomains[domain._id]}
                         onOpen={openDomain}
+                        onToggle={toggleDomainSelected}
                         compact={false}
                       />
                     ))}
@@ -748,6 +861,13 @@ export function DomainsList({
                     <table className="min-w-full table-fixed border-separate border-spacing-0">
                       <thead className="sticky top-0 z-20">
                         <tr className="bg-slate-50/90 backdrop-blur-md">
+                          <th scope="col" className="w-10 px-2 sm:px-3 py-3 text-center border-b border-slate-100">
+                            <SelectionCheckbox
+                              checked={isAllCurrentPageSelected}
+                              onChange={handleToggleSelectAllCurrentPage}
+                              ariaLabel="Select all domains on this page"
+                            />
+                          </th>
                           <th
                             scope="col"
                             className="w-16 sm:w-20 px-2 sm:px-3 py-3 text-center text-xs font-bold text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100/50 transition-colors group select-none hidden sm:table-cell border-b border-slate-100"
@@ -801,7 +921,9 @@ export function DomainsList({
                           <DomainTableRow
                             key={domain._id}
                             domain={domain}
+                            isChecked={!!selectedDomains[domain._id]}
                             onOpen={openDomain}
+                            onToggle={toggleDomainSelected}
                           />
                         ))}
                       </tbody>
