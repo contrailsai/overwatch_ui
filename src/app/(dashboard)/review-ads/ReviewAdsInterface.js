@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { useState, useEffect, useCallback, useTransition, useMemo } from 'react'
+import { useState, useEffect, useCallback, useTransition, useMemo, useRef } from 'react'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { format } from 'date-fns'
 import {
@@ -32,6 +32,14 @@ import { AdMediaThumb } from '@/components/ads/AdMediaThumb'
 import { AdAdvertiserAvatar } from '@/components/ads/AdAdvertiserAvatar'
 import { AdChannelFilter } from '@/components/ads/AdChannelFilter'
 import ReviewAdForm from './ReviewAdDetails'
+import {
+  planQueueMove,
+  pickQueueEdge,
+  queueHasPrev,
+  queueHasNext,
+  scrollQueueItemIntoView,
+  idsEqual,
+} from '@/lib/list-queue-nav'
 
 const FILTER_LABEL = 'text-[10px] font-bold text-slate-500 uppercase tracking-wide'
 const FILTER_TRIGGER =
@@ -164,6 +172,7 @@ function AdListRow({ ad, isActive, onOpen }) {
     <li>
       <button
         type="button"
+        data-queue-id={ad._id}
         onClick={() => onOpen(ad)}
         className={cn(
           'w-full text-left px-5 py-3.5 flex gap-3.5 transition-colors duration-150',
@@ -219,6 +228,7 @@ function AdMobileCard({ ad, onOpen }) {
     <article
       role="button"
       tabIndex={0}
+      data-queue-id={ad._id}
       onClick={() => onOpen(ad)}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
@@ -283,7 +293,7 @@ function AdTableRow({ ad, onOpen }) {
   const ReviewIcon = fields.reviewStatus === 'reviewed' ? CheckCircle : ClockFading
 
   return (
-    <tr onClick={() => onOpen(ad)} className="transition-all cursor-pointer group hover:bg-slate-50">
+    <tr data-queue-id={ad._id} onClick={() => onOpen(ad)} className="transition-all cursor-pointer group hover:bg-slate-50">
       <td className="px-2 sm:px-3 whitespace-nowrap align-middle hidden sm:table-cell border-b border-slate-50">
         <RiskCell risk={fields.risk} />
       </td>
@@ -395,6 +405,7 @@ export function ReviewAdsInterface({
   const [ads, setAds] = useState(initialAds || [])
   const [selectedAd, setSelectedAd] = useState(initialAd || null)
   const [showFilters, setShowFilters] = useState(false)
+  const pendingSelectRef = useRef(null)
 
   const filters = useMemo(
     () => ({ ...initialFilters, ...parseFilters(searchParams) }),
@@ -501,25 +512,91 @@ export function ReviewAdsInterface({
     updateParams({ search: val || null, page: 1 })
   }
 
-  const openAd = (ad) => {
+  const openAd = useCallback((ad) => {
+    if (!ad?._id) return
     setSelectedAd(ad)
     updateParams({ ad_id: ad._id }, { replace: true })
-  }
+    scrollQueueItemIntoView(ad._id)
+  }, [updateParams])
 
-  const closeAd = () => {
+  const closeAd = useCallback(() => {
     setSelectedAd(null)
     updateParams({ ad_id: null }, { replace: true })
-  }
+  }, [updateParams])
+
+  const applyQueuePlan = useCallback((plan) => {
+    if (plan.replaced) setAds(plan.list)
+    if (plan.type === 'item' && plan.item) {
+      openAd(plan.item)
+      return
+    }
+    if (plan.type === 'page') {
+      pendingSelectRef.current = plan.edge
+      updateParams({ page: plan.page, ad_id: null })
+      return
+    }
+    if (plan.type === 'close') closeAd()
+  }, [openAd, updateParams, closeAd])
+
+  useEffect(() => {
+    const edge = pendingSelectRef.current
+    if (!edge) return
+    const list = initialAds || []
+    if (!list.length) return
+    pendingSelectRef.current = null
+    const item = pickQueueEdge(list, edge)
+    if (item) openAd(item)
+    else closeAd()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only the new page rows
+  }, [initialAds])
 
   const selectedIndex = selectedAd
-    ? ads.findIndex((a) => a._id === selectedAd._id)
+    ? ads.findIndex((a) => idsEqual(a._id, selectedAd._id))
     : -1
 
-  const navigateAd = (dir) => {
-    if (selectedIndex < 0) return
-    const next = ads[selectedIndex + dir]
-    if (next) openAd(next)
-  }
+  const navigateAd = useCallback((dir) => {
+    if (!selectedAd) return
+    applyQueuePlan(planQueueMove({
+      list: ads,
+      selectedId: selectedAd._id,
+      dir,
+      page: currentPage,
+      totalPages,
+    }))
+  }, [selectedAd, ads, currentPage, totalPages, applyQueuePlan])
+
+  const handleReviewComplete = useCallback((reviewed) => {
+    const id = reviewed?._id || selectedAd?._id
+    if (!id) return
+    if (filters.status === 'pending') {
+      applyQueuePlan(planQueueMove({
+        list: ads,
+        selectedId: id,
+        dir: 1,
+        page: currentPage,
+        totalPages,
+        dropCurrent: true,
+      }))
+      return
+    }
+    if (reviewed) {
+      setSelectedAd(reviewed)
+      setAds((prev) => prev.map((item) => (
+        idsEqual(item._id, reviewed._id) ? { ...item, ...reviewed } : item
+      )))
+    }
+  }, [filters.status, ads, selectedAd, currentPage, totalPages, applyQueuePlan])
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (!selectedAd) return
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return
+      if (e.key === 'ArrowLeft') { e.preventDefault(); navigateAd(-1) }
+      else if (e.key === 'ArrowRight') { e.preventDefault(); navigateAd(1) }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [selectedAd, navigateAd])
 
   const rangeFrom = ads.length === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1
   const rangeTo = ads.length === 0 ? 0 : rangeFrom + ads.length - 1
@@ -932,15 +1009,22 @@ export function ReviewAdsInterface({
             )}
           </div>
           <ReviewAdForm
+            key={selectedAd._id}
             ad={selectedAd}
             project={project}
             clientDetails={clientDetails}
             onClose={closeAd}
             onNavigate={navigateAd}
-            hasPrev={selectedIndex > 0}
-            hasNext={selectedIndex >= 0 && selectedIndex < ads.length - 1}
+            hasPrev={queueHasPrev({ selectedIndex, page: currentPage })}
+            hasNext={queueHasNext({
+              selectedIndex,
+              listLength: ads.length,
+              page: currentPage,
+              totalPages,
+            })}
             setAds={setAds}
             setSelectedAd={setSelectedAd}
+            onReviewComplete={handleReviewComplete}
           />
         </div>
       )}

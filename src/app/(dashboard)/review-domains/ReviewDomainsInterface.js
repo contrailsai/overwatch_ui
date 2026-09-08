@@ -17,6 +17,14 @@ import { DateFilterPopover } from '@/components/DateFilterPopover'
 import { domainScreenshotUrl, isDomainOnline, collectDomainViolations } from '@/lib/domains/domain-display'
 import { getDomainById } from './actions'
 import ReviewDomainForm from './ReviewDomainDetails'
+import {
+  planQueueMove,
+  pickQueueEdge,
+  queueHasPrev,
+  queueHasNext,
+  scrollQueueItemIntoView,
+  idsEqual,
+} from '@/lib/list-queue-nav'
 
 const REVIEW_STATUS_OPTIONS = [
   { value: 'pending', label: 'Pending review' },
@@ -63,6 +71,7 @@ function DomainListRow({ domain, isActive, onOpen }) {
     <li>
       <button
         type="button"
+        data-queue-id={domain._id}
         onClick={() => onOpen(domain)}
         className={cn(
           'w-full text-left px-3 py-2.5 flex gap-2.5 transition-colors duration-150',
@@ -157,7 +166,7 @@ function DomainTableRow({ domain, onOpen }) {
   const violations = collectDomainViolations(domain)
 
   return (
-    <tr onClick={() => onOpen(domain)} className="transition-all cursor-pointer group hover:bg-slate-50">
+    <tr data-queue-id={domain._id} onClick={() => onOpen(domain)} className="transition-all cursor-pointer group hover:bg-slate-50">
       <td className="px-2 sm:px-3 whitespace-nowrap align-middle hidden sm:table-cell border-b border-slate-50">
         <DomainRiskCell risk={risk} />
       </td>
@@ -261,6 +270,7 @@ export function ReviewDomainsInterface({
   const [listCollapsed, setListCollapsed] = useState(false)
   const [showFilters, setShowFilters] = useState(false)
   const detailRequestId = useRef(0)
+  const pendingSelectRef = useRef(null)
   const [, startTransition] = useTransition()
 
   useEffect(() => {
@@ -275,7 +285,7 @@ export function ReviewDomainsInterface({
     }
   }, [initialDomain])
 
-  const updateQueryParams = useCallback((newParams) => {
+  const updateQueryParams = useCallback((newParams, options = {}) => {
     const params = new URLSearchParams(searchParams.toString())
     Object.entries(newParams).forEach(([key, value]) => {
       if (
@@ -288,9 +298,9 @@ export function ReviewDomainsInterface({
         params.set(key, value)
       }
     })
-    if (!newParams.page) params.delete('page')
     startTransition(() => {
-      router.push(`${pathname}?${params.toString()}`)
+      const method = options.replace ? router.replace : router.push
+      method(`${pathname}?${params.toString()}`)
     })
   }, [router, pathname, searchParams])
 
@@ -311,13 +321,14 @@ export function ReviewDomainsInterface({
     })
   }
 
-  const openDomain = async (domain) => {
+  const openDomain = useCallback(async (domain) => {
     if (!domain?._id) return
     const requestId = ++detailRequestId.current
     setSelectedDomain(domain)
     setDetailError(null)
     setDetailLoading(true)
-    updateQueryParams({ domain_id: domain._id })
+    updateQueryParams({ domain_id: domain._id }, { replace: true })
+    scrollQueueItemIntoView(domain._id)
 
     try {
       const full = await getDomainById(domain._id)
@@ -335,25 +346,86 @@ export function ReviewDomainsInterface({
         setDetailLoading(false)
       }
     }
-  }
+  }, [updateQueryParams])
 
-  const closeDomain = () => {
+  const closeDomain = useCallback(() => {
     setSelectedDomain(null)
     setDetailLoading(false)
     setDetailError(null)
     setListCollapsed(false)
-    updateQueryParams({ domain_id: null })
-  }
+    updateQueryParams({ domain_id: null }, { replace: true })
+  }, [updateQueryParams])
+
+  const applyQueuePlan = useCallback((plan) => {
+    if (plan.replaced) setDomains(plan.list)
+    if (plan.type === 'item' && plan.item) {
+      openDomain(plan.item)
+      return
+    }
+    if (plan.type === 'page') {
+      pendingSelectRef.current = plan.edge
+      updateQueryParams({ page: plan.page, domain_id: null })
+      return
+    }
+    if (plan.type === 'close') closeDomain()
+  }, [openDomain, updateQueryParams, closeDomain])
+
+  useEffect(() => {
+    const edge = pendingSelectRef.current
+    if (!edge) return
+    const list = Array.isArray(initialDomains) ? initialDomains : (initialDomains?.domains || [])
+    if (!list.length) return
+    pendingSelectRef.current = null
+    const item = pickQueueEdge(list, edge)
+    if (item) openDomain(item)
+    else closeDomain()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only the new page rows
+  }, [initialDomains])
 
   const selectedIndex = selectedDomain
-    ? domains.findIndex((d) => d._id === selectedDomain._id)
+    ? domains.findIndex((d) => idsEqual(d._id, selectedDomain._id))
     : -1
 
-  const navigateDomain = (dir) => {
-    if (selectedIndex < 0) return
-    const next = domains[selectedIndex + dir]
-    if (next) openDomain(next)
-  }
+  const navigateDomain = useCallback((dir) => {
+    if (!selectedDomain) return
+    applyQueuePlan(planQueueMove({
+      list: domains,
+      selectedId: selectedDomain._id,
+      dir,
+      page: currentPage,
+      totalPages,
+    }))
+  }, [selectedDomain, domains, currentPage, totalPages, applyQueuePlan])
+
+  const handleReviewComplete = useCallback((reviewed) => {
+    if (!reviewed?._id) return
+    if (initialFilters.status === 'pending') {
+      applyQueuePlan(planQueueMove({
+        list: domains,
+        selectedId: reviewed._id,
+        dir: 1,
+        page: currentPage,
+        totalPages,
+        dropCurrent: true,
+      }))
+      return
+    }
+    setSelectedDomain(reviewed)
+    setDomains((prev) => prev.map((item) => (
+      idsEqual(item._id, reviewed._id) ? { ...item, ...reviewed } : item
+    )))
+  }, [initialFilters.status, domains, currentPage, totalPages, applyQueuePlan])
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (!selectedDomain) return
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return
+      if (e.key === 'ArrowLeft') { e.preventDefault(); navigateDomain(-1) }
+      else if (e.key === 'ArrowRight') { e.preventDefault(); navigateDomain(1) }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [selectedDomain, navigateDomain])
 
   const handleSearchSubmit = (e) => {
     if (e.key === 'Enter') {
@@ -771,15 +843,22 @@ export function ReviewDomainsInterface({
             </div>
           ) : (
             <ReviewDomainForm
+              key={selectedDomain._id}
               domain={selectedDomain}
               project={project}
               clientDetails={clientDetails}
               onClose={closeDomain}
               onNavigate={navigateDomain}
-              hasPrev={selectedIndex > 0}
-              hasNext={selectedIndex >= 0 && selectedIndex < domains.length - 1}
+              hasPrev={queueHasPrev({ selectedIndex, page: currentPage })}
+              hasNext={queueHasNext({
+                selectedIndex,
+                listLength: domains.length,
+                page: currentPage,
+                totalPages,
+              })}
               setDomains={setDomains}
               setSelectedDomain={setSelectedDomain}
+              onReviewComplete={handleReviewComplete}
             />
           )}
         </div>

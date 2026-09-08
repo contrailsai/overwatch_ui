@@ -18,6 +18,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/u
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
+import {
+  planQueueMove,
+  pickQueueEdge,
+  queueHasPrev,
+  queueHasNext,
+  idsEqual,
+} from '@/lib/list-queue-nav'
 import { useIsMobile } from '@/hooks/use-media-query'
 
 import ReviewForm from "./ReviewDetails"
@@ -226,9 +233,27 @@ export function ReviewInterface({
 
   const [isPending, startTransition] = useTransition()
   const postRefs = useRef({})
+  const pendingSelectRef = useRef(null)
 
   useEffect(() => {
     setPosts(initialPosts)
+  }, [initialPosts])
+
+  useEffect(() => {
+    const edge = pendingSelectRef.current
+    if (!edge) return
+    const list = initialPosts || []
+    if (!list.length) return
+    pendingSelectRef.current = null
+    const item = pickQueueEdge(list, edge)
+    if (item) {
+      setSelectedPost(item)
+      setTimeout(() => {
+        postRefs.current[item._id]?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }, 100)
+    } else {
+      setSelectedPost(null)
+    }
   }, [initialPosts])
 
   useEffect(() => {
@@ -248,10 +273,6 @@ export function ReviewInterface({
         params.set(key, value)
       }
     })
-
-    if (!newParams.page) {
-      params.delete('page')
-    }
 
     startTransition(() => {
       router.push(`${pathname}?${params.toString()}`, { scroll: false })
@@ -383,27 +404,59 @@ export function ReviewInterface({
 
   const navigatePost = useCallback((direction) => {
     if (!selectedPost) return
-    const currentIndex = posts.findIndex(p => p._id === selectedPost._id)
-    const nextIndex = direction === 'next' ? currentIndex + 1 : currentIndex - 1
+    const plan = planQueueMove({
+      list: posts,
+      selectedId: selectedPost._id,
+      dir: direction,
+      page: currentPage,
+      totalPages,
+    })
 
-    if (nextIndex >= 0 && nextIndex < posts.length) {
-      const nextPost = posts[nextIndex]
-      setSelectedPost(nextPost)
-
+    if (plan.type === 'item' && plan.item) {
+      setSelectedPost(plan.item)
+      const nextIndex = posts.findIndex((p) => idsEqual(p._id, plan.item._id))
       const neighborIds = [
         posts[nextIndex - 1]?._id,
         posts[nextIndex + 1]?._id,
       ].filter(Boolean)
       prefetchTopicsForPosts(neighborIds)
-
       setTimeout(() => {
-        const postElement = postRefs.current[nextPost._id]
-        if (postElement) {
-          postElement.scrollIntoView({ behavior: 'smooth', block: 'center' })
-        }
+        postRefs.current[plan.item._id]?.scrollIntoView({ behavior: 'smooth', block: 'center' })
       }, 100)
+      return
     }
-  }, [selectedPost, posts])
+
+    if (plan.type === 'page') {
+      pendingSelectRef.current = plan.edge
+      updateQueryParams({ page: plan.page, case_id: null })
+    }
+  }, [selectedPost, posts, currentPage, totalPages, updateQueryParams])
+
+  const handleReviewComplete = useCallback((reviewedId) => {
+    if (initialFilters.status !== 'pending') return
+    const plan = planQueueMove({
+      list: posts,
+      selectedId: reviewedId,
+      dir: 1,
+      page: currentPage,
+      totalPages,
+      dropCurrent: true,
+    })
+    if (plan.replaced) setPosts(plan.list)
+    if (plan.type === 'item' && plan.item) {
+      setSelectedPost(plan.item)
+      setTimeout(() => {
+        postRefs.current[plan.item._id]?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }, 100)
+      return
+    }
+    if (plan.type === 'page') {
+      pendingSelectRef.current = plan.edge
+      updateQueryParams({ page: plan.page, case_id: null })
+      return
+    }
+    if (plan.type === 'close') setSelectedPost(null)
+  }, [initialFilters.status, posts, currentPage, totalPages, updateQueryParams])
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -885,9 +938,18 @@ export function ReviewInterface({
             clientDetails={clientDetails}
             onClose={() => setSelectedPost(null)}
             onNavigate={navigatePost}
-            hasPrev={posts.findIndex(p => p._id === selectedPost._id) > 0}
-            hasNext={posts.findIndex(p => p._id === selectedPost._id) < posts.length - 1}
+            hasPrev={queueHasPrev({
+              selectedIndex: posts.findIndex((p) => idsEqual(p._id, selectedPost._id)),
+              page: currentPage,
+            })}
+            hasNext={queueHasNext({
+              selectedIndex: posts.findIndex((p) => idsEqual(p._id, selectedPost._id)),
+              listLength: posts.length,
+              page: currentPage,
+              totalPages,
+            })}
             setPosts={setPosts}
+            onReviewComplete={handleReviewComplete}
           />
         )}
       </div>

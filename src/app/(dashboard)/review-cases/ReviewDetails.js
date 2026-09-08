@@ -52,7 +52,7 @@ const CORRECTION_POLL_INTERVAL_MS = 5000
 const CORRECTION_POLL_TIMEOUT_MS = 180000
 const CORRECTION_POLL_BURST_MS = 60000
 
-export default function ReviewForm({ post, project, clientDetails, onClose, onNavigate, hasPrev, hasNext, setPosts }) {
+export default function ReviewForm({ post, project, clientDetails, onClose, onNavigate, hasPrev, hasNext, setPosts, onReviewComplete }) {
     const { project_details } = project
     const initialFormDefaults = buildReviewFormDefaults(post, project.project_details)
     const submit_to_edit = submitCaseReview.bind(null, project, clientDetails)
@@ -102,15 +102,17 @@ export default function ReviewForm({ post, project, clientDetails, onClose, onNa
     // Sync state to parent AND local UI on successful submission
     useEffect(() => {
         if (state?.success && state?.updatedFields) {
-            // Update parent list
             if (setPosts) {
                 setPosts(prevPosts => prevPosts.map(p =>
                     p._id === localPost._id ? { ...p, ...state.updatedFields } : p
                 ))
             }
 
-            // Update local UI immediately (this makes the 'Reviewed' badge appear!)
             setLocalPost(prev => ({ ...prev, ...state.updatedFields }))
+
+            if (onReviewComplete) {
+                onReviewComplete(localPost._id)
+            }
 
             // Trigger temporary success notification
             setShowSuccess(true)

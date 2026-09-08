@@ -822,11 +822,10 @@ export function ProfilesList({ profiles, project, initialFilters, currentPage })
                 params.set(key, value)
             }
         })
-        if (!newParams.page) params.delete('page')
         router.push(`${pathname}?${params.toString()}`)
     }, [router, pathname, searchParams])
 
-    const handleFilterChange = (key, value) => updateQueryParams({ [key]: value })
+    const handleFilterChange = (key, value) => updateQueryParams({ [key]: value, page: 1 })
 
     const handlePageChange = (newPage) => {
         if (newPage < 1 || newPage > totalPages) return

@@ -58,6 +58,7 @@ export default function ReviewDomainForm({
   hasNext,
   setDomains,
   setSelectedDomain,
+  onReviewComplete,
 }) {
   const { project_details } = project
   const projectLabels = project_details?.labels || []
@@ -105,6 +106,10 @@ export default function ReviewDomainForm({
   useEffect(() => {
     if (state?.success && state.domain) {
       setShowSuccess(true)
+      if (onReviewComplete) {
+        onReviewComplete(state.domain)
+        return
+      }
       setLocalDomain(state.domain)
       setSelectedDomain?.(state.domain)
       setDomains?.((prev) => prev.map((item) => (item._id === state.domain._id ? { ...item, ...state.domain } : item)))

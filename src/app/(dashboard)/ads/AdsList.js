@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useEffect, useMemo, useTransition } from 'react'
+import { useState, useCallback, useEffect, useMemo, useTransition, useRef } from 'react'
 import {
   Filter, X, ChevronLeft, ChevronRight,
   Facebook, Instagram, Youtube, CheckCircle,
@@ -35,6 +35,15 @@ import { AdChannelFilter } from '@/components/ads/AdChannelFilter'
 import ReportGenerate from '@/components/ReportGenerate'
 import { trackClientClick } from './actions'
 import AdDetailPanel from './AdDetails'
+import {
+  planQueueMove,
+  pickQueueEdge,
+  queueHasPrev,
+  queueHasNext,
+  scrollQueueItemIntoView,
+  clientStatusMatchesFilter,
+  idsEqual,
+} from '@/lib/list-queue-nav'
 
 const FILTER_LABEL = 'text-[10px] font-bold text-slate-500 uppercase tracking-wide'
 const FILTER_TRIGGER =
@@ -214,6 +223,7 @@ function AdListRow({ ad, isActive, isChecked, onOpen, onToggle }) {
       <div
         role="button"
         tabIndex={0}
+        data-queue-id={ad._id}
         onClick={() => onOpen(ad)}
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') {
@@ -355,6 +365,7 @@ function AdTableRow({ ad, isChecked, onOpen, onToggle }) {
 
   return (
     <tr
+      data-queue-id={ad._id}
       onClick={() => onOpen(ad)}
       className={cn(
         'transition-all cursor-pointer group',
@@ -469,6 +480,7 @@ export function AdsList({
   const [detailedPdfState, setDetailedPdfState] = useState({ loading: false, statusText: '' })
   const [detailedDocxState, setDetailedDocxState] = useState({ loading: false, statusText: '' })
   const [toast, setToast] = useState(null)
+  const pendingSelectRef = useRef(null)
 
   const showToast = (message, type = 'error') => {
     setToast({ message, type })
@@ -497,10 +509,11 @@ export function AdsList({
     if (selectedAd?._id === adId) {
       setSelectedAd((prev) => ({ ...prev, ...updates }))
     }
-    router.refresh()
   }
 
-  const selectedIndex = selectedAd ? localAds.findIndex((a) => a._id === selectedAd._id) : -1
+  const selectedIndex = selectedAd
+    ? localAds.findIndex((a) => idsEqual(a._id, selectedAd._id))
+    : -1
 
   const updateQueryParams = useCallback((newParams, { replace = false } = {}) => {
     const params = new URLSearchParams(searchParams.toString())
@@ -521,24 +534,60 @@ export function AdsList({
   const openAd = useCallback((ad) => {
     setSelectedAd(ad)
     updateQueryParams({ ad_id: ad._id }, { replace: true })
+    scrollQueueItemIntoView(ad._id)
   }, [updateQueryParams])
 
   const closeAd = useCallback(() => {
+    const status = selectedAd?.client_status
+    if (selectedAd && !clientStatusMatchesFilter(status, initialFilters.status)) {
+      setLocalAds((prev) => prev.filter((a) => !idsEqual(a._id, selectedAd._id)))
+    }
     setSelectedAd(null)
     if (searchParams.has('ad_id')) {
       updateQueryParams({ ad_id: null }, { replace: true })
     }
-  }, [searchParams, updateQueryParams])
+  }, [searchParams, updateQueryParams, selectedAd, initialFilters.status])
+
+  const applyQueuePlan = useCallback((plan) => {
+    if (plan.replaced) setLocalAds(plan.list)
+    if (plan.type === 'item' && plan.item) {
+      openAd(plan.item)
+      return
+    }
+    if (plan.type === 'page') {
+      pendingSelectRef.current = plan.edge
+      updateQueryParams({ page: plan.page, ad_id: null })
+      return
+    }
+    if (plan.type === 'close') closeAd()
+  }, [openAd, updateQueryParams, closeAd])
+
+  useEffect(() => {
+    const edge = pendingSelectRef.current
+    if (!edge) return
+    if (!adList.length) return
+    pendingSelectRef.current = null
+    const item = pickQueueEdge(adList, edge)
+    if (item) openAd(item)
+    else closeAd()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only the new page rows
+  }, [adList])
 
   const navigateAd = useCallback((direction) => {
     if (!selectedAd) return
-    const currentIndex = localAds.findIndex((a) => a._id === selectedAd._id)
-    if (currentIndex === -1) return
-    const nextIndex = direction === 'next' ? currentIndex + 1 : currentIndex - 1
-    if (nextIndex >= 0 && nextIndex < localAds.length) {
-      openAd(localAds[nextIndex])
-    }
-  }, [selectedAd, localAds, openAd])
+    const dropCurrent = !clientStatusMatchesFilter(
+      selectedAd.client_status,
+      initialFilters.status,
+    )
+    applyQueuePlan(planQueueMove({
+      list: localAds,
+      selectedId: selectedAd._id,
+      dir: direction,
+      page: currentPage,
+      totalPages,
+      dropCurrent,
+    }))
+  }, [selectedAd, localAds, currentPage, totalPages, initialFilters.status, applyQueuePlan])
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -1190,8 +1239,13 @@ export function AdsList({
             onUpdate={handleAdUpdate}
             onNext={() => navigateAd('next')}
             onPrev={() => navigateAd('prev')}
-            hasNext={selectedIndex >= 0 && selectedIndex < localAds.length - 1}
-            hasPrev={selectedIndex > 0}
+            hasNext={queueHasNext({
+              selectedIndex,
+              listLength: localAds.length,
+              page: currentPage,
+              totalPages,
+            })}
+            hasPrev={queueHasPrev({ selectedIndex, page: currentPage })}
           />
         </div>
       )}

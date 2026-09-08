@@ -21,6 +21,15 @@ import {
 import { DateFilterPopover } from '@/components/DateFilterPopover'
 import { getDomainById } from './actions'
 import DomainDetailPanel from './DomainDetails'
+import {
+  planQueueMove,
+  pickQueueEdge,
+  queueHasPrev,
+  queueHasNext,
+  scrollQueueItemIntoView,
+  clientStatusMatchesFilter,
+  idsEqual,
+} from '@/lib/list-queue-nav'
 
 const CLIENT_STATUS_OPTIONS = [
   { value: 'all', label: 'All' },
@@ -90,6 +99,7 @@ function DomainListRow({ domain, isActive, onOpen, compact }) {
     <li>
       <button
         type="button"
+        data-queue-id={domain._id}
         onClick={() => onOpen(domain)}
         className={cn(
           'w-full text-left flex gap-2.5 transition-colors duration-150',
@@ -200,7 +210,7 @@ function DomainTableRow({ domain, onOpen }) {
   const violations = collectDomainViolations(domain)
 
   return (
-    <tr onClick={() => onOpen(domain)} className="transition-all cursor-pointer group hover:bg-slate-50">
+    <tr data-queue-id={domain._id} onClick={() => onOpen(domain)} className="transition-all cursor-pointer group hover:bg-slate-50">
       <td className="px-2 sm:px-3 whitespace-nowrap align-middle hidden sm:table-cell border-b border-slate-50">
         <DomainRiskCell risk={risk} />
       </td>
@@ -331,6 +341,7 @@ export function DomainsList({
   const [listCollapsed, setListCollapsed] = useState(false)
   const [showFilters, setShowFilters] = useState(false)
   const detailRequestId = useRef(0)
+  const pendingSelectRef = useRef(null)
   const [, startTransition] = useTransition()
 
   useEffect(() => {
@@ -349,7 +360,7 @@ export function DomainsList({
     }
   }, [initialDomain])
 
-  const updateQueryParams = useCallback((newParams) => {
+  const updateQueryParams = useCallback((newParams, options = {}) => {
     const params = new URLSearchParams(searchParams.toString())
     Object.entries(newParams).forEach(([key, value]) => {
       if (value === null || value === undefined || value === 'all' || value === '') {
@@ -359,7 +370,8 @@ export function DomainsList({
       }
     })
     startTransition(() => {
-      router.push(`${pathname}?${params.toString()}`)
+      const method = options.replace ? router.replace : router.push
+      method(`${pathname}?${params.toString()}`)
     })
   }, [router, pathname, searchParams])
 
@@ -371,7 +383,8 @@ export function DomainsList({
     setSelectedDomain(domain)
     setDetailError(null)
     setDetailLoading(true)
-    updateQueryParams({ domain_id: domain._id })
+    updateQueryParams({ domain_id: domain._id }, { replace: true })
+    scrollQueueItemIntoView(domain._id)
 
     try {
       const full = await getDomainById(domain._id)
@@ -392,30 +405,68 @@ export function DomainsList({
   }, [updateQueryParams])
 
   const closeDomain = useCallback(() => {
+    const status = selectedDomain?.client_status
+    if (selectedDomain && !clientStatusMatchesFilter(status, initialFilters.status)) {
+      setLocalDomains((prev) => prev.filter((d) => !idsEqual(d._id, selectedDomain._id)))
+    }
     setSelectedDomain(null)
     setDetailLoading(false)
     setDetailError(null)
     setListCollapsed(false)
-    updateQueryParams({ domain_id: null })
-  }, [updateQueryParams])
+    updateQueryParams({ domain_id: null }, { replace: true })
+  }, [selectedDomain, initialFilters.status, updateQueryParams])
 
   const handleDomainUpdate = (domainId, updates) => {
     setLocalDomains((prev) => prev.map((d) => (d._id === domainId ? { ...d, ...updates } : d)))
     if (selectedDomain?._id === domainId) {
       setSelectedDomain((prev) => ({ ...prev, ...updates }))
     }
-    router.refresh()
   }
 
+  const applyQueuePlan = useCallback((plan) => {
+    if (plan.replaced) setLocalDomains(plan.list)
+    if (plan.type === 'item' && plan.item) {
+      openDomain(plan.item)
+      return
+    }
+    if (plan.type === 'page') {
+      pendingSelectRef.current = plan.edge
+      updateQueryParams({ page: plan.page, domain_id: null })
+      return
+    }
+    if (plan.type === 'close') closeDomain()
+  }, [openDomain, updateQueryParams, closeDomain])
+
+  useEffect(() => {
+    const edge = pendingSelectRef.current
+    if (!edge) return
+    if (!domainList.length) return
+    pendingSelectRef.current = null
+    const item = pickQueueEdge(domainList, edge)
+    if (item) openDomain(item)
+    else closeDomain()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only the new page rows
+  }, [domainList])
+
   const selectedIndex = selectedDomain
-    ? localDomains.findIndex((d) => d._id === selectedDomain._id)
+    ? localDomains.findIndex((d) => idsEqual(d._id, selectedDomain._id))
     : -1
 
   const navigateDomain = useCallback((dir) => {
-    if (selectedIndex < 0) return
-    const next = localDomains[selectedIndex + dir]
-    if (next) openDomain(next)
-  }, [selectedIndex, localDomains, openDomain])
+    if (!selectedDomain) return
+    const dropCurrent = !clientStatusMatchesFilter(
+      selectedDomain.client_status,
+      initialFilters.status,
+    )
+    applyQueuePlan(planQueueMove({
+      list: localDomains,
+      selectedId: selectedDomain._id,
+      dir,
+      page: currentPage,
+      totalPages,
+      dropCurrent,
+    }))
+  }, [selectedDomain, localDomains, currentPage, totalPages, initialFilters.status, applyQueuePlan])
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -844,8 +895,13 @@ export function DomainsList({
               onClose={closeDomain}
               onUpdate={handleDomainUpdate}
               onNavigate={navigateDomain}
-              hasNext={selectedIndex >= 0 && selectedIndex < localDomains.length - 1}
-              hasPrev={selectedIndex > 0}
+              hasNext={queueHasNext({
+                selectedIndex,
+                listLength: localDomains.length,
+                page: currentPage,
+                totalPages,
+              })}
+              hasPrev={queueHasPrev({ selectedIndex, page: currentPage })}
             />
           )}
         </div>
