@@ -3,7 +3,7 @@
 import { ObjectId } from 'mongodb'
 import clientPromise from '@/utils/mongodb/client'
 import { requireAuthContext, requireRole } from '@/utils/auth-context'
-import { postsCollection, poisCollection } from '@/utils/mongodb/collections'
+import { postsCollection, poisCollection, profilesCollection } from '@/utils/mongodb/collections'
 import { traceAction } from '@/utils/tracing'
 import { logActionError, LOKI_STREAMS } from '@/utils/otel-logger'
 import { getSignedImageUrl, getSignedUploadUrl, buildS3PublicUrl, headS3Object } from '@/utils/aws/s3'
@@ -32,6 +32,7 @@ import {
   mergeAliasFieldsIntoParent,
   uniquePoiStrings,
   poiListSortStages,
+  POI_POSTS_PAGE_SIZE,
 } from '@/lib/pois/poi-helpers'
 
 async function signPoiImage(poi) {
@@ -115,6 +116,35 @@ async function serializeSignedPoi(doc, extra = {}) {
     ...extra,
   })
 }
+
+export const getPoiFilterOptions = traceAction('getPoiFilterOptions', async () => {
+  try {
+    const { dbName } = await requireAuthContext()
+    const client = await clientPromise
+    const docs = await poisCollection(client.db(dbName))
+      .find(parentPoiFilter())
+      .project({ name: 1, display_name: 1 })
+      .sort({ display_name: 1, name: 1 })
+      .limit(500)
+      .toArray()
+
+    return {
+      pois: docs
+        .filter((doc) => doc.name)
+        .map((doc) => ({
+          name: doc.name,
+          display_name: doc.display_name || doc.name,
+        })),
+    }
+  } catch (e) {
+    logActionError({
+      loki_stream: LOKI_STREAMS.profiles,
+      app_action: 'getPoiFilterOptions',
+      message: 'pois.getPoiFilterOptions failed',
+    }, e)
+    return { pois: [] }
+  }
+})
 
 export const getPois = traceAction('getPois', async ({
   tier = 'all',
@@ -364,17 +394,50 @@ export const getPoiProfiles = traceAction('getPoiProfiles', async (poiId, range 
       ])
       .toArray()
 
-    return {
-      profiles: rows.map((r) => ({
-        profile_id: r.profile_id?.toString?.() ?? r.profile_id ?? null,
+    const profileIds = rows
+      .map((r) => r.profile_id)
+      .filter((id) => id && ObjectId.isValid(id))
+      .map((id) => (id instanceof ObjectId ? id : new ObjectId(String(id))))
+    const profileDocs = profileIds.length
+      ? await profilesCollection(db)
+          .find({ _id: { $in: profileIds } })
+          .project({
+            'list.follower_count': 1,
+            'enrichment.profile_pic_s3': 1,
+            'metadata.s3_url': 1,
+          })
+          .toArray()
+      : []
+    const profileById = new Map(profileDocs.map((doc) => [doc._id.toString(), doc]))
+
+    const profiles = await Promise.all(rows.map(async (r) => {
+      const profileId = r.profile_id?.toString?.() ?? r.profile_id ?? null
+      const profile = profileId ? profileById.get(String(profileId)) : null
+      const picS3 = profile?.enrichment?.profile_pic_s3 || profile?.metadata?.s3_url || null
+      let signedProfilePic = null
+      if (picS3) {
+        try {
+          signedProfilePic = await getSignedImageUrl(picS3)
+        } catch {
+          signedProfilePic = null
+        }
+      }
+      const followerRaw = profile?.list?.follower_count
+      const followerCount = followerRaw == null || followerRaw === '' ? null : Number(followerRaw)
+      return {
+        profile_id: profileId,
         platform: r.platform || 'unknown',
         username: r.username || r.display_name || 'Unknown',
         display_name: r.display_name || r.username || 'Unknown',
         profile_url: r.profile_url || null,
         posts: r.posts || 0,
         engagement: Math.round(r.engagement || 0),
-      })),
-    }
+        follower_count: Number.isFinite(followerCount) ? followerCount : null,
+        profile_pic: signedProfilePic,
+      }
+    }))
+
+    return { profiles }
   } catch (e) {
     logActionError({
       loki_stream: LOKI_STREAMS.profiles,
@@ -423,73 +486,104 @@ async function serializePoiPostCard(post) {
   }
 }
 
-export const getPoiRecentPosts = traceAction('getPoiRecentPosts', async (poiId, range = {}, limit = 12) => {
+function parsePoiPostsPage(pageOrOptions, maybeLimit, defaultLimit) {
+  if (pageOrOptions && typeof pageOrOptions === 'object') {
+    return {
+      page: Math.max(Number(pageOrOptions.page) || 1, 1),
+      limit: Math.min(Math.max(Number(pageOrOptions.limit) || defaultLimit, 1), 50),
+    }
+  }
+  const limit = Math.min(Math.max(Number(maybeLimit ?? pageOrOptions) || defaultLimit, 1), 50)
+  const page = Number.isFinite(Number(maybeLimit)) ? Math.max(Number(pageOrOptions) || 1, 1) : 1
+  return { page, limit }
+}
+
+export const getPoiRecentPosts = traceAction('getPoiRecentPosts', async (poiId, range = {}, pageOrOptions = 1, maybeLimit) => {
   try {
     const { dbName } = await requireAuthContext()
     const oid = parseObjectId(poiId)
-    if (!oid) return { posts: [], error: 'Invalid POI id' }
+    if (!oid) return { posts: [], total: 0, page: 1, hasMore: false, error: 'Invalid POI id' }
 
     const client = await clientPromise
     const db = client.db(dbName)
     const poi = await poisCollection(db).findOne({ _id: oid })
-    if (!poi) return { posts: [], error: 'POI not found' }
+    if (!poi) return { posts: [], total: 0, page: 1, hasMore: false, error: 'POI not found' }
 
     const { from, to } = resolvePoiDateRange(range)
     const match = buildPoiPostMatch(poi, { from, to })
-    const safeLimit = Math.min(Math.max(Number(limit) || 12, 1), 24)
+    const { page, limit } = parsePoiPostsPage(pageOrOptions, maybeLimit, POI_POSTS_PAGE_SIZE)
+    const skip = (page - 1) * limit
 
-    const docs = await postsCollection(db)
-      .find(match)
-      .sort({ 'list.sourced_at': -1 })
-      .limit(safeLimit)
-      .toArray()
+    const [docs, total] = await Promise.all([
+      postsCollection(db)
+        .find(match)
+        .sort({ 'list.sourced_at': -1 })
+        .skip(skip)
+        .limit(limit)
+        .toArray(),
+      postsCollection(db).countDocuments(match),
+    ])
 
     const posts = await Promise.all(docs.map(serializePoiPostCard))
 
-    return { posts }
+    return {
+      posts,
+      total,
+      page,
+      hasMore: skip + docs.length < total,
+    }
   } catch (e) {
     logActionError({
       loki_stream: LOKI_STREAMS.profiles,
       app_action: 'getPoiRecentPosts',
       message: 'pois.getPoiRecentPosts failed',
     }, e)
-    return { posts: [], error: e.message }
+    return { posts: [], total: 0, page: 1, hasMore: false, error: e.message }
   }
 })
 
-export const getPoiAigcPosts = traceAction('getPoiAigcPosts', async (poiId, range = {}, limit = 60) => {
+export const getPoiAigcPosts = traceAction('getPoiAigcPosts', async (poiId, range = {}, pageOrOptions = 1, maybeLimit) => {
   try {
     const { dbName } = await requireAuthContext()
     const oid = parseObjectId(poiId)
-    if (!oid) return { posts: [], error: 'Invalid POI id' }
+    if (!oid) return { posts: [], total: 0, page: 1, hasMore: false, error: 'Invalid POI id' }
 
     const client = await clientPromise
     const db = client.db(dbName)
     const poi = await poisCollection(db).findOne({ _id: oid })
-    if (!poi) return { posts: [], error: 'POI not found' }
+    if (!poi) return { posts: [], total: 0, page: 1, hasMore: false, error: 'POI not found' }
 
     const { from, to } = resolvePoiDateRange(range)
     const match = buildPoiAigcPostMatch(poi, { from, to })
-    const safeLimit = Math.min(Math.max(Number(limit) || 60, 1), 60)
-    const fetchCap = Math.min(safeLimit * 2, 120)
+    const { page, limit } = parsePoiPostsPage(pageOrOptions, maybeLimit, POI_POSTS_PAGE_SIZE)
+    const skip = (page - 1) * limit
 
-    const docs = await postsCollection(db)
-      .find(match)
-      .sort({ 'list.sourced_at': -1 })
-      .limit(fetchCap)
-      .toArray()
+    const [docs, total] = await Promise.all([
+      postsCollection(db)
+        .find(match)
+        .sort({ 'list.sourced_at': -1 })
+        .skip(skip)
+        .limit(limit)
+        .toArray(),
+      postsCollection(db).countDocuments(match),
+    ])
 
     docs.sort(compareAigcPosts)
-    const posts = await Promise.all(docs.slice(0, safeLimit).map(serializePoiPostCard))
+    const posts = await Promise.all(docs.map(serializePoiPostCard))
 
-    return { posts }
+    return {
+      posts,
+      total,
+      page,
+      hasMore: skip + docs.length < total,
+    }
   } catch (e) {
     logActionError({
       loki_stream: LOKI_STREAMS.profiles,
       app_action: 'getPoiAigcPosts',
       message: 'pois.getPoiAigcPosts failed',
     }, e)
-    return { posts: [], error: e.message }
+    return { posts: [], total: 0, page: 1, hasMore: false, error: e.message }
   }
 })
 
