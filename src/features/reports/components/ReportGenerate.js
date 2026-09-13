@@ -124,12 +124,12 @@ export default function ReportGenerate({
 
   if (toolbar) {
     return (
-      <div className={cn('flex shrink-0 flex-col gap-1.5 min-w-0 max-w-[280px]', className)}>
+      <div className={cn('flex w-max shrink-0 flex-col gap-1.5', className)}>
         {showProgress ? (
-          <ExportProgress statusText={currentState.statusText} className="px-0.5 w-full" />
+          <ExportProgress statusText={currentState.statusText} className="px-0.5 min-w-[16rem]" />
         ) : (
-          <div className="flex w-full min-w-0 items-center gap-2">
-            <div className="flex min-w-0 items-center gap-0.5 rounded-lg border border-slate-200 bg-slate-50 p-0.5">
+          <div className="flex items-center gap-2 flex-nowrap">
+            <div className="flex shrink-0 items-center gap-0.5 rounded-lg border border-slate-200 bg-slate-50 p-0.5">
               {availableFormats.map((f) => (
                 <button
                   key={f.id}
