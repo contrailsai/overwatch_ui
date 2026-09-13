@@ -2,11 +2,13 @@
  * Feeds collection (per-project MongoDB DB resolved via project.mongo_db_map).
  *
  * A Feed is a reviewer-curated collection of content shown to clients. It references
- * topics (by their stable `topic_id`) and/or individual posts (by `Posts._id`).
- * Posts are NOT denormalized into the feed; they are resolved live at read time:
+ * topics (by their stable `topic_id`) and/or individual posts (by `Posts._id`)
+ * and optionally individual ads (by `Ads._id`).
+ * Posts/ads are NOT denormalized into the feed; they are resolved live at read time:
  *   feed.topic_ids -> topics.posts[]  (one query)
  *   union with feed.manual_post_ids
  *   -> Posts $match { _id: { $in } } + reviewed filter (one query)
+ *   feed.manual_ad_ids -> Ads $match (separate query for mixed nexus / future feed UI)
  * This keeps feeds "live" (topic edits cascade automatically) while bounding reads.
  *
  * Document shape:
@@ -16,6 +18,7 @@
  *   description: string,
  *   topic_ids: string[],        // references topics.topic_id e.g. "T00002"
  *   manual_post_ids: string[],  // Posts._id hex strings added directly via search
+ *   manual_ad_ids: string[],    // Ads._id hex strings (mixed feed / nexus)
  *   cover_image_url: string|null,
  *   created_by: string,         // reviewer email
  *   created_at: Date,
@@ -48,6 +51,7 @@ export function serializeFeed(doc) {
   if (!doc) return null
   const topic_ids = Array.isArray(doc.topic_ids) ? doc.topic_ids : []
   const manual_post_ids = Array.isArray(doc.manual_post_ids) ? doc.manual_post_ids : []
+  const manual_ad_ids = Array.isArray(doc.manual_ad_ids) ? doc.manual_ad_ids : []
   const _id = doc._id ? doc._id.toString() : null
   const title = doc.title || 'Untitled feed'
   return {
@@ -57,8 +61,10 @@ export function serializeFeed(doc) {
     description: doc.description || '',
     topic_ids,
     manual_post_ids,
+    manual_ad_ids,
     topic_count: topic_ids.length,
     manual_post_count: manual_post_ids.length,
+    manual_ad_count: manual_ad_ids.length,
     cover_image_url: doc.cover_image_url || null,
     created_by: doc.created_by || null,
     created_at: toIso(doc.created_at),
@@ -81,7 +87,7 @@ export function serializeTopicOption(doc) {
   }
 }
 
-/** Dedupe + trim an array of strings (used for topic_ids / manual_post_ids). */
+/** Dedupe + trim an array of strings (used for topic_ids / manual_post_ids / manual_ad_ids). */
 export function sanitizeStringArray(arr) {
   if (!Array.isArray(arr)) return []
   return [...new Set(arr.filter((v) => typeof v === 'string' && v.trim()).map((v) => v.trim()))]

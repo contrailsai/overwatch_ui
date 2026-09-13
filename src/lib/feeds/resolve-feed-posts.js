@@ -5,7 +5,11 @@ import {
   buildCasesDateFilterStage,
   buildUniqueClustersStage,
 } from '@/lib/posts/pipeline-helpers'
-import { buildCasesListSortPipeline, buildCasesReportSortPipeline } from '@/app/(dashboard)/cases/riskBuckets'
+import {
+  buildCasesListSortStages,
+  buildCasesListSortUnsetStage,
+  buildCasesReportSortPipeline,
+} from '@/app/(dashboard)/cases/riskBuckets'
 
 /** Convert post id strings or ObjectIds to ObjectIds; skip invalid entries. */
 export function toPostObjectIds(ids = []) {
@@ -48,6 +52,16 @@ export async function resolveFeedPostObjectIds(db, feed) {
   return toPostObjectIds([...fromTopics, ...manualIds])
 }
 
+/**
+ * Resolve a feed's manually linked ads (ObjectIds).
+ * Topics do not yet carry ads[]; membership is manual_ad_ids only for now.
+ */
+export async function resolveFeedAdObjectIds(db, feed) {
+  if (!feed) return []
+  const manualIds = Array.isArray(feed.manual_ad_ids) ? feed.manual_ad_ids : []
+  return toPostObjectIds(manualIds)
+}
+
 /** Shared pipeline prefix: feed post id scope + cases filters + date stages. */
 export function buildFeedScopedPipeline(postObjectIds, filters = {}) {
   if (!postObjectIds?.length) return null
@@ -72,16 +86,16 @@ export function buildFeedPostsFacetPipeline(postObjectIds, filters, sort, page, 
   if (!base) return null
 
   const skip = (page - 1) * limit
-  const sortPipeline = buildCasesListSortPipeline(sort)
 
   return [
     ...base,
     {
       $facet: {
         data: [
-          { $sort: sortPipeline },
+          ...buildCasesListSortStages(sort),
           { $skip: skip },
           { $limit: limit },
+          buildCasesListSortUnsetStage(),
         ],
         total: [{ $count: 'total' }],
       },
