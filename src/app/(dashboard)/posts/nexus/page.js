@@ -7,7 +7,7 @@ import { getPostsNexusGraph } from '@/app/(dashboard)/nexus/actions'
 import { PostsNexusClient } from './PostsNexusClient'
 
 export const metadata = {
-  title: 'Posts Nexus',
+  title: 'Nexus-posts',
   description: 'Graph understanding of posts, topics, POIs, and profiles.',
 }
 
@@ -42,8 +42,8 @@ export default async function PostsNexusPage() {
   return (
     <main className="flex flex-1 flex-col h-full min-h-0 overflow-hidden bg-slate-50">
       <PageHeader
-        title="Posts understanding"
-        description="Parent topics, POIs, or profiles → posts with violation colors"
+        title="Nexus-posts"
+        description="Themes, POIs, or profiles → posts with violation colors"
       />
       <PostsNexusClient
         initialGraph={graphData}

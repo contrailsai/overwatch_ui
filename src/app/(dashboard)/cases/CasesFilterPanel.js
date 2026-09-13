@@ -139,6 +139,7 @@ export function CasesFilterPanel({
   setBulkAssignedEmail,
   handleBulkAssign,
   isBulkAssigning,
+  includeToolbarFilters = false,
   applyWhenRangeComplete = false,
   debouncedSearch = false,
   showBulkActionPopover = false,
@@ -203,7 +204,7 @@ export function CasesFilterPanel({
 
   const activeChips = []
 
-  if (initialFilters.risk_priority && initialFilters.risk_priority !== 'all') {
+  if (initialFilters.risk_priority && initialFilters.risk_priority !== 'all' && initialFilters.risk_priority !== 'high') {
     activeChips.push({
       label: `Risk: ${initialFilters.risk_priority}`,
       onRemove: () => handleFilterChange('risk_priority', 'all'),
@@ -481,7 +482,7 @@ export function CasesFilterPanel({
     (initialFilters.unique_clusters === 'true' ||
       initialFilters.unique_clusters === true ||
       initialFilters.platform !== 'all' ||
-      initialFilters.risk_priority !== 'all' ||
+      (initialFilters.risk_priority && initialFilters.risk_priority !== 'all' && initialFilters.risk_priority !== 'high') ||
       initialFilters.client_status !== 'all' ||
       (initialFilters.visibility_status && initialFilters.visibility_status !== 'all') ||
       (initialFilters.violations && initialFilters.violations !== 'all') ||
@@ -880,8 +881,17 @@ export function CasesFilterPanel({
     )
     const similarType = searchParams.get('search_type')
 
+    const toolbarFilters = includeToolbarFilters ? (
+      <>
+        <div className="w-full">{toolbarSearch}</div>
+        <div className="w-full">{toolbarAlertDate}</div>
+        <div className="w-full">{toolbarPoi}</div>
+      </>
+    ) : null
+
     const advancedControls = (
       <>
+        {toolbarFilters}
         <div className={cn(stacked ? 'w-full' : 'min-w-[140px] max-w-[180px] flex-1')}>
           <RiskFilter
             inline={compactInline && stacked}

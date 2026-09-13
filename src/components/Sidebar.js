@@ -203,7 +203,7 @@ export function Sidebar({ user, clientDetails, project }) {
         children: [
           { name: 'Review Cases', href: '/review-cases', icon: ScanEye, show: isReviewer },
           { name: 'Content List', href: '/cases', icon: List, show: true },
-          { name: 'Posts Nexus', href: '/posts/nexus', icon: Waypoints, show: true },
+          { name: 'Nexus-posts', href: '/posts/nexus', icon: Waypoints, show: true },
           { name: 'Review Profiles', href: '/review-profiles', icon: UserRoundPen, show: isReviewer },
           { name: 'Profile List', href: '/profiles', icon: Users, show: true },
           { name: 'POIs', href: '/pois', icon: UserRoundSearch, show: true },
@@ -218,7 +218,7 @@ export function Sidebar({ user, clientDetails, project }) {
         children: [
           { name: 'Review Ads', href: '/review-ads', icon: ScanEye, show: isReviewer },
           { name: 'Ad List', href: '/ads', icon: List, show: true },
-          { name: 'Ads Nexus', href: '/ads/nexus', icon: Waypoints, show: true },
+          { name: 'Nexus-ads', href: '/ads/nexus', icon: Waypoints, show: true },
           { name: 'Review Ad Profiles', href: '/review-ad-profiles', icon: UserRoundPen, show: isReviewer },
           { name: 'Ad Profile List', href: '/ad-profiles', icon: Users, show: true },
         ],

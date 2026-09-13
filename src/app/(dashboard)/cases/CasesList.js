@@ -322,7 +322,7 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
   const updateQueryParams = useCallback((newParams) => {
     const params = new URLSearchParams(searchParams.toString())
     Object.entries(newParams).forEach(([key, value]) => {
-      if (value === null || value === undefined || (value === 'all' && key !== 'status' && key !== 'platform')) {
+      if (value === null || value === undefined || (value === 'all' && key !== 'status' && key !== 'platform' && key !== 'risk_priority')) {
         params.delete(key)
       } else {
         params.set(key, value)
@@ -701,7 +701,7 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
     initialFilters.unique_clusters === 'true' ||
     initialFilters.unique_clusters === true ||
     initialFilters.platform !== 'all' ||
-    initialFilters.risk_priority !== 'all' ||
+    (initialFilters.risk_priority && initialFilters.risk_priority !== 'all' && initialFilters.risk_priority !== 'high') ||
     initialFilters.client_status !== 'all' ||
     (initialFilters.visibility_status && initialFilters.visibility_status !== 'all') ||
     (initialFilters.violations && initialFilters.violations !== 'all') ||
@@ -717,7 +717,7 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
     initialFilters.unique_clusters === 'true' ||
     initialFilters.unique_clusters === true ||
     initialFilters.platform !== 'all' ||
-    initialFilters.risk_priority !== 'all' ||
+    (initialFilters.risk_priority && initialFilters.risk_priority !== 'all' && initialFilters.risk_priority !== 'high') ||
     initialFilters.client_status !== 'all' ||
     (initialFilters.visibility_status && initialFilters.visibility_status !== 'all') ||
     (initialFilters.violations && initialFilters.violations !== 'all') ||
@@ -824,6 +824,7 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
               <div className="flex items-center gap-1.5 min-w-0">
                 <CaseFilterSuggestions
                   initialFilters={initialFilters}
+                  initialSort={initialSort}
                   handleFilterChange={handleFilterChange}
                   updateQueryParams={updateQueryParams}
                   scroll
@@ -928,6 +929,7 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                 <div className="flex items-center gap-2 min-w-0">
                   <CaseFilterSuggestions
                     initialFilters={initialFilters}
+                    initialSort={initialSort}
                     handleFilterChange={handleFilterChange}
                     updateQueryParams={updateQueryParams}
                     className="min-w-0 flex-1 flex-nowrap overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
@@ -1612,7 +1614,12 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
               </div>
               <CasesFilterPanel surface="primary" arrangement="stacked" {...filterPanelProps} />
               {showFilters && (
-                <CasesFilterPanel surface="advanced" arrangement="stacked" {...filterPanelProps} />
+                <CasesFilterPanel
+                  {...filterPanelProps}
+                  surface="advanced"
+                  arrangement="stacked"
+                  includeToolbarFilters
+                />
               )}
             </div>
 

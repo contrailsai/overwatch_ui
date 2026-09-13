@@ -48,10 +48,12 @@ export function FeedPostRow({
   renderAs = compact ? 'compact' : 'row',
   isOpen = false,
   onOpen,
+  hideUnreviewedStatus = false,
 }) {
   const risk = getRiskLabel(post.review_details?.threat_score)
   const statusConfig = getFeedPostStatusConfig(post, allowDoTakedown)
   const StatusIcon = statusConfig.icon
+  const showStatus = !(hideUnreviewedStatus && statusConfig.label === 'To Be Reviewed')
 
   if (renderAs === 'compact') {
     return (
@@ -81,9 +83,11 @@ export function FeedPostRow({
             <span className="text-[11px] font-bold text-slate-800 truncate">
               @{post.user?.username || 'unknown'}
             </span>
-            <span className={cn('inline-flex h-3.5 w-3.5 items-center justify-center rounded-full border', statusConfig.color)}>
-              <StatusIcon className="h-2 w-2" />
-            </span>
+            {showStatus && (
+              <span className={cn('inline-flex h-3.5 w-3.5 items-center justify-center rounded-full border', statusConfig.color)}>
+                <StatusIcon className="h-2 w-2" />
+              </span>
+            )}
           </div>
           <p className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-slate-600">
             {post.caption || <span className="italic text-slate-400">No caption</span>}
@@ -128,9 +132,11 @@ export function FeedPostRow({
               <span className="text-xs font-bold text-slate-800 truncate">
                 @{post.user?.username || 'unknown'}
               </span>
-              <span className={cn('inline-flex h-4 w-4 items-center justify-center rounded-full border', statusConfig.color)}>
-                <StatusIcon className="h-2.5 w-2.5" />
-              </span>
+              {showStatus && (
+                <span className={cn('inline-flex h-4 w-4 items-center justify-center rounded-full border', statusConfig.color)}>
+                  <StatusIcon className="h-2.5 w-2.5" />
+                </span>
+              )}
             </div>
             <p className="mt-0.5 line-clamp-2 text-xs leading-snug text-slate-600">
               {post.caption || <span className="italic text-slate-400">No caption</span>}

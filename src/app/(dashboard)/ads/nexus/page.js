@@ -6,7 +6,7 @@ import { getAdsNexusGraph } from '@/app/(dashboard)/nexus/actions'
 import { AdsNexusClient } from './AdsNexusClient'
 
 export const metadata = {
-  title: 'Ads Nexus',
+  title: 'Nexus-ads',
   description: 'Graph understanding of ads linked to profiles and domains.',
 }
 
@@ -38,7 +38,7 @@ export default async function AdsNexusPage() {
   return (
     <main className="flex flex-1 flex-col h-full min-h-0 overflow-hidden bg-slate-50">
       <PageHeader
-        title="Ads understanding"
+        title="Nexus-ads"
         description="Ad profiles or domains → ads with violation colors"
       />
       <AdsNexusClient initialGraph={graphData} initialMode="ad_profile" />
