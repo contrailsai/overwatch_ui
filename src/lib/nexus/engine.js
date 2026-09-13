@@ -144,7 +144,14 @@ function pointerToGraph(event, canvas, transform) {
  * @param {object} options
  */
 export function mountNexus(container, graph, options = {}) {
-  const noop = { destroy() {}, clearSelection() {}, setLeaves() {}, getSettings() { return {} } }
+  const noop = {
+    destroy() {},
+    clearSelection() {},
+    selectById() {},
+    refocusSelection() {},
+    setLeaves() {},
+    getSettings() { return {} },
+  }
   if (!container || !graph?.nodes?.length) return noop
 
   const {
@@ -1427,6 +1434,8 @@ export function mountNexus(container, graph, options = {}) {
           if (still) focusCameraOnNode(still, true)
         }, 140)
       })
+    } else {
+      fitWholeGraphSoon()
     }
     onSelectNode?.(node || null)
   }
@@ -1516,6 +1525,35 @@ export function mountNexus(container, graph, options = {}) {
     state.neighborhoodIds = null
     state.highlightColorKey = null
     requestRender()
+    fitWholeGraphSoon()
+  }
+
+  /** Fit the whole graph after the detail panel closes and the canvas grows back. */
+  function fitWholeGraphSoon() {
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        if (destroyed || state.selectedId) return
+        fitGraphToView(true)
+      }, 320)
+    })
+  }
+
+  /** Re-frame the current selection after the detail panel changes width. */
+  function refocusSelection() {
+    if (!state.selectedId) return
+    const node = state.byId.get(state.selectedId)
+    if (node) focusCameraOnNode(node, true)
+  }
+
+  /** Focus a node the same way a canvas click does. `null` clears like an empty click. */
+  function selectById(id) {
+    if (id == null || id === '') {
+      setSelection(null)
+      return
+    }
+    const node = state.byId.get(id)
+    if (!node) return
+    setSelection(node)
   }
 
   function resize() {
@@ -1985,6 +2023,8 @@ export function mountNexus(container, graph, options = {}) {
   return {
     destroy,
     clearSelection,
+    selectById,
+    refocusSelection,
     setLeaves,
     getSettings: () => ({ ...settings }),
     fitGraphToView,

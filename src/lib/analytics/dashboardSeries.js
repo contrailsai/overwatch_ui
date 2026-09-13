@@ -19,7 +19,7 @@ const PLATFORM_COLORS = {
   instagram: '#e1306c',
   facebook: '#1877f2',
   meta: '#1877f2',
-  x: '#0f172a',
+  x: '#475569',
   twitter: '#1da1f2',
   reddit: '#ff4500',
   youtube: '#ff0000',

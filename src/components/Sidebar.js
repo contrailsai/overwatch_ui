@@ -352,14 +352,14 @@ export function Sidebar({ user, clientDetails, project }) {
 
       {isOpen && (
         <div
-          className="fixed inset-0 bg-slate-900/40 z-40 md:hidden backdrop-blur-sm transition-opacity duration-300"
+          className="fixed inset-0 bg-slate-900/40 z-[190] md:hidden backdrop-blur-sm transition-opacity duration-300"
           onClick={() => setIsOpen(false)}
         />
       )}
 
       <div
         className={cn(
-          'fixed inset-y-0 left-0 z-50 w-72 bg-white shadow-2xl transform transition-transform duration-300 ease-in-out md:hidden flex flex-col h-full',
+          'fixed inset-y-0 left-0 z-[200] w-72 bg-white shadow-2xl transform transition-transform duration-300 ease-in-out md:hidden flex flex-col h-full',
           isOpen ? 'translate-x-0' : '-translate-x-full',
         )}
       >
@@ -370,7 +370,7 @@ export function Sidebar({ user, clientDetails, project }) {
 
       <div
         className={cn(
-          'hidden md:flex flex-col h-full bg-white border-r border-slate-200 shadow-sm z-40 fixed left-0 top-0',
+          'hidden md:flex flex-col h-full bg-white border-r border-slate-200 shadow-sm z-[200] fixed left-0 top-0',
           'transition-all duration-300 ease-in-out overflow-hidden group',
           'w-20 hover:w-64 hover:shadow-xl',
         )}

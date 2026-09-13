@@ -33,6 +33,7 @@ export function NexusGraphShell({
   extraSidebar = null,
   violationLabels = null,
   defaultShowColors = false,
+  engineRef = null,
 }) {
   const rootRef = useRef(null)
   const apiRef = useRef(null)
@@ -59,6 +60,7 @@ export function NexusGraphShell({
 
   useEffect(() => {
     if (!rootRef.current || !graphData?.nodes?.length) {
+      if (engineRef) engineRef.current = null
       setGraphReady(false)
       return undefined
     }
@@ -80,15 +82,17 @@ export function NexusGraphShell({
         })
       },
     })
+    if (engineRef) engineRef.current = apiRef.current
     // boot() is sync; mark ready so React owns the `ready` class (don't fight classList).
     setGraphReady(true)
 
     return () => {
       apiRef.current?.destroy?.()
       apiRef.current = null
+      if (engineRef) engineRef.current = null
       setGraphReady(false)
     }
-  }, [graphData, title, subtitle, violationLabels, defaultShowColors])
+  }, [graphData, title, subtitle, violationLabels, defaultShowColors, engineRef])
 
   const handleClear = useCallback(() => {
     apiRef.current?.clearSelection?.()
@@ -103,6 +107,7 @@ export function NexusGraphShell({
     showDetail ? 'has-selection' : '',
     showDetail && detailSize === 'narrow' ? 'detail-narrow' : '',
     showDetail && detailSize === 'medium' ? 'detail-medium' : '',
+    showDetail && detailSize === 'expanded' ? 'detail-expanded' : '',
   ]
     .filter(Boolean)
     .join(' ')

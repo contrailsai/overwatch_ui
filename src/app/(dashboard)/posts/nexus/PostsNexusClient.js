@@ -24,7 +24,28 @@ const PARENT_MODES = [
   { id: 'profile', label: 'Profiles' },
 ]
 
-const SHOWCASE_MS = 280
+function graphWithoutEmptyTopics(graph) {
+  if (!graph?.nodes?.length) return graph
+  const hidden = new Set(
+    graph.nodes
+      .filter((node) => node.type === 'cluster' && !(node.count > 0))
+      .map((node) => node.id)
+  )
+  if (!hidden.size) return graph
+  return {
+    ...graph,
+    nodes: graph.nodes.filter((node) => !hidden.has(node.id)),
+    links: (graph.links || []).filter((link) => {
+      const source = typeof link.source === 'object' ? link.source.id : link.source
+      const target = typeof link.target === 'object' ? link.target.id : link.target
+      return !hidden.has(String(source)) && !hidden.has(String(target))
+    }),
+    meta: {
+      ...graph.meta,
+      clusterCount: graph.nodes.filter((node) => node.type === 'cluster' && !hidden.has(node.id)).length,
+    },
+  }
+}
 
 function entityDetailsHref(node, kind) {
   if (!node?.id) return null
@@ -56,46 +77,15 @@ function PostListSkeleton() {
   )
 }
 
-function CaseChrome({ title, onBack, onClose, children }) {
-  return (
-    <div className="flex h-full min-h-0 flex-col bg-white">
-      <div className="flex items-center gap-2 border-b border-slate-200 px-4 py-3">
-        {onBack && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-9 w-9 rounded-full bg-slate-100"
-            onClick={onBack}
-            title="Back to parent"
-          >
-            <ChevronLeft className="h-5 w-5" />
-          </Button>
-        )}
-        <h2 className="min-w-0 flex-1 truncate text-base font-bold text-slate-900">{title}</h2>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="h-9 w-9 rounded-full bg-slate-100"
-          onClick={onClose}
-          title="Close"
-        >
-          <X className="h-5 w-5" />
-        </Button>
-      </div>
-      <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
-    </div>
-  )
-}
-
-/** Full-area post content. Back returns to the parent node; close dismisses everything. */
-function PostShowcaseOverlay({
+function PostDetailPane({
   post,
   loading = false,
   error = false,
   onBack,
   onClose,
+  onNavigate,
+  hasPrev = false,
+  hasNext = false,
   project,
   clientDetails,
   projectEmails,
@@ -103,79 +93,62 @@ function PostShowcaseOverlay({
   onUpdatePost,
   onShowToast,
 }) {
-  const [open, setOpen] = useState(false)
-  const closingRef = useRef(false)
-  const closeTimerRef = useRef(null)
+  if (loading) {
+    return (
+      <div className="flex h-full min-h-0 flex-col bg-white">
+        <div className="flex items-center gap-2 border-b border-slate-200 px-4 py-3">
+          {onBack && (
+            <Button type="button" variant="ghost" size="icon" className="h-8 w-8 rounded-full bg-slate-100" onClick={onBack} title="Back">
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+          )}
+          <h2 className="min-w-0 flex-1 truncate text-sm font-bold text-slate-900">Post</h2>
+          <Button type="button" variant="ghost" size="icon" className="h-8 w-8 rounded-full bg-slate-100" onClick={onClose} title="Close">
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+        <div className="p-4">
+          <PostListSkeleton />
+        </div>
+      </div>
+    )
+  }
 
-  useEffect(() => {
-    closingRef.current = false
-    setOpen(false)
-    const id = requestAnimationFrame(() => setOpen(true))
-    return () => {
-      cancelAnimationFrame(id)
-      if (closeTimerRef.current) clearTimeout(closeTimerRef.current)
-    }
-  }, [])
-
-  const dismiss = useCallback((done) => {
-    if (closingRef.current) return
-    closingRef.current = true
-    setOpen(false)
-    closeTimerRef.current = setTimeout(() => {
-      done?.()
-    }, SHOWCASE_MS)
-  }, [])
-
-  const handleClose = useCallback(() => dismiss(onClose), [dismiss, onClose])
-  const handleBack = useCallback(() => {
-    if (onBack) dismiss(onBack)
-  }, [dismiss, onBack])
-
-  useEffect(() => {
-    const onKey = (e) => {
-      if (e.key === 'Escape') handleClose()
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [handleClose])
+  if (error || !post) {
+    return (
+      <div className="flex h-full min-h-0 flex-col bg-white">
+        <div className="flex items-center gap-2 border-b border-slate-200 px-4 py-3">
+          {onBack && (
+            <Button type="button" variant="ghost" size="icon" className="h-8 w-8 rounded-full bg-slate-100" onClick={onBack} title="Back">
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+          )}
+          <h2 className="min-w-0 flex-1 truncate text-sm font-bold text-slate-900">Post</h2>
+          <Button type="button" variant="ghost" size="icon" className="h-8 w-8 rounded-full bg-slate-100" onClick={onClose} title="Close">
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+        <p className="px-4 py-8 text-center text-sm text-rose-500">Could not load this post.</p>
+      </div>
+    )
+  }
 
   return (
-    <div
-      className={cn(
-        'absolute inset-0 z-50 flex min-h-0 flex-col overflow-hidden bg-white shadow-xl',
-        'transition-[opacity,transform] ease-out',
-        open ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-3 scale-[0.985]'
-      )}
-      style={{ transitionDuration: `${SHOWCASE_MS}ms` }}
-      role="dialog"
-      aria-modal="true"
-      aria-label="Post content"
-    >
-      {loading ? (
-        <CaseChrome title="Post" onBack={onBack ? handleBack : null} onClose={handleClose}>
-          <div className="p-4">
-            <PostListSkeleton />
-          </div>
-        </CaseChrome>
-      ) : error || !post ? (
-        <CaseChrome title="Post" onBack={onBack ? handleBack : null} onClose={handleClose}>
-          <p className="px-4 py-8 text-center text-sm text-rose-500">Could not load this post.</p>
-        </CaseChrome>
-      ) : (
-        <CaseDetailPanel
-          post={post}
-          isOpen
-          onBack={onBack ? handleBack : null}
-          onClose={handleClose}
-          project={project}
-          clientDetails={clientDetails}
-          projectEmails={projectEmails}
-          onUpdateStatus={onUpdateStatus}
-          onUpdatePost={onUpdatePost}
-          onShowToast={onShowToast}
-        />
-      )}
-    </div>
+    <CaseDetailPanel
+      post={post}
+      isOpen
+      onBack={onBack}
+      onClose={onClose}
+      onNavigate={onNavigate}
+      hasPrev={hasPrev}
+      hasNext={hasNext}
+      project={project}
+      clientDetails={clientDetails}
+      projectEmails={projectEmails}
+      onUpdateStatus={onUpdateStatus}
+      onUpdatePost={onUpdatePost}
+      onShowToast={onShowToast}
+    />
   )
 }
 
@@ -186,10 +159,22 @@ function ClusterPostsPanel({
   eyebrow = 'Cluster',
   onBack = null,
   detailsHref = null,
+  activePost = null,
+  postLoading = false,
+  postError = false,
+  onBackFromPost = null,
+  project = null,
+  clientDetails = null,
+  projectEmails = null,
+  onUpdateStatus = null,
+  onUpdatePost = null,
+  onShowToast = null,
 }) {
   const [page, setPage] = useState(1)
   const [result, setResult] = useState(null)
   const [isPending, startTransition] = useTransition()
+  const listRef = useRef(null)
+  const pendingOpen = useRef(null)
 
   const load = useCallback((clusterId, nextPage) => {
     startTransition(async () => {
@@ -205,15 +190,66 @@ function ClusterPostsPanel({
 
   useEffect(() => {
     if (!node?.id) return
+    pendingOpen.current = null
     setPage(1)
     load(node.id, 1)
   }, [node?.id, load])
 
   const posts = result?.posts || []
   const totalPages = result?.totalPages || 0
+  const expanded = Boolean(activePost || postLoading || postError)
+  const activeId = activePost?._id
+  const activeIndex = posts.findIndex((post) => String(post._id) === String(activeId))
+
+  useEffect(() => {
+    if (!pendingOpen.current || isPending || !posts.length) return
+    const pick = pendingOpen.current === 'last' ? posts.at(-1) : posts[0]
+    pendingOpen.current = null
+    if (pick) onOpenPost?.(pick)
+  }, [posts, isPending, onOpenPost])
+
+  useEffect(() => {
+    if (!expanded || activeId == null || !listRef.current) return
+    const row = listRef.current.querySelector(`[data-post-id="${activeId}"]`)
+    row?.scrollIntoView({ block: 'nearest' })
+  }, [expanded, activeId, posts])
+
+  const openPageEdge = useCallback((nextPage, edge) => {
+    pendingOpen.current = edge
+    setPage(nextPage)
+    load(node.id, nextPage)
+  }, [load, node?.id])
+
+  const navigatePost = useCallback((dir) => {
+    if (dir === 'next') {
+      if (activeIndex >= 0 && activeIndex < posts.length - 1) {
+        onOpenPost?.(posts[activeIndex + 1])
+        return
+      }
+      if (page < totalPages) {
+        openPageEdge(page + 1, 'first')
+        return
+      }
+      if (activeIndex === -1 && posts[0]) onOpenPost?.(posts[0])
+      return
+    }
+    if (activeIndex > 0) {
+      onOpenPost?.(posts[activeIndex - 1])
+      return
+    }
+    if (page > 1) {
+      openPageEdge(page - 1, 'last')
+      return
+    }
+    if (activeIndex === -1 && posts.length) onOpenPost?.(posts.at(-1))
+  }, [activeIndex, posts, page, totalPages, onOpenPost, openPageEdge])
+
+  const hasPrev = activeIndex > 0 || page > 1 || (activeIndex === -1 && (page > 1 || posts.length > 0))
+  const hasNext = (activeIndex >= 0 && activeIndex < posts.length - 1) || page < totalPages || (activeIndex === -1 && (posts.length > 0 || page < totalPages))
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full min-h-0 flex-1">
+      <div className={cn('flex h-full min-h-0 min-w-0 flex-col', expanded ? 'w-[280px] shrink-0 border-r border-slate-200' : 'flex-1')}>
       <div className="flex items-center justify-between gap-2 border-b border-slate-200 px-4 py-3">
         <div className="flex min-w-0 flex-1 items-start gap-1">
           {onBack && (
@@ -241,7 +277,7 @@ function ClusterPostsPanel({
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-1">
-          {detailsHref && (
+          {detailsHref && !expanded && (
             <Button asChild variant="outline" size="xs" className="shrink-0">
               <Link href={detailsHref} title="Show more details">
                 Details
@@ -255,7 +291,7 @@ function ClusterPostsPanel({
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-3 space-y-2">
+      <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto p-3 space-y-2">
         {isPending && !posts.length ? (
           <PostListSkeleton />
         ) : result?.error ? (
@@ -266,13 +302,15 @@ function ClusterPostsPanel({
           <p className="py-8 text-center text-sm text-slate-400">No posts in this cluster.</p>
         ) : (
           posts.map((post) => (
-            <FeedPostRow
-              key={post._id}
-              post={post}
-              compact
-              hideUnreviewedStatus
-              onOpen={() => onOpenPost?.(post)}
-            />
+            <div key={post._id} data-post-id={post._id}>
+              <FeedPostRow
+                post={post}
+                compact
+                hideUnreviewedStatus
+                isOpen={expanded && String(post._id) === String(activeId)}
+                onOpen={() => onOpenPost?.(post)}
+              />
+            </div>
           ))
         )}
       </div>
@@ -310,30 +348,33 @@ function ClusterPostsPanel({
           </Button>
         </div>
       )}
+      </div>
+      {expanded && (
+        <div className="h-full min-h-0 min-w-0 flex-1">
+          <PostDetailPane
+            post={activePost}
+            loading={postLoading}
+            error={postError}
+            onBack={onBackFromPost}
+            onClose={onBackFromPost}
+            onNavigate={posts.length || totalPages > 1 ? navigatePost : null}
+            hasPrev={hasPrev}
+            hasNext={hasNext}
+            project={project}
+            clientDetails={clientDetails}
+            projectEmails={projectEmails}
+            onUpdateStatus={onUpdateStatus}
+            onUpdatePost={onUpdatePost}
+            onShowToast={onShowToast}
+          />
+        </div>
+      )}
     </div>
   )
 }
 
-/** Parent-topic hub → list of child topics → posts for a topic. */
-function ParentTopicPanel({ hub, topics, onClose, onOpenPost }) {
-  const [selectedTopic, setSelectedTopic] = useState(null)
-
-  useEffect(() => {
-    setSelectedTopic(null)
-  }, [hub?.id])
-
-  if (selectedTopic) {
-    return (
-      <ClusterPostsPanel
-        node={selectedTopic}
-        eyebrow="Topic"
-        onBack={() => setSelectedTopic(null)}
-        onClose={onClose}
-        onOpenPost={onOpenPost}
-      />
-    )
-  }
-
+/** Parent-topic hub → list of child topics. Selecting a topic focuses that graph node. */
+function ParentTopicPanel({ hub, topics, onClose, onSelectTopic }) {
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
@@ -362,7 +403,7 @@ function ParentTopicPanel({ hub, topics, onClose, onOpenPost }) {
               <li key={topic.id}>
                 <button
                   type="button"
-                  onClick={() => setSelectedTopic(topic)}
+                  onClick={() => onSelectTopic?.(topic)}
                   className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left hover:bg-slate-50 transition-colors"
                 >
                   <span
@@ -390,27 +431,8 @@ function ParentTopicPanel({ hub, topics, onClose, onOpenPost }) {
   )
 }
 
-/** Category hub → list of POI clusters → posts for a POI. */
-function PoiCategoryPanel({ hub, pois, onClose, onOpenPost }) {
-  const [selectedPoi, setSelectedPoi] = useState(null)
-
-  useEffect(() => {
-    setSelectedPoi(null)
-  }, [hub?.id])
-
-  if (selectedPoi) {
-    return (
-      <ClusterPostsPanel
-        node={selectedPoi}
-        eyebrow="POI"
-        detailsHref={entityDetailsHref(selectedPoi, 'poi')}
-        onBack={() => setSelectedPoi(null)}
-        onClose={onClose}
-        onOpenPost={onOpenPost}
-      />
-    )
-  }
-
+/** Category hub → list of POI clusters. Selecting a POI focuses that graph node. */
+function PoiCategoryPanel({ hub, pois, onClose, onSelectPoi }) {
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center justify-between gap-2 border-b border-slate-200 px-4 py-3">
@@ -442,7 +464,7 @@ function PoiCategoryPanel({ hub, pois, onClose, onOpenPost }) {
                 <li key={poi.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-1 rounded-lg pr-1 hover:bg-slate-50">
                   <button
                     type="button"
-                    onClick={() => setSelectedPoi(poi)}
+                    onClick={() => onSelectPoi?.(poi)}
                     className="w-full min-w-0 rounded-lg px-2 py-2 text-left transition-colors"
                   >
                     <span className="grid w-full min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3">
@@ -512,9 +534,14 @@ export function PostsNexusClient({
   const [isPending, startTransition] = useTransition()
   const postReq = useRef(0)
   const toastTimer = useRef(null)
+  const engineRef = useRef(null)
   const violationLabels = useMemo(
     () => normalizeViolationLabels(project?.project_details?.labels),
     [project]
+  )
+  const visibleGraph = useMemo(
+    () => (parentMode === 'parent_topic' ? graphWithoutEmptyTopics(graphData) : graphData),
+    [graphData, parentMode]
   )
 
   const showToast = useCallback((message, type = 'error') => {
@@ -568,14 +595,19 @@ export function PostsNexusClient({
     [graphData]
   )
 
-  const closeCase = useCallback(() => {
+  const focusNode = useCallback((id) => {
+    engineRef.current?.selectById?.(id)
+  }, [])
+
+  const closeDetail = useCallback(() => {
     postReq.current += 1
+    engineRef.current?.clearSelection?.()
+    setSelected(null)
     setCaseOpen(false)
     setCaseReturn(null)
     setShowcasePost(null)
     setPostLoading(false)
     setPostError(false)
-    setSelected(null)
   }, [])
 
   const backFromCase = useCallback(() => {
@@ -622,6 +654,22 @@ export function PostsNexusClient({
       })
   }, [project, nodeById])
 
+  useEffect(() => {
+    if (!caseOpen) return undefined
+    const onKey = (e) => {
+      if (e.key === 'Escape') backFromCase()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [caseOpen, backFromCase])
+
+  useEffect(() => {
+    const id = setTimeout(() => {
+      engineRef.current?.refocusSelection?.()
+    }, 320)
+    return () => clearTimeout(id)
+  }, [caseOpen])
+
   const handleNeedLeaves = useCallback(
     (args, api) => {
       startTransition(async () => {
@@ -655,12 +703,12 @@ export function PostsNexusClient({
       <PoiCategoryPanel
         hub={selected}
         pois={pois}
-        onClose={() => setSelected(null)}
-        onOpenPost={(post) => openPost(post, selected)}
+        onClose={closeDetail}
+        onSelectPoi={(poi) => focusNode(poi.id)}
       />
     )
   } else if (parentMode === 'parent_topic' && selected?.type === 'hub') {
-    const topics = (graphData?.nodes || [])
+    const topics = (visibleGraph?.nodes || [])
       .filter((n) => n.type === 'cluster' && n.parentId === selected.id)
       .slice()
       .sort(
@@ -672,11 +720,15 @@ export function PostsNexusClient({
       <ParentTopicPanel
         hub={selected}
         topics={topics}
-        onClose={() => setSelected(null)}
-        onOpenPost={(post) => openPost(post, selected)}
+        onClose={closeDetail}
+        onSelectTopic={(topic) => focusNode(topic.id)}
       />
     )
   } else if (selected?.type === 'cluster' || selected?.type === 'hub') {
+    const parentHub =
+      (parentMode === 'poi' || parentMode === 'parent_topic') && selected?.type === 'cluster'
+        ? nodeById(selected.parentId)
+        : null
     detailPanel = (
       <ClusterPostsPanel
         node={selected}
@@ -696,14 +748,43 @@ export function PostsNexusClient({
               ? entityDetailsHref(selected, 'profile')
               : null
         }
-        onClose={() => setSelected(null)}
+        onBack={parentHub?.type === 'hub' ? () => focusNode(parentHub.id) : null}
+        onClose={closeDetail}
         onOpenPost={(post) => openPost(post, selected)}
+        activePost={caseOpen ? showcasePost : null}
+        postLoading={caseOpen && postLoading}
+        postError={caseOpen && postError}
+        onBackFromPost={backFromCase}
+        project={project}
+        clientDetails={clientDetails}
+        projectEmails={projectEmails}
+        onUpdateStatus={handleUpdateStatus}
+        onUpdatePost={handleUpdatePost}
+        onShowToast={showToast}
+      />
+    )
+  } else if (caseOpen) {
+    detailPanel = (
+      <PostDetailPane
+        post={showcasePost}
+        loading={postLoading}
+        error={postError}
+        onBack={backFromCase}
+        onClose={backFromCase}
+        project={project}
+        clientDetails={clientDetails}
+        projectEmails={projectEmails}
+        onUpdateStatus={handleUpdateStatus}
+        onUpdatePost={handleUpdatePost}
+        onShowToast={showToast}
       />
     )
   }
 
-  const detailSize =
-    selected?.type === 'hub' && (parentMode === 'poi' || parentMode === 'parent_topic')
+  const postExpanded = caseOpen && (selected?.type === 'cluster' || selected?.type === 'hub' || !selected)
+  const detailSize = postExpanded
+    ? 'expanded'
+    : selected?.type === 'hub' && (parentMode === 'poi' || parentMode === 'parent_topic')
       ? 'narrow'
       : selected?.type === 'cluster' || selected?.type === 'hub'
         ? 'medium'
@@ -714,7 +795,7 @@ export function PostsNexusClient({
       ? {
           title: 'No profile hubs yet',
           description:
-            'Profiles appear once client-visible profiles exist (reviewed or with reviewed posts).',
+            'Profiles appear once they are reviewed on review-profiles and have at least one reviewed post.',
         }
       : parentMode === 'poi'
         ? {
@@ -736,7 +817,7 @@ export function PostsNexusClient({
         </div>
       )}
       <NexusGraphShell
-        graphData={graphData}
+        graphData={visibleGraph}
         title="Nexus-posts"
         subtitle="Leaves = posts · colors = violations"
         emptyTitle={emptyCopy.title}
@@ -746,26 +827,12 @@ export function PostsNexusClient({
         onParentModeChange={handleModeChange}
         onNeedLeaves={handleNeedLeaves}
         onSelectNode={handleSelectNode}
+        engineRef={engineRef}
         detailPanel={detailPanel}
         detailSize={detailSize}
         violationLabels={violationLabels}
         defaultShowColors
       />
-      {caseOpen && (
-        <PostShowcaseOverlay
-          post={showcasePost}
-          loading={postLoading}
-          error={postError}
-          onBack={caseReturn ? backFromCase : null}
-          onClose={closeCase}
-          project={project}
-          clientDetails={clientDetails}
-          projectEmails={projectEmails}
-          onUpdateStatus={handleUpdateStatus}
-          onUpdatePost={handleUpdatePost}
-          onShowToast={showToast}
-        />
-      )}
       {toast && (
         <div
           className={cn(

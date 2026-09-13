@@ -39,12 +39,7 @@ function buildProfileMatchQuery(filters) {
     if (filters.reviewStatus === 'reviewed') {
         andConditions.push({ 'workflow.review_status': 'reviewed' })
     } else if (filters.reviewStatus === 'pending') {
-        andConditions.push({
-            $or: [
-                { 'workflow.review_status': 'pending' },
-                { 'workflow.review_status': { $exists: false } },
-            ],
-        })
+        andConditions.push({ 'workflow.review_status': { $ne: 'reviewed' } })
     }
 
     if (filters.searchText?.trim()) {

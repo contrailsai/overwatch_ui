@@ -173,7 +173,7 @@ export function ProfileOverview({ profile, project, analytics, posts, reportCase
   const [isBioExpanded, setIsBioExpanded] = useState(false)
 
   const review = profile.review_details || {}
-  const riskScore = review.risk || 'safe'
+  const riskScore = profile?.list?.risk_rank ?? profile?.list?.risk ?? review.risk ?? 'safe'
   const reasoning = review.reasoning || 'No profile reasoning provided.'
   const violations = review.violations || []
   const profileRisk = getProfileRiskBadge(riskScore)
