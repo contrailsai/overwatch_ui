@@ -15,7 +15,7 @@ function readInfoDismissed() {
 }
 
 /**
- * Shared Nexus canvas host used by Feeds, Posts understanding, and Ads understanding.
+ * Shared Nexus canvas host used by Feeds, Nexus-posts, and Nexus-ads.
  */
 export function NexusGraphShell({
   graphData,
@@ -109,7 +109,7 @@ export function NexusGraphShell({
 
   const modeSwitcher = hasModes ? (
     <div className="nx-control-group">
-      <h2>Parent mode</h2>
+      <h2>Graph type</h2>
       <div className="nx-mode-row">
         {parentModes.map((mode) => (
           <button
@@ -143,7 +143,7 @@ export function NexusGraphShell({
               <p className="max-w-md text-sm">{emptyDescription}</p>
               {hasModes && (
                 <p className="max-w-md text-sm text-slate-500 mt-3">
-                  Try another parent mode in the sidebar — this view only uses data for the
+                  Try another graph type in the sidebar — this view only uses data for the
                   selected mode.
                 </p>
               )}

@@ -11,7 +11,6 @@ import { CaseDetailPanel } from '@/app/(dashboard)/cases/CaseDetailPanel'
 import { getPostById } from '@/app/(dashboard)/cases/actions'
 import { cn } from '@/lib/utils'
 import { normalizeViolationLabels } from '@/lib/nexus/colors'
-import { formatPoiActivityRange } from '@/lib/pois/poi-helpers'
 import { parsePoiNexusId } from '@/lib/nexus/poi-categories'
 import {
   getNexusLeafStubs,
@@ -20,7 +19,7 @@ import {
 } from '@/app/(dashboard)/nexus/actions'
 
 const PARENT_MODES = [
-  { id: 'parent_topic', label: 'Parent topics' },
+  { id: 'parent_topic', label: 'Themes' },
   { id: 'poi', label: 'POIs' },
   { id: 'profile', label: 'Profiles' },
 ]
@@ -215,32 +214,29 @@ function ClusterPostsPanel({
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3 gap-2">
-        <div className="min-w-0 flex items-start gap-1">
+      <div className="flex items-center justify-between gap-2 border-b border-slate-200 px-4 py-3">
+        <div className="flex min-w-0 flex-1 items-start gap-1">
           {onBack && (
             <Button
               type="button"
               variant="ghost"
               size="icon"
-              className="h-8 w-8 shrink-0 -ml-1 mt-0.5"
+              className="mt-0.5 -ml-1 h-8 w-8 shrink-0"
               onClick={onBack}
               title="Back"
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
           )}
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
               {eyebrow}
             </p>
             <h3 className="truncate text-sm font-bold text-slate-900">
               {result?.meta?.title || node?.label || node?.id}
             </h3>
-            <p className="text-xs text-slate-500">
+            <p className="truncate text-xs text-slate-500">
               {result?.totalCount ?? node?.count ?? 0} posts
-              {formatPoiActivityRange(node?.firstSeen, node?.lastSeen)
-                ? ` · ${formatPoiActivityRange(node.firstSeen, node.lastSeen)}`
-                : ''}
             </p>
           </div>
         </div>
@@ -274,6 +270,7 @@ function ClusterPostsPanel({
               key={post._id}
               post={post}
               compact
+              hideUnreviewedStatus
               onOpen={() => onOpenPost?.(post)}
             />
           ))
@@ -416,23 +413,20 @@ function PoiCategoryPanel({ hub, pois, onClose, onOpenPost }) {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
-        <div className="min-w-0">
+      <div className="flex items-center justify-between gap-2 border-b border-slate-200 px-4 py-3">
+        <div className="min-w-0 flex-1">
           <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
             Category
           </p>
           <h3 className="truncate text-sm font-bold text-slate-900">
             {hub?.label || hub?.id}
           </h3>
-          <p className="text-xs text-slate-500">
+          <p className="truncate text-xs text-slate-500">
             {pois.length} POI{pois.length === 1 ? '' : 's'}
             {hub?.count ? ` · ${hub.count} post${hub.count === 1 ? '' : 's'}` : ''}
-            {formatPoiActivityRange(hub?.firstSeen, hub?.lastSeen)
-              ? ` · ${formatPoiActivityRange(hub.firstSeen, hub.lastSeen)}`
-              : ''}
           </p>
         </div>
-        <Button type="button" variant="ghost" size="icon" onClick={onClose}>
+        <Button type="button" variant="ghost" size="icon" className="shrink-0" onClick={onClose}>
           <X className="h-4 w-4" />
         </Button>
       </div>
@@ -445,40 +439,39 @@ function PoiCategoryPanel({ hub, pois, onClose, onOpenPost }) {
             {pois.map((poi) => {
               const detailsHref = entityDetailsHref(poi, 'poi')
               return (
-                <li key={poi.id} className="flex items-center gap-1 rounded-lg pr-1 hover:bg-slate-50">
+                <li key={poi.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-1 rounded-lg pr-1 hover:bg-slate-50">
                   <button
                     type="button"
                     onClick={() => setSelectedPoi(poi)}
-                    className="flex min-w-0 flex-1 items-center gap-3 rounded-lg px-2 py-2 text-left transition-colors"
+                    className="w-full min-w-0 rounded-lg px-2 py-2 text-left transition-colors"
                   >
-                    {poi.imageUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={poi.imageUrl}
-                        alt=""
-                        className="h-9 w-9 shrink-0 rounded-full object-cover bg-slate-100"
-                      />
-                    ) : (
-                      <span
-                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
-                        style={{ background: poi.familyColor || '#64748b' }}
-                      >
-                        {(poi.label || '?').slice(0, 1).toUpperCase()}
+                    <span className="grid w-full min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3">
+                      {poi.imageUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={poi.imageUrl}
+                          alt=""
+                          className="h-9 w-9 rounded-full object-cover bg-slate-100"
+                        />
+                      ) : (
+                        <span
+                          className="flex h-9 w-9 items-center justify-center rounded-full text-xs font-bold text-white"
+                          style={{ background: poi.familyColor || '#64748b' }}
+                        >
+                          {(poi.label || '?').slice(0, 1).toUpperCase()}
+                        </span>
+                      )}
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm font-semibold text-slate-900">
+                          {poi.label || poi.id}
+                        </span>
+                        <span className="block truncate text-xs text-slate-500">
+                          {poi.count ?? 0} post{(poi.count ?? 0) === 1 ? '' : 's'}
+                          {poi.isPrimary ? ' · Primary' : ''}
+                        </span>
                       </span>
-                    )}
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-semibold text-slate-900">
-                        {poi.label || poi.id}
-                      </span>
-                      <span className="block text-xs text-slate-500">
-                        {poi.count ?? 0} post{(poi.count ?? 0) === 1 ? '' : 's'}
-                        {formatPoiActivityRange(poi.firstSeen, poi.lastSeen)
-                          ? ` · ${formatPoiActivityRange(poi.firstSeen, poi.lastSeen)}`
-                          : ''}
-                        {poi.isPrimary ? ' · Primary' : ''}
-                      </span>
+                      <ChevronRight className="h-4 w-4 text-slate-300" />
                     </span>
-                    <ChevronRight className="h-4 w-4 shrink-0 text-slate-300" />
                   </button>
                   {detailsHref && (
                     <Link
@@ -744,7 +737,7 @@ export function PostsNexusClient({
       )}
       <NexusGraphShell
         graphData={graphData}
-        title="Posts understanding"
+        title="Nexus-posts"
         subtitle="Leaves = posts · colors = violations"
         emptyTitle={emptyCopy.title}
         emptyDescription={emptyCopy.description}

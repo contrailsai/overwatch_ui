@@ -21,13 +21,13 @@ Filters and sort are driven by search params:
 | `platform` | `platform` | `all` |
 | `status` | `client_status` | `all` |
 | `visibility_status` | `visibility_status` | `all` |
-| `risk_priority` | `risk_priority` | `all` |
+| `risk_priority` | `risk_priority` | `high` when the param is absent. Explicit `all` stays unfiltered (the param is kept so a refresh does not snap High risk back on). |
 | `violations` | `violations` (comma-separated) | `all` |
 | `pois` | `pois` (comma-separated parent POI `name`s; aliases included in the match) | `all` |
 | `published_from` / `published_to` (aliases: `original_date_*`) | publish date range on `list.posted_at` | — |
 | `alert_from` / `alert_to` (aliases: `processed_*`) | alert date range on `list.reviewed_at` | — |
 | `unique_clusters` | `true` / absent | off |
-| `sortField` | `threat_score`, `processed_date`, `original_date` | `threat_score` (except similarity search) |
+| `sortField` | `engagement_score`, `threat_score`, `processed_date`, `original_date` | `engagement_score` when the param is absent (except similarity / semantic search, which keep a null sort field). Turning the engagement chip off writes `threat_score` + `desc`. |
 | `sortDirection` | `asc` / `desc` | `desc` |
 | `page`, `limit` | pagination | `1`, `25` (max 100) |
 | `similar_to`, `semantic_search` | similarity modes | — |
@@ -39,7 +39,11 @@ Filters and sort are driven by search params:
 
 Built in [`pipeline-helpers.js`](../../lib/posts/pipeline-helpers.js) and applied from [`actions.js`](actions.js). All filters combine with the reviewed gate. POI matching is a second step: `applyPoiNameFilter`.
 
-The list toolbar splits controls across surfaces in [`CasesFilterPanel.js`](CasesFilterPanel.js): **primary** (search, alert date, POI), **actions** (similar search / assign when rows are selected), and **advanced** (platform, status, visibility, risk, violations, publish date, unique clusters). Alert-date chips (today / last 7 days) live in [`CaseFilterSuggestions.js`](CaseFilterSuggestions.js).
+The list toolbar splits controls across surfaces in [`CasesFilterPanel.js`](CasesFilterPanel.js): **primary** (search, alert date, POI), **actions** (similar search / assign when rows are selected), and **advanced** (platform, status, visibility, risk, violations, publish date, unique clusters). Suggestion chips in [`CaseFilterSuggestions.js`](CaseFilterSuggestions.js) are Today, Last 7 days, Needs review, High risk, and Still online, then a divider and **Sort by engagement**.
+
+Landing view (no query params): High risk is on, and sort is highest `list.engagement_score` first. Un-clicking High risk writes `risk_priority=all`. Un-clicking engagement sort writes `sortField=threat_score` and `sortDirection=desc` (the risk-bucket list order below). There is no low-engagement sort. High risk alone does not light the Clear button or the filters-toggle dot. Clear still resets the URL to `/cases`, which returns to the landing view.
+
+The case-detail side list keeps search, alert date, and POI visible, and repeats those three at the top of the Filters panel.
 
 ### Platform
 
@@ -138,7 +142,15 @@ The **cases table** and **PDF/DOCX reports** intentionally use different priorit
 
 Builders: `buildCasesListSortStages(sort)` in [`riskBuckets.js`](riskBuckets.js) (`$addFields` then `$sort`). Feed lists use the same helper.
 
-**Default / Risk column (`sortField=threat_score`, desc):** descending except `_id` (asc tiebreaker). Implemented via `buildCasesDefaultListSortPipeline()`.
+**Landing sort (`sortField=engagement_score`, always desc):** highest engagement first. Direction is ignored for this field (no ascending mode).
+
+1. `list.engagement_score` desc
+2. `list.effective_threat_score` desc
+3. `list.reviewed_at` desc
+4. `list.posted_at` desc
+5. `_id` asc
+
+**Risk column (`sortField=threat_score`, desc):** descending except `_id` (asc tiebreaker). Implemented via `buildCasesDefaultListSortPipeline()`. This is what the engagement chip writes when turned off.
 
 1. `_sort_risk_bucket` desc — High → Medium → Low → Safe (same bucket, same priority)
 2. `_sort_alert_day` desc — newest alert **calendar day** first (IST `dd-mm-yyyy`; time of day ignored)

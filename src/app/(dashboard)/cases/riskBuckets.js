@@ -159,6 +159,16 @@ export function buildCasesListSortPipeline(sort = {}) {
     }
   }
 
+  if (sort.field === 'engagement_score') {
+    return {
+      'list.engagement_score': engagementDesc,
+      'list.effective_threat_score': -1,
+      'list.reviewed_at': dateDesc,
+      'list.posted_at': dateDesc,
+      _id: idAsc,
+    }
+  }
+
   if (!sort.field || sort.field === 'threat_score') {
     if (sort.direction === 'asc') {
       return {

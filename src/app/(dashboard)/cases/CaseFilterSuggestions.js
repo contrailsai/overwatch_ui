@@ -88,8 +88,18 @@ function buildSuggestions(initialFilters, handleFilterChange, updateQueryParams)
   ]
 }
 
+function toggleEngagementSort(initialSort, updateQueryParams) {
+  const engagementOn = initialSort?.field === 'engagement_score'
+  updateQueryParams({
+    sortField: engagementOn ? 'threat_score' : 'engagement_score',
+    sortDirection: 'desc',
+    page: 1,
+  })
+}
+
 export function CaseFilterSuggestions({
   initialFilters,
+  initialSort,
   handleFilterChange,
   updateQueryParams,
   className,
@@ -105,6 +115,7 @@ export function CaseFilterSuggestions({
       ? { ...chip, active: mounted && chip.active }
       : chip
   ))
+  const engagementOn = initialSort?.field === 'engagement_score'
 
   return (
     <div
@@ -130,6 +141,20 @@ export function CaseFilterSuggestions({
           {chip.label}
         </button>
       ))}
+      <span className="mx-0.5 h-4 w-px shrink-0 bg-slate-200" aria-hidden="true" />
+      <button
+        type="button"
+        aria-pressed={engagementOn}
+        onClick={() => toggleEngagementSort(initialSort, updateQueryParams)}
+        className={cn(
+          'h-7 px-2.5 rounded-full border text-[11px] font-semibold shrink-0 transition-colors cursor-pointer',
+          engagementOn
+            ? 'border-blue-300 bg-blue-50 text-blue-700'
+            : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-800',
+        )}
+      >
+        Sort by engagement
+      </button>
     </div>
   )
 }

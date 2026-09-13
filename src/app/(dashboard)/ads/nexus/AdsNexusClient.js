@@ -172,7 +172,7 @@ export function AdsNexusClient({ initialGraph, initialMode = 'ad_profile' }) {
       )}
       <NexusGraphShell
         graphData={graphData}
-        title="Ads understanding"
+        title="Nexus-ads"
         subtitle="Leaves = ads · colors = violations"
         parentModes={PARENT_MODES}
         parentMode={parentMode}

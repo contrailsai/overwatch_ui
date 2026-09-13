@@ -32,7 +32,7 @@ export default async function CasesPage({ searchParams }) {
     platform: resolvedParams.platform || 'all',
     client_status: resolvedParams.status || 'all',
     visibility_status: resolvedParams.visibility_status || 'all',
-    risk_priority: resolvedParams.risk_priority || 'all',
+    risk_priority: resolvedParams.risk_priority || 'high',
     violations: resolvedParams.violations || 'all',
     pois: resolvedParams.pois || 'all',
     published_from: resolvedParams.published_from || resolvedParams.original_date_from || null,
@@ -52,7 +52,7 @@ export default async function CasesPage({ searchParams }) {
       : rawSortField
 
   const sort = {
-    field: normalizedSortField || (isSimilaritySearch ? null : 'threat_score'),
+    field: normalizedSortField || (isSimilaritySearch ? null : 'engagement_score'),
     direction: resolvedParams.sortDirection === 'asc' ? 'asc' : 'desc',
   }
 

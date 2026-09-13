@@ -173,7 +173,7 @@ Canonical names are in [`src/utils/mongodb/collections.js`](src/utils/mongodb/co
 | Collection | Description |
 | :--- | :--- |
 | `Posts` | Social posts. List queries use materialized `list.*` / `workflow.*` fields (schema v3). |
-| `profiles` | Social accounts. Client list uses the same visibility gate as Posts Nexus profile hubs. |
+| `profiles` | Social accounts. Client list uses the same visibility gate as Nexus-posts profile hubs. |
 | `Ads` / `Ad_profiles` | Ad creatives and advertiser pages. Not stored in `Posts`. |
 | `Domains` | Destination domains, including cloak-lander review fields. |
 | `topics` | Topic membership (`posts[]`). Feeds reference `topic_id`. |
@@ -197,7 +197,7 @@ Navigation is grouped in [`src/components/Sidebar.js`](src/components/Sidebar.js
 | Feeds | `/feeds` (topic map), `/feeds/collections` | `/manage-feeds` |
 | Ops | `/takedowns`, `/upload-content`, `/configurations`, `/reports` | plus `/admin` for reviewers and client-admins |
 
-Cases list filters and sort are documented in [`src/app/(dashboard)/cases/CASES_DATA_FETCHING_README.md`](src/app/(dashboard)/cases/CASES_DATA_FETCHING_README.md). Default list order is risk bucket, then IST alert day, then engagement — not a raw score sort.
+Cases list filters and sort are documented in [`src/app/(dashboard)/cases/CASES_DATA_FETCHING_README.md`](src/app/(dashboard)/cases/CASES_DATA_FETCHING_README.md). Opening `/cases` applies High risk and highest engagement first. Turning engagement sort off returns to risk bucket, then IST alert day, then engagement — not a raw score sort. Nav labels for the graphs are **Nexus-posts** and **Nexus-ads**.
 
 ---
 

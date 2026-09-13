@@ -35,7 +35,7 @@
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: 280px 1fr;
+  grid-template-columns: 252px 1fr;
   opacity: 0;
   transition: opacity 0.2s ease;
 }
@@ -45,23 +45,23 @@
 }
 
 .nexus-graph-root [data-nx='app'].has-selection {
-  grid-template-columns: 280px minmax(0, 1fr) minmax(360px, 40vw);
+  grid-template-columns: 252px minmax(0, 1fr) minmax(400px, 40vw);
 }
 
 /* Category / parent lists are short — keep the graph wide. */
 .nexus-graph-root [data-nx='app'].has-selection.detail-narrow {
-  grid-template-columns: 280px minmax(0, 1fr) 280px;
+  grid-template-columns: 252px minmax(0, 1fr) 340px;
 }
 
 /* Topic / POI post lists need a bit more, but not 40vw. */
 .nexus-graph-root [data-nx='app'].has-selection.detail-medium {
-  grid-template-columns: 280px minmax(0, 1fr) minmax(320px, 380px);
+  grid-template-columns: 252px minmax(0, 1fr) minmax(380px, 440px);
 }
 
 @media (max-width: 1200px) {
   .nexus-graph-root [data-nx='app'].has-selection.detail-narrow,
   .nexus-graph-root [data-nx='app'].has-selection.detail-medium {
-    grid-template-columns: 220px minmax(0, 1fr) minmax(240px, 34vw);
+    grid-template-columns: 200px minmax(0, 1fr) minmax(280px, 36vw);
   }
 }
 
@@ -373,15 +373,16 @@
 
 .nexus-graph-root .nx-mode-row {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  flex-wrap: nowrap;
+  gap: 4px;
   margin-bottom: 8px;
 }
 
 .nexus-graph-root .nx-mode-btn {
   font-size: 0.7rem;
   font-weight: 600;
-  padding: 5px 10px;
+  padding: 5px 8px;
+  white-space: nowrap;
   border-radius: 999px;
   border: 1px solid var(--nx-border);
   background: #fff;

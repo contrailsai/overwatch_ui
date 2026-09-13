@@ -10,10 +10,12 @@ Nexus is the shared force-layout used to browse reviewed content as hubs → clu
 | Route | Section gate | Default mode | What you see |
 |-------|--------------|--------------|--------------|
 | `/feeds` | `feeds` | POI → topics | Topic map. Collections stay at `/feeds/collections`. |
-| `/posts/nexus` | `posts` | Parent topics | Parent topic, POI category, or profile hubs, then posts. |
-| `/ads/nexus` | `ads` | Ad profiles | Ad-profile or domain hubs, then reviewed ads. |
+| `/posts/nexus` | `posts` | Themes | Theme, POI category, or profile hubs, then posts. Page title: **Nexus-posts**. |
+| `/ads/nexus` | `ads` | Ad profiles | Ad-profile or domain hubs, then reviewed ads. Page title: **Nexus-ads**. |
 
-Sidebar entries: **Posts Nexus** and **Ads Nexus**. The feeds topic map is the **Feeds** item (tab: Topic map).
+Sidebar entries: **Nexus-posts** and **Nexus-ads**. The feeds topic map is the **Feeds** item (tab: Topic map).
+
+The graph sidebar labels the mode switcher **Graph type**. Posts modes are **Themes**, **POIs**, and **Profiles** (the themes option still uses parent-topic ids). Left column is 252px; the selected detail panel is a little wider (narrow 340px, medium up to 440px). POI category and POI drill-in panels omit activity dates. Graph post rows hide the unreviewed status chip; other client statuses still show.
 
 A fourth preset, `feed-mixed`, is built for a single feed (`getFeedMixedNexusGraph`). It unions that feed’s resolved posts with `manual_ad_ids`. The manage-feeds builder can store ad ids; the mixed graph is available from server actions, not a dedicated nav item yet.
 
@@ -36,7 +38,7 @@ Server actions live in `src/app/(dashboard)/nexus/actions.js`. Query builders li
 | Preset | L1 action | Parents | Leaves |
 |--------|-----------|---------|--------|
 | `feeds-poi-topics` | `getFeedsNexusGraph` | Parent POIs → topics (`buildPoiTopicsGraph` → `fromPoiTopicsGraph`) | Posts for topic ids |
-| `posts-parent-topics` | `getPostsNexusGraph('parent_topic')` | Parent topics → child topics | Posts for topic ids |
+| `posts-parent-topics` | `getPostsNexusGraph('parent_topic')` | Themes (parent topics) → child topics | Posts for topic ids |
 | `posts-poi-categories` | `getPostsNexusGraph('poi')` | `pois.category` hub → POI cluster | Reviewed posts matching POI labels |
 | `posts-profiles` | `getPostsNexusGraph('profile')` | Up to 200 client-visible profiles | Posts for those profiles |
 | `ads-ad-profiles` | `getAdsNexusGraph('ad_profile')` | Client-visible ad profiles | Reviewed ads |
@@ -60,7 +62,7 @@ Nexus follows the same client-visible gates as the list pages.
 | Ad-profile hubs | `CLIENT_VISIBLE_AD_PROFILE_FILTER` — same shape, with `list.reviewed_ad_count` |
 | POI hubs | `parentPoiFilter()` only. Alias/handle rows are not hubs. |
 
-Posts Nexus POI mode groups parent POIs by `pois.category` (`src/lib/nexus/poi-categories.js`). Slugs `political_party` and `celebrity` still map onto the politician and other hubs so older documents cluster. Counts in that mode come from reviewed mention labels, not the stored `post_count` alone.
+Nexus-posts POI mode groups parent POIs by `pois.category` (`src/lib/nexus/poi-categories.js`). Slugs `political_party` and `celebrity` still map onto the politician and other hubs so older documents cluster. Counts in that mode come from reviewed mention labels, not the stored `post_count` alone.
 
 ## Code map
 
