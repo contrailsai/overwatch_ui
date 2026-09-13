@@ -1,25 +1,22 @@
 import { getClientandProjectDetails } from '@/app/(dashboard)/actions'
-import { fetch_clients_in_project } from '@/app/(dashboard)/cases/feature_actions'
 import PageHeader from '@/components/PageHeader'
 import { DisabledSectionFallback } from '@/components/DisabledSectionFallback'
 import { isSectionEnabled } from '@/lib/project-sections'
-import { countFeeds } from './actions'
-import { getFeedsNexusGraph } from '@/app/(dashboard)/nexus/actions'
-import { FeedsNexusClient } from './FeedsNexusClient'
-import { FeedsSubNav } from './FeedsSubNav'
+import { getAdsNexusGraph } from '@/app/(dashboard)/nexus/actions'
+import { AdsNexusClient } from './AdsNexusClient'
 
 export const metadata = {
-  title: 'Feeds',
-  description: 'Explore topics and POIs across your project.',
+  title: 'Ads Nexus',
+  description: 'Graph understanding of ads linked to profiles and domains.',
 }
 
-export default async function FeedsPage() {
+export default async function AdsNexusPage() {
   const result = await getClientandProjectDetails()
   if (!result) return null
 
   const { clientDetails, project } = result
 
-  if (!isSectionEnabled(project, 'feeds')) {
+  if (!isSectionEnabled(project, 'ads')) {
     return <DisabledSectionFallback />
   }
 
@@ -30,33 +27,21 @@ export default async function FeedsPage() {
           <h2 className="text-xl font-bold text-amber-900 mb-3">Account Not Set Up</h2>
           <p className="text-amber-800/80 mb-6 text-sm leading-relaxed">
             Your account has been created but not yet assigned to a project.
-            Please contact your administrator to complete your setup.
           </p>
         </div>
       </div>
     )
   }
 
-  const [graphData, feedCount, projectEmails] = await Promise.all([
-    getFeedsNexusGraph(),
-    countFeeds(),
-    fetch_clients_in_project(clientDetails.project_name),
-  ])
+  const graphData = await getAdsNexusGraph('ad_profile')
 
   return (
     <main className="flex flex-1 flex-col h-full min-h-0 overflow-hidden bg-slate-50">
       <PageHeader
-        title="Feeds"
-        description="Topic and POI relationships across your project"
+        title="Ads understanding"
+        description="Ad profiles or domains → ads with violation colors"
       />
-      <FeedsSubNav feedCount={feedCount} />
-      <FeedsNexusClient
-        graphData={graphData}
-        feedCount={feedCount}
-        project={project}
-        clientDetails={clientDetails}
-        projectEmails={projectEmails}
-      />
+      <AdsNexusClient initialGraph={graphData} initialMode="ad_profile" />
     </main>
   )
 }

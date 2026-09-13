@@ -3,23 +3,21 @@ import { fetch_clients_in_project } from '@/app/(dashboard)/cases/feature_action
 import PageHeader from '@/components/PageHeader'
 import { DisabledSectionFallback } from '@/components/DisabledSectionFallback'
 import { isSectionEnabled } from '@/lib/project-sections'
-import { countFeeds } from './actions'
-import { getFeedsNexusGraph } from '@/app/(dashboard)/nexus/actions'
-import { FeedsNexusClient } from './FeedsNexusClient'
-import { FeedsSubNav } from './FeedsSubNav'
+import { getPostsNexusGraph } from '@/app/(dashboard)/nexus/actions'
+import { PostsNexusClient } from './PostsNexusClient'
 
 export const metadata = {
-  title: 'Feeds',
-  description: 'Explore topics and POIs across your project.',
+  title: 'Posts Nexus',
+  description: 'Graph understanding of posts, topics, POIs, and profiles.',
 }
 
-export default async function FeedsPage() {
+export default async function PostsNexusPage() {
   const result = await getClientandProjectDetails()
   if (!result) return null
 
   const { clientDetails, project } = result
 
-  if (!isSectionEnabled(project, 'feeds')) {
+  if (!isSectionEnabled(project, 'posts')) {
     return <DisabledSectionFallback />
   }
 
@@ -30,29 +28,26 @@ export default async function FeedsPage() {
           <h2 className="text-xl font-bold text-amber-900 mb-3">Account Not Set Up</h2>
           <p className="text-amber-800/80 mb-6 text-sm leading-relaxed">
             Your account has been created but not yet assigned to a project.
-            Please contact your administrator to complete your setup.
           </p>
         </div>
       </div>
     )
   }
 
-  const [graphData, feedCount, projectEmails] = await Promise.all([
-    getFeedsNexusGraph(),
-    countFeeds(),
+  const [graphData, projectEmails] = await Promise.all([
+    getPostsNexusGraph('parent_topic'),
     fetch_clients_in_project(clientDetails.project_name),
   ])
 
   return (
     <main className="flex flex-1 flex-col h-full min-h-0 overflow-hidden bg-slate-50">
       <PageHeader
-        title="Feeds"
-        description="Topic and POI relationships across your project"
+        title="Posts understanding"
+        description="Parent topics, POIs, or profiles → posts with violation colors"
       />
-      <FeedsSubNav feedCount={feedCount} />
-      <FeedsNexusClient
-        graphData={graphData}
-        feedCount={feedCount}
+      <PostsNexusClient
+        initialGraph={graphData}
+        initialMode="parent_topic"
         project={project}
         clientDetails={clientDetails}
         projectEmails={projectEmails}
