@@ -74,6 +74,8 @@ Add new unlock pairs to both:
 - [`../known_cloak_params.txt`](../known_cloak_params.txt) (reference list)
 - `Data_pipeline_test/domain_analyzer/cloak_tokens.py` `KNOWN_CLOAK_PAIRS` (canonical list used by probe; [`sebi_report/cloak_tokens.py`](sebi_report/cloak_tokens.py) re-exports it)
 
+[`sebi_report/cloak_probe.py`](sebi_report/cloak_probe.py) also re-exports `collect_ad_source_urls` from `domain_analyzer.cloak_probe` so batch probes can harvest ad landing URLs as extra unlock targets.
+
 ## Bulk-review pending ads on reviewed domains
 
 Reviews **pending** ads (library + feed by default) whose destination domain already has
