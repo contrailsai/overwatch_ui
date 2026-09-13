@@ -44,5 +44,15 @@ next-env.d.ts
 /.claude
 /.agents
 /.gemini
+
+# rsynced research / vendor trees and generated probe output
+/tmp/
+scripts/iaf_parent_topics/.venv/
+scripts/out/
+docs/ops/sebi-ads-domain-cloak-pipeline/scripts/out/
+docs/ops/sebi-ads-domain-cloak-pipeline/scripts/**/__pycache__/
+**/__pycache__/
+*.pyc
+supabase/.temp/
 .env.local
 .env.grafana
