@@ -37,6 +37,7 @@ export default async function ReviewAdProfilesPage({ searchParams }) {
 
   const filters = {
     platform: resolvedParams.platform || 'all',
+    is_verified: resolvedParams.is_verified || 'all',
     reviewStatus: resolvedParams.reviewStatus || 'all',
     searchText: resolvedParams.search || '',
     publish_date_from: resolvedParams.publish_date_from || null,

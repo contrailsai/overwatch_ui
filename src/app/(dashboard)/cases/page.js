@@ -1,6 +1,7 @@
 import { CasesList } from './CasesList'
 import { getPosts, getPostById, getSimilarPosts, getSemanticSearchPosts } from './actions'
 import { fetch_clients_in_project } from './feature_actions'
+import { getPoiFilterOptions } from '@/app/(dashboard)/pois/actions'
 import { requireAuthContext } from '@/utils/auth-context'
 import { runInSpan } from '@/utils/tracing'
 import PageHeader from '@/components/PageHeader'
@@ -33,6 +34,7 @@ export default async function CasesPage({ searchParams }) {
     visibility_status: resolvedParams.visibility_status || 'all',
     risk_priority: resolvedParams.risk_priority || 'all',
     violations: resolvedParams.violations || 'all',
+    pois: resolvedParams.pois || 'all',
     published_from: resolvedParams.published_from || resolvedParams.original_date_from || null,
     published_to: resolvedParams.published_to || resolvedParams.original_date_to || null,
     alert_from: resolvedParams.alert_from || resolvedParams.processed_from || null,
@@ -90,10 +92,16 @@ export default async function CasesPage({ searchParams }) {
     async () => fetch_clients_in_project(clientDetails.project_name),
     { loki_stream: 'cases', 'app.span_type': 'rsc_fetch', 'app.surface': 'rsc', 'app.fetch_target': 'project_emails' }
   )
-  const [cases, initialCase, email_n_alias] = await Promise.all([
+  const poiOptionsPromise = runInSpan(
+    'rsc.cases_page.poi_filter_options',
+    async () => getPoiFilterOptions(),
+    { loki_stream: 'cases', 'app.span_type': 'rsc_fetch', 'app.surface': 'rsc', 'app.fetch_target': 'poi_filter_options' }
+  )
+  const [cases, initialCase, email_n_alias, poiOptionsRes] = await Promise.all([
     casesPromise,
     initialCasePromise,
     projectEmailsPromise,
+    poiOptionsPromise,
   ])
 
   return (
@@ -111,6 +119,7 @@ export default async function CasesPage({ searchParams }) {
           itemsPerPage={itemsPerPage}
           initialCase={initialCase}
           projectEmails={email_n_alias}
+          poiOptions={poiOptionsRes?.pois || []}
         />
       </div>
     </main>

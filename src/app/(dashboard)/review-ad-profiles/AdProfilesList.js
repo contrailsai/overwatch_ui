@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect, useTransition } from 'react'
 import { getAdProfileAds, submitAdProfileReview } from './actions'
+import { getAdProfileLinkedDomains } from '@/app/(dashboard)/ad-profiles/actions'
 import {
     Filter, Search, ExternalLink, X, ChevronLeft, ChevronRight,
     ChevronsLeft, ChevronsRight,
@@ -9,7 +10,7 @@ import {
     User, ArrowRight, FileText, Siren, ClockFading, Info, Globe,
     ShieldAlert, TriangleAlert, TrendingDown, Smile,
     Loader2, AlertCircle, UserX, UserCheck, CheckCheck, CheckCircle,
-    MapPin, Calendar, Link2, Hash
+    MapPin, Calendar, Link2, Hash, BadgeCheck
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -23,6 +24,7 @@ import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { format } from 'date-fns'
 import { DateFilterPopover } from '@/app/(dashboard)/cases/DateFilterPopover'
 import { getAdSourceLinkLabel } from '@/lib/ads/ad-display'
+import { AdProfileLinkedDomains } from '@/components/ads/AdProfileLinkedDomains'
 
 const isPendingReviewAd = (ad) =>
     ad?.workflow?.review_status === 'pending' || ad?.list?.review_threat_score == null
@@ -342,6 +344,7 @@ function AdProfileReviewForm({ profile, project, onReviewSaved }) {
 // ─── Ad Profile Detail Panel ─────────────────────────────────────────────────
 function AdProfileDetailPanel({ profile, profiles = [], project, isOpen, onClose, onReviewSaved, onSelectProfile }) {
     const [ads, setAds] = useState(null)
+    const [domains, setDomains] = useState(null)
     const [loading, setLoading] = useState(false)
     const [isBioExpanded, setIsBioExpanded] = useState(false)
 
@@ -354,15 +357,26 @@ function AdProfileDetailPanel({ profile, profiles = [], project, isOpen, onClose
         if (!isOpen || !profile) return
         let cancelled = false
         setAds(null)
+        setDomains(null)
         setIsBioExpanded(false)
-        if (adsCount === 0) {
-            setAds([])
-            return
-        }
         setLoading(true)
-        getAdProfileAds(project, profile._id)
-            .then(result => { if (!cancelled) setAds(result) })
-            .catch(() => { if (!cancelled) setAds([]) })
+        const adsPromise = adsCount === 0
+            ? Promise.resolve([])
+            : getAdProfileAds(project, profile._id)
+        Promise.all([
+            adsPromise,
+            getAdProfileLinkedDomains(profile._id, {}, { allAds: true }),
+        ])
+            .then(([adsResult, domainsResult]) => {
+                if (cancelled) return
+                setAds(adsResult)
+                setDomains(domainsResult?.domains || [])
+            })
+            .catch(() => {
+                if (cancelled) return
+                setAds([])
+                setDomains([])
+            })
             .finally(() => { if (!cancelled) setLoading(false) })
         return () => { cancelled = true }
     }, [isOpen, profile?._id, project, adsCount])
@@ -485,6 +499,9 @@ function AdProfileDetailPanel({ profile, profiles = [], project, isOpen, onClose
                                     <div className="flex flex-col min-w-0 pt-0.5">
                                         <div className="flex items-center gap-2 flex-wrap">
                                             <h2 className="text-lg font-bold text-slate-900 truncate tracking-tight">{displayName}</h2>
+                                            {profile.is_verified && (
+                                                <BadgeCheck className="w-4 h-4 text-blue-500 shrink-0" />
+                                            )}
                                             {pageIsDeleted && (
                                                 <Badge variant="outline" className="h-5 px-1.5 text-[9px] font-bold bg-rose-50 text-rose-700 border-rose-200 uppercase tracking-wider gap-1">
                                                     <ShieldAlert className="w-3 h-3" /> Deleted
@@ -602,6 +619,25 @@ function AdProfileDetailPanel({ profile, profiles = [], project, isOpen, onClose
                                 )}
                             </div>
                         )}
+                        {/* Linked Domains */}
+                        <div className="shrink-0 pb-2">
+                            <div className="px-6 py-4">
+                                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Linked Domains</h3>
+                                {loading && domains == null ? (
+                                    <div className="space-y-3">
+                                        {Array.from({ length: 2 }).map((_, i) => (
+                                            <div key={i} className="h-16 bg-slate-50 rounded-lg animate-pulse border border-slate-100" />
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <AdProfileLinkedDomains
+                                        domains={domains || []}
+                                        hrefBase="/review-domains"
+                                        emptyLabel="No reviewed domains linked from this advertiser’s ads."
+                                    />
+                                )}
+                            </div>
+                        </div>
                         {/* Associated Ads */}
                         <div className="shrink-0 pb-8">
                             <div className="px-6 py-4">
@@ -820,7 +856,7 @@ export function AdProfilesList({ profiles, project, initialFilters, currentPage,
 
     const clearFilters = () => router.push(pathname)
 
-    const hasActiveFilter = initialFilters.platform !== 'all' || (initialFilters.reviewStatus && initialFilters.reviewStatus !== 'all') || initialFilters.searchText || initialFilters.publish_date_from || initialFilters.publish_date_to
+    const hasActiveFilter = initialFilters.platform !== 'all' || initialFilters.is_verified !== 'all' || (initialFilters.reviewStatus && initialFilters.reviewStatus !== 'all') || initialFilters.searchText || initialFilters.publish_date_from || initialFilters.publish_date_to
 
     const [searchInput, setSearchInput] = useState(initialFilters.searchText || '')
 
@@ -921,6 +957,20 @@ export function AdProfilesList({ profiles, project, initialFilters, currentPage,
                                 </div>
 
                                 <div className="space-y-1">
+                                    <Label className="text-[10px] uppercase font-bold text-slate-400">Verified</Label>
+                                    <Select value={initialFilters.is_verified || 'all'} onValueChange={(val) => handleFilterChange('is_verified', val)}>
+                                        <SelectTrigger className="w-[130px] bg-white border-slate-200 h-9 text-xs font-semibold">
+                                            <SelectValue placeholder="All" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">All</SelectItem>
+                                            <SelectItem value="true">Verified</SelectItem>
+                                            <SelectItem value="false">Unverified</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                <div className="space-y-1">
                                     <Label className="text-[10px] uppercase font-bold text-slate-400">Publish Date</Label>
                                     <div className="w-[190px]">
                                         <DateFilterPopover
@@ -995,8 +1045,11 @@ export function AdProfilesList({ profiles, project, initialFilters, currentPage,
                                                     )}
                                                 </div>
                                                 <div className="flex flex-col gap-0.5">
-                                                    <span className="font-semibold text-slate-900 text-sm truncate max-w-[160px]">
-                                                        {rowName}
+                                                    <span className="font-semibold text-slate-900 text-sm truncate max-w-[160px] inline-flex items-center gap-1">
+                                                        <span className="truncate">{rowName}</span>
+                                                        {profile.is_verified ? (
+                                                            <BadgeCheck className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                                                        ) : null}
                                                     </span>
                                                     {profile.platform_page_id && (
                                                         <span className="text-[10px] text-slate-400 truncate max-w-[160px] font-mono">

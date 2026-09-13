@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { DateFilterPopover } from '@/components/DateFilterPopover'
 import { ViolationsFilter } from './ViolationsFilter'
+import { PoiFilter } from './PoiFilter'
 import { RiskFilter } from './RiskFilter'
 import { StatusFilter } from './StatusFilter'
 import { PlatformFilter } from './PlatformFilter'
@@ -62,6 +63,42 @@ function InlineFilterRow({ label, children, className }) {
   )
 }
 
+const TOOLBAR_DATE_TRIGGER = 'h-8 w-full bg-slate-50 border-slate-200 hover:bg-slate-50 px-2.5 shadow-none'
+
+function ToolbarSearch({ searchTerm, setSearchTerm, handleSearchApply, updateQueryParams }) {
+  return (
+    <div className="relative min-w-0 w-full">
+      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
+      <input
+        type="text"
+        value={searchTerm}
+        onChange={(e) => setSearchTerm(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault()
+            handleSearchApply()
+          }
+        }}
+        placeholder="Search by text..."
+        className="w-full h-8 bg-slate-50 border border-slate-200 rounded-md pl-8 pr-8 text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+      />
+      {searchTerm && (
+        <button
+          type="button"
+          onClick={() => {
+            setSearchTerm('')
+            updateQueryParams({ semantic_search: null, page: 1 })
+          }}
+          className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded-full text-slate-400 hover:bg-slate-200 hover:text-slate-700"
+          aria-label="Clear search"
+        >
+          <X className="h-3 w-3" />
+        </button>
+      )}
+    </div>
+  )
+}
+
 function ActiveFilterChip({ label, onRemove }) {
   return (
     <button
@@ -85,6 +122,7 @@ export function CasesFilterPanel({
   scrollPaddingBottom = false,
   onMobileDrawerDone,
   initialFilters,
+  poiOptions = [],
   project,
   allowDoTakedown,
   handleFilterChange,
@@ -117,6 +155,8 @@ export function CasesFilterPanel({
   BulkActionMenu,
   clearFilters,
   hideSearch = false,
+  surface = 'all',
+  arrangement = 'inline',
 }) {
   const isStacked = layout === 'stacked'
   const compactInline = compactInlineProp ?? isStacked
@@ -143,6 +183,24 @@ export function CasesFilterPanel({
     { value: 'Flag for Takedown', label: 'Flag for Takedown' },
   ].filter(Boolean)
 
+  const applyAlertRange = (range) =>
+    updateQueryParams({
+      alert_from: range?.from ? format(range.from, "yyyy-MM-dd'T'HH:mm:ssXXX") : null,
+      alert_to: range?.to ? format(range.to, "yyyy-MM-dd'T'HH:mm:ssXXX") : null,
+      processed_from: null,
+      processed_to: null,
+      page: 1,
+    })
+
+  const applyPublishRange = (range) =>
+    updateQueryParams({
+      published_from: range?.from ? format(range.from, "yyyy-MM-dd'T'HH:mm:ssXXX") : null,
+      published_to: range?.to ? format(range.to, "yyyy-MM-dd'T'HH:mm:ssXXX") : null,
+      original_date_from: null,
+      original_date_to: null,
+      page: 1,
+    })
+
   const activeChips = []
 
   if (initialFilters.risk_priority && initialFilters.risk_priority !== 'all') {
@@ -167,6 +225,14 @@ export function CasesFilterPanel({
     activeChips.push({
       label: `Violations: ${initialFilters.violations}`,
       onRemove: () => handleFilterChange('violations', 'all'),
+    })
+  }
+  if (initialFilters.pois && initialFilters.pois !== 'all') {
+    const selectedNames = initialFilters.pois.split(',').filter(Boolean)
+    const labels = selectedNames.map((name) => poiOptions.find((poi) => poi.name === name)?.display_name || name)
+    activeChips.push({
+      label: `POIs: ${labels.join(', ')}`,
+      onRemove: () => handleFilterChange('pois', 'all'),
     })
   }
   if (initialFilters.visibility_status && initialFilters.visibility_status !== 'all') {
@@ -246,6 +312,14 @@ export function CasesFilterPanel({
           onChange={(val) => handleFilterChange('violations', val)}
         />
       </FilterField>
+      <FilterField layout={layout} compactInline={compactInline} className={!isStacked && 'lg:min-w-[160px] lg:max-w-[200px]'}>
+        <PoiFilter
+          inline={compactInline}
+          poiOptions={poiOptions}
+          initialPois={initialFilters.pois}
+          onChange={(val) => handleFilterChange('pois', val)}
+        />
+      </FilterField>
     </>
   )
 
@@ -259,19 +333,7 @@ export function CasesFilterPanel({
               initialFrom={initialFilters.alert_from}
               initialTo={initialFilters.alert_to}
               applyWhenRangeComplete={applyWhenRangeComplete}
-              onApply={(range) =>
-                updateQueryParams({
-                  alert_from: range?.from
-                    ? format(range.from, "yyyy-MM-dd'T'HH:mm:ssXXX")
-                    : null,
-                  alert_to: range?.to
-                    ? format(range.to, "yyyy-MM-dd'T'HH:mm:ssXXX")
-                    : null,
-                  processed_from: null,
-                  processed_to: null,
-                  page: 1,
-                })
-              }
+              onApply={applyAlertRange}
             />
           </InlineFilterRow>
         ) : (
@@ -282,19 +344,7 @@ export function CasesFilterPanel({
               initialFrom={initialFilters.alert_from}
               initialTo={initialFilters.alert_to}
               applyWhenRangeComplete={applyWhenRangeComplete}
-              onApply={(range) =>
-                updateQueryParams({
-                  alert_from: range?.from
-                    ? format(range.from, "yyyy-MM-dd'T'HH:mm:ssXXX")
-                    : null,
-                  alert_to: range?.to
-                    ? format(range.to, "yyyy-MM-dd'T'HH:mm:ssXXX")
-                    : null,
-                  processed_from: null,
-                  processed_to: null,
-                  page: 1,
-                })
-              }
+              onApply={applyAlertRange}
             />
           </>
         )}
@@ -307,19 +357,7 @@ export function CasesFilterPanel({
               initialFrom={initialFilters.published_from}
               initialTo={initialFilters.published_to}
               applyWhenRangeComplete={applyWhenRangeComplete}
-              onApply={(range) =>
-                updateQueryParams({
-                  published_from: range?.from
-                    ? format(range.from, "yyyy-MM-dd'T'HH:mm:ssXXX")
-                    : null,
-                  published_to: range?.to
-                    ? format(range.to, "yyyy-MM-dd'T'HH:mm:ssXXX")
-                    : null,
-                  original_date_from: null,
-                  original_date_to: null,
-                  page: 1,
-                })
-              }
+              onApply={applyPublishRange}
             />
           </InlineFilterRow>
         ) : (
@@ -330,19 +368,7 @@ export function CasesFilterPanel({
               initialFrom={initialFilters.published_from}
               initialTo={initialFilters.published_to}
               applyWhenRangeComplete={applyWhenRangeComplete}
-              onApply={(range) =>
-                updateQueryParams({
-                  published_from: range?.from
-                    ? format(range.from, "yyyy-MM-dd'T'HH:mm:ssXXX")
-                    : null,
-                  published_to: range?.to
-                    ? format(range.to, "yyyy-MM-dd'T'HH:mm:ssXXX")
-                    : null,
-                  original_date_from: null,
-                  original_date_to: null,
-                  page: 1,
-                })
-              }
+              onApply={applyPublishRange}
             />
           </>
         )}
@@ -459,6 +485,7 @@ export function CasesFilterPanel({
       initialFilters.client_status !== 'all' ||
       (initialFilters.visibility_status && initialFilters.visibility_status !== 'all') ||
       (initialFilters.violations && initialFilters.violations !== 'all') ||
+      (initialFilters.pois && initialFilters.pois !== 'all') ||
       initialFilters.published_from ||
       initialFilters.published_to ||
       initialFilters.alert_from ||
@@ -684,6 +711,335 @@ export function CasesFilterPanel({
       {!mobileDrawerLayout && contextualPlacement === 'bottom' && contextualSection}
     </>
   )
+
+  const toolbarSearch = (
+    <ToolbarSearch
+      searchTerm={searchTerm}
+      setSearchTerm={setSearchTerm}
+      handleSearchApply={handleSearchApply}
+      updateQueryParams={updateQueryParams}
+    />
+  )
+
+  const toolbarAlertDate = (
+    <DateFilterPopover
+      title="Alert date"
+      triggerClassName={TOOLBAR_DATE_TRIGGER}
+      initialFrom={initialFilters.alert_from}
+      initialTo={initialFilters.alert_to}
+      applyWhenRangeComplete={applyWhenRangeComplete}
+      onApply={applyAlertRange}
+    />
+  )
+
+  const toolbarPoi = (
+    <PoiFilter
+      compact
+      poiOptions={poiOptions}
+      initialPois={initialFilters.pois}
+      onChange={(val) => handleFilterChange('pois', val)}
+    />
+  )
+
+  if (surface === 'primary') {
+    if (arrangement === 'stacked') {
+      return (
+        <div className="flex flex-col gap-2 w-full">
+          {toolbarSearch}
+          {toolbarAlertDate}
+          {toolbarPoi}
+        </div>
+      )
+    }
+    if (arrangement === 'split') {
+      return (
+        <div className="flex flex-col gap-1.5 w-full">
+          {toolbarSearch}
+          <div className="grid grid-cols-2 gap-1.5">
+            <div className="min-w-0">{toolbarAlertDate}</div>
+            <div className="min-w-0">{toolbarPoi}</div>
+          </div>
+        </div>
+      )
+    }
+    return (
+      <div className="flex flex-wrap items-center gap-2 flex-1 min-w-[220px]">
+        <div className="flex-1 min-w-[160px] max-w-sm">{toolbarSearch}</div>
+        <div className="w-[148px] shrink-0">{toolbarAlertDate}</div>
+        <div className="min-w-[140px] max-w-[200px] flex-1">{toolbarPoi}</div>
+      </div>
+    )
+  }
+
+  if (surface === 'actions') {
+    const showSimilar = selectedCount === 1
+    const showAssign = clientDetails?.permission === 'client-admin' && selectedCount > 0
+    if (!showSimilar && !showAssign) return null
+
+    const selectedId = Object.keys(selectedCases || {})[0]
+    const similarTextActive =
+      searchParams.get('similar_to') === selectedId && searchParams.get('search_type') === 'text'
+    const similarImageActive =
+      searchParams.get('similar_to') === selectedId && searchParams.get('search_type') === 'image'
+
+    return (
+      <div className="flex flex-wrap items-center gap-2 w-full">
+        {showSimilar && (
+          <div className="flex items-center gap-1.5 shrink-0">
+            <Button
+              variant={similarTextActive ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => {
+                if (!selectedId) return
+                if (similarTextActive) {
+                  updateQueryParams({ similar_to: null, search_type: null, page: 1 })
+                  return
+                }
+                updateQueryParams({
+                  similar_to: selectedId,
+                  search_type: 'text',
+                  semantic_search: null,
+                  page: 1,
+                })
+              }}
+              className={cn(
+                'h-8 px-2.5 text-[10px] font-bold uppercase tracking-wider shadow-sm',
+                similarTextActive
+                  ? 'bg-blue-600 text-white hover:bg-blue-700'
+                  : 'bg-white border-blue-200 text-blue-700 hover:bg-blue-50'
+              )}
+            >
+              <Search className="w-3 h-3 mr-1.5" />
+              Similar text
+            </Button>
+            <Button
+              variant={similarImageActive ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => {
+                if (!selectedId) return
+                if (similarImageActive) {
+                  updateQueryParams({ similar_to: null, search_type: null, page: 1 })
+                  return
+                }
+                updateQueryParams({
+                  similar_to: selectedId,
+                  search_type: 'image',
+                  semantic_search: null,
+                  page: 1,
+                })
+              }}
+              className={cn(
+                'h-8 px-2.5 text-[10px] font-bold uppercase tracking-wider shadow-sm',
+                similarImageActive
+                  ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                  : 'bg-white border-emerald-200 text-emerald-700 hover:bg-emerald-50'
+              )}
+            >
+              <Search className="w-3 h-3 mr-1.5" />
+              Similar image
+            </Button>
+          </div>
+        )}
+        {showAssign && (
+          <div className="flex flex-wrap items-center gap-2 min-w-0 flex-1">
+            <select
+              value={bulkAssignedEmail}
+              onChange={(e) => setBulkAssignedEmail(e.target.value)}
+              className="min-w-[160px] flex-1 bg-white border border-slate-200 rounded-md px-2.5 h-8 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
+              aria-label="Assign selected cases"
+            >
+              <option value="">Assign to…</option>
+              {projectEmails?.map((userObj) => (
+                <option key={userObj.email} value={userObj.email}>
+                  {userObj.alias || userObj.email}
+                </option>
+              ))}
+            </select>
+            <Button
+              onClick={handleBulkAssign}
+              disabled={!bulkAssignedEmail || isBulkAssigning}
+              className="h-8 px-3 cursor-pointer bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-sm shrink-0"
+            >
+              {isBulkAssigning ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />
+              ) : (
+                <UserPlus className="w-3.5 h-3.5 mr-1.5" />
+              )}
+              Assign
+            </Button>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  if (surface === 'advanced') {
+    const stacked = arrangement === 'stacked' || layout === 'stacked'
+    const hiddenChips = activeChips.filter(
+      (chip) => chip.label !== 'Alert date' && !chip.label.startsWith('POIs')
+    )
+    const similarType = searchParams.get('search_type')
+
+    const advancedControls = (
+      <>
+        <div className={cn(stacked ? 'w-full' : 'min-w-[140px] max-w-[180px] flex-1')}>
+          <RiskFilter
+            inline={compactInline && stacked}
+            initialRisk={initialFilters.risk_priority || 'all'}
+            onChange={(val) => handleFilterChange('risk_priority', val)}
+          />
+        </div>
+        <div className={cn(stacked ? 'w-full' : 'min-w-[140px] max-w-[180px] flex-1')}>
+          <PlatformFilter
+            inline={compactInline && stacked}
+            initialPlatform={initialFilters.platform}
+            onChange={(val) => handleFilterChange('platform', val)}
+          />
+        </div>
+        <div className={cn(stacked ? 'w-full' : 'min-w-[140px] max-w-[180px] flex-1')}>
+          <StatusFilter
+            inline={compactInline && stacked}
+            initialStatus={initialFilters.client_status}
+            onChange={(val) => handleFilterChange('client_status', val)}
+            options={statusOptions}
+          />
+        </div>
+        <div className={cn(stacked ? 'w-full' : 'min-w-[140px] max-w-[200px] flex-1')}>
+          <ViolationsFilter
+            inline={compactInline && stacked}
+            projectLabels={project?.project_details?.labels || []}
+            initialViolations={initialFilters.violations}
+            onChange={(val) => handleFilterChange('violations', val)}
+          />
+        </div>
+        <div className={cn(stacked ? 'w-full' : 'min-w-[140px] max-w-[180px] flex-1')}>
+          <StatusFilter
+            inline={compactInline && stacked}
+            label="Visibility"
+            placeholder="All Visibility"
+            initialStatus={initialFilters.visibility_status || 'all'}
+            onChange={(val) => handleFilterChange('visibility_status', val)}
+            options={[
+              { value: 'active', label: 'Online' },
+              { value: 'down', label: 'Taken Down' },
+            ]}
+          />
+        </div>
+        <div className={cn(stacked ? 'w-full' : 'min-w-[140px] max-w-[160px] flex-1', !compactInline && 'space-y-1')}>
+          {compactInline && stacked ? (
+            <InlineFilterRow label="Publish">
+              <DateFilterPopover
+                title="Publish Date"
+                initialFrom={initialFilters.published_from}
+                initialTo={initialFilters.published_to}
+                applyWhenRangeComplete={applyWhenRangeComplete}
+                onApply={applyPublishRange}
+              />
+            </InlineFilterRow>
+          ) : (
+            <>
+              <Label className="text-[10px] uppercase font-bold text-slate-400">Publish date</Label>
+              <DateFilterPopover
+                title="Publish Date"
+                triggerClassName={stacked ? undefined : TOOLBAR_DATE_TRIGGER}
+                initialFrom={initialFilters.published_from}
+                initialTo={initialFilters.published_to}
+                applyWhenRangeComplete={applyWhenRangeComplete}
+                onApply={applyPublishRange}
+              />
+            </>
+          )}
+        </div>
+        <div className={cn(stacked ? 'w-full' : 'w-[120px] shrink-0', !compactInline && 'space-y-1')}>
+          {compactInline && stacked ? (
+            <InlineFilterRow label="Unique">
+              <div className="flex items-center justify-start w-fit h-9 border border-slate-200 rounded-md px-2.5 bg-slate-50">
+                <Switch
+                  checked={
+                    initialFilters.unique_clusters === 'true' ||
+                    initialFilters.unique_clusters === true
+                  }
+                  onCheckedChange={(checked) =>
+                    handleFilterChange('unique_clusters', checked ? 'true' : 'false')
+                  }
+                />
+              </div>
+            </InlineFilterRow>
+          ) : (
+            <>
+              <Label className="text-[10px] uppercase font-bold text-slate-400">Unique</Label>
+              <div className="flex items-center gap-2 h-8 border border-slate-200 rounded-md px-2 bg-slate-50">
+                <Switch
+                  checked={
+                    initialFilters.unique_clusters === 'true' ||
+                    initialFilters.unique_clusters === true
+                  }
+                  onCheckedChange={(checked) =>
+                    handleFilterChange('unique_clusters', checked ? 'true' : 'false')
+                  }
+                />
+                <span className="text-xs font-semibold text-slate-700">Unique</span>
+              </div>
+            </>
+          )}
+        </div>
+      </>
+    )
+
+    const chipRow = (hiddenChips.length > 0 || similarType) && (
+      <div className="flex flex-wrap items-center gap-1.5">
+        {hiddenChips.map((chip) => (
+          <ActiveFilterChip key={chip.label} label={chip.label} onRemove={chip.onRemove} />
+        ))}
+        {similarType && (
+          <ActiveFilterChip
+            label={`Similar: ${similarType}`}
+            onRemove={() => updateQueryParams({ similar_to: null, search_type: null, page: 1 })}
+          />
+        )}
+      </div>
+    )
+
+    if (mobileDrawerLayout) {
+      return (
+        <div className="flex flex-col flex-1 min-h-0 w-full overflow-hidden">
+          <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain custom-scrollbar pt-2">
+            <div className="flex flex-col w-full">
+              <FilterSection title="Filters" showSections compact={compactInline}>
+                <div className="flex flex-col gap-2">{advancedControls}</div>
+              </FilterSection>
+              {chipRow && (
+                <FilterSection title="Active" showSections compact={compactInline}>
+                  {chipRow}
+                </FilterSection>
+              )}
+              {onMobileDrawerDone && (
+                <div className="flex justify-center px-6 pt-6 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="min-h-11 cursor-pointer px-12 py-1 font-semibold shadow-sm"
+                    onClick={onMobileDrawerDone}
+                  >
+                    Done
+                  </Button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )
+    }
+
+    return (
+      <div className="space-y-2.5 pt-1 animate-in fade-in slide-in-from-top-1 duration-200">
+        <div className={cn('flex gap-x-2.5 gap-y-2.5', stacked ? 'flex-col' : 'flex-wrap')}>
+          {advancedControls}
+        </div>
+        {chipRow}
+      </div>
+    )
+  }
 
   if (mobileDrawerLayout) {
     return (

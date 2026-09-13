@@ -2,7 +2,7 @@
 
 **Status:** Complete (reviewer **Manage Feeds**, client **Feeds** viewer, and **Review Cases topic assignment**).
 
-**Last updated:** June 2026
+**Last updated:** September 2026
 
 ---
 
@@ -29,8 +29,9 @@ The feeds system lets reviewers curate themed collections of content for clients
 
 - **Topics** — groups of related posts (`Topics.posts[]`)
 - **Manual posts** — individual cases added by search, outside any topic
+- **Manual ads** — `Ads._id` values pasted in the builder (`manual_ad_ids`), used by the mixed feed nexus. Topics do not carry ads.
 
-Clients browse feeds at `/feeds` with the same filtering, detail panel, reports, and publishing-date chart behavior as `/cases`.
+Clients browse curated lists at `/feeds/collections` (and `/feeds/[slug]`) with the same filtering, detail panel, reports, and publishing-date chart behavior as `/cases`. `/feeds` itself is the **topic map**: a POI → topics Nexus graph. See [`docs/nexus.md`](../nexus.md).
 
 **Topic assignment** (at `/review-cases`) is the in-app **write path** for topic membership. Posts do not store a `topic_id`; membership lives on topic documents. When a reviewer assigns or moves a case to a topic, any feed that references that topic updates automatically on the next read — no writes to `Feeds` are required.
 
@@ -43,12 +44,12 @@ flowchart LR
 
   subgraph data [MongoDB per tenant]
     Topics["Topics.posts[]"]
-    Feeds["Feeds.topic_ids + manual_post_ids"]
+    Feeds["Feeds.topic_ids + manual_post_ids + manual_ad_ids"]
     Posts["Posts + review_details.threat_score"]
   end
 
   subgraph reads [All project users]
-    CF["/feeds → live resolve + reviewed filter"]
+    CF["/feeds/collections → live resolve + reviewed filter"]
   end
 
   RC --> Topics
@@ -73,7 +74,7 @@ flowchart LR
 | Topic membership per post | **One topic per post** — enforced on assign/move; legacy multi-topic data is cleaned on next move |
 | Feed visibility | **All users in project** — no per-user assignment or draft/publish toggle |
 | Reviewer surfaces | `/manage-feeds` (feed CRUD), `/review-cases` (topic assignment) |
-| Client surface | `/feeds` (index + detail) |
+| Client surfaces | `/feeds` (topic map), `/feeds/collections` (index), `/feeds/[slug]` (detail) |
 
 ---
 
@@ -97,7 +98,8 @@ flowchart LR
 | Module | Role |
 |--------|------|
 | [`feed-schema.js`](../../src/lib/feeds/feed-schema.js) | Collection names, serializers, `sanitizeStringArray`, `escapeRegex` |
-| [`resolve-feed-posts.js`](../../src/lib/feeds/resolve-feed-posts.js) | Live post resolution + feed-scoped aggregation pipelines |
+| [`resolve-feed-posts.js`](../../src/lib/feeds/resolve-feed-posts.js) | Live post resolution, `resolveFeedAdObjectIds`, feed-scoped aggregation pipelines (same list sort as `/cases`) |
+| [`src/lib/nexus`](../../src/lib/nexus) | Topic-map and mixed-feed graph. `poi-topics-graph-engine.js` is deprecated. |
 | [`feed-slug.js`](../../src/lib/feeds/feed-slug.js) | URL slugs (`{title-slug}-{last8ofId}`) |
 | [`topic-membership.js`](../../src/lib/feeds/topic-membership.js) | Pure DB helpers (move, stats, allocate id) |
 | [`topic-membership-actions.js`](../../src/lib/feeds/topic-membership-actions.js) | Reviewer server actions for topic assignment |
@@ -120,6 +122,7 @@ Auto-created on first `insertOne`. One collection per tenant MongoDB database (`
   description: String,
   topic_ids: [String],        // e.g. "T00002" — references Topics.topic_id
   manual_post_ids: [String],  // Posts._id hex strings
+  manual_ad_ids: [String],    // Ads._id hex strings (optional; mixed nexus)
   cover_image_url: String | null,
   created_by: String,         // reviewer email
   created_at: Date,
@@ -196,12 +199,13 @@ sequenceDiagram
 |-------|----------|-------|
 | `/manage-feeds` | Reviewer | Fake 404 for non-reviewers; `requireRole(['reviewer'])` in actions |
 | `/review-cases` | Reviewer | Same pattern |
-| `/feeds` | All project users | `requireAuthContext()` |
+| `/feeds` | All project users | Topic map (`getFeedsNexusGraph`). `requireAuthContext()` |
+| `/feeds/collections` | All project users | Feed index cards |
 | `/feeds/[feedId]` | All project users | Slug or raw ObjectId; redirects legacy ids to canonical slug |
 
 **Sidebar** ([`Sidebar.js`](../../src/components/Sidebar.js)):
 
-- **Feeds** — `show: true`
+- **Feeds** — topic map + collections; hidden or grayed when the project `feeds` section is off
 - **Manage Feeds** — `show: permission === 'reviewer'`
 
 **Tenancy:** All Mongo access uses `dbName` from auth context (`mongo_db_map`). Never trust client-supplied database names.
@@ -224,6 +228,7 @@ sequenceDiagram
 
 | Action | Description |
 |--------|-------------|
+| `getFeedsNexusGraph` | Topic map L1 (`nexus/actions.js`) |
 | `listFeedsForClient` | Feed index for all users |
 | `getFeedById` | Metadata + slug |
 | `getFeedPosts` | Paginated, filterable, reviewed-only list |
@@ -261,7 +266,8 @@ src/
 │   │   ├── ManageFeedsClient.js        # Feed cards + delete
 │   │   └── FeedBuilder.js              # Right slide-over create/edit
 │   ├── feeds/
-│   │   ├── page.js                     # Client feed index
+│   │   ├── page.js                     # Topic map (FeedsNexusClient)
+│   │   ├── collections/                # Client feed index
 │   │   ├── [feedId]/page.js            # Feed detail (filters, histogram)
 │   │   ├── actions.js                  # Client read actions
 │   │   ├── FeedsIndexClient.js         # Feed cards
@@ -446,7 +452,7 @@ If a post was manually added to a feed and later deleted, its id may remain in `
 
 ### Empty feeds
 
-A feed with no topics, no manual posts, or only unreviewed topic members shows an empty state on `/feeds`.
+A feed with no topics, no manual posts, or only unreviewed topic members shows an empty state on `/feeds/collections` and the feed detail page. `manual_ad_ids` do not appear in that post list; they are resolved only for the mixed nexus (`resolveFeedAdObjectIds`).
 
 ### Topic assignment timing vs review submit
 
@@ -473,9 +479,10 @@ Topic changes are **immediate** (not bundled with review form submit). Review su
 - [ ] Delete feed with confirm
 - [ ] MongoDB `Feeds` doc shape matches schema (`update_history`, etc.)
 
-### Client Feeds (`/feeds`)
+### Client Feeds (`/feeds` and `/feeds/collections`)
 
-- [ ] Index lists all feeds for project
+- [ ] `/feeds` renders the POI → topics map (not the card index)
+- [ ] `/feeds/collections` lists all feeds for the project
 - [ ] Feed detail loads with slug URL (legacy ObjectId redirects)
 - [ ] Filters, sort, pagination match `/cases` behavior
 - [ ] Publishing histogram renders; bar click sets date filter
@@ -513,6 +520,7 @@ Topic changes are **immediate** (not bundled with review form submit). Review su
 | `cover_image_url` picker | Field exists; no UI yet |
 | Draft/publish feeds | Per-feed visibility control |
 | Bulk topic assign | From review list view |
+| Ad picker in FeedBuilder | Today the builder stores pasted `Ads._id` values; no search picker yet |
 | Image/similar-post search in FeedBuilder | `getSimilarPosts` available |
 | Multi-tenant index script | Loop all `mongo_db_map` values automatically |
 
@@ -520,4 +528,4 @@ Topic changes are **immediate** (not bundled with review form submit). Review su
 
 ## Summary
 
-Feeds and topics form a **live, reference-based curation layer** on top of existing `Posts` and cases infrastructure. Reviewers build feeds from topics and hand-picked posts; assign cases to topics during review; clients browse the result with full cases-list capabilities. **Deployment requires per-tenant MongoDB indexes on `Topics` (especially `topic_id` unique and `posts` multikey)** — run `node scripts/ensure_indexes.js` for each project database before go-live.
+Feeds and topics form a **live, reference-based curation layer** on top of existing `Posts` and cases infrastructure. Reviewers build feeds from topics, hand-picked posts, and optional ad ids; assign cases to topics during review; clients browse collections with full cases-list capabilities and the topic map at `/feeds`. **Deployment requires per-tenant MongoDB indexes on `Topics` (especially `topic_id` unique and `posts` multikey)** — run `node scripts/ensure_indexes.js` for each project database before go-live.

@@ -3,6 +3,8 @@
  */
 
 import { getSignedImageUrl } from '@/utils/aws/s3'
+import { poisCollection } from '@/utils/mongodb/collections'
+import { getPoiMatchLabels, parentPoiFilter, uniquePoiStrings } from '@/lib/pois/poi-helpers'
 import {
   ONLINE_VISIBILITY_VALUES,
   buildEffectiveThreatScoreRange,
@@ -16,6 +18,8 @@ import { withReviewedThreatScoreFilter } from '@/lib/posts/reviewed-post-filter'
 import {
   UNIQUE_CLUSTER_LIST_SORT,
   UNIQUE_CLUSTER_EARLY_SORT,
+  CASES_LIST_SORT_HELPER_FIELDS,
+  buildCasesSortKeyAddFields,
   buildCasesListSortPipeline as buildListSortFromRiskBuckets,
   buildCasesReportSortPipeline as buildReportSortFromRiskBuckets,
 } from '@/app/(dashboard)/cases/riskBuckets'
@@ -54,20 +58,29 @@ export function buildUniqueClustersStage(filters, { clusterSort = 'list' } = {})
     return []
   }
 
+  const clusterPrep = {
+    $addFields: {
+      _unique_group_key: {
+        $ifNull: [{ $toString: '$list.cluster_id' }, { $toString: '$_id' }],
+      },
+      ...buildCasesSortKeyAddFields(),
+    },
+  }
+  const dropClusterHelpers = {
+    $project: {
+      _unique_group_key: 0,
+      ...Object.fromEntries(CASES_LIST_SORT_HELPER_FIELDS.map((field) => [field, 0])),
+    },
+  }
+
   const useStrictUniqueClustering = process.env.USE_STRICT_UNIQUE_CLUSTERING === 'true'
   if (!useStrictUniqueClustering) {
     return [
-      {
-        $addFields: {
-          _unique_group_key: {
-            $ifNull: [{ $toString: '$list.cluster_id' }, { $toString: '$_id' }],
-          },
-        },
-      },
+      clusterPrep,
       { $sort: { _unique_group_key: 1, ...clusterRankSort } },
       { $group: { _id: '$_unique_group_key', doc: { $first: '$$ROOT' } } },
       { $replaceRoot: { newRoot: '$doc' } },
-      { $project: { _unique_group_key: 0 } },
+      dropClusterHelpers,
     ]
   }
 
@@ -81,17 +94,11 @@ export function buildUniqueClustersStage(filters, { clusterSort = 'list' } = {})
         ],
       },
     },
-    {
-      $addFields: {
-        _unique_group_key: {
-          $ifNull: [{ $toString: '$list.cluster_id' }, { $toString: '$_id' }],
-        },
-      },
-    },
+    clusterPrep,
     { $sort: { _unique_group_key: 1, ...clusterRankSort } },
     { $group: { _id: '$_unique_group_key', doc: { $first: '$$ROOT' } } },
     { $replaceRoot: { newRoot: '$doc' } },
-    { $project: { _unique_group_key: 0 } },
+    dropClusterHelpers,
   ]
 }
 
@@ -173,6 +180,43 @@ export function buildCasesMatchQuery(filters = {}) {
   return query
 }
 
+/**
+ * Expand `filters.pois` (comma-separated parent POI `name`s) into alias labels
+ * and AND them onto a cases match query. Mutates and returns `query`.
+ */
+export async function applyPoiNameFilter(db, query, filters = {}) {
+  const raw = filters.pois
+  if (!raw || raw === 'all') return query
+
+  const names = String(raw)
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+  if (!names.length) return query
+
+  const pois = await poisCollection(db)
+    .find({ ...parentPoiFilter(), name: { $in: names } })
+    .project({ name: 1, display_name: 1, aliases: 1, alias_poi_names: 1 })
+    .toArray()
+
+  const labels = uniquePoiStrings(pois.flatMap((poi) => getPoiMatchLabels(poi)))
+  if (!labels.length) {
+    query._id = { $exists: false }
+    return query
+  }
+
+  query.$and = [
+    ...(query.$and || []),
+    {
+      $or: [
+        { 'review_details.poi_names': { $in: labels } },
+        { 'analysis_results.poi_check.poi_names': { $in: labels } },
+      ],
+    },
+  ]
+  return query
+}
+
 /** Parse URL search params into the filter object consumed by buildCasesMatchQuery. */
 export function parseCasesListFilters(searchParams = {}) {
   return {
@@ -181,6 +225,7 @@ export function parseCasesListFilters(searchParams = {}) {
     visibility_status: searchParams.visibility_status || 'all',
     risk_priority: searchParams.risk_priority || 'all',
     violations: searchParams.violations || 'all',
+    pois: searchParams.pois || 'all',
     published_from: searchParams.published_from || searchParams.original_date_from || null,
     published_to: searchParams.published_to || searchParams.original_date_to || null,
     alert_from: searchParams.alert_from || searchParams.processed_from || null,

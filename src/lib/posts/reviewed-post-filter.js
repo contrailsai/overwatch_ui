@@ -3,6 +3,15 @@ export const REVIEWED_THREAT_SCORE_FILTER = {
   'workflow.review_status': 'reviewed',
 }
 
+/** Profiles shown on the client Profiles list / Posts Nexus profile hubs. */
+export const CLIENT_VISIBLE_PROFILE_FILTER = {
+  $or: [
+    { 'workflow.review_status': 'reviewed' },
+    { 'list.reviewed_post_count': { $gt: 0 } },
+    { 'review_details.reviewed_at': { $exists: true } },
+  ],
+}
+
 export function withReviewedThreatScoreFilter(query = {}) {
   return {
     ...query,

@@ -7,7 +7,10 @@ import { traceAction } from '@/utils/tracing'
 import { getSignedImageUrl } from '@/utils/aws/s3'
 import { requireAuthContext } from '@/utils/auth-context'
 import { logActionError, LOKI_STREAMS } from '@/utils/otel-logger'
-import { withReviewedThreatScoreFilter } from '@/lib/posts/reviewed-post-filter'
+import {
+  CLIENT_VISIBLE_PROFILE_FILTER,
+  withReviewedThreatScoreFilter,
+} from '@/lib/posts/reviewed-post-filter'
 import { resolvePoiDateRange } from '@/lib/pois/poi-helpers'
 import { postsCollection, profilesCollection } from '@/utils/mongodb/collections'
 import {
@@ -52,11 +55,7 @@ export const getProfiles = traceAction('getProfiles', async (page = 1, limit = 2
         const skip = (page - 1) * limit
 
         const query = {
-            $or: [
-                { 'workflow.review_status': 'reviewed' },
-                { 'list.reviewed_post_count': { $gt: 0 } },
-                { 'review_details.reviewed_at': { $exists: true } },
-            ],
+            $or: [...CLIENT_VISIBLE_PROFILE_FILTER.$or],
         }
 
         if (filters.platform && filters.platform !== 'all') {

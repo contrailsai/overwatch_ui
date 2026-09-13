@@ -1,3 +1,7 @@
+/**
+ * @deprecated Replaced by `@/lib/nexus/engine` (`mountNexus`) + `FeedsNexusClient`.
+ * Kept temporarily for reference; do not mount new surfaces on this file.
+ */
 import * as d3 from 'd3'
 
 const config = {

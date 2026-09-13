@@ -10,20 +10,21 @@ Built with a **"Calm Focus"** design philosophy, Overwatch minimizes cognitive l
 ## 🌟 Key Features
 
 ### 🔍 Intelligence & Review
-- **Multi-Platform Support:** Unified interface for reviewing content from Facebook, Instagram, and X (Twitter).
-- **AI-Powered Analysis:** Pre-processed risk scoring, threat classification, and Point of Interest (POI) detection.
-- **Infinite Review Stream:** Specialized reviewer interface optimized for processing high volumes of posts with minimal friction.
-- **Media Previews:** Secure, high-speed image and video previews served via AWS S3 presigned URLs.
+- **Posts, ads, and domains:** Separate reviewer and client surfaces for social posts, ad creatives, advertiser profiles, and destination domains. Project settings can turn each section on or off.
+- **AI-assisted review:** Risk scoring, threat types, and Point of Interest (POI) detection, with a reviewer stream for posts, ads, profiles, and domains.
+- **POIs and profiles:** Parent POIs (aliases collapsed), profile detail pages, and ad-profile detail pages with linked domains and recent creatives.
+- **Media previews:** Image and video previews via AWS S3 presigned URLs, including stored video thumbnails on the ads list.
 
 ### 📈 Case Management & Analytics
-- **Role-Based Workflows:** Distinct interfaces and permissions for **Reviewers** (analysts) and **Clients** (decision-makers).
-- **Executive Dashboard:** Real-time KPI cards and trend charts visualizing threat landscapes.
-- **Takedown Lifecycle:** End-to-end tracking from "Suggested" by reviewers to "Approved" and "Resolved" by clients.
-- **Automated Alerts:** Instant Slack notifications triggered upon client approval of takedowns.
+- **Role-based workflows:** Distinct interfaces for **Reviewers**, **Clients**, and **Client admins**.
+- **Analytics dashboard:** Metrics split by entity type (posts, ads, domains) on one dashboard.
+- **Nexus graphs:** Force-layout maps for feeds (POI → topics), posts (topics, POI categories, or profiles), and ads (ad profiles or domains). See [docs/nexus.md](docs/nexus.md).
+- **Feeds:** Reviewers curate topics, posts, and optional ad ids. Clients browse a topic map at `/feeds` and collections at `/feeds/collections`.
+- **Takedown lifecycle:** Tracking from reviewer suggestion through client approval, with Slack notifications on approval.
 
 ### 📄 Professional Reporting
-- **PDF & DOCX Exports:** Generate high-quality, branded reports for single cases or comprehensive profile summaries.
-- **Detailed Audit Trails:** Track every action from discovery to resolution.
+- **PDF and DOCX exports:** Case, profile, and domain reports.
+- **Audit trails:** Case events from discovery through resolution.
 
 ---
 
@@ -167,32 +168,64 @@ Supabase dashboard checklist:
 
 Each project has its own isolated database with the following primary collections:
 
+Canonical names are in [`src/utils/mongodb/collections.js`](src/utils/mongodb/collections.js).
+
 | Collection | Description |
 | :--- | :--- |
-| `Posts` | The main repository for social media content. Stores raw data, engagement metrics, and AI-driven risk analysis. |
-| `Profiles` | Detailed metadata for monitored social media accounts, including follower counts and platform history. |
-| `Keywords` | List of active search terms and phrases used by ingestion engines to discover new content. |
-| `ResearchWatchlist` | Groups of keywords and profiles organized by "Topic" for targeted intelligence research. |
-| `unique_clusters` | AI-generated groupings of related posts, used to identify emerging trends or coordinated campaigns. |
+| `Posts` | Social posts. List queries use materialized `list.*` / `workflow.*` fields (schema v3). |
+| `profiles` | Social accounts. Client list uses the same visibility gate as Posts Nexus profile hubs. |
+| `Ads` / `Ad_profiles` | Ad creatives and advertiser pages. Not stored in `Posts`. |
+| `Domains` | Destination domains, including cloak-lander review fields. |
+| `topics` | Topic membership (`posts[]`). Feeds reference `topic_id`. |
+| `pois` | Parent POIs, aliases, category, and activity range. |
+| `Feeds` | Curated references: `topic_ids`, `manual_post_ids`, `manual_ad_ids`. |
+| `case_events` | Audit log (`entity_type` distinguishes posts, ads, profiles, domains). |
+| `post_embeddings` | Vector index documents, 1:1 with posts. |
 
 ---
 
-## � Sample Data
+## Product surfaces
 
-To understand the exact data structures used in the system, refer to the `sample_documents/` directory:
-- **MongoDB Samples:** `sample_documents/mongodb/` contains real-world JSON exports for `Posts`, `Profiles`, and `ResearchWatchlist`.
-- **Supabase Definitions:** `supabase/tables info` contains the SQL DDL for the relational schema.
+Navigation is grouped in [`src/components/Sidebar.js`](src/components/Sidebar.js). Reviewer-only items are hidden for clients. Sections the project has disabled render a disabled fallback instead of data.
+
+| Area | Client | Reviewer |
+| :--- | :--- | :--- |
+| Analytics | `/` | `/` |
+| Posts | `/cases`, `/posts/nexus`, `/profiles`, `/pois` | `/review-cases`, `/review-profiles` |
+| Ads | `/ads`, `/ads/nexus`, `/ad-profiles`, `/ad-profiles/[id]` | `/review-ads`, `/review-ad-profiles` |
+| Domains | `/domains` | `/review-domains` |
+| Feeds | `/feeds` (topic map), `/feeds/collections` | `/manage-feeds` |
+| Ops | `/takedowns`, `/upload-content`, `/configurations`, `/reports` | plus `/admin` for reviewers and client-admins |
+
+Cases list filters and sort are documented in [`src/app/(dashboard)/cases/CASES_DATA_FETCHING_README.md`](src/app/(dashboard)/cases/CASES_DATA_FETCHING_README.md). Default list order is risk bucket, then IST alert day, then engagement — not a raw score sort.
 
 ---
 
-## �📁 Project Structure
+## Docs
 
-- `src/app/`: Next.js App Router (Dashboard, Auth, Actions).
-- `src/components/`: Reusable UI components (PDF/Docx logic, Charts, Tables).
-- `src/utils/`: Core logic for Supabase, MongoDB, AWS, and Tracing.
-- `src/instrumentation.js`: OpenTelemetry registration (traces, metrics, OTLP logs).
-- `docs/observability.md`: Logs, traces, and metrics — current implementation and usage.
-- `scripts/`: Maintenance utilities (migrations, index management, debug tools).
+| Doc | What it covers |
+| :--- | :--- |
+| [docs/nexus.md](docs/nexus.md) | Graph presets, queries, and visibility gates |
+| [docs/feeds/manage-feeds-implementation-review.md](docs/feeds/manage-feeds-implementation-review.md) | Feed documents, topic assignment, collections vs topic map |
+| [docs/contracts/posts-profiles-schema-v3.md](docs/contracts/posts-profiles-schema-v3.md) | Posts / profiles write contract |
+| [docs/contracts/ads-ad-profiles-schema-v3.md](docs/contracts/ads-ad-profiles-schema-v3.md) | Ads / ad profiles write contract |
+| [docs/contracts/domains-schema-v1.md](docs/contracts/domains-schema-v1.md) | Domains write contract |
+| [docs/prd/domain-pdf-reports.md](docs/prd/domain-pdf-reports.md) | Domain PDF reports |
+| [docs/observability.md](docs/observability.md) | Logs, traces, metrics |
+| [docs/db-schema-v3-ui-migration.md](docs/db-schema-v3-ui-migration.md) | Historical v3 cutover notes (not the live collection list) |
+
+Sample documents live under `sample_documents/`. Supabase DDL is under `supabase/`.
+
+---
+
+## Project structure
+
+- `src/app/(dashboard)/`: App Router pages and server actions (cases, ads, domains, feeds, nexus, pois, profiles).
+- `src/lib/nexus/`: Graph contract, queries, and canvas engine.
+- `src/components/`: Shared UI (cards, nexus shell, reports).
+- `src/utils/`: Supabase, MongoDB, AWS, tracing.
+- `src/instrumentation.js`: OpenTelemetry registration.
+- `scripts/`: Indexes, migrations, and one-off POI/topic labeling tools.
 
 ---
 
@@ -219,32 +252,19 @@ The UI is built to reduce "Moderator Fatigue":
 ## 📄 License
 Internal Property - All Rights Reserved.
 
-- Generates presigned URL valid for 1 hour
-- Graceful fallback for missing/invalid images
-
-### Key Components
+### Key components
 
 **Sidebar (`components/Sidebar.js`):**
-- Collapsible navigation menu
-- Routes: Dashboard (`/`), Review Cases (`/review-cases`), Cases List, Takedowns, Settings
-- Currently, only Dashboard and Review Cases are implemented
+- Grouped nav for posts, ads, and domains, plus feeds, takedowns, and reports
+- Reviewer-only children are omitted for clients
+- Disabled project sections stay visible but do not load data
 
-**MetricsCards (`components/MetricsCards.js`):**
-- Displays 3 KPIs: Total Cases, Active Takedowns, High Risk count
-- Data aggregated from `cases_metadata` table
+**Cases list (`/cases`):**
+- Server-paginated reviewed posts. Filters and sort are URL params. See the cases fetching readme.
+- Detail is a route or in-page panel with prev/next on the current page queue
 
-**ThreatChart (`components/ThreatChart.js`):**
-- Recharts bar chart showing threat distribution by type
-- Categories: scam, hate_speech, violence, nsfw, fake_news, other
-
-**ReviewInterface (`components/ReviewInterface.js`):**
-- Two-panel layout: infinite scroll table (left) + review form (right)
-- Fetches unreviewed posts from MongoDB
-- Form submits new case to `cases_metadata` table with threat classification
-
-**ProfilePic (`components/ProfilePic.js`):**
-- Generates deterministic avatar color based on username hash
-- Used for user identification in UI
+**Nexus (`/posts/nexus`, `/ads/nexus`, `/feeds`):**
+- Shared canvas. L1 is hubs and clusters; L2 leaf stubs load on expand. See [docs/nexus.md](docs/nexus.md).
 
 ### Important Patterns & Conventions
 
@@ -267,40 +287,16 @@ Internal Property - All Rights Reserved.
 - Custom color palette for threat severity indicators
 - Responsive design with mobile-first approach
 
-### Placeholder Routes
-
-The following routes exist in Sidebar navigation but are NOT implemented:
-- `/cases` - Full case list view
-- `/takedowns` - Takedown management dashboard
-- `/settings` - User/system settings
-
-## Database Migrations
-
-Run migrations after setting up `.env.local` with `DATABASE_URL`:
-
-```bash
-# Create cases_metadata table with RLS policies
-node scripts/setup_db.js
-
-# Create client_details table for user permissions
-node scripts/setup_client_details.js
-```
-
-**Row-Level Security (RLS) Policies:**
-- `cases_metadata`: Read access for all, insert/update for authenticated users only
-- `client_details`: Users can only view their own permission record
-
-## Integration Notes
+## Integration notes
 
 **Supabase:**
-- All queries use async/await pattern
-- Client created per-request to maintain session context
-- Auth middleware refreshes tokens automatically
+- Auth and project metadata. Session refresh is in middleware; see the session policy above.
+- Tenant data is not stored in `cases_metadata`. Case status lives on the Mongo document (`workflow.client_status`) plus `case_events`.
 
 **MongoDB:**
-- Connection pooled via singleton pattern in `utils/mongodb/client.js`
-- Database name specified via environment variable
-- Queries use native MongoDB Node.js driver (v7.0.0)
+- Connection pooled in `src/utils/mongodb/client.js`.
+- The database name comes from the project's `mongo_db_map`, not a single env database, except for maintenance scripts that take `MONGO_DB_NAME`.
+- Queries use the native MongoDB Node.js driver.
 
 **AWS S3:**
 - Presigned URLs valid for 3600 seconds (1 hour)

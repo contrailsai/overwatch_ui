@@ -63,6 +63,11 @@ function FeedCard({ feed, onEdit, onDelete, deleting }) {
           <FileText className="h-3.5 w-3.5" />
           {feed.manual_post_count} added {feed.manual_post_count === 1 ? 'post' : 'posts'}
         </span>
+        {(feed.manual_ad_count || 0) > 0 && (
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
+            {feed.manual_ad_count} added {feed.manual_ad_count === 1 ? 'ad' : 'ads'}
+          </span>
+        )}
       </div>
 
       <div className="mt-4 flex items-center gap-1.5 border-t border-slate-100 pt-3 text-xs text-slate-400">
@@ -94,7 +99,16 @@ export function ManageFeedsClient({ initialFeeds }) {
   const handleEdit = useCallback(async (feed) => {
     setLoadingFeed(true)
     setBuilderOpen(true)
-    setEditingFeed({ _id: feed._id, title: feed.title, description: feed.description, topics: [], manualPosts: [], topic_ids: feed.topic_ids, manual_post_ids: feed.manual_post_ids })
+    setEditingFeed({
+      _id: feed._id,
+      title: feed.title,
+      description: feed.description,
+      topics: [],
+      manualPosts: [],
+      topic_ids: feed.topic_ids,
+      manual_post_ids: feed.manual_post_ids,
+      manual_ad_ids: feed.manual_ad_ids || [],
+    })
     try {
       const full = await getFeed(feed._id)
       if (full) setEditingFeed(full)

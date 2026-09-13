@@ -1,0 +1,59 @@
+{
+  "tenant": "IAF",
+  "db": "AirForce-Data-Search",
+  "topic_prefix": "T",
+  "parent_prefix": "P",
+  "model": "gemini-2.5-flash",
+  "pillars": [
+    {
+      "pillar_id": "iaf_paf_combat",
+      "topic_id": "P00001",
+      "name": "IAF–PAF combat & Operation Sindoor",
+      "description": "Current India–Pakistan air war: Operation Sindoor, Rafale vs J-10C / PL-15, shootdown scorecards, lost IAF jets, PAF victory tallies, and Kashmir framed as the outcome of this fight."
+    },
+    {
+      "pillar_id": "balakot_2019",
+      "topic_id": "P00002",
+      "name": "Balakot / Abhinandan 2019",
+      "description": "2019 Balakot airstrike, F-16 shootdown disputes, Abhinandan Varthaman capture, and older POW revisionism (Nachiketa, Ahuja) used to relitigate that episode."
+    },
+    {
+      "pillar_id": "leadership_politics",
+      "topic_id": "P00003",
+      "name": "IAF leadership & political use",
+      "description": "CAS / air-marshal personality attacks (A.P. Singh, Dixit, Kapoor) and Modi / BJP / opposition / Trump-mediation framing that uses the IAF as a political prop rather than a named kinetic event."
+    },
+    {
+      "pillar_id": "media_platforms",
+      "topic_id": "P00004",
+      "name": "Media, platforms & personnel",
+      "description": "Studio/YouTube/Netflix IAF talk (Sawhney, Arya, Aroor), aircraft/HAL/Tejas capability when not a dogfight scorecard, and named-pilot clips that are not the 2019 Abhinandan event."
+    }
+  ],
+  "seeds": [
+    {
+      "topic_id": "T00001",
+      "pillar_id": "iaf_paf_combat",
+      "name": "IAF–PAF combat catch-all",
+      "summary": "Residual for current air-combat / Sindoor talk without a distinct event hook."
+    },
+    {
+      "topic_id": "T00002",
+      "pillar_id": "balakot_2019",
+      "name": "Balakot / Abhinandan catch-all",
+      "summary": "Residual for 2019 Balakot/Abhinandan talk without a distinct event hook."
+    },
+    {
+      "topic_id": "T00003",
+      "pillar_id": "leadership_politics",
+      "name": "Leadership & politics catch-all",
+      "summary": "Residual for CAS / political IAF framing without a distinct event hook."
+    },
+    {
+      "topic_id": "T00004",
+      "pillar_id": "media_platforms",
+      "name": "Media & platforms catch-all",
+      "summary": "Residual for commentator / platform / personnel talk without a distinct event hook."
+    }
+  ]
+}

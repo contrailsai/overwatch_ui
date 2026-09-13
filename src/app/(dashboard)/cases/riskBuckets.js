@@ -69,13 +69,71 @@ const engagementDesc = -1
 const dateDesc = -1
 const idAsc = 1
 
+/** Computed list-sort keys. Must be produced by buildCasesSortKeyAddFields before $sort. */
+export const CASES_SORT_RISK_BUCKET = '_sort_risk_bucket'
+export const CASES_SORT_ALERT_DAY = '_sort_alert_day'
+export const CASES_ALERT_DAY_TIMEZONE = 'Asia/Kolkata'
+export const CASES_LIST_SORT_HELPER_FIELDS = [CASES_SORT_RISK_BUCKET, CASES_SORT_ALERT_DAY]
+
+/**
+ * Bucket rank from list.effective_threat_score (same cutoffs as getRiskLabel)
+ * plus reviewed_at truncated to an IST calendar day. Missing/non-date
+ * reviewed_at becomes null and sorts last in a descending day sort.
+ */
+export function buildCasesSortKeyAddFields() {
+  return {
+    [CASES_SORT_RISK_BUCKET]: {
+      $switch: {
+        branches: [
+          { case: { $gt: ['$list.effective_threat_score', RISK_THRESHOLDS.HIGH] }, then: RISK_RANK.HIGH },
+          { case: { $gt: ['$list.effective_threat_score', RISK_THRESHOLDS.MEDIUM] }, then: RISK_RANK.MEDIUM },
+          { case: { $gt: ['$list.effective_threat_score', RISK_THRESHOLDS.LOW] }, then: RISK_RANK.LOW },
+        ],
+        default: RISK_RANK.SAFE,
+      },
+    },
+    [CASES_SORT_ALERT_DAY]: {
+      $cond: [
+        { $eq: [{ $type: '$list.reviewed_at' }, 'date'] },
+        {
+          $dateTrunc: {
+            date: '$list.reviewed_at',
+            unit: 'day',
+            timezone: CASES_ALERT_DAY_TIMEZONE,
+          },
+        },
+        null,
+      ],
+    },
+  }
+}
+
+export function buildCasesListSortAddFieldsStage() {
+  return { $addFields: buildCasesSortKeyAddFields() }
+}
+
+export function buildCasesListSortUnsetStage() {
+  return { $unset: CASES_LIST_SORT_HELPER_FIELDS }
+}
+
+/**
+ * $addFields then $sort. extraSortPrefix is spread first so callers can pin
+ * vector/search score ahead of the list chain.
+ */
+export function buildCasesListSortStages(sort = {}, extraSortPrefix = null) {
+  const listSort = buildCasesListSortPipeline(sort)
+  return [
+    buildCasesListSortAddFieldsStage(),
+    { $sort: extraSortPrefix ? { ...extraSortPrefix, ...listSort } : listSort },
+  ]
+}
+
 export function buildCasesDefaultListSortPipeline() {
   return {
-    'list.effective_threat_score': -1,
-    'list.alert_hour_ist': -1,
+    [CASES_SORT_RISK_BUCKET]: -1,
+    [CASES_SORT_ALERT_DAY]: -1,
     'list.engagement_score': -1,
     'list.posted_at': -1,
-    'list.reviewed_at': -1,
     _id: idAsc,
   }
 }
@@ -104,11 +162,10 @@ export function buildCasesListSortPipeline(sort = {}) {
   if (!sort.field || sort.field === 'threat_score') {
     if (sort.direction === 'asc') {
       return {
-        'list.effective_threat_score': 1,
-        'list.alert_hour_ist': dateDesc,
+        [CASES_SORT_RISK_BUCKET]: 1,
+        [CASES_SORT_ALERT_DAY]: dateDesc,
         'list.engagement_score': engagementDesc,
         'list.posted_at': dateDesc,
-        'list.reviewed_at': dateDesc,
         _id: idAsc,
       }
     }
@@ -130,12 +187,8 @@ export function buildCasesReportSortPipeline() {
 
 export const UNIQUE_CLUSTER_LIST_SORT = buildCasesDefaultListSortPipeline()
 
-export const UNIQUE_CLUSTER_EARLY_SORT = {
-  'list.effective_threat_score': -1,
-  'list.engagement_score': engagementDesc,
-  'list.reviewed_at': dateDesc,
-  _id: idAsc,
-}
+/** Same ranking as the list so the kept cluster row matches page order. */
+export const UNIQUE_CLUSTER_EARLY_SORT = buildCasesDefaultListSortPipeline()
 
 /** @deprecated Use buildCasesListSortPipeline */
 export function buildCasesSortPipeline(sort = {}) {

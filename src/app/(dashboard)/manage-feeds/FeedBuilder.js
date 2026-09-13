@@ -13,6 +13,7 @@ import {
   ChevronDown,
   ChevronRight,
   Trash2,
+  Megaphone,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -342,6 +343,7 @@ export function FeedBuilder({ open, onOpenChange, feed, loadingFeed, onSaved }) 
   const [description, setDescription] = useState('')
   const [selectedTopics, setSelectedTopics] = useState([])
   const [selectedPosts, setSelectedPosts] = useState([])
+  const [manualAdIdsText, setManualAdIdsText] = useState('')
 
   const [topicQuery, setTopicQuery] = useState('')
   const [topicResults, setTopicResults] = useState([])
@@ -363,6 +365,12 @@ export function FeedBuilder({ open, onOpenChange, feed, loadingFeed, onSaved }) 
     setDescription(feed?.description || '')
     setSelectedTopics(Array.isArray(feed?.topics) ? feed.topics : [])
     setSelectedPosts(Array.isArray(feed?.manualPosts) ? feed.manualPosts : [])
+    const adIds = Array.isArray(feed?.manual_ad_ids)
+      ? feed.manual_ad_ids
+      : Array.isArray(feed?.manualAdIds)
+        ? feed.manualAdIds
+        : []
+    setManualAdIdsText(adIds.join('\n'))
     setError('')
   }, [open, feed])
 
@@ -452,6 +460,10 @@ export function FeedBuilder({ open, onOpenChange, feed, loadingFeed, onSaved }) 
       description,
       topic_ids: selectedTopics.map((t) => t.topic_id),
       manual_post_ids: selectedPosts.map((p) => p._id),
+      manual_ad_ids: manualAdIdsText
+        .split(/[\s,]+/)
+        .map((s) => s.trim())
+        .filter(Boolean),
     }
     const res = isEditing ? await updateFeed(feed._id, payload) : await createFeed(payload)
     setSaving(false)
@@ -460,7 +472,7 @@ export function FeedBuilder({ open, onOpenChange, feed, loadingFeed, onSaved }) 
     } else {
       setError(res?.error || 'Failed to save feed.')
     }
-  }, [title, description, selectedTopics, selectedPosts, isEditing, feed, onSaved])
+  }, [title, description, selectedTopics, selectedPosts, manualAdIdsText, isEditing, feed, onSaved])
 
   return (
     <>
@@ -737,6 +749,25 @@ export function FeedBuilder({ open, onOpenChange, feed, loadingFeed, onSaved }) 
                       </li>
                     ))}
                   </ul>
+                </FeedCompositionPanel>
+
+                <FeedCompositionPanel
+                  icon={Megaphone}
+                  title="Ads in this feed"
+                  count={manualAdIdsText.split(/[\s,]+/).filter(Boolean).length}
+                  emptyMessage="Paste Ads._id values (one per line) to include ads in mixed feed nexus."
+                >
+                  <textarea
+                    value={manualAdIdsText}
+                    onChange={(e) => setManualAdIdsText(e.target.value)}
+                    placeholder="507f1f77bcf86cd799439011&#10;507f191e810c19729de860ea"
+                    rows={4}
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 font-mono text-xs text-slate-700 outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+                  />
+                  <p className="mt-1.5 text-[11px] text-slate-400">
+                    Stored as <code className="rounded bg-slate-100 px-1">manual_ad_ids</code>. Typed
+                    leaves (post vs ad) appear in the feed nexus when loaded.
+                  </p>
                 </FeedCompositionPanel>
               </div>
             </div>

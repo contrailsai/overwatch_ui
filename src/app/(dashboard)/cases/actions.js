@@ -10,13 +10,15 @@ import { traceAction, recordClickMetric, runInSpan } from '@/utils/tracing'
 import { requireAuthContext } from '@/utils/auth-context'
 import { flushOtelLogs, isOtelLogsVerbose, logActionError, LOKI_STREAMS, otelLogger } from '@/utils/otel-logger'
 import {
-  buildCasesListSortPipeline,
+  buildCasesListSortStages,
+  buildCasesListSortUnsetStage,
   buildCasesReportSortPipeline,
 } from './riskBuckets'
 import { withReviewedThreatScoreFilter } from '@/lib/posts/reviewed-post-filter'
 import {
   normalizeS3Post,
   buildCasesMatchQuery,
+  applyPoiNameFilter,
   buildCasesDateFilterStage,
   buildUniqueClustersStage,
 } from '@/lib/posts/pipeline-helpers'
@@ -55,8 +57,7 @@ export const getPosts = traceAction('getPosts', async (_project, page = 1, limit
     const skip = (page - 1) * limit
 
     const query = buildCasesMatchQuery(filters);
-
-    const sortPipeline = buildCasesListSortPipeline(sort);
+    await applyPoiNameFilter(db, query, filters);
 
     const matchStage = { ...query };
     const dateFilterStage = buildCasesDateFilterStage(filters);
@@ -76,9 +77,10 @@ export const getPosts = traceAction('getPosts', async (_project, page = 1, limit
         {
           $facet: {
             data: [
-              { $sort: sortPipeline },
+              ...buildCasesListSortStages(sort),
               { $skip: skip },
               { $limit: limit },
+              buildCasesListSortUnsetStage(),
             ],
             total: [{ $count: 'total' }],
           }
@@ -218,6 +220,7 @@ export const getAllPostIds = traceAction('getAllPostIds', async (_project, filte
     const collection = postsCollection(db)
 
     const matchStage = buildCasesMatchQuery(filters)
+    await applyPoiNameFilter(db, matchStage, filters)
     const dateFilterStage = buildCasesDateFilterStage(filters)
     const hasDateFilters = Object.keys(dateFilterStage).length > 0
 
@@ -325,8 +328,12 @@ export const getSimilarPosts = traceAction('getSimilarPosts', async (_project, s
       ...buildCasesMatchQuery(filters),
       _id: { $ne: new ObjectId(sourcePostId) } // Exclude self
     };
+    await applyPoiNameFilter(db, matchQuery, filters);
 
-    const sortPipeline = { score: -1, ...buildCasesListSortPipeline(sort) };
+    const sortStages = [
+      ...buildCasesListSortStages(sort, { score: -1 }),
+      buildCasesListSortUnsetStage(),
+    ];
 
     // 2. Perform vector search using Atlas Vector Search stage $vectorSearch
     // We assume an index named 'vector_index' is configured for the 'Posts' collection
@@ -365,16 +372,8 @@ export const getSimilarPosts = traceAction('getSimilarPosts', async (_project, s
       pipeline.push({ $match: dateFilterStage });
     }
 
-    // Add explicit sorting if requested (overrides similarity score ordering)
-    // Only sort if it's explicitly not the default, or if we want to enforce it.
-    // If we sort, we lose the similarity ranking. We will apply sort only if field is explicitly passed.
-    if (sortPipeline) {
-       pipeline.push({ $sort: sortPipeline });
-    }
-
-    pipeline.push(
-      { $limit: limit },
-    );
+    // Search score stays the primary key; list sort keys are the tiebreakers.
+    pipeline.push(...sortStages, { $limit: limit });
 
     const posts = await embeddings.aggregate(pipeline).toArray()
     const processedPosts = await Promise.all(posts.map((post) => normalizeS3Post(post, db)))
@@ -445,8 +444,12 @@ export const getSemanticSearchPosts = traceAction('getSemanticSearchPosts', asyn
     const embeddings = postEmbeddingsCollection(db)
 
     const matchQuery = buildCasesMatchQuery(filters);
+    await applyPoiNameFilter(db, matchQuery, filters);
 
-    const sortPipeline = { score: -1, ...buildCasesListSortPipeline(sort) };
+    const sortStages = [
+      ...buildCasesListSortStages(sort, { score: -1 }),
+      buildCasesListSortUnsetStage(),
+    ];
 
     const dateFilterStage = buildCasesDateFilterStage(filters);
 
@@ -480,8 +483,7 @@ export const getSemanticSearchPosts = traceAction('getSemanticSearchPosts', asyn
       ];
 
       if (Object.keys(dateFilterStage).length > 0) semanticPipeline.push({ $match: dateFilterStage });
-      if (sortPipeline) semanticPipeline.push({ $sort: sortPipeline });
-      semanticPipeline.push({ $limit: limit });
+      semanticPipeline.push(...sortStages, { $limit: limit });
       
       try {
         semanticPosts = await embeddings.aggregate(semanticPipeline).toArray();
@@ -541,8 +543,7 @@ export const getSemanticSearchPosts = traceAction('getSemanticSearchPosts', asyn
     ];
 
     if (Object.keys(dateFilterStage).length > 0) textPipeline.push({ $match: dateFilterStage });
-    if (sortPipeline) textPipeline.push({ $sort: sortPipeline });
-    textPipeline.push({ $limit: limit });
+    textPipeline.push(...sortStages, { $limit: limit });
     
     try {
       textPosts = await collection.aggregate(textPipeline).toArray();

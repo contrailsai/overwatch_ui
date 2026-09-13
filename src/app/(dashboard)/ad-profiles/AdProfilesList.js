@@ -27,8 +27,6 @@ import { RiskFilter } from '@/app/(dashboard)/cases/RiskFilter'
 import { StatusFilter } from '@/app/(dashboard)/cases/StatusFilter'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
-import AdProfileDetailPanel from "./AdProfileDetails"
-
 const PlatformIcon = ({ platform, className }) => {
     const p = platform?.toLowerCase()
     if (p === 'instagram') return <Instagram className={cn('w-3.5 h-3.5 text-pink-500', className)} />
@@ -55,7 +53,7 @@ const getStatusConfig = (status) => {
     return { label: status, color: 'text-slate-600 bg-slate-50 border-slate-200', icon: Info }
 }
 
-export function AdProfilesList({ profiles, project, initialFilters, initialSort = { field: null, direction: 'desc' }, currentPage, itemsPerPage }) {
+export function AdProfilesList({ profiles, project: _project, initialFilters, initialSort = { field: null, direction: 'desc' }, currentPage, itemsPerPage }) {
     const router = useRouter()
     const pathname = usePathname()
     const searchParams = useSearchParams()
@@ -65,7 +63,6 @@ export function AdProfilesList({ profiles, project, initialFilters, initialSort 
     const profileList = profiles?.profiles || []
 
     const [localProfiles, setLocalProfiles] = useState(profileList)
-    const [selectedProfile, setSelectedProfile] = useState(null)
     const [searchInput, setSearchInput] = useState(initialFilters.searchText || '')
     const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false)
 
@@ -77,43 +74,9 @@ export function AdProfilesList({ profiles, project, initialFilters, initialSort 
         setSearchInput(initialFilters.searchText || '')
     }, [initialFilters.searchText])
 
-    const handleProfileUpdate = (profileId, updates) => {
-        setLocalProfiles(prev => prev.map(p =>
-            p._id === profileId ? { ...p, ...updates } : p
-        ))
-        if (selectedProfile?._id === profileId) {
-            setSelectedProfile(prev => ({ ...prev, ...updates }))
-        }
-        router.refresh()
-    }
-
-    const selectedIndex = selectedProfile ? localProfiles.findIndex(p => p._id === selectedProfile._id) : -1
-
-    const navigateProfile = useCallback((direction) => {
-        if (!selectedProfile) return
-        const currentIndex = localProfiles.findIndex(p => p._id === selectedProfile._id)
-        if (currentIndex === -1) return
-        const nextIndex = direction === 'next' ? currentIndex + 1 : currentIndex - 1
-        if (nextIndex >= 0 && nextIndex < localProfiles.length) {
-            setSelectedProfile(localProfiles[nextIndex])
-        }
-    }, [selectedProfile, localProfiles])
-
-    useEffect(() => {
-        const handleKeyDown = (e) => {
-            if (!selectedProfile) return
-            if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return
-            if (e.key === 'ArrowLeft') {
-                e.preventDefault()
-                navigateProfile('prev')
-            } else if (e.key === 'ArrowRight') {
-                e.preventDefault()
-                navigateProfile('next')
-            }
-        }
-        window.addEventListener('keydown', handleKeyDown)
-        return () => window.removeEventListener('keydown', handleKeyDown)
-    }, [selectedProfile, navigateProfile])
+    const openProfile = useCallback((profileId) => {
+        router.push(`/ad-profiles/${profileId}`)
+    }, [router])
 
     const updateQueryParams = useCallback((newParams) => {
         const params = new URLSearchParams(searchParams.toString())
@@ -420,13 +383,12 @@ export function AdProfilesList({ profiles, project, initialFilters, initialSort 
                                 </tr>
                             ) : (
                                 localProfiles.map((profile) => {
-                                    const isSelected = selectedProfile?._id === profile._id
                                     const risk = profile.review_details?.risk || 'safe'
                                     const lastActive = profile.last_relevant_publish_date
                                     const displayName = profile.page_name || profile.display_name
                                     const pageId = profile.platform_page_id || profile.username || profile.metadata?.username
                                     return (
-                                        <tr key={profile._id} onClick={() => setSelectedProfile(profile)} className={cn('transition-all cursor-pointer group hover:bg-slate-50/80', isSelected && 'bg-blue-50/50')}>
+                                        <tr key={profile._id} onClick={() => openProfile(profile._id)} className="transition-all cursor-pointer group hover:bg-slate-50/80">
                                             <td className="px-4 py-3 whitespace-nowrap align-middle border-b border-slate-50">
                                                 <span className={cn("inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold border shadow-sm",
                                                     risk === "high" ? "bg-rose-100 text-rose-600 border-rose-300"
@@ -560,7 +522,6 @@ export function AdProfilesList({ profiles, project, initialFilters, initialSort 
                         </div>
                     ) : (
                         localProfiles.map((profile) => {
-                            const isSelected = selectedProfile?._id === profile._id
                             const risk = profile.review_details?.risk || 'safe'
                             const statusCfg = getStatusConfig(profile.client_status)
                             const StatusIcon = statusCfg.icon
@@ -568,13 +529,10 @@ export function AdProfilesList({ profiles, project, initialFilters, initialSort 
                             const pageId = profile.platform_page_id || profile.username || profile.metadata?.username
 
                             return (
-                                <div 
-                                    key={profile._id} 
-                                    onClick={() => setSelectedProfile(profile)}
-                                    className={cn(
-                                        "bg-white rounded-2xl border p-4 flex flex-col gap-4 shadow-sm transition-all cursor-pointer relative overflow-hidden",
-                                        isSelected ? "border-blue-300 bg-blue-50/50" : "border-slate-200 hover:border-slate-300 hover:shadow-md"
-                                    )}
+                                <div
+                                    key={profile._id}
+                                    onClick={() => openProfile(profile._id)}
+                                    className="bg-white rounded-2xl border p-4 flex flex-col gap-4 shadow-sm transition-all cursor-pointer relative overflow-hidden border-slate-200 hover:border-slate-300 hover:shadow-md"
                                 >
                                     {/* Header: Platform & Status */}
                                     <div className="flex justify-between items-start">
@@ -639,23 +597,27 @@ export function AdProfilesList({ profiles, project, initialFilters, initialSort 
                                                 <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Ads</span>
                                                 <span className="text-xs font-bold text-slate-700 leading-none">{profile.ads_count ?? profile.cases_count ?? 0}</span>
                                             </div>
-                                            <div className="w-px h-6 bg-slate-100"></div>
-                                            <a
-                                                href={profile.profile_url}
-                                                target="_blank"
-                                                rel="noreferrer"
-                                                onClick={(e) => e.stopPropagation()}
-                                                className="inline-flex items-center text-blue-600 hover:text-blue-800 font-bold text-[10px] transition-colors hover:underline bg-blue-50 px-2 py-1 rounded-md"
-                                            >
-                                                Source <ExternalLink className="w-2.5 h-2.5 ml-1" />
-                                            </a>
+                                            {profile.profile_url ? (
+                                                <>
+                                                    <div className="w-px h-6 bg-slate-100"></div>
+                                                    <a
+                                                        href={profile.profile_url}
+                                                        target="_blank"
+                                                        rel="noreferrer"
+                                                        onClick={(e) => e.stopPropagation()}
+                                                        className="inline-flex items-center text-blue-600 hover:text-blue-800 font-bold text-[10px] transition-colors hover:underline bg-blue-50 px-2 py-1 rounded-md"
+                                                    >
+                                                        Source <ExternalLink className="w-2.5 h-2.5 ml-1" />
+                                                    </a>
+                                                </>
+                                            ) : null}
                                         </div>
                                         <Button
                                             size="sm"
                                             variant="secondary"
                                             onClick={(e) => {
                                                 e.stopPropagation();
-                                                setSelectedProfile(profile);
+                                                openProfile(profile._id);
                                             }}
                                             className="h-7 px-3 text-[10px] font-bold shadow-sm bg-white border border-slate-200 hover:bg-slate-50 text-slate-600"
                                         >
@@ -790,18 +752,6 @@ export function AdProfilesList({ profiles, project, initialFilters, initialSort 
                 </div>
             </div>
             )}
-
-            <AdProfileDetailPanel
-                profile={selectedProfile}
-                project={project}
-                isOpen={!!selectedProfile}
-                onClose={() => setSelectedProfile(null)}
-                onUpdate={handleProfileUpdate}
-                onNext={() => navigateProfile('next')}
-                onPrev={() => navigateProfile('prev')}
-                hasNext={selectedIndex >= 0 && selectedIndex < localProfiles.length - 1}
-                hasPrev={selectedIndex > 0}
-            />
         </div>
     )
 }

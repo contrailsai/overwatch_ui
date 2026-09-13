@@ -22,6 +22,7 @@ export function MobileCasesFilterDrawer({
   alwaysShow = false,
   countLabel = 'cases',
   elevated = false,
+  surface,
 }) {
   return (
     <Drawer open={open} onOpenChange={onOpenChange} shouldScaleBackground={false}>
@@ -65,11 +66,12 @@ export function MobileCasesFilterDrawer({
           <CasesFilterPanel
             layout="stacked"
             showSections
-            debouncedSearch
+            debouncedSearch={surface !== 'advanced'}
             contextualPlacement="top"
             mobileDrawerLayout
             onMobileDrawerDone={() => onOpenChange(false)}
             {...filterPanelProps}
+            surface={surface}
           />
         </div>
       </DrawerContent>

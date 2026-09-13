@@ -1,5 +1,6 @@
 import { notFound, redirect } from 'next/navigation'
 import { getClientandProjectDetails } from '@/app/(dashboard)/actions'
+import { fetch_clients_in_project } from '@/app/(dashboard)/cases/feature_actions'
 import { isSectionEnabled } from '@/lib/project-sections'
 import { DisabledSectionFallback } from '@/components/DisabledSectionFallback'
 import {
@@ -10,7 +11,7 @@ import {
   getPoiAigcPosts,
 } from '../actions'
 import { PoiOverview } from './PoiOverview'
-import { DEFAULT_INFORMATICS_RANGE_PRESET } from '@/lib/pois/poi-helpers'
+import { DEFAULT_INFORMATICS_RANGE_PRESET, POI_POSTS_PAGE_SIZE } from '@/lib/pois/poi-helpers'
 
 export async function generateMetadata({ params }) {
   const { id } = await params
@@ -42,24 +43,39 @@ export default async function PoiDetailPage({ params, searchParams }) {
     redirect(`/pois/${poi.merged_into}`)
   }
 
-  const [analytics, profilesRes, postsRes, aigcRes] = await Promise.all([
+  const [analytics, profilesRes, postsRes, aigcRes, projectEmails] = await Promise.all([
     getPoiAnalytics(id, range),
     getPoiProfiles(id, range, 20),
-    getPoiRecentPosts(id, range, 24),
-    getPoiAigcPosts(id, range, 60),
+    getPoiRecentPosts(id, range, { page: 1, limit: POI_POSTS_PAGE_SIZE }),
+    getPoiAigcPosts(id, range, { page: 1, limit: POI_POSTS_PAGE_SIZE }),
+    fetch_clients_in_project(clientDetails.project_name),
   ])
 
   const isReviewer = clientDetails?.permission === 'reviewer'
 
   return (
     <PoiOverview
+      key={`${preset}|${from || ''}|${to || ''}`}
       poi={poi}
       analytics={analytics}
       profiles={profilesRes?.profiles || []}
       posts={postsRes?.posts || []}
+      postsMeta={{
+        total: postsRes?.total || 0,
+        page: postsRes?.page || 1,
+        hasMore: Boolean(postsRes?.hasMore),
+      }}
       aigcPosts={aigcRes?.posts || []}
+      aigcMeta={{
+        total: aigcRes?.total || 0,
+        page: aigcRes?.page || 1,
+        hasMore: Boolean(aigcRes?.hasMore),
+      }}
       range={{ preset, from, to }}
       isReviewer={isReviewer}
+      project={project}
+      clientDetails={clientDetails}
+      projectEmails={projectEmails}
     />
   )
 }

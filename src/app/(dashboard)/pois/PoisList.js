@@ -21,6 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { formatPoiActivityRange } from '@/lib/pois/poi-helpers'
 import { updatePoiTier } from './actions'
 import { ConnectPoiDrawer } from './ConnectPoiDrawer'
 
@@ -225,6 +226,9 @@ export function PoisList({ initialData, initialTier, initialSearch, isReviewer }
                     <div className="mt-3 flex items-center justify-between gap-2">
                       <span className="text-xs font-medium text-slate-600 tabular-nums">
                         {(poi.post_count || 0).toLocaleString()} posts
+                        {formatPoiActivityRange(poi.first_seen, poi.last_seen)
+                          ? ` · ${formatPoiActivityRange(poi.first_seen, poi.last_seen)}`
+                          : ''}
                       </span>
                       {isReviewer ? (
                         <Select

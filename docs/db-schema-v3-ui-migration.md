@@ -1,5 +1,7 @@
 # MongoDB Schema V3 — Client UI Migration
 
+> **Current state (September 2026):** this file is the migration record for the `db_schema_update` cutover. Collection names and product surfaces have moved on. Trust [`src/utils/mongodb/collections.js`](../src/utils/mongodb/collections.js) and the [product map in the README](../README.md#product-surfaces). In particular: `Feeds` is live, topics are the `topics` collection, profiles are `profiles`, and ads/domains are first-class (`Ads`, `Ad_profiles`, `Domains`). Counts below are a snapshot, not production totals.
+
 Branch: `db_schema_update`  
 Target database: `Ambani-Data-v2` (see `.env.local` / Supabase `project.mongo_db_map`)  
 Sample documents: `sample_documents/new_schemas/`

@@ -84,7 +84,13 @@ export async function getFeed(feedId) {
       manualPosts = Array.isArray(res?.posts) ? res.posts : []
     }
 
-    return { ...serialized, topics, manualPosts }
+    return {
+      ...serialized,
+      topics,
+      manualPosts,
+      // Ad ids are stored for mixed nexus; full ad hydration can be added in the builder UI.
+      manualAdIds: serialized.manual_ad_ids,
+    }
   } catch (e) {
     logActionError({ ...FEED_LOG, app_action: 'getFeed', message: 'getFeed failed' }, e)
     console.error('getFeed Error:', e)
@@ -106,6 +112,7 @@ export async function createFeed(input = {}) {
       description: (input.description || '').trim(),
       topic_ids: sanitizeStringArray(input.topic_ids),
       manual_post_ids: sanitizeStringArray(input.manual_post_ids),
+      manual_ad_ids: sanitizeStringArray(input.manual_ad_ids),
       cover_image_url: input.cover_image_url || null,
       created_by: clientDetails.email,
       created_at: now,
@@ -149,6 +156,7 @@ export async function updateFeed(feedId, input = {}) {
       description: (input.description || '').trim(),
       topic_ids: sanitizeStringArray(input.topic_ids),
       manual_post_ids: sanitizeStringArray(input.manual_post_ids),
+      manual_ad_ids: sanitizeStringArray(input.manual_ad_ids),
       updated_at: now,
     }
     if ('cover_image_url' in input) {

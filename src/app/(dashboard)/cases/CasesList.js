@@ -14,7 +14,7 @@ import {
   ExternalLink, Info, Siren, ArrowRight, Quote, X, FlagTriangleLeft,
   FileDown, ArrowUp, ArrowDown, ClockFading,
   ChevronLeft, ChevronRight, Smile, TrendingDown, TriangleAlert,
-  Youtube, Instagram, Facebook, UserPlus, Check,
+  Youtube, Instagram, Facebook,
   AlertOctagon, ChevronDown,
   DownloadIcon, ShieldAlert, MoreHorizontal, Scale
 } from 'lucide-react'
@@ -57,6 +57,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import ReportGenerate from '@/components/ReportGenerate'
 import { useIsMobile, useIsSmallScreen } from '@/hooks/use-media-query'
 import { CasesFilterPanel } from './CasesFilterPanel'
+import { CaseFilterSuggestions } from './CaseFilterSuggestions'
 import { MobileCasesFilterDrawer } from './MobileCasesFilterDrawer'
 // import SafeDate from '@/components/SafeDate'
 
@@ -158,6 +159,25 @@ function ListSelectionBar({
   )
 }
 
+function FiltersToggle({ active, open, onClick }) {
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      onClick={onClick}
+      className={cn(
+        'gap-1.5 h-8 shrink-0',
+        (open || active) && 'border-blue-300 bg-blue-50 text-blue-700',
+      )}
+    >
+      <Filter className="h-3.5 w-3.5" />
+      Filters
+      {active && <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />}
+    </Button>
+  )
+}
+
 function BulkActionMenu({
   isBulkTakedownProcessing,
   isBulkNoActionProcessing,
@@ -223,7 +243,7 @@ function BulkActionMenu({
   )
 }
 
-export function CasesList({ cases, project, clientDetails, initialFilters, initialSort, currentPage, itemsPerPage, initialCase, projectEmails }) {
+export function CasesList({ cases, project, clientDetails, initialFilters, initialSort, currentPage, itemsPerPage, initialCase, projectEmails, poiOptions = [] }) {
   // console.log(cases)
 
   // console.log(project)
@@ -236,6 +256,7 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
   const [isPending, startTransition] = useTransition()
 
   const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false)
+  const [showFilters, setShowFilters] = useState(false)
   const isMobile = useIsMobile()
   const isSmallScreen = useIsSmallScreen()
 
@@ -684,6 +705,7 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
     initialFilters.client_status !== 'all' ||
     (initialFilters.visibility_status && initialFilters.visibility_status !== 'all') ||
     (initialFilters.violations && initialFilters.violations !== 'all') ||
+    (initialFilters.pois && initialFilters.pois !== 'all') ||
     initialFilters.published_from ||
     initialFilters.published_to ||
     initialFilters.alert_from ||
@@ -691,8 +713,21 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
     searchParams.get('similar_to') ||
     searchParams.get('semantic_search')
 
+  const hasHiddenFilters =
+    initialFilters.unique_clusters === 'true' ||
+    initialFilters.unique_clusters === true ||
+    initialFilters.platform !== 'all' ||
+    initialFilters.risk_priority !== 'all' ||
+    initialFilters.client_status !== 'all' ||
+    (initialFilters.visibility_status && initialFilters.visibility_status !== 'all') ||
+    (initialFilters.violations && initialFilters.violations !== 'all') ||
+    initialFilters.published_from ||
+    initialFilters.published_to ||
+    Boolean(searchParams.get('similar_to'))
+
   const filterPanelProps = {
     initialFilters,
+    poiOptions,
     project,
     allowDoTakedown,
     handleFilterChange,
@@ -735,6 +770,20 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
     clearFilters,
   }
 
+  const reportGenerateProps = {
+    selectedPostsArray,
+    selectedCount,
+    summaryState,
+    detailedPdfState,
+    detailedDocxState,
+    setSummaryState,
+    setDetailedPdfState,
+    setDetailedDocxState,
+    showToast,
+    trackClientClick,
+    project,
+  }
+
   return (
     <div className='flex flex-row h-full min-h-0 overflow-hidden p-0 m-0'>
 
@@ -743,60 +792,45 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
         {!selectedPost ? (
           <>
             {/* Mobile compact toolbar */}
-            <div className="lg:hidden shrink-0 px-2 py-1.5 border-b border-slate-100 bg-white">
-              <div className="gap-x-2 gap-y-1.5 max-[385px]:grid max-[385px]:grid-cols-[1fr_auto] min-[386px]:flex min-[386px]:items-center min-[386px]:flex-wrap">
-                <div className="flex items-baseline gap-1 min-w-0 shrink-0 max-[385px]:col-start-1 max-[385px]:row-start-1">
+            <div className="lg:hidden shrink-0 px-2 py-2 border-b border-slate-100 bg-white space-y-2">
+              <div className="flex items-center gap-1.5">
+                <div className="flex items-baseline gap-1 min-w-0 shrink-0">
                   <span className="text-base font-black text-slate-800 tabular-nums leading-none">
                     {totalCount.toLocaleString()}
                   </span>
                   <span className="text-[10px] font-semibold text-slate-500">cases</span>
                   {isPending && <Loader2 className="h-3 w-3 animate-spin text-blue-600 shrink-0" />}
                 </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
+                {hasActiveFilters && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={clearFilters}
+                    className="h-8 px-2 text-xs text-slate-500 hover:text-slate-800 shrink-0"
+                  >
+                    Clear
+                  </Button>
+                )}
+                <FiltersToggle
+                  active={hasHiddenFilters}
+                  open={isMobileFiltersOpen}
                   onClick={() => setIsMobileFiltersOpen(true)}
-                  className="h-8 px-2.5 bg-slate-50 border border-slate-200 rounded-lg text-[11px] font-semibold text-slate-700 gap-1.5 shrink-0 max-[385px]:col-start-1 max-[385px]:row-start-2 max-[385px]:w-fit min-[386px]:order-none"
-                >
-                  <Filter className="w-3.5 h-3.5" />
-                  Filters
-                  {hasActiveFilters && (
-                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                  )}
-                </Button>
-                <div className="shrink-0 max-[385px]:col-start-2 max-[385px]:row-start-1 max-[385px]:justify-self-end min-[386px]:ml-auto">
-                  <ReportGenerate
-                    selectedPostsArray={selectedPostsArray}
-                    selectedCount={selectedCount}
-                    summaryState={summaryState}
-                    detailedPdfState={detailedPdfState}
-                    detailedDocxState={detailedDocxState}
-                    setSummaryState={setSummaryState}
-                    setDetailedPdfState={setDetailedPdfState}
-                    setDetailedDocxState={setDetailedDocxState}
-                    showToast={showToast}
-                    trackClientClick={trackClientClick}
-                    project={project}
-                    showLabel={false}
-                    compact
-                  />
+                />
+                <div className="ml-auto shrink-0">
+                  <ReportGenerate {...reportGenerateProps} showLabel={false} compact />
                 </div>
               </div>
-              {mergedPosts.length > 0 && totalCount > 0 && (
-                <div className="mt-1.5 pt-1.5 border-t border-slate-100 flex flex-col gap-1.5">
-                  <div className="flex items-center justify-between gap-2 min-h-8 min-w-0">
-                    <div className="flex items-center gap-2 min-w-0 shrink">
-                      {hasActiveFilters && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={clearFilters}
-                          className="h-7 px-2 text-rose-600 hover:bg-rose-50 text-[10px] font-bold uppercase shrink-0"
-                        >
-                          <X className="w-3 h-3 mr-0.5" /> Clear filters
-                        </Button>
-                      )}
-                    </div>
+              <CasesFilterPanel surface="primary" arrangement="split" {...filterPanelProps} />
+              <div className="flex items-center gap-1.5 min-w-0">
+                <CaseFilterSuggestions
+                  initialFilters={initialFilters}
+                  handleFilterChange={handleFilterChange}
+                  updateQueryParams={updateQueryParams}
+                  scroll
+                  className="min-w-0 flex-1"
+                />
+                {mergedPosts.length > 0 && totalCount > 0 && (
+                  <div className="flex items-center gap-1.5 shrink-0 ml-auto">
                     <ListSelectionBar
                       showPageCheckbox={false}
                       selectedCount={selectedCount}
@@ -808,11 +842,9 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                       onToggleAllOnPage={handleToggleAllOnPage}
                       onSelectAllFiltered={handleSelectAllFiltered}
                       onClearSelection={handleClearAllSelected}
-                      className="w-auto shrink-0 flex-nowrap min-w-0"
+                      className="w-auto"
                     />
-                  </div>
-                  {selectedCount > 0 && (
-                    <div className="flex items-center">
+                    {selectedCount > 0 && (
                       <Popover open={mobileActionMenuOpen} onOpenChange={setMobileActionMenuOpen}>
                         <PopoverTrigger asChild>
                           <Button
@@ -824,7 +856,7 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                             <ChevronDown className={cn("w-3 h-3 ml-0.5", mobileActionMenuOpen && "rotate-180")} />
                           </Button>
                         </PopoverTrigger>
-                        <PopoverContent align="start" className="min-w-[140px] p-1 z-50">
+                        <PopoverContent align="end" className="min-w-[140px] p-1 z-50">
                           <BulkActionMenu
                             isBulkTakedownProcessing={isBulkTakedownProcessing}
                             isBulkNoActionProcessing={isBulkNoActionProcessing}
@@ -835,10 +867,11 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
                           />
                         </PopoverContent>
                       </Popover>
-                    </div>
-                  )}
-                </div>
-              )}
+                    )}
+                  </div>
+                )}
+              </div>
+              <CasesFilterPanel surface="actions" {...filterPanelProps} />
             </div>
 
             <MobileCasesFilterDrawer
@@ -846,150 +879,105 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
               onOpenChange={setIsMobileFiltersOpen}
               totalCount={totalCount}
               isPending={isPending}
-              hasActiveFilters={hasActiveFilters}
+              hasActiveFilters={hasHiddenFilters}
               onClearFilters={clearFilters}
               filterPanelProps={filterPanelProps}
+              surface="advanced"
             />
 
             {/* Filters & Controls (desktop) */}
-            <div className="hidden lg:block px-3 shrink-0">
-              <div className="px-3 py-3">
-                <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
-
-                  {/* Left: Filters */}
-                  <div className="flex flex-col lg:flex-row gap-4 w-full">
-
-                    {/* Header Row: Title & Summary Box */}
-                    <div className="flex flex-col w-full lg:w-[160px] xl:w-[180px] shrink-0 rounded-xl p-3 relative ">
-                      <div className="flex items-start justify-between pb-1">
-                        <div className="flex flex-col items-start gap-2">
-                          <div className="flex items-center gap-1.5">
-                            <Filter className="w-3.5 h-3.5 text-blue-600" />
-                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                              Filter
-                            </span>
-                            <span
-                              className="relative inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center overflow-visible"
-                              aria-hidden={!isPending}
-                            >
-                              <Loader2
-                                className={cn(
-                                  "absolute h-5 w-5 animate-spin text-blue-600 stroke-[2.5]",
-                                  isPending ? "opacity-100" : "opacity-0",
-                                )}
-                              />
-                            </span>
-                          </div>
-                          <div className="flex items-baseline gap-1.5 mb-3">
-                            <span className="text-2xl font-black text-slate-800 tracking-tight leading-none">
-                              {totalCount}
-                            </span>
-                            <span className="text-[11px] font-bold text-slate-500 leading-none">
-                              cases found
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Selection Controls */}
-                      <div className="mt-auto border-t border-slate-200/80 pt-3 relative min-h-[40px]">
-                        <div
-                          className="grid transition-all duration-300 ease-in-out"
-                          style={{ gridTemplateRows: selectedCount > 0 ? '1fr' : '0fr' }}
-                        >
-                          <div className="overflow-hidden">
-                            <div className={cn("flex flex-col transition-all duration-300", selectedCount > 0 ? "opacity-100 translate-y-0" : "opacity-0 translate-y-2")}>
-                              <div className="flex items-center justify-between">
-                                <span className="inline-flex items-center text-[10px] font-bold bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">
-                                  {isAllFilterSelected ? `All ${totalCount}` : selectedCount} Selected
-                                </span>
-                                <button
-                                  onClick={handleClearAllSelected}
-                                  className="text-[10px] font-bold text-slate-400 hover:text-slate-700 transition-colors cursor-pointer underline underline-offset-2"
-                                >
-                                  Clear
-                                </button>
-                              </div>
-
-                              <div
-                                className="grid transition-all duration-300 ease-in-out"
-                                style={{ gridTemplateRows: (!isAllFilterSelected && totalCount > selectedCount) ? '1fr' : '0fr' }}
-                              >
-                                <div className="overflow-hidden">
-                                  <div className="pt-2">
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={handleSelectAllFiltered}
-                                      disabled={isSelectingAll}
-                                      className="w-full h-7 text-[10px] bg-blue-600 text-white hover:bg-blue-700 font-bold shadow-sm cursor-pointer transition-colors"
-                                    >
-                                      {isSelectingAll ? (
-                                        <Loader2 className="w-3 h-3 animate-spin mr-1.5" />
-                                      ) : (
-                                        <CheckCircle className="w-3 h-3 mr-1.5 opacity-70" />
-                                      )}
-                                      Select all {totalCount} cases
-                                    </Button>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div
-                          className={cn(
-                            "absolute inset-x-0 bottom-0 transition-all duration-300 ease-in-out",
-                            selectedCount === 0 ? "opacity-100 pointer-events-auto translate-y-0" : "opacity-0 pointer-events-none translate-y-2"
-                          )}
-                        >
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={handleSelectAllFiltered}
-                            disabled={isSelectingAll || totalCount === 0}
-                            className="w-full h-7 text-[10px] bg-white text-slate-700 hover:bg-slate-100 font-bold shadow-none cursor-pointer transition-colors"
-                          >
-                            {isSelectingAll ? (
-                              <Loader2 className="w-3 h-3 animate-spin mr-1.5 text-blue-600" />
-                            ) : (
-                              <CheckCircle className="w-3 h-3 mr-1.5 text-slate-400" />
-                            )}
-                            Select all cases
-                          </Button>
-                        </div>
-                      </div>
+            <div className="hidden lg:block shrink-0 border-b border-slate-100 bg-white">
+              <div className="px-4 py-2 space-y-2">
+                <div className="flex items-center gap-2">
+                  <div className="flex min-w-0 flex-1 items-center gap-2">
+                    <div className="min-w-0 shrink-0 mr-1">
+                      <p className="font-bold text-slate-900 tabular-nums tracking-tight leading-none text-2xl">
+                        {totalCount.toLocaleString()}
+                        <span className="ml-1.5 text-base font-semibold text-slate-600">
+                          {totalCount === 1 ? 'case' : 'cases'}
+                        </span>
+                        {isPending && (
+                          <Loader2 className="inline ml-2 h-4 w-4 animate-spin text-slate-400 align-middle" />
+                        )}
+                      </p>
                     </div>
-
-                    <div className="hidden lg:flex w-full">
-                      <CasesFilterPanel
-                        layout="row"
-                        showBulkActionPopover
-                        {...filterPanelProps}
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {hasActiveFilters && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={clearFilters}
+                          className="h-8 text-xs text-slate-500 hover:text-slate-800 px-2"
+                        >
+                          Clear
+                        </Button>
+                      )}
+                      <FiltersToggle
+                        active={hasHiddenFilters}
+                        open={showFilters}
+                        onClick={() => setShowFilters((open) => !open)}
                       />
                     </div>
-
-                    {/* Right: Actions & Counts */}
-                    {/* Report Download - hidden on mobile dialog as it's now outside */}
-                    <div className="hidden lg:flex flex-col gap-2 w-full lg:w-auto lg:flex-1 lg:max-w-[280px] lg:min-w-[240px]">
-                      <ReportGenerate
-                        selectedPostsArray={selectedPostsArray}
-                        selectedCount={selectedCount}
-                        summaryState={summaryState}
-                        detailedPdfState={detailedPdfState}
-                        detailedDocxState={detailedDocxState}
-                        setSummaryState={setSummaryState}
-                        setDetailedPdfState={setDetailedPdfState}
-                        setDetailedDocxState={setDetailedDocxState}
-                        showToast={showToast}
-                        trackClientClick={trackClientClick}
-                        project={project}
-                        showLabel={true}
-                      />
-                    </div>
+                    <CasesFilterPanel surface="primary" {...filterPanelProps} />
+                  </div>
+                  <div className="shrink-0">
+                    <ReportGenerate {...reportGenerateProps} toolbar showLabel={false} />
                   </div>
                 </div>
+
+                <div className="flex items-center gap-2 min-w-0">
+                  <CaseFilterSuggestions
+                    initialFilters={initialFilters}
+                    handleFilterChange={handleFilterChange}
+                    updateQueryParams={updateQueryParams}
+                    className="min-w-0 flex-1 flex-nowrap overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                  />
+                  <div className="flex items-center gap-2 shrink-0 ml-auto">
+                    <ListSelectionBar
+                      showPageCheckbox={false}
+                      selectedCount={selectedCount}
+                      totalCount={totalCount}
+                      isAllFilterSelected={isAllFilterSelected}
+                      isSelectingAll={isSelectingAll}
+                      isAllCurrentPageSelected={isAllCurrentPageSelected}
+                      isSomeCurrentPageSelected={isSomeCurrentPageSelected}
+                      onToggleAllOnPage={handleToggleAllOnPage}
+                      onSelectAllFiltered={handleSelectAllFiltered}
+                      onClearSelection={handleClearAllSelected}
+                      className="w-auto"
+                    />
+                    {selectedCount > 0 && (
+                      <Popover open={actionMenuOpen} onOpenChange={setActionMenuOpen}>
+                        <PopoverTrigger asChild>
+                          <Button
+                            size="sm"
+                            disabled={isBulkTakedownProcessing || isBulkNoActionProcessing}
+                            className="h-8 px-2.5 text-[10px] font-bold text-white bg-red-500 hover:bg-red-600 shrink-0"
+                          >
+                            Action ({isAllFilterSelected ? totalCount : selectedCount})
+                            <ChevronDown className={cn('w-3 h-3 ml-0.5', actionMenuOpen && 'rotate-180')} />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent align="end" className="min-w-[160px] p-1 z-50">
+                          <BulkActionMenu
+                            isBulkTakedownProcessing={isBulkTakedownProcessing}
+                            isBulkNoActionProcessing={isBulkNoActionProcessing}
+                            onPlatformTakedown={() => { setActionMenuOpen(false); openBulkTakedown('platform') }}
+                            onI4cTakedown={() => { setActionMenuOpen(false); openBulkTakedown('i4c') }}
+                            onReportInternal={() => { setActionMenuOpen(false); openBulkTakedown('report_internal') }}
+                            onNoAction={() => { setActionMenuOpen(false); setShowBulkNoActionConfirm(true) }}
+                          />
+                        </PopoverContent>
+                      </Popover>
+                    )}
+                  </div>
+                </div>
+
+                <CasesFilterPanel surface="actions" {...filterPanelProps} />
+
+                {showFilters && (
+                  <CasesFilterPanel surface="advanced" {...filterPanelProps} />
+                )}
               </div>
             </div>
 
@@ -1592,12 +1580,40 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
           </>
         ) : (
           <div className="flex flex-col h-full bg-white">
-            {/* Queue Navigation Header */}
-            <div className="flex items-center justify-between p-4 border-b border-slate-100 shrink-0">
-              <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Queue Navigation</h3>
-              <span className="text-xs text-slate-400 font-medium">
-                {mergedPosts.findIndex(p => p._id === selectedPost._id) + 1 + (currentPage - 1) * itemsPerPage}/{totalCount}
-              </span>
+            <div className="shrink-0 border-b border-slate-100 px-3 py-2.5 space-y-2">
+              <div className="flex items-center gap-1.5">
+                <p className="min-w-0 font-bold text-slate-900 tabular-nums tracking-tight leading-none text-lg">
+                  {totalCount.toLocaleString()}
+                  <span className="ml-1 text-xs font-semibold text-slate-500">cases</span>
+                  {isPending && (
+                    <Loader2 className="inline ml-1.5 h-3.5 w-3.5 animate-spin text-slate-400 align-middle" />
+                  )}
+                </p>
+                <span className="ml-auto text-[11px] text-slate-400 font-medium tabular-nums shrink-0">
+                  {mergedPosts.findIndex(p => p._id === selectedPost._id) + 1 + (currentPage - 1) * itemsPerPage}/{totalCount}
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                {hasActiveFilters && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={clearFilters}
+                    className="h-8 px-2 text-xs text-slate-500 hover:text-slate-800 shrink-0"
+                  >
+                    Clear
+                  </Button>
+                )}
+                <FiltersToggle
+                  active={hasHiddenFilters}
+                  open={showFilters}
+                  onClick={() => setShowFilters((open) => !open)}
+                />
+              </div>
+              <CasesFilterPanel surface="primary" arrangement="stacked" {...filterPanelProps} />
+              {showFilters && (
+                <CasesFilterPanel surface="advanced" arrangement="stacked" {...filterPanelProps} />
+              )}
             </div>
 
             {/* List */}

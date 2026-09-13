@@ -28,6 +28,8 @@ export const MAX_POI_RANGE_DAYS = 90
 /** Flip to `'30d'` once informatics volume is high enough. */
 export const DEFAULT_INFORMATICS_RANGE_PRESET = 'all'
 
+export const POI_POSTS_PAGE_SIZE = 25
+
 export function normalizePoiNameKey(raw) {
   return String(raw || '')
     .trim()
@@ -326,6 +328,25 @@ export function resolvePoiDateRange({
   return { from: null, to: null, preset: 'all' }
 }
 
+export function formatPoiActivityRange(from, to) {
+  const fmt = (value) => {
+    if (!value) return ''
+    const d = new Date(value)
+    if (Number.isNaN(d.getTime())) return ''
+    return d.toLocaleDateString('en-GB', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      timeZone: 'UTC',
+    })
+  }
+  const start = fmt(from)
+  const end = fmt(to)
+  if (!start && !end) return ''
+  if (!start || !end || start === end) return start || end
+  return `${start} – ${end}`
+}
+
 export function serializePoiForClient(poi, extra = {}) {
   if (!poi) return null
   const signedImageUrl = extra.signedImageUrl || null
@@ -350,7 +371,11 @@ export function serializePoiForClient(poi, extra = {}) {
       notes: poi.meta?.notes || '',
     },
     post_count: typeof poi.post_count === 'number' ? poi.post_count : 0,
+    first_seen: poi.first_seen ? new Date(poi.first_seen).toISOString() : null,
+    last_seen: poi.last_seen ? new Date(poi.last_seen).toISOString() : null,
     topic_count: typeof poi.topic_count === 'number' ? poi.topic_count : 0,
+    category: poi.category || '',
+    category_label: poi.category_label || '',
     status: poi.status || 'active',
     merged_into: poi.merged_into?.toString?.() ?? poi.merged_into ?? null,
     merged_into_name: poi.merged_into_name || null,

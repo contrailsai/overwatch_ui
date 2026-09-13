@@ -3,8 +3,9 @@ import { fetch_clients_in_project } from '@/app/(dashboard)/cases/feature_action
 import PageHeader from '@/components/PageHeader'
 import { DisabledSectionFallback } from '@/components/DisabledSectionFallback'
 import { isSectionEnabled } from '@/lib/project-sections'
-import { getPoiTopicsGraph, countFeeds } from './actions'
-import { FeedsGraphClient } from './FeedsGraphClient'
+import { countFeeds } from './actions'
+import { getFeedsNexusGraph } from '@/app/(dashboard)/nexus/actions'
+import { FeedsNexusClient } from './FeedsNexusClient'
 import { FeedsSubNav } from './FeedsSubNav'
 
 export const metadata = {
@@ -37,7 +38,7 @@ export default async function FeedsPage() {
   }
 
   const [graphData, feedCount, projectEmails] = await Promise.all([
-    getPoiTopicsGraph(),
+    getFeedsNexusGraph(),
     countFeeds(),
     fetch_clients_in_project(clientDetails.project_name),
   ])
@@ -49,7 +50,7 @@ export default async function FeedsPage() {
         description="Topic and POI relationships across your project"
       />
       <FeedsSubNav feedCount={feedCount} />
-      <FeedsGraphClient
+      <FeedsNexusClient
         graphData={graphData}
         feedCount={feedCount}
         project={project}

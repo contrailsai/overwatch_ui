@@ -76,67 +76,82 @@ export function formatViolation(name) {
     .replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
-/**
- * @param {{ post: object, href?: string, showAuthor?: boolean }} props
- * href defaults to /cases/[id] (profile inspect path). POI uses /cases?case_id=.
- */
-export function PostCard({ post, href, showAuthor = true }) {
+function PostCardBody({ post, showAuthor }) {
   const risk = getRiskLabel(post.effective_threat_score)
   const caption = post.caption || 'No caption'
+
+  return (
+    <>
+      {post.signedImageUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={post.signedImageUrl}
+          alt=""
+          className="h-28 w-full object-cover bg-slate-100"
+        />
+      ) : null}
+      <div className="p-2.5 space-y-1.5">
+        <div className="flex items-center justify-between gap-2">
+          <span className="inline-flex items-center gap-1 text-xs text-slate-500">
+            <PlatformIcon platform={post.platform} />
+            {platformLabel(post.platform)}
+          </span>
+          <span
+            className={cn(
+              'inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-black uppercase border shrink-0',
+              risk.color
+            )}
+          >
+            {risk.label}
+          </span>
+        </div>
+        <p className="text-xs sm:text-sm text-slate-700 line-clamp-2" title={caption}>
+          {caption}
+        </p>
+        <div className="flex flex-wrap gap-1">
+          {(post.threat_types || []).slice(0, 2).map((t) => (
+            <Badge
+              key={t}
+              variant="outline"
+              className={cn('text-[10px] capitalize border', getViolationBadgeClass(t))}
+            >
+              {formatViolation(t)}
+            </Badge>
+          ))}
+        </div>
+        {showAuthor ? (
+          <div className="flex items-center justify-between gap-2 text-[11px] text-slate-400 pt-0.5">
+            <span className="truncate min-w-0">
+              {post.author?.display_name || post.author?.username || '—'}
+            </span>
+            {post.original_url ? <span className="h-7 w-7 shrink-0" aria-hidden /> : null}
+          </div>
+        ) : (
+          post.original_url ? <div className="h-7" aria-hidden /> : null
+        )}
+      </div>
+    </>
+  )
+}
+
+/**
+ * @param {{ post: object, href?: string, onSelect?: (post: object) => void, showAuthor?: boolean }} props
+ * href defaults to /cases/[id]. Pass onSelect to open in-page instead of navigating.
+ */
+export function PostCard({ post, href, onSelect, showAuthor = true }) {
   const caseHref = href || `/cases/${post._id}`
 
   return (
     <li className="relative break-inside-avoid mb-3 bg-white border border-slate-200 rounded-xl overflow-hidden hover:border-slate-300 transition-colors">
-      <Link href={caseHref} className="block">
-        {post.signedImageUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={post.signedImageUrl}
-            alt=""
-            className="h-28 w-full object-cover bg-slate-100"
-          />
-        ) : null}
-        <div className="p-2.5 space-y-1.5">
-          <div className="flex items-center justify-between gap-2">
-            <span className="inline-flex items-center gap-1 text-xs text-slate-500">
-              <PlatformIcon platform={post.platform} />
-              {platformLabel(post.platform)}
-            </span>
-            <span
-              className={cn(
-                'inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-black uppercase border shrink-0',
-                risk.color
-              )}
-            >
-              {risk.label}
-            </span>
-          </div>
-          <p className="text-xs sm:text-sm text-slate-700 line-clamp-2" title={caption}>
-            {caption}
-          </p>
-          <div className="flex flex-wrap gap-1">
-            {(post.threat_types || []).slice(0, 2).map((t) => (
-              <Badge
-                key={t}
-                variant="outline"
-                className={cn('text-[10px] capitalize border', getViolationBadgeClass(t))}
-              >
-                {formatViolation(t)}
-              </Badge>
-            ))}
-          </div>
-          {showAuthor ? (
-            <div className="flex items-center justify-between gap-2 text-[11px] text-slate-400 pt-0.5">
-              <span className="truncate min-w-0">
-                {post.author?.display_name || post.author?.username || '—'}
-              </span>
-              {post.original_url ? <span className="h-7 w-7 shrink-0" aria-hidden /> : null}
-            </div>
-          ) : (
-            post.original_url ? <div className="h-7" aria-hidden /> : null
-          )}
-        </div>
-      </Link>
+      {onSelect ? (
+        <button type="button" onClick={() => onSelect(post)} className="block w-full text-left cursor-pointer">
+          <PostCardBody post={post} showAuthor={showAuthor} />
+        </button>
+      ) : (
+        <Link href={caseHref} className="block">
+          <PostCardBody post={post} showAuthor={showAuthor} />
+        </Link>
+      )}
       {post.original_url ? (
         <Button
           type="button"

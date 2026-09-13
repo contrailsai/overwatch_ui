@@ -38,7 +38,7 @@ import { CaseExportDocxButton } from '@/components/docx/CaseExportDocxButton'
 import SafeDate from '@/components/SafeDate'
 import { getRiskLabel } from './riskBuckets'
 
-export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose, onNavigate, hasPrev, hasNext, onUpdateStatus, onUpdatePost, onShowToast, projectEmails, isMobileLayout = false, stackedLayout = false }) {
+export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose, onBack = null, onNavigate, hasPrev, hasNext, onUpdateStatus, onUpdatePost, onShowToast, projectEmails, isMobileLayout = false, stackedLayout = false, contentOnly = false }) {
     const [isProcessing, setIsProcessing] = useState(false)
     const [imgError, setImgError] = useState(false)
     const router = useRouter()
@@ -350,7 +350,7 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
                 {/* LEFT PANEL (Source Content) */}
                 <div className={cn(
                     "flex-none space-y-4 bg-slate-50/50",
-                    stackedLayout ? "w-full" : "lg:flex-1 lg:overflow-y-auto"
+                    contentOnly || stackedLayout ? "w-full flex-1 overflow-y-auto" : "lg:flex-1 lg:overflow-y-auto"
                 )}>
                     {/* Header */}
                     <div className={cn(
@@ -358,6 +358,11 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
                         stackedLayout ? "px-3 py-2" : "px-4 sm:px-6 py-3 sm:py-4"
                     )}>
                         <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+                            {onBack && (
+                                <Button variant="ghost" title="Back" size="icon" onClick={onBack} className="h-8 w-8 sm:h-10 sm:w-10 rounded-full cursor-pointer bg-slate-100 text-slate-700">
+                                    <ChevronLeft className="w-5 h-5 sm:w-6 sm:h-6" />
+                                </Button>
+                            )}
                             <Button variant="ghost" title="Close" size="icon" onClick={onClose} className="h-8 w-8 sm:h-10 sm:w-10 rounded-full cursor-pointer bg-slate-100 text-slate-700">
                                 <X className="w-5 h-5 sm:w-6 sm:h-6" />
                             </Button>
@@ -395,6 +400,7 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
                                     </Button>
                                 </div>
                             )}
+                            {!contentOnly && (
                             <Button
                                 variant="ghost"
                                 size="icon"
@@ -404,6 +410,7 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
                             >
                                 {copied ? <Check className="w-4 h-4 sm:w-5 sm:h-5 text-green-500" /> : <LinkIcon className="w-4 h-4 sm:w-5 sm:h-5" />}
                             </Button>
+                            )}
 
                             {isRequested && (
                                 <Badge className="bg-orange-50 text-orange-700 border-orange-200 gap-1.5 pl-2 animate-pulse hidden sm:inline-flex">
@@ -414,6 +421,7 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
                     </div>
 
                     {/* Mobile export & edit actions */}
+                    {!contentOnly && (
                     <div className={cn(
                         "flex gap-2 border-b border-slate-100 bg-white",
                         stackedLayout ? "flex px-3 py-2" : "lg:hidden px-4 sm:px-6 py-3"
@@ -439,6 +447,7 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
                             <span className="sr-only sm:not-sr-only">Edit</span>
                         </Button>
                     </div>
+                    )}
 
                     <div className={cn(
                         "flex flex-col",
@@ -675,8 +684,8 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
                     </div>
                 </div>
 
-                {/* RIGHT PANEL */}
-                {
+                {/* RIGHT PANEL — case reference. Hidden when the caller only wants post content. */}
+                {!contentOnly && (
                     isEditing && !isMobileLayout ? (
                         <div className={cn("flex flex-row w-full shrink-0", !stackedLayout && "lg:w-[500px]")}>
                             <EditForm
@@ -1106,7 +1115,7 @@ export function CaseDetailPanel({ post, project, clientDetails, isOpen, onClose,
 
                         </div>
                     )
-                }
+                )}
             </div>
         </div>
         </>
