@@ -8,7 +8,7 @@ The Cases page loads posts from the MongoDB `Posts` collection. Large result set
 
 Every post is normalized via `normalizeS3Post` (presigned S3 URLs, consistent fields for React).
 
-**Gate:** Only posts with `review_details.threat_score` present are included (reviewed content). This applies to the list, bulk ID fetch, and report ordering.
+**Gate:** Reviewed content only, via `withReviewedThreatScoreFilter` in [`reviewed-post-filter.js`](../../lib/posts/reviewed-post-filter.js): `workflow.review_status: 'reviewed'` **or** a stored `list.review_threat_score`. This applies to the list, bulk ID fetch, and report ordering.
 
 ---
 
@@ -23,8 +23,9 @@ Filters and sort are driven by search params:
 | `visibility_status` | `visibility_status` | `all` |
 | `risk_priority` | `risk_priority` | `all` |
 | `violations` | `violations` (comma-separated) | `all` |
-| `original_date_from` / `original_date_to` | publish date range | — |
-| `processed_from` / `processed_to` | alert date range | — |
+| `pois` | `pois` (comma-separated parent POI `name`s; aliases included in the match) | `all` |
+| `published_from` / `published_to` (aliases: `original_date_*`) | publish date range on `list.posted_at` | — |
+| `alert_from` / `alert_to` (aliases: `processed_*`) | alert date range on `list.reviewed_at` | — |
 | `unique_clusters` | `true` / absent | off |
 | `sortField` | `threat_score`, `processed_date`, `original_date` | `threat_score` (except similarity search) |
 | `sortDirection` | `asc` / `desc` | `desc` |
@@ -36,7 +37,9 @@ Filters and sort are driven by search params:
 
 ## Filters (`buildCasesMatchQuery`)
 
-Implemented in [`actions.js`](actions.js). All filters combine with the reviewed-threat-score gate.
+Built in [`pipeline-helpers.js`](../../lib/posts/pipeline-helpers.js) and applied from [`actions.js`](actions.js). All filters combine with the reviewed gate. POI matching is a second step: `applyPoiNameFilter`.
+
+The list toolbar splits controls across surfaces in [`CasesFilterPanel.js`](CasesFilterPanel.js): **primary** (search, alert date, POI), **actions** (similar search / assign when rows are selected), and **advanced** (platform, status, visibility, risk, violations, publish date, unique clusters). Alert-date chips (today / last 7 days) live in [`CaseFilterSuggestions.js`](CaseFilterSuggestions.js).
 
 ### Platform
 
@@ -44,22 +47,24 @@ Implemented in [`actions.js`](actions.js). All filters combine with the reviewed
 
 ### Visibility
 
-- `down`: `visibility_status === 'down'`.
-- `active` / `online` / `available`: online-like statuses, including missing/null (treated as online).
+- `down`: `workflow.visibility_status === 'down'`.
+- `active` / `online` / `available`: online-like `workflow.visibility_status` values, including missing/null (treated as online).
 
 ### Client status
 
-- `To Be Reviewed`: missing, null, or case-insensitive match.
-- `takedown` / `takedowns`: regex for takedown variants.
-- Other values: case-insensitive exact match on `client_status`.
+Mapped through `mapUiClientStatusToV3` onto `workflow.client_status`.
+
+- `To Be Reviewed`: `open`, `alerted`, or missing/null.
+- `takedown` / `takedowns`: `workflow.client_status === 'takedown'`.
+- Other values: exact v3 status from the UI label.
 
 ### Risk priority (threat score buckets)
 
-Aligned with UI labels in [`riskBuckets.js`](riskBuckets.js):
+Aligned with UI labels in [`riskBuckets.js`](riskBuckets.js). Filter field is `list.effective_threat_score`.
 
 | Filter id | Mongo condition |
 |-----------|-----------------|
-| `high` | `threat_score` > 95 |
+| `high` | > 95 |
 | `medium` | > 75 and ≤ 95 |
 | `low` | > 40 and ≤ 75 |
 | `safe` | ≤ 40 |
@@ -67,50 +72,61 @@ Aligned with UI labels in [`riskBuckets.js`](riskBuckets.js):
 ### Violations
 
 - Comma-separated list in `violations` param.
-- Matches `review_details.threat_types`, `review_details.flags.<type>`, or `review_details.is_aigc` when `aigc` is included.
+- Matches `list.violation_flags`, `review_details.threat_types`, or `review_details.flags.<type>`.
+- `aigc` matches `review_details.is_aigc`.
 
-### Publish date (`original_date_*`)
+### POIs
 
-- Applied after `$addFields` computes `sort_original_date` from `engagement.posted_at` or `metadata.posted_date`.
-- Range: `$gte` / `$lte` on normalized date.
+- Comma-separated parent POI `name`s in the `pois` param (multi-select). Options come from `getPoiFilterOptions()` (parent POIs only).
+- Each selected POI is expanded to its display name, canonical name, aliases, and `alias_poi_names`, then matched against `review_details.poi_names` or `analysis_results.poi_check.poi_names` (any label).
+- Unknown names match nothing (`_id` exists-false), so a stale selection cannot return the unfiltered list.
 
-### Alert date (`processed_*`)
+### Publish date (`published_*` / `original_date_*`)
 
-- Applied on `sort_processed_after`: `review_details.reviewed_at` or `metadata.updated_at`.
+- `$match` on stored `list.posted_at` (`$gte` / `$lte`). No computed date field.
+
+### Alert date (`alert_*` / `processed_*`)
+
+- `$match` on stored `list.reviewed_at`.
+- The default list **sort** still buckets by IST calendar day; the filter uses the full timestamp.
 
 ### Unique clusters
 
-- When `unique_clusters=true`, pipeline deduplicates by cluster (see [Unique clusters](#unique-clusters)).
+- When `unique_clusters=true`, pipeline deduplicates by `list.cluster_id` (falling back to `_id`). See [Unique clusters](#unique-clusters).
 - Strict mode: `USE_STRICT_UNIQUE_CLUSTERING=true` uses `unique_clusters` collection + representative/member rules.
 
 ---
 
 ## Computed sort fields (`$addFields`)
 
+Default / Risk-column sort cannot use stored fields directly. `buildCasesSortKeyAddFields()` in [`riskBuckets.js`](riskBuckets.js) adds these immediately before `$sort` (`buildCasesListSortStages`). They are `$unset` on list results so they do not leak to the client.
+
 | Field | Source | Purpose |
 |-------|--------|---------|
-| `sort_original_date` | Publish/posted date | Publish column, publish filter, sort |
-| `sort_processed_after` | Review/alert date (full timestamp) | Alert column filter, Alert column sort, sub-hour tiebreaker |
-| `sort_processed_after_hour` | Alert date truncated to IST hour (`$dateTrunc`, `Asia/Kolkata`) | Default Risk sort — posts in the same clock-hour compete on engagement |
-| `risk_rank` | `threat_score` buckets 4→1 | Risk bucket sort (not raw score) |
-| `sort_engagement` | Weighted engagement | Engagement tiebreaker / report sort |
+| `_sort_risk_bucket` | `list.effective_threat_score` via the buckets below (null/missing score → Safe) | Default Risk sort. Same bucket, same priority. Not the stored `list.risk_rank` string (that sorts alphabetically). |
+| `_sort_alert_day` | `list.reviewed_at` truncated to an IST calendar day (`$dateTrunc`, `Asia/Kolkata`). Non-date → null (sorts last when descending). | Default Risk sort. Time of day is ignored. |
+| `list.engagement_score` | Materialized weighted engagement | Engagement tiebreaker |
+| `list.posted_at` | Publish time | Publish tiebreaker / Publish column |
+| `list.reviewed_at` | Alert timestamp | Alert column sort only (not the default chain) |
 
-### Risk buckets (`risk_rank`)
+### Risk buckets (`_sort_risk_bucket`)
 
-| Bucket | `risk_rank` | Threshold |
-|--------|-------------|-----------|
+Same cutoffs as `getRiskLabel` / `RISK_THRESHOLDS`.
+
+| Bucket | Rank | Threshold |
+|--------|------|-----------|
 | High | 4 | > 95 |
 | Medium | 3 | > 75, ≤ 95 |
 | Low | 2 | > 40, ≤ 75 |
-| Safe | 1 | ≤ 40 |
+| Safe | 1 | ≤ 40, or score missing |
 
-### Engagement score (`sort_engagement`)
+### Engagement score (`list.engagement_score`)
 
 ```
 views + (2 × likes) + (3 × comments) + (4 × shares)
 ```
 
-Mongo paths: `engagement.views`, `engagement.likes`, `engagement.comments`, `engagement.shares`. Null/missing → 0. All zeros still sort; dates break ties.
+Stored on `list.engagement_score` at write time. Null/missing sorts as lowest.
 
 ---
 
@@ -120,37 +136,36 @@ The **cases table** and **PDF/DOCX reports** intentionally use different priorit
 
 ### A. Cases page / `getPosts` — list order
 
-Builders: `buildCasesListSortPipeline(sort)` in [`riskBuckets.js`](riskBuckets.js).
+Builders: `buildCasesListSortStages(sort)` in [`riskBuckets.js`](riskBuckets.js) (`$addFields` then `$sort`). Feed lists use the same helper.
 
-**Default / Risk column (`sortField=threat_score`, desc):** all descending except `_id` (asc tiebreaker). Implemented via `buildCasesDefaultListSortPipeline()`.
+**Default / Risk column (`sortField=threat_score`, desc):** descending except `_id` (asc tiebreaker). Implemented via `buildCasesDefaultListSortPipeline()`.
 
-1. `risk_rank` desc — High → Medium → Low → Safe
-2. `sort_processed_after_hour` desc — newest alert **hour** first (IST; e.g. `27-05-2026 16` before `27-05-2026 06`)
-3. `sort_engagement` desc — highest engagement first within the same hour
-4. `sort_original_date` desc — newest publish date first
-5. `sort_processed_after` desc — full alert timestamp (sub-hour tiebreaker)
-6. `_id` asc — stable tiebreaker
+1. `_sort_risk_bucket` desc — High → Medium → Low → Safe (same bucket, same priority)
+2. `_sort_alert_day` desc — newest alert **calendar day** first (IST `dd-mm-yyyy`; time of day ignored)
+3. `list.engagement_score` desc
+4. `list.posted_at` desc
+5. `_id` asc — pagination tiebreaker only
 
-The UI still displays the full alert time (`dd/MM/yyyy hh:mm a`); only sort uses the hour bucket.
+The UI still displays the full alert time (`dd/MM/yyyy hh:mm a`); only sort uses the IST date.
 
-Risk column **asc** only reverses `risk_rank`; hour, engagement, publish, and full-alert tiebreakers stay desc.
+Risk column **asc** only reverses `_sort_risk_bucket`; alert day, engagement, and publish stay desc.
 
-**Alert Date column (`processed_date`):** primary = alert date (user direction), then risk → publish date → engagement → `_id`.
+**Alert Date column (`processed_date`):** primary = full `list.reviewed_at` (user direction), then numeric `list.effective_threat_score` → `list.posted_at` → engagement → `_id`. Not the default bucket/day chain.
 
-**Publish Date column (`original_date`):** primary = publish date (user direction), then risk → alert date → engagement → `_id`.
+**Publish Date column (`original_date`):** primary = `list.posted_at` (user direction), then numeric score → `list.reviewed_at` → engagement → `_id`.
 
-Similarity search (`getSimilarPosts`, `getSemanticSearchPosts`) prepends vector/search `score: -1`, then uses list tiebreakers.
+Similarity search (`getSimilarPosts`, `getSemanticSearchPosts`) prepends vector/search `score: -1`, then uses the same list tiebreakers.
 
 ### B. Reports — export / SQS order
 
 Builders: `buildCasesReportSortPipeline()` in [`riskBuckets.js`](riskBuckets.js).
 
-**Fixed order (ignores UI column sort):**
+**Fixed order (ignores UI column sort).** This is not the list bucket/day chain.
 
-1. `risk_rank`
-2. `sort_engagement`
-3. `sort_processed_after`
-4. `sort_original_date`
+1. `list.effective_threat_score` (numeric, not the risk bucket)
+2. `list.engagement_score`
+3. `list.reviewed_at` (full timestamp)
+4. `list.posted_at`
 5. `_id`
 
 **Where it is applied:**
@@ -196,7 +211,7 @@ Flow: `useReportExport` → `getOrCreateReportJob` → `orderPostIdsForReport` �
 ### `getSimilarPosts` / `getSemanticSearchPosts`
 
 - Vector / text search; filters and list-style sort after search score.
-- Unique-cluster pick uses `UNIQUE_CLUSTER_EARLY_SORT` when date fields are not yet computed.
+- Unique-cluster pick uses the same ranking keys as the list (`UNIQUE_CLUSTER_EARLY_SORT`).
 
 ### `getPostById` / `getIdenticalPosts` / `getPostsByIds`
 
@@ -207,12 +222,10 @@ Flow: `useReportExport` → `getOrCreateReportJob` → `orderPostIdsForReport` �
 ## Pipeline architecture (typical `getPosts`)
 
 1. `$match` — `buildCasesMatchQuery` + reviewed gate  
-2. `$project` — drop embeddings  
-3. `$addFields` — dates, `risk_rank`, `sort_engagement`  
-4. `$match` — date range filters (if any)  
-5. Unique clusters stages (if enabled)  
-6. `$facet` — `{ data: [$sort, $skip, $limit], total: [$count] }`  
-7. Normalize + S3 signing on results  
+2. `$match` — date range filters (if any)  
+3. Unique clusters stages (if enabled; computes sort keys, then drops them)  
+4. `$facet` — `{ data: [$addFields sort keys, $sort, $skip, $limit, $unset helpers], total: [$count] }`  
+5. Normalize + S3 signing on results  
 
 ---
 
@@ -220,9 +233,7 @@ Flow: `useReportExport` → `getOrCreateReportJob` → `orderPostIdsForReport` �
 
 When enabled, one representative post per cluster is kept.
 
-**Representative pick sort** (after sort fields exist): list priority — `risk_rank` → alert date → publish date → engagement → `reviewed_at` → `_id`.
-
-Early pipelines (vector search before date `$addFields`): `risk_rank` → engagement → `reviewed_at` → `_id`.
+**Representative pick sort** (list and early/similarity): `_sort_risk_bucket` → `_sort_alert_day` → `list.engagement_score` → `list.posted_at` → `_id`. Sort keys are computed in the cluster stage, then projected away.
 
 ---
 
