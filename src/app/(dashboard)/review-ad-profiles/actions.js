@@ -24,6 +24,10 @@ function buildAdProfileMatchQuery(filters) {
     matchQuery.platform = { $regex: new RegExp(`^${filters.platform}$`, 'i') }
   }
 
+  if (filters.is_verified !== undefined && filters.is_verified !== 'all') {
+    matchQuery.is_verified = filters.is_verified === 'true'
+  }
+
   if (filters.publish_date_from || filters.publish_date_to) {
     matchQuery['list.last_active_at'] = {}
     if (filters.publish_date_from) {

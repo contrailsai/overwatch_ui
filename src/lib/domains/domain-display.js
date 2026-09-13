@@ -160,7 +160,7 @@ export function hrefForDomainOccurrence(entityType, entityId) {
   const type = String(entityType || '').toLowerCase()
   if (type === 'ad') return `/ads?ad_id=${entityId}`
   if (type === 'post') return `/cases/${entityId}`
-  if (type === 'ad_profile') return `/ad-profiles`
+  if (type === 'ad_profile') return `/ad-profiles/${entityId}`
   if (type === 'profile') return `/profiles/${entityId}`
   return null
 }
