@@ -45,6 +45,11 @@ const PlatformIcon = ({ platform, className }) => {
     return <Globe className={cn('w-3.5 h-3.5 text-slate-400', className)} />
 }
 
+function profileRiskLabel(profile) {
+    const raw = profile?.list?.risk_rank ?? profile?.list?.risk ?? profile?.review_details?.risk
+    return raw || 'safe'
+}
+
 const getStatusConfig = (status) => {
     const s = status?.toLowerCase();
     if (s === 'to be reviewed' || s === 'pending' || !status) return { label: 'To Be Reviewed', color: 'text-slate-700 bg-slate-100 border-slate-200', icon: ClockFading }
@@ -440,7 +445,7 @@ export function ProfilesList({ profiles, project: _project, initialFilters, init
                                 </tr>
                             ) : (
                                 localProfiles.map((profile) => {
-                                    const risk = profile.review_details?.risk || 'safe'
+                                    const risk = profileRiskLabel(profile)
                                     const followerCount = profile.metadata?.follower_count
                                     const lastActive = profile.last_relevant_publish_date
                                     return (
@@ -588,7 +593,7 @@ export function ProfilesList({ profiles, project: _project, initialFilters, init
                         </div>
                     ) : (
                         localProfiles.map((profile) => {
-                            const risk = profile.review_details?.risk || 'safe'
+                            const risk = profileRiskLabel(profile)
                             const statusCfg = getStatusConfig(profile.client_status)
                             const StatusIcon = statusCfg.icon
                             const followerCount = profile.metadata?.follower_count

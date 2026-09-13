@@ -38,7 +38,7 @@ import { DEFAULT_INFORMATICS_RANGE_PRESET, POI_POSTS_PAGE_SIZE } from '@/lib/poi
 const PLATFORM_COLORS = {
   instagram: '#e1306c',
   facebook: '#1877f2',
-  x: '#0f172a',
+  x: '#475569',
   twitter: '#1da1f2',
   youtube: '#ff0000',
   reddit: '#ff4500',

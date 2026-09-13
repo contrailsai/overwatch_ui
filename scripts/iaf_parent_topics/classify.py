@@ -9,6 +9,7 @@ Usage:
   export GEMINI_API_KEY=...
   python scripts/iaf_parent_topics/classify.py --dry-run
   python scripts/iaf_parent_topics/classify.py --db AirForce-Data-Search
+  python scripts/iaf_parent_topics/classify.py --reviewed-on 2026-09-13
 """
 
 from __future__ import annotations
@@ -19,7 +20,7 @@ import os
 import re
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -246,26 +247,33 @@ def post_card(doc: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def load_reviewed_posts(coll) -> list[dict[str, Any]]:
-    docs = list(
-        coll.find(
-            {"workflow.review_status": "reviewed"},
-            {
-                "content.caption": 1,
-                "analysis_results.reasoning": 1,
-                "analysis_results.anti_india_reasoning": 1,
-                "analysis_results.misinformation_explanation": 1,
-                "analysis_results.poi_names": 1,
-                "review_details.reasoning": 1,
-                "review_details.poi_names": 1,
-                "review_details.threat_types": 1,
-                "list.threat_types": 1,
-                "list.posted_at": 1,
-                "platform": 1,
-                "original_url": 1,
-            },
-        )
-    )
+POST_PROJECTION = {
+    "content.caption": 1,
+    "analysis_results.reasoning": 1,
+    "analysis_results.anti_india_reasoning": 1,
+    "analysis_results.misinformation_explanation": 1,
+    "analysis_results.poi_names": 1,
+    "review_details.reasoning": 1,
+    "review_details.poi_names": 1,
+    "review_details.threat_types": 1,
+    "list.threat_types": 1,
+    "list.posted_at": 1,
+    "list.reviewed_at": 1,
+    "platform": 1,
+    "original_url": 1,
+}
+
+
+def utc_day_bounds(day: str) -> tuple[datetime, datetime]:
+    start = datetime.strptime(day, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+    return start, start + timedelta(days=1)
+
+
+def load_reviewed_posts(coll, query: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    match = {"workflow.review_status": "reviewed"}
+    if query:
+        match.update(query)
+    docs = list(coll.find(match, POST_PROJECTION))
     return [post_card(d) for d in docs]
 
 
@@ -286,6 +294,9 @@ def catalog_from_mongo(topics: list[dict[str, Any]], taxonomy: dict[str, Any]) -
             "seed": bool(t.get("seed")),
             "post_ids": [str(x) for x in (t.get("posts") or [])],
             "parent_topic_id": t.get("parent_topic_id"),
+            "poi_names": [str(n) for n in (t.get("poi_names") or []) if n],
+            "first_posted_at": t.get("first_posted_at"),
+            "last_posted_at": t.get("last_posted_at"),
         }
     return {"topics": out}
 
@@ -584,14 +595,15 @@ def apply_assignments(
             ids.add(post_id)
             assigned += 1
         topic["post_ids"] = sorted(ids)
-        topic["poi_names"] = sorted(
-            {
-                str(n)
-                for pid in topic["post_ids"]
-                for n in (post_by_id.get(pid, {}).get("pois") or [])
-                if n
-            }
-        )
+        known = {
+            str(n)
+            for pid in topic["post_ids"]
+            if pid in post_by_id
+            for n in (post_by_id.get(pid, {}).get("pois") or [])
+            if n
+        }
+        # Keep names already stored when this run does not reload every member.
+        topic["poi_names"] = sorted(set(topic.get("poi_names") or []) | known)
     return {"created": created, "assigned": assigned}
 
 
@@ -605,6 +617,9 @@ def write_topics(coll, catalog: dict[str, Any], taxonomy: dict[str, Any], post_b
             posted = post_by_id.get(pid, {}).get("posted_at")
             if posted:
                 dates.append(posted)
+        for bound in (topic.get("first_posted_at"), topic.get("last_posted_at")):
+            if bound:
+                dates.append(bound)
         parent_id = topic.get("parent_topic_id")
         if parent_id in parent_counts:
             parent_counts[parent_id] += len(post_oids)
@@ -652,6 +667,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--db", default=None)
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--limit", type=int, default=0)
+    parser.add_argument(
+        "--reviewed-on",
+        default=None,
+        metavar="YYYY-MM-DD",
+        help="Only classify posts whose list.reviewed_at falls on this UTC day, and only if they are not already on a topic",
+    )
     args = parser.parse_args(argv)
 
     taxonomy = load_taxonomy()
@@ -663,13 +684,31 @@ def main(argv: list[str] | None = None) -> int:
 
     client = MongoClient(uri)
     db = client[db_name]
-    posts = load_reviewed_posts(db["Posts"])
+    existing = list(db["topics"].find({}))
+    catalog = catalog_from_mongo(existing, taxonomy)
+    assigned = {
+        pid
+        for topic in catalog["topics"].values()
+        for pid in (topic.get("post_ids") or [])
+    }
+    query: dict[str, Any] = {}
+    if args.reviewed_on:
+        start, end = utc_day_bounds(args.reviewed_on)
+        query["list.reviewed_at"] = {"$gte": start, "$lt": end}
+    posts = load_reviewed_posts(db["Posts"], query or None)
+    if args.reviewed_on:
+        before = len(posts)
+        posts = [p for p in posts if p["post_id"] not in assigned]
+        print(f"reviewed_on={args.reviewed_on} matched={before} already_assigned={before - len(posts)} to_classify={len(posts)}")
     if args.limit:
         posts = posts[: args.limit]
     post_by_id = {p["post_id"]: p for p in posts}
-    existing = list(db["topics"].find({}))
-    catalog = catalog_from_mongo(existing, taxonomy)
     print(f"DB={db_name} reviewed_posts={len(posts)} child_topics={len(catalog['topics'])} model={MODEL_NAME}")
+    before_counts = {
+        tid: len(topic.get("post_ids") or [])
+        for tid, topic in catalog["topics"].items()
+    }
+    before_ids = set(before_counts)
 
     for i in range(0, len(posts), BATCH_SIZE):
         batch = posts[i : i + BATCH_SIZE]
@@ -694,6 +733,23 @@ def main(argv: list[str] | None = None) -> int:
             for t in sorted(catalog["topics"].values(), key=lambda x: x["topic_id"])
         ],
     }
+    changed = []
+    for topic in sorted(catalog["topics"].values(), key=lambda x: x["topic_id"]):
+        before = before_counts.get(topic["topic_id"], 0)
+        after = len(topic.get("post_ids") or [])
+        if topic["topic_id"] not in before_ids or after != before:
+            changed.append(
+                {
+                    "topic_id": topic["topic_id"],
+                    "title": topic["name"],
+                    "pillar_id": topic.get("pillar_id"),
+                    "parent": topic.get("parent_topic_id"),
+                    "new_topic": topic["topic_id"] not in before_ids,
+                    "added": after - before,
+                    "post_count": after,
+                }
+            )
+    print("DELTA " + json.dumps(changed, indent=2, default=str))
     print(json.dumps(summary, indent=2, default=str))
     if args.dry_run:
         return 0

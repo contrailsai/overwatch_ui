@@ -360,8 +360,6 @@ function buildProfileMetadataForUi(profile, signedProfilePic = null) {
 }
 
 export function buildNormalizedProfileForUi(profile, { signedProfilePic = null, postIds = [] } = {}) {
-  const profileRisk = profile?.list?.risk_rank ?? profile?.list?.risk ?? profile?.review_details?.risk ?? null
-
   return {
     _id: profile._id.toString(),
     display_name: profile?.display_name || profile?.metadata?.display_name || profile?.username || 'Unknown',
@@ -370,10 +368,7 @@ export function buildNormalizedProfileForUi(profile, { signedProfilePic = null, 
     is_verified: profile?.is_verified ?? profile?.metadata?.is_verified ?? false,
     posts: postIds,
     profile_url: profile?.profile_url || profile?.metadata?.profile_url || null,
-    review_details: serializeForClient({
-      ...(profile?.review_details || {}),
-      risk: profileRisk,
-    }),
+    review_details: serializeForClient(profile?.review_details) ?? null,
     client_status: resolveClientStatusForUi(profile),
     client_notes: serializeForClient(profile?.client_notes) ?? [],
     last_relevant_publish_date: toIsoDate(profile?.list?.last_active_at ?? profile?.last_relevant_publish_date),

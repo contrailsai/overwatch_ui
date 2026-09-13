@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useEffect, useTransition } from 'react'
+import { useState, useCallback, useEffect, useRef, useTransition } from 'react'
 import { getProfileCases, submitProfileReview } from './actions'
 import {
     Filter, Search, ExternalLink, X, ChevronLeft, ChevronRight,
@@ -23,7 +23,12 @@ import { cn } from '@/lib/utils'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { format } from 'date-fns'
 import { DateFilterPopover } from '@/app/(dashboard)/cases/DateFilterPopover'
-import { getCaseInspectHref, isPendingReviewCase } from '@/lib/posts/reviewed-post-filter'
+import {
+    getCaseInspectHref,
+    isPendingReviewCase,
+    isProfileReviewed,
+    unionViolationsFromReviewedPosts,
+} from '@/lib/posts/reviewed-post-filter'
 
 const PlatformIcon = ({ platform, className }) => {
     const p = platform?.toLowerCase()
@@ -74,29 +79,39 @@ const RISK_LEVELS = [
 ]
 
 // ─── Profile Review Form ─────────────────────────────────────────────────────
-function ProfileReviewForm({ profile, project, onReviewSaved }) {
-    const review = profile.review_details || {}
-    const hasReview = Object.keys(review).length > 0
+function ProfileReviewForm({ profile, project, cases, onReviewSaved }) {
+    const reviewed = isProfileReviewed(profile)
     const labels = project?.project_details?.labels || []
+    const seededFor = useRef(null)
 
-    const [risk, setRisk] = useState(review.risk || '')
-    const [violations, setViolations] = useState(review.violations || [])
-    const [reasoning, setReasoning] = useState(review.reasoning || '')
-    const [reviewerComments, setReviewerComments] = useState(review.reviewer_comments || '')
-    const [action, setAction] = useState(review.action || '')
+    const saved = reviewed ? (profile.review_details || {}) : {}
+    const [risk, setRisk] = useState(saved.risk || '')
+    const [violations, setViolations] = useState(saved.violations || [])
+    const [reasoning, setReasoning] = useState(saved.reasoning || '')
+    const [reviewerComments, setReviewerComments] = useState(saved.reviewer_comments || '')
+    const [action, setAction] = useState(saved.action || '')
     const [isPending, startTransition] = useTransition()
     const [result, setResult] = useState(null)
 
-    // Reset when profile changes
+    // Reset when profile changes. Unreviewed forms stay empty until posts seed violations.
     useEffect(() => {
-        const r = profile.review_details || {}
+        const r = isProfileReviewed(profile) ? (profile.review_details || {}) : {}
         setRisk(r.risk || '')
         setViolations(r.violations || [])
         setReasoning(r.reasoning || '')
         setReviewerComments(r.reviewer_comments || '')
         setAction(r.action || '')
         setResult(null)
-    }, [profile._id])
+        seededFor.current = null
+    }, [profile._id, profile.workflow?.review_status])
+
+    // Seed violations once per unreviewed profile so the reviewer can still uncheck.
+    useEffect(() => {
+        if (reviewed || !profile?._id || cases == null) return
+        if (seededFor.current === profile._id) return
+        setViolations(unionViolationsFromReviewedPosts(cases, labels))
+        seededFor.current = profile._id
+    }, [profile?._id, reviewed, cases, labels])
 
     const toggleViolation = (name) => {
         setViolations(prev =>
@@ -128,7 +143,7 @@ function ProfileReviewForm({ profile, project, onReviewSaved }) {
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                         <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Profile Review</h3>
-                        {hasReview && (
+                        {reviewed && (
                             <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 gap-1.5 pl-2 text-[10px]">
                                 <CheckCircle className="w-3 h-3" /> Reviewed
                             </Badge>
@@ -337,7 +352,7 @@ function ProfileReviewForm({ profile, project, onReviewSaved }) {
                 >
                     {isPending
                         ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Saving...</>
-                        : hasReview ? 'Update Review' : 'Submit Review'
+                        : reviewed ? 'Update Review' : 'Submit Review'
                     }
                 </Button>
             </div>
@@ -348,6 +363,7 @@ function ProfileReviewForm({ profile, project, onReviewSaved }) {
 // ─── Profile Detail Panel ────────────────────────────────────────────────────
 function ProfileDetailPanel({ profile, profiles = [], project, isOpen, onClose, onReviewSaved, onSelectProfile }) {
     const [cases, setCases] = useState(null)
+    const [casesProfileId, setCasesProfileId] = useState(null)
     const [loading, setLoading] = useState(false)
     const [isBioExpanded, setIsBioExpanded] = useState(false)
 
@@ -359,14 +375,21 @@ function ProfileDetailPanel({ profile, profiles = [], project, isOpen, onClose, 
         if (!isOpen || !profile) return
         let cancelled = false
         setCases(null)
+        setCasesProfileId(null)
         setIsBioExpanded(false)
         if ((profile.cases_count ?? 0) === 0) {
             setCases([])
+            setCasesProfileId(profile._id)
             return
         }
         setLoading(true)
         getProfileCases(project, profile._id)
-            .then(result => { if (!cancelled) setCases(result) })
+            .then(result => {
+                if (!cancelled) {
+                    setCases(result)
+                    setCasesProfileId(profile._id)
+                }
+            })
             .catch(() => { if (!cancelled) setCases([]) })
             .finally(() => { if (!cancelled) setLoading(false) })
         return () => { cancelled = true }
@@ -794,6 +817,7 @@ function ProfileDetailPanel({ profile, profiles = [], project, isOpen, onClose, 
                     <ProfileReviewForm
                         profile={profile}
                         project={project}
+                        cases={casesProfileId === profile._id ? cases : null}
                         onReviewSaved={onReviewSaved}
                     />
                 </div>
@@ -812,6 +836,7 @@ export function ProfilesList({ profiles, project, initialFilters, currentPage })
     const profileList = profiles?.profiles || []
 
     const [selectedProfile, setSelectedProfile] = useState(null)
+    const [savedReviews, setSavedReviews] = useState({})
 
     const updateQueryParams = useCallback((newParams) => {
         const params = new URLSearchParams(searchParams.toString())
@@ -848,17 +873,30 @@ export function ProfilesList({ profiles, project, initialFilters, currentPage })
         }
     }
 
-    const handleSelectProfile = (profile) => {
-        setSelectedProfile(profile);
-        // Reset panel state so cases are reloaded for new profile
-        // setSelectedProfile(null)
-        // setTimeout(() => setSelectedProfile(profile), 0)
+    const withSavedReview = (profile) => {
+        const saved = profile ? savedReviews[profile._id] : null
+        if (!profile || !saved) return profile
+        return {
+            ...profile,
+            review_details: saved,
+            workflow: { ...(profile.workflow || {}), review_status: 'reviewed' },
+        }
     }
 
-    // Update review_details in selectedProfile after save
+    const handleSelectProfile = (profile) => {
+        setSelectedProfile(withSavedReview(profile))
+    }
+
     const handleReviewSaved = (profileId, review_details) => {
+        setSavedReviews(prev => ({ ...prev, [profileId]: review_details }))
         setSelectedProfile(prev =>
-            prev?._id === profileId ? { ...prev, review_details } : prev
+            prev?._id === profileId
+                ? {
+                    ...prev,
+                    review_details,
+                    workflow: { ...(prev.workflow || {}), review_status: 'reviewed' },
+                }
+                : prev
         )
     }
 
@@ -1005,7 +1043,15 @@ export function ProfilesList({ profiles, project, initialFilters, currentPage })
                         <tbody className="bg-white divide-y divide-slate-100">
                             {profileList.map((profile) => {
                                 const isSelected = selectedProfile?._id === profile._id
-                                const hasReview = Object.keys(profile.review_details || {}).length > 0
+                                const saved = savedReviews[profile._id]
+                                const rowProfile = saved
+                                    ? {
+                                        ...profile,
+                                        review_details: saved,
+                                        workflow: { ...(profile.workflow || {}), review_status: 'reviewed' },
+                                    }
+                                    : (isSelected && selectedProfile ? selectedProfile : profile)
+                                const reviewed = isProfileReviewed(rowProfile)
                                 return (
                                     <tr
                                         key={profile._id}
@@ -1034,7 +1080,7 @@ export function ProfilesList({ profiles, project, initialFilters, currentPage })
                                                             @{profile.username}
                                                         </span>
                                                     )}
-                                                    {hasReview && (
+                                                    {reviewed && (
                                                         <span className="text-[10px] text-emerald-600 font-bold flex items-center gap-1">
                                                             <CheckCircle className="w-2.5 h-2.5" /> Reviewed
                                                         </span>

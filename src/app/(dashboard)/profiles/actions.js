@@ -55,7 +55,7 @@ export const getProfiles = traceAction('getProfiles', async (page = 1, limit = 2
         const skip = (page - 1) * limit
 
         const query = {
-            $or: [...CLIENT_VISIBLE_PROFILE_FILTER.$or],
+            $and: [...CLIENT_VISIBLE_PROFILE_FILTER.$and],
         }
 
         if (filters.platform && filters.platform !== 'all') {
@@ -91,7 +91,6 @@ export const getProfiles = traceAction('getProfiles', async (page = 1, limit = 2
                 { display_name: { $regex: searchRegex } },
             ]
             if (query.$or) {
-                // Merge search $or with any existing $or (e.g. from "To Be Reviewed" status filter)
                 query.$and = [
                     ...(query.$and || []),
                     { $or: query.$or },
@@ -209,7 +208,10 @@ export const getProfileById = traceAction('getProfileById', async (profileId) =>
         const { dbName } = await requireAuthContext()
         const client = await clientPromise
         const db = client.db(dbName)
-        const doc = await profilesCollection(db).findOne({ _id: oid })
+        const doc = await profilesCollection(db).findOne({
+            _id: oid,
+            ...CLIENT_VISIBLE_PROFILE_FILTER,
+        })
         if (!doc) return { profile: null, error: 'Profile not found' }
 
         let signedProfilePic = null

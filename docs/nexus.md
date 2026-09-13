@@ -58,7 +58,7 @@ Nexus follows the same client-visible gates as the list pages.
 | Post leaves | `workflow.review_status: 'reviewed'` (`REVIEWED_THREAT_SCORE_FILTER` / reviewed match in `queries.js`) |
 | Ad leaves | `REVIEWED_ADS_FILTER` |
 | Domain hubs | `REVIEWED_DOMAINS_FILTER` |
-| Profile hubs | `CLIENT_VISIBLE_PROFILE_FILTER` — reviewed, or `list.reviewed_post_count > 0`, or `review_details.reviewed_at` |
+| Profile hubs | `CLIENT_VISIBLE_PROFILE_FILTER` — `workflow.review_status: 'reviewed'` **and** `list.reviewed_post_count > 0` (review-profiles + reviewed posts) |
 | Ad-profile hubs | `CLIENT_VISIBLE_AD_PROFILE_FILTER` — same shape, with `list.reviewed_ad_count` |
 | POI hubs | `parentPoiFilter()` only. Alias/handle rows are not hubs. |
 
