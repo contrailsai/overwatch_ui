@@ -2,7 +2,7 @@
 
 import clientPromise from '@/utils/mongodb/client'
 import { ObjectId } from 'mongodb'
-import { traceAction } from '@/utils/tracing'
+import { traceAction, recordClickMetric } from '@/utils/tracing'
 import { requireAuthContext } from '@/utils/auth-context'
 import { logActionError, LOKI_STREAMS } from '@/utils/otel-logger'
 import { getSignedImageUrl } from '@/utils/aws/s3'
@@ -19,12 +19,23 @@ import {
 import {
   CLIENT_VISIBLE_AD_PROFILE_FILTER,
   REVIEWED_ADS_FILTER,
+  REVIEWED_AD_PROFILES_FILTER,
 } from '@/lib/ads/reviewed-ad-filter'
 import { getAdDestinationLinks, getAdDisplayPreview, getAdDisplayTitle } from '@/lib/ads/ad-display'
 import { REVIEWED_DOMAINS_FILTER } from '@/lib/domains/domain-helpers'
 import { toDestinationDomainSummary } from '@/lib/domains/domain-display'
 import { resolvePoiDateRange } from '@/lib/pois/poi-helpers'
 import { getDomainsByNames } from '@/app/(dashboard)/domains/actions'
+
+const AD_PROFILES_TRACE = { loki_stream: LOKI_STREAMS.ad_profiles }
+
+export const trackClientClick = traceAction(
+  'trackClientClick',
+  async (buttonName, attributes = {}) => {
+    recordClickMetric(buttonName, attributes)
+  },
+  AD_PROFILES_TRACE,
+)
 
 function escapeRegex(text) {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -85,6 +96,46 @@ function buildAdProfileAdMatch(profileOid, { from = null, to = null, allAds = fa
 function normalizeHost(host) {
   return String(host || '').trim().toLowerCase().replace(/^www\./i, '')
 }
+
+/** Order ad profile IDs for report export (reviewed_at → last_active → _id). */
+export const orderAdProfileIdsForReport = traceAction('orderAdProfileIdsForReport', async (adProfileIds = []) => {
+  try {
+    if (!adProfileIds?.length) return []
+
+    const { dbName } = await requireAuthContext()
+    const objectIds = adProfileIds
+      .filter((id) => id != null && String(id) !== '')
+      .map((id) => {
+        try {
+          return new ObjectId(id)
+        } catch {
+          return null
+        }
+      })
+      .filter(Boolean)
+
+    if (objectIds.length === 0) return []
+
+    const client = await clientPromise
+    const collection = adProfilesCollection(client.db(dbName))
+
+    const docs = await collection.aggregate([
+      { $match: { _id: { $in: objectIds }, ...REVIEWED_AD_PROFILES_FILTER } },
+      { $sort: { 'workflow.reviewed_at': -1, 'list.last_active_at': -1, _id: 1 } },
+      { $project: { _id: 1 } },
+    ]).toArray()
+
+    return docs.map((d) => d._id.toString())
+  } catch (e) {
+    logActionError({
+      loki_stream: LOKI_STREAMS.ad_profiles,
+      app_action: 'orderAdProfileIdsForReport',
+      message: 'orderAdProfileIdsForReport failed',
+    }, e)
+    console.error('orderAdProfileIdsForReport Error:', e)
+    return []
+  }
+}, AD_PROFILES_TRACE)
 
 export const getAdProfiles = traceAction('getAdProfiles', async (page = 1, limit = 20, filters = {}, sort = { field: null, direction: 'desc' }) => {
   try {

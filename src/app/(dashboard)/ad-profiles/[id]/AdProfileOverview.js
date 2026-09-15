@@ -58,6 +58,7 @@ import {
 import { fillTimeline } from '@/components/analytics/fillTimeline'
 import { AdCard } from '@/components/ads/AdCard'
 import { AdProfileLinkedDomains } from '@/components/ads/AdProfileLinkedDomains'
+import { AdProfileExportButton } from '@/components/pdf/AdProfileExportButton'
 import { addAdProfileClientNote, updateAdProfileClientStatus } from '../actions'
 
 const VIOLATION_COLORS = [
@@ -379,6 +380,13 @@ export function AdProfileOverview({ profile, project, analytics, ads, domains, r
             <RiskIcon label={profileRisk.label} />
             {profileRisk.label} Risk
           </Badge>
+        </div>
+        <div className="flex gap-2 shrink-0">
+          <AdProfileExportButton
+            profile={profile}
+            project={project}
+            className="cursor-pointer rounded-md border border-slate-200 text-slate-600 hover:border-blue-500 hover:text-blue-600 flex items-center justify-center gap-1.5 text-xs font-bold transition-all bg-white px-3 py-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+          />
         </div>
       </div>
 
