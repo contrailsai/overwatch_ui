@@ -1223,7 +1223,7 @@ export default function TakedownDetails({ takedownId, initialData, initialDocume
                 </div>
                 
                 <a
-                  href={post?.url || post?.original_url || '#'}
+                  href={post?.original_url || post?.url || '#'}
                   target="_blank"
                   rel="noreferrer"
                   className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs sm:text-sm font-bold transition-colors flex items-center gap-1.5 shrink-0"
