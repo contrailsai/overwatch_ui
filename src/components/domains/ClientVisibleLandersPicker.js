@@ -20,8 +20,9 @@ function tabLabel(v) {
 }
 
 /**
- * Reviewer-only: pick which differing landers the client filmstrip may show.
- * Empty selection means the client sees every different lander.
+ * Reviewer-only: pick which unlock landers the client filmstrip may show.
+ * Bare is always shown to the client and is not selectable here.
+ * Empty selection means the client sees every different unlock lander (+ bare).
  */
 export function ClientVisibleLandersPicker({
   variants = [],
@@ -29,13 +30,16 @@ export function ClientVisibleLandersPicker({
   onChange,
   primaryScreenshotUrl = null,
 }) {
-  const list = uniqueCloakVariants(variants)
+  const list = uniqueCloakVariants(variants).filter((v) => v.label !== 'bare')
   if (list.length === 0) return null
 
-  const selected = new Set((selectedKeys || []).map(String).filter(Boolean))
+  const selected = new Set(
+    (selectedKeys || []).map(String).filter((k) => k && k !== 'bare'),
+  )
   const noneChecked = selected.size === 0
 
   const toggle = (key) => {
+    if (!key || key === 'bare') return
     const next = new Set(selected)
     if (next.has(key)) next.delete(key)
     else next.add(key)
@@ -49,11 +53,12 @@ export function ClientVisibleLandersPicker({
           Client-visible landers
         </h4>
         <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
-          Unchecked landers stay in the review queue only. If none are checked, the client sees every different lander.
+          Bare is always shown to the client. Check unlock landers to expose them;
+          unchecked unlocks stay in review only. If none are checked, the client sees every unlock.
         </p>
         {noneChecked && (
           <p className="text-[10px] font-semibold text-emerald-700 mt-1.5">
-            Currently showing all landers to the client
+            Currently showing all unlock landers to the client
           </p>
         )}
       </div>
