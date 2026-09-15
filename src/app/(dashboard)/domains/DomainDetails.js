@@ -189,12 +189,18 @@ export default function DomainDetailPanel({
   const reviewerComments = review.reviewer_comments || ''
   const reviewedAt = review.reviewed_at || domain.reviewed_at || list.reviewed_at
 
-  const occurrences = Array.isArray(domain.discovery?.occurrences)
-    ? domain.discovery.occurrences
+  const totalAds = domain.total_ad_count
+    ?? (Array.isArray(domain.discovery?.occurrences)
+      ? domain.discovery.occurrences.filter(
+        (o) => String(o?.entity_type || '').toLowerCase() === 'ad' && o?.entity_id,
+      ).length
+      : null)
+    ?? domain.occurrence_count
+    ?? 0
+  const reviewedAds = domain.reviewed_ad_count ?? 0
+  const linkedAds = Array.isArray(domain.reviewed_linked_ads)
+    ? domain.reviewed_linked_ads
     : []
-  const linkedAds = occurrences.filter(
-    (o) => String(o?.entity_type || '').toLowerCase() === 'ad' && o?.entity_id,
-  )
 
   return (
     <div className="flex flex-col flex-1 min-h-0 h-full overflow-hidden relative">
@@ -377,9 +383,7 @@ export default function DomainDetailPanel({
                           <p className={cn('text-sm font-medium leading-relaxed whitespace-pre-wrap', textClass)}>
                             {reasoning}
                           </p>
-                        ) : (
-                          <p className="text-xs text-slate-400 italic">No reasoning text for this code.</p>
-                        )}
+                        ) : null}
                       </div>
                     )
                   })}
@@ -469,17 +473,16 @@ export default function DomainDetailPanel({
 
             {/* Linked Ads */}
             <div className="space-y-2.5 py-3 first:pt-0 border-b border-slate-100">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
                   <Megaphone className="w-3.5 h-3.5" />
                   Linked Ads
                 </h4>
                 <Badge variant="outline" className="text-[10px] font-bold tabular-nums border-slate-200 text-slate-600 h-5 px-1.5">
-                  {linkedAds.length > 0
-                    ? `${linkedAds.length} ${linkedAds.length === 1 ? 'ad' : 'ads'}`
-                    : (domain.occurrence_count != null
-                      ? `${domain.occurrence_count} ${(domain.occurrence_count === 1) ? 'sighting' : 'sightings'}`
-                      : '0 ads')}
+                  Total ads: {Number(totalAds).toLocaleString()}
+                </Badge>
+                <Badge variant="outline" className="text-[10px] font-bold tabular-nums border-slate-200 text-slate-600 h-5 px-1.5">
+                  Reviewed ads: {Number(reviewedAds).toLocaleString()}
                 </Badge>
               </div>
               {linkedAds.length > 0 ? (
@@ -521,7 +524,9 @@ export default function DomainDetailPanel({
                 </ul>
               ) : (
                 <p className="text-xs text-slate-400 italic">
-                  This domain has not been linked to any ads yet.
+                  {Number(totalAds) > 0
+                    ? 'No reviewed ads linked to this domain yet.'
+                    : 'This domain has not been linked to any ads yet.'}
                 </p>
               )}
             </div>

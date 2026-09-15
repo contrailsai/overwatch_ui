@@ -107,7 +107,8 @@ function DomainListRow({ domain, isActive, isChecked, onOpen, onToggle, compact 
   const thumb = domainScreenshotUrl(domain)
   const online = isDomainOnline(domain)
   const cloaked = domainHasCloaking(domain)
-  const adCount = domain.occurrence_count ?? 0
+  const totalAds = domain.total_ad_count ?? domain.occurrence_count ?? 0
+  const reviewedAds = domain.reviewed_ad_count ?? 0
   const statusCfg = getStatusConfig(domain.client_status)
   const StatusIcon = statusCfg.icon
   const alertDate = domain.reviewed_at || domain.list?.reviewed_at
@@ -198,7 +199,7 @@ function DomainListRow({ domain, isActive, isChecked, onOpen, onToggle, compact 
               </span>
             ))}
             <span className="tabular-nums font-semibold text-slate-600 shrink-0">
-              {adCount.toLocaleString()} {adCount === 1 ? 'ad' : 'ads'}
+              Total: {totalAds.toLocaleString()} · Reviewed: {reviewedAds.toLocaleString()}
             </span>
             {alertDate && (
               <span className="ml-auto text-slate-400 tabular-nums shrink-0">
@@ -234,7 +235,8 @@ function DomainTableRow({ domain, isChecked, onOpen, onToggle }) {
   const thumb = domainScreenshotUrl(domain)
   const online = isDomainOnline(domain)
   const cloaked = domainHasCloaking(domain)
-  const adCount = domain.occurrence_count ?? 0
+  const totalAds = domain.total_ad_count ?? domain.occurrence_count ?? 0
+  const reviewedAds = domain.reviewed_ad_count ?? 0
   const statusCfg = getStatusConfig(domain.client_status)
   const StatusIcon = statusCfg.icon
   const alertDate = domain.reviewed_at || domain.list?.reviewed_at
@@ -313,7 +315,7 @@ function DomainTableRow({ domain, isChecked, onOpen, onToggle }) {
       </td>
       <td className="px-2 py-2.5 whitespace-nowrap align-middle hidden xl:table-cell border-b border-slate-50">
         <span className="text-[11px] text-slate-600 tabular-nums font-semibold">
-          {adCount.toLocaleString()}
+          {totalAds.toLocaleString()} / {reviewedAds.toLocaleString()}
         </span>
       </td>
       <td className="px-2 py-2.5 whitespace-nowrap align-middle hidden lg:table-cell border-b border-slate-50">
@@ -895,11 +897,12 @@ export function DomainsList({
                           </th>
                           <th
                             scope="col"
-                            className="w-20 px-2 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100/50 transition-colors group select-none hidden xl:table-cell border-b border-slate-100"
+                            className="w-28 px-2 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100/50 transition-colors group select-none hidden xl:table-cell border-b border-slate-100"
                             onClick={() => handleSortChange('occurrences')}
+                            title="Total ads / Reviewed ads"
                           >
                             <div className="flex items-center">
-                              Ads
+                              Total/Rev
                               <SortIcon field="occurrences" />
                             </div>
                           </th>
