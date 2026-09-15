@@ -21,7 +21,15 @@ import {
   insertCaseEvent,
   toIsoDate,
 } from '@/utils/mongodb/v3-schema'
-import { normalizeS3Post } from '@/lib/posts/pipeline-helpers'
+import { normalizeS3Post, applyPoiNameFilter } from '@/lib/posts/pipeline-helpers'
+import {
+  TAKEDOWN_URL_LOOKUP_CAP,
+  collectPostUrlCandidates,
+  extractPlatformIdsFromUrl,
+  extractUrlsFromInput,
+  normalizePostUrl,
+  resolvePostSourceUrl,
+} from '@/lib/takedowns/url-lookup'
 
 export const trackClientClick = traceAction(
   'trackClientClick',
@@ -49,19 +57,25 @@ export const checkReviewerPermission = traceAction('checkReviewerPermission', as
   return ctx?.clientDetails?.permission === 'reviewer'
 })
 
-const buildTakedownMatchQuery = (filters = {}) => {
+const TAKEDOWN_CORPUS_OR = [
+  { 'workflow.client_status': 'takedown' },
+  { 'workflow.takedown_status': { $exists: true, $nin: [null, 'none'] } },
+  { 'takedown.status': { $exists: true, $nin: [null, 'none'] } },
+]
+
+const escapeRegex = (value = '') => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+const buildTakedownMatchQuery = (filters = {}, options = {}) => {
+  const { omitStatus = false, omitVisibility = false } = options
+
   let query = {
-    $or: [
-      { 'workflow.client_status': 'takedown' },
-      { 'workflow.takedown_status': { $exists: true, $nin: [null, 'none'] } },
-      { 'takedown.status': { $exists: true, $nin: [null, 'none'] } },
-    ],
+    $or: TAKEDOWN_CORPUS_OR,
   }
 
   const andConditions = []
 
   // Status Filter
-  if (filters.status && filters.status !== 'all') {
+  if (!omitStatus && filters.status && filters.status !== 'all') {
     const statusMap = {
       'takedown successful': ['takedown successful', 'takedown_successful'],
       'takedown_successful': ['takedown successful', 'takedown_successful'],
@@ -71,6 +85,9 @@ const buildTakedownMatchQuery = (filters = {}) => {
       're_appeal_takedown': ['appealed again', 're_appeal_takedown'],
       'under process': ['under process', 'under_review'],
       'under_review': ['under process', 'under_review'],
+      // KPI "In Progress" bucket
+      in_progress: ['initiated', 'under_review', 'under process'],
+      initiated: ['initiated'],
     }
 
     if (statusMap[filters.status]) {
@@ -83,6 +100,21 @@ const buildTakedownMatchQuery = (filters = {}) => {
   // Platform Filter
   if (filters.platform && filters.platform !== 'all') {
     query.platform = { $regex: new RegExp(`^${filters.platform}$`, 'i') }
+  }
+
+  // Visibility (Online vs Taken Down)
+  if (!omitVisibility && filters.visibility_status && filters.visibility_status !== 'all') {
+    if (filters.visibility_status === 'down') {
+      query['workflow.visibility_status'] = 'down'
+    } else if (filters.visibility_status === 'active') {
+      andConditions.push({
+        $or: [
+          { 'workflow.visibility_status': { $in: ['active', 'online'] } },
+          { 'workflow.visibility_status': { $exists: false } },
+          { 'workflow.visibility_status': null },
+        ],
+      })
+    }
   }
 
   // Risk Priority Filter
@@ -113,6 +145,31 @@ const buildTakedownMatchQuery = (filters = {}) => {
         andConditions.push({ $or: violationConditions })
       }
     }
+  }
+
+  // Keyword search (caption / handle / platform ids / mongo id)
+  const q = typeof filters.q === 'string' ? filters.q.trim() : ''
+  if (q) {
+    const keywordOr = [
+      { 'content.caption': { $regex: escapeRegex(q), $options: 'i' } },
+      { 'post_content.caption': { $regex: escapeRegex(q), $options: 'i' } },
+      { caption: { $regex: escapeRegex(q), $options: 'i' } },
+      { 'author_snapshot.username': { $regex: escapeRegex(q.replace(/^@/, '')), $options: 'i' } },
+      { 'profile.username': { $regex: escapeRegex(q.replace(/^@/, '')), $options: 'i' } },
+      { 'user.username': { $regex: escapeRegex(q.replace(/^@/, '')), $options: 'i' } },
+      { 'author.username': { $regex: escapeRegex(q.replace(/^@/, '')), $options: 'i' } },
+      { platform_post_id: { $regex: escapeRegex(q), $options: 'i' } },
+      { post_id: { $regex: escapeRegex(q), $options: 'i' } },
+      { code: { $regex: escapeRegex(q), $options: 'i' } },
+    ]
+    if (/^[a-f0-9]{24}$/i.test(q)) {
+      try {
+        keywordOr.push({ _id: new ObjectId(q) })
+      } catch {
+        // ignore invalid ObjectId
+      }
+    }
+    andConditions.push({ $or: keywordOr })
   }
 
   if (andConditions.length > 0) {
@@ -209,6 +266,154 @@ const getTakedownDocumentsFromPost = (post) =>
 const getTakedownNotesFromPost = (post) =>
   post?.takedown?.notes || post?.takedown_info?.notes || []
 
+async function enrichPostToTakedownListItem(post) {
+  const takedownInfo = buildTakedownInfoForUi(post)
+  const author = getAuthorSnapshot(post)
+  const caption = getPostCaption(post)
+  let thumbnail = null
+
+  const s3Url = getFirstMediaS3Url(post)
+  if (s3Url) {
+    thumbnail = await getSignedImageUrl(s3Url)
+  }
+
+  const lastUpdateDate = toIsoDate(
+    post.system?.updated_at || post.takedown?.initiated_at || post.metadata?.updated_at || null,
+  )
+  const takedownStartDate = toIsoDate(takedownInfo.takedown_start_date)
+  const takedownSuccessfulDate = toIsoDate(takedownInfo.takedown_end_date)
+  const notes = getTakedownNotesFromPost(post)
+
+  const { threat_types, violations_unknown } = getListThreatTypes(post.review_details)
+
+  return {
+    id: post._id.toString(),
+    mongo_post_id: post._id.toString(),
+    post_platform_id: post.platform_post_id || post.post_id || post.code || '',
+    platform: post.platform,
+    status: takedownInfo.status || 'initiated',
+    visibility_status: post.workflow?.visibility_status || post.visibility_status || 'active',
+    risk_score: post.list?.effective_threat_score ?? post.review_details?.threat_score ?? 0,
+    threat_type: threat_types[0] || (violations_unknown ? 'Unknown' : '-'),
+    threat_types,
+    violations_unknown,
+    last_update_date: lastUpdateDate,
+    takedown_start_date: takedownStartDate,
+    takedown_successful_date: takedownSuccessfulDate,
+    posted_at: toIsoDate(post.list?.posted_at || post.engagement?.posted_at || post.metadata?.posted_date || null),
+    url: resolvePostSourceUrl(post),
+    notes: notes.length > 0 ? notes.join('\n\n') : '',
+    caption,
+    user: {
+      username: author.username,
+      full_name: author.display_name,
+      profile_pic_url: author.profile_url,
+      is_verified: author.is_verified,
+    },
+    enrichment: {
+      caption: caption.length > 100 ? `${caption.substring(0, 100)}...` : caption,
+      thumbnail,
+      username: author.username,
+    },
+  }
+}
+
+function postMatchesUrlLookup(post, lookupEntries) {
+  const postUrls = collectPostUrlCandidates(post).map(normalizePostUrl).filter(Boolean)
+  const postIds = new Set(
+    [post.platform_post_id, post.post_id, post.code]
+      .filter(Boolean)
+      .map((v) => String(v).toLowerCase()),
+  )
+
+  for (const entry of lookupEntries) {
+    if (entry.normalized && postUrls.includes(entry.normalized)) return true
+    for (const id of entry.platformIds) {
+      if (postIds.has(String(id).toLowerCase())) return true
+    }
+  }
+  return false
+}
+
+function whichInputUrlsMatchPost(post, lookupEntries) {
+  const matched = []
+  const postUrls = collectPostUrlCandidates(post).map(normalizePostUrl).filter(Boolean)
+  const postIds = new Set(
+    [post.platform_post_id, post.post_id, post.code]
+      .filter(Boolean)
+      .map((v) => String(v).toLowerCase()),
+  )
+
+  for (const entry of lookupEntries) {
+    let hit = false
+    if (entry.normalized && postUrls.includes(entry.normalized)) hit = true
+    if (!hit) {
+      for (const id of entry.platformIds) {
+        if (postIds.has(String(id).toLowerCase())) {
+          hit = true
+          break
+        }
+      }
+    }
+    if (hit) matched.push(entry.original)
+  }
+  return matched
+}
+
+function buildUrlLookupMongoClause(lookupEntries) {
+  const or = []
+  const normalizedSet = new Set()
+  const idSet = new Set()
+
+  for (const entry of lookupEntries) {
+    if (entry.normalized) normalizedSet.add(entry.normalized)
+    for (const id of entry.platformIds) idSet.add(id)
+    // Also match raw original against common fields via regex on path fragments
+    if (entry.platformIds.length === 0 && entry.original) {
+      const esc = escapeRegex(entry.original.replace(/^https?:\/\//i, '').replace(/^www\./i, ''))
+      if (esc.length >= 8) {
+        or.push({ original_url: { $regex: esc, $options: 'i' } })
+        or.push({ url: { $regex: esc, $options: 'i' } })
+        or.push({ 'metadata.url': { $regex: esc, $options: 'i' } })
+        or.push({ 'ingestion.source_url': { $regex: esc, $options: 'i' } })
+      }
+    }
+  }
+
+  for (const n of normalizedSet) {
+    // Match normalized host+path as substring of stored URLs (case-insensitive)
+    const esc = escapeRegex(n)
+    or.push({ original_url: { $regex: esc, $options: 'i' } })
+    or.push({ url: { $regex: esc, $options: 'i' } })
+    or.push({ 'metadata.url': { $regex: esc, $options: 'i' } })
+    or.push({ 'ingestion.source_url': { $regex: esc, $options: 'i' } })
+    or.push({ original_link: { $regex: esc, $options: 'i' } })
+  }
+
+  for (const id of idSet) {
+    const esc = escapeRegex(id)
+    or.push({ platform_post_id: { $regex: `^${esc}$`, $options: 'i' } })
+    or.push({ post_id: { $regex: `^${esc}$`, $options: 'i' } })
+    or.push({ code: { $regex: `^${esc}$`, $options: 'i' } })
+  }
+
+  return or.length > 0 ? { $or: or } : null
+}
+
+function reduceTakedownStatusMetrics(rows) {
+  return rows.reduce(
+    (acc, curr) => {
+      const status = curr._id ? curr._id.toLowerCase() : 'unknown'
+      if (['initiated', 'under_review', 'under process'].includes(status)) acc.inProgress += curr.count
+      else if (status === 'takedown_successful' || status === 'takedown successful') acc.successful += curr.count
+      else if (status === 're_appeal_takedown' || status === 'appealed again') acc.reAppeal += curr.count
+      else if (status === 'takedown_failed' || status === 'takedown failed') acc.failed += curr.count
+      return acc
+    },
+    { inProgress: 0, successful: 0, reAppeal: 0, failed: 0 },
+  )
+}
+
 /**
  * Fetch active takedowns with filters, server-side pagination, and enriched MongoDB data
  */
@@ -226,7 +431,11 @@ export const getTakedowns = traceAction('getTakedowns_list', async (filters = {}
     const collection = postsCollection(db)
 
     const { dateFilterStage, statusOverride, hasDateFilters } = buildTakedownDateFilterStages(filters)
-    const matchStage = applyStatusOverride(buildTakedownMatchQuery(filters), statusOverride)
+    const matchStage = await applyPoiNameFilter(
+      db,
+      applyStatusOverride(buildTakedownMatchQuery(filters), statusOverride),
+      filters,
+    )
 
     const aggregationPipeline = [
       { $match: matchStage },
@@ -254,57 +463,7 @@ export const getTakedowns = traceAction('getTakedowns_list', async (filters = {}
 
     const enrichedTakedowns = await runInSpan(
       'takedowns.getTakedowns.s3_signing',
-      async () => Promise.all(posts.map(async (post) => {
-        const takedownInfo = buildTakedownInfoForUi(post)
-        const author = getAuthorSnapshot(post)
-        const caption = getPostCaption(post)
-        let thumbnail = null
-
-        const s3Url = getFirstMediaS3Url(post)
-        if (s3Url) {
-          thumbnail = await getSignedImageUrl(s3Url)
-        }
-
-        const lastUpdateDate = toIsoDate(
-          post.system?.updated_at || post.takedown?.initiated_at || post.metadata?.updated_at || null,
-        )
-        const takedownStartDate = toIsoDate(takedownInfo.takedown_start_date)
-        const takedownSuccessfulDate = toIsoDate(takedownInfo.takedown_end_date)
-        const notes = getTakedownNotesFromPost(post)
-
-        const { threat_types, violations_unknown } = getListThreatTypes(post.review_details)
-
-        return {
-          id: post._id.toString(),
-          mongo_post_id: post._id.toString(),
-          post_platform_id: post.platform_post_id || post.post_id || post.code || '',
-          platform: post.platform,
-          status: takedownInfo.status || 'initiated',
-          visibility_status: post.workflow?.visibility_status || post.visibility_status || 'active',
-          risk_score: post.list?.effective_threat_score ?? post.review_details?.threat_score ?? 0,
-          threat_type: threat_types[0] || (violations_unknown ? 'Unknown' : '-'),
-          threat_types,
-          violations_unknown,
-          last_update_date: lastUpdateDate,
-          takedown_start_date: takedownStartDate,
-          takedown_successful_date: takedownSuccessfulDate,
-          posted_at: toIsoDate(post.list?.posted_at || post.engagement?.posted_at || post.metadata?.posted_date || null),
-          url: post.url || post.metadata?.url || '',
-          notes: notes.length > 0 ? notes.join('\n\n') : '',
-          caption,
-          user: {
-            username: author.username,
-            full_name: author.display_name,
-            profile_pic_url: author.profile_url,
-            is_verified: author.is_verified,
-          },
-          enrichment: {
-            caption: caption.length > 100 ? `${caption.substring(0, 100)}...` : caption,
-            thumbnail,
-            username: author.username,
-          },
-        }
-      })),
+      async () => Promise.all(posts.map((post) => enrichPostToTakedownListItem(post))),
       { 'app.span_type': 's3_signing' },
     )
 
@@ -316,6 +475,187 @@ export const getTakedowns = traceAction('getTakedowns_list', async (filters = {}
     logActionError({ loki_stream: LOKI_STREAMS.takedowns, app_action: 'getTakedowns', message: 'getTakedowns failed' }, mongoError)
     console.error('Error fetching takedowns from MongoDB:', mongoError)
     return { takedowns: [], totalCount: 0 }
+  }
+})
+
+/**
+ * Paste-list URL lookup against the takedown corpus with two-pass miss taxonomy.
+ * URLs stay out of the query string — call this from the client.
+ */
+export const lookupTakedownsByUrls = traceAction('lookupTakedownsByUrls', async (rawUrls = [], filters = {}) => {
+  const ctx = await getAuthContext()
+  const emptyLookup = {
+    takedowns: [],
+    totalCount: 0,
+    metrics: { inProgress: 0, successful: 0, reAppeal: 0, failed: 0 },
+    lookup: {
+      inputCount: 0,
+      foundCount: 0,
+      notInTakedowns: [],
+      hiddenByFilters: [],
+      truncated: false,
+      leftoverTokens: [],
+    },
+  }
+  if (!ctx?.clientDetails?.project_name || !ctx.dbName) return emptyLookup
+
+  const joined = Array.isArray(rawUrls) ? rawUrls.join('\n') : String(rawUrls || '')
+  const { urls, leftoverTokens, truncated } = extractUrlsFromInput(joined, TAKEDOWN_URL_LOOKUP_CAP)
+  if (urls.length === 0) {
+    return {
+      ...emptyLookup,
+      lookup: { ...emptyLookup.lookup, leftoverTokens, truncated },
+    }
+  }
+
+  const lookupEntries = urls.map((original) => ({
+    original,
+    normalized: normalizePostUrl(original),
+    platformIds: extractPlatformIdsFromUrl(original),
+  }))
+
+  const page = parseInt(filters.page) || 1
+  const pageSize = parseInt(filters.pageSize) || 25
+  const skip = (page - 1) * pageSize
+
+  try {
+    const client = await clientPromise
+    const db = client.db(ctx.dbName)
+    const collection = postsCollection(db)
+
+    const urlClause = buildUrlLookupMongoClause(lookupEntries)
+    if (!urlClause) return emptyLookup
+
+    // Pass 1: takedown corpus only (no status / visibility) + URL match + platform/risk/violations/dates/q ignored for taxonomy base
+    // Still apply platform/dates/risk/violations for corpus candidates? Plan: pass1 = corpus without status/visibility.
+    // Platform/dates still apply as filters that can hide — those go in pass2. Pass1 is purely "is this URL a takedown?"
+    const corpusMatch = {
+      $and: [{ $or: TAKEDOWN_CORPUS_OR }, urlClause],
+    }
+
+    const corpusPosts = await runInSpan(
+      'takedowns.lookupTakedownsByUrls.corpus',
+      async () =>
+        collection
+          .find(corpusMatch, {
+            projection: {
+              original_url: 1,
+              url: 1,
+              'metadata.url': 1,
+              'ingestion.source_url': 1,
+              original_link: 1,
+              platform_post_id: 1,
+              post_id: 1,
+              code: 1,
+              workflow: 1,
+              takedown: 1,
+              list: 1,
+              review_details: 1,
+              content: 1,
+              post_content: 1,
+              caption: 1,
+              author_snapshot: 1,
+              profile: 1,
+              user: 1,
+              author: 1,
+              platform: 1,
+              engagement: 1,
+              system: 1,
+              media: 1,
+              enrichment: 1,
+            },
+          })
+          .limit(500)
+          .toArray(),
+      { 'app.span_type': 'mongo_query' },
+    )
+
+    // Precise match in app (regex is broad)
+    const inCorpus = corpusPosts.filter((post) => postMatchesUrlLookup(post, lookupEntries))
+
+    const matchedUrlSet = new Set()
+    for (const post of inCorpus) {
+      whichInputUrlsMatchPost(post, lookupEntries).forEach((u) => matchedUrlSet.add(u))
+    }
+    const notInTakedowns = urls.filter((u) => !matchedUrlSet.has(u))
+
+    // Pass 2: apply full filters (status, visibility, platform, dates, pois, etc.)
+    const { dateFilterStage, statusOverride, hasDateFilters } = buildTakedownDateFilterStages(filters)
+    const baseFiltered = await applyPoiNameFilter(db, buildTakedownMatchQuery(filters), filters)
+    const andParts = [...(baseFiltered.$and || []), urlClause]
+    const filteredMatchClean = applyStatusOverride(
+      { ...baseFiltered, $and: andParts },
+      statusOverride,
+    )
+
+    // Fetch all filtered candidates (capped) then precise-match + paginate in app
+    const filteredCandidates = await runInSpan(
+      'takedowns.lookupTakedownsByUrls.filtered',
+      async () => {
+        const pipeline = [
+          { $match: filteredMatchClean },
+          { $addFields: buildTakedownDateAddFields() },
+          ...(hasDateFilters ? [{ $match: dateFilterStage }] : []),
+          { $sort: { 'system.updated_at': -1, 'takedown.initiated_at': -1 } },
+          { $limit: 500 },
+        ]
+        return collection.aggregate(pipeline).toArray()
+      },
+      { 'app.span_type': 'mongo_query' },
+    )
+
+    const allFilteredDocs = filteredCandidates.filter((post) => postMatchesUrlLookup(post, lookupEntries))
+    const totalCount = allFilteredDocs.length
+    const pagePosts = allFilteredDocs.slice(skip, skip + pageSize)
+
+    const filteredUrlSet = new Set()
+    for (const post of allFilteredDocs) {
+      whichInputUrlsMatchPost(post, lookupEntries).forEach((u) => filteredUrlSet.add(u))
+    }
+    const hiddenByFilters = urls.filter((u) => matchedUrlSet.has(u) && !filteredUrlSet.has(u))
+
+    const enriched = await Promise.all(pagePosts.map((post) => enrichPostToTakedownListItem(post)))
+
+    // Metrics for URL slice: ignore status, keep visibility/platform/dates/risk/violations/pois
+    const metricsFilters = { ...filters }
+    delete metricsFilters.status
+    const metricsBase = await applyPoiNameFilter(db, buildTakedownMatchQuery(metricsFilters), metricsFilters)
+    const metricsAnd = [...(metricsBase.$and || []), urlClause]
+    const metricsMatch = { ...metricsBase, $and: metricsAnd }
+    const { dateFilterStage: mDateStage, hasDateFilters: mHasDates } = buildTakedownDateFilterStages(filters)
+
+    const metricsPipeline = [
+      { $match: metricsMatch },
+      ...(mHasDates
+        ? [{ $addFields: buildTakedownDateAddFields() }, { $match: mDateStage }]
+        : []),
+      {
+        $group: {
+          _id: '$workflow.takedown_status',
+          count: { $sum: 1 },
+        },
+      },
+    ]
+    const metricsRows = await collection.aggregate(metricsPipeline).toArray()
+
+    return {
+      takedowns: enriched,
+      totalCount,
+      metrics: reduceTakedownStatusMetrics(metricsRows),
+      allIds: allFilteredDocs.map((d) => d._id.toString()),
+      lookup: {
+        inputCount: urls.length,
+        foundCount: filteredUrlSet.size,
+        notInTakedowns,
+        hiddenByFilters,
+        truncated,
+        leftoverTokens,
+      },
+    }
+  } catch (error) {
+    logActionError({ loki_stream: LOKI_STREAMS.takedowns, app_action: 'lookupTakedownsByUrls', message: 'lookupTakedownsByUrls failed' }, error)
+    console.error('Error looking up takedowns by URLs:', error)
+    return emptyLookup
   }
 })
 
@@ -333,7 +673,11 @@ export const getTakedownMetrics = traceAction('getTakedownMetrics_page', async (
     delete metricsFilters.status
     
     const { dateFilterStage, statusOverride, hasDateFilters } = buildTakedownDateFilterStages(filters)
-    const matchStage = applyStatusOverride(buildTakedownMatchQuery(metricsFilters), statusOverride)
+    const matchStage = await applyPoiNameFilter(
+      db,
+      applyStatusOverride(buildTakedownMatchQuery(metricsFilters), statusOverride),
+      metricsFilters,
+    )
 
     const pipeline = [
       { $match: matchStage },
@@ -357,14 +701,7 @@ export const getTakedownMetrics = traceAction('getTakedownMetrics_page', async (
       { 'app.span_type': 'mongo_query' }
     )
 
-    return metrics.reduce((acc, curr) => {
-      const status = curr._id ? curr._id.toLowerCase() : 'unknown'
-      if (['initiated', 'under_review'].includes(status)) acc.inProgress += curr.count;
-      else if (status === 'takedown_successful' || status === 'takedown successful') acc.successful += curr.count;
-      else if (status === 're_appeal_takedown' || status === 'appealed again') acc.reAppeal += curr.count;
-      else if (status === 'takedown_failed' || status === 'takedown failed') acc.failed += curr.count;
-      return acc;
-    }, { inProgress: 0, successful: 0, reAppeal: 0, failed: 0 });
+    return reduceTakedownStatusMetrics(metrics)
     
   } catch (error) {
     logActionError({ loki_stream: LOKI_STREAMS.takedowns, app_action: 'getTakedownMetrics', message: 'getTakedownMetrics failed' }, error)
@@ -762,7 +1099,11 @@ export const getAllTakedownIds = traceAction('getAllTakedownIds', async (filters
     const collection = postsCollection(db)
 
     const { dateFilterStage, statusOverride, hasDateFilters } = buildTakedownDateFilterStages(filters)
-    const matchStage = applyStatusOverride(buildTakedownMatchQuery(filters), statusOverride)
+    const matchStage = await applyPoiNameFilter(
+      db,
+      applyStatusOverride(buildTakedownMatchQuery(filters), statusOverride),
+      filters,
+    )
 
     const pipeline = [
       { $match: matchStage },
