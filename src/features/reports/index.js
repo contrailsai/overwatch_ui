@@ -8,6 +8,13 @@
  *     → waitForReportCompletion (client realtime + poll + server fallback)
  *     → getReportDownloadUrl (server) → browser download
  *
+ * Post /cases reports:
+ *   Pass the current table `sort` ({ field, direction }) through export.
+ *   getOrCreateReportJob → orderPostIdsForReport(ids, sort) → SQS `postIds`
+ *   in the same order as the cases/feeds UI (default: engagement_score desc).
+ *   The PDF worker walks `postIds` in array order; it does not re-sort.
+ *   Details: src/app/(dashboard)/cases/CASES_DATA_FETCHING_README.md
+ *
  * PDF/DOCX React document templates remain under @/components/pdf and @/components/docx.
  * Domain PDFs: SummaryDomainsReportDocument, DetailedDomainsReportDocument, SingleDomainDocument.
  * SQS payload for domains includes entityType: 'domains', domainIds, variantKeysByDomainId.

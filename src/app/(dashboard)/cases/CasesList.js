@@ -420,7 +420,7 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
   const handleSelectAllFiltered = async () => {
     setIsSelectingAll(true)
     try {
-      const ids = await getAllPostIds(project, initialFilters)
+      const ids = await getAllPostIds(project, initialFilters, initialSort)
       // We store lightweight placeholder objects keyed by id.
       // The id is enough for the export actions.
       setSelectedCases(prev => {
@@ -782,6 +782,7 @@ export function CasesList({ cases, project, clientDetails, initialFilters, initi
     showToast,
     trackClientClick,
     project,
+    sort: initialSort,
   }
 
   return (

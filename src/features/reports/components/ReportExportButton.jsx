@@ -11,9 +11,9 @@ import { REPORT_EXPORT_PRESETS } from '@/features/reports/client/presets'
 
 /**
  * Configurable export button driven by {@link REPORT_EXPORT_PRESETS}.
- * @param {{ preset: keyof typeof REPORT_EXPORT_PRESETS, posts: Array, project: object, className?: string, onStateChange?: (state: {loading: boolean, statusText: string}) => void, entityType?: 'posts'|'ads'|'domains'|'ad_profiles' }} props
+ * @param {{ preset: keyof typeof REPORT_EXPORT_PRESETS, posts: Array, project: object, className?: string, onStateChange?: (state: {loading: boolean, statusText: string}) => void, entityType?: 'posts'|'ads'|'domains'|'ad_profiles', sort?: { field?: string, direction?: string } }} props
  */
-export function ReportExportButton({ preset, posts, project, className, onStateChange, entityType }) {
+export function ReportExportButton({ preset, posts, project, className, onStateChange, entityType, sort }) {
   const config = REPORT_EXPORT_PRESETS[preset]
   const { exportReport, loading, statusText } = useReportExport(config.format)
   const { clientDetails } = useClient()
@@ -50,6 +50,7 @@ export function ReportExportButton({ preset, posts, project, className, onStateC
       fileNamePrefix: config.fileNamePrefix,
       gaEventName: config.gaEventName,
       entityType,
+      sort,
     })
   }
 

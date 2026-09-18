@@ -70,7 +70,7 @@ export const getReportDownloadUrl = traceAction('getReportDownloadUrl', async (j
 
 /**
  * Create or reuse a report generation job and dispatch Lambda via SQS.
- * @param {{ posts: Array<{_id: string, reportVariantKey?: string}>, project?: object, profile?: object, reportType: string, reportFormat?: 'pdf'|'docx', entityType?: 'posts'|'ads'|'domains'|'ad_profiles' }} input
+ * @param {{ posts: Array<{_id: string, reportVariantKey?: string}>, project?: object, profile?: object, reportType: string, reportFormat?: 'pdf'|'docx', entityType?: 'posts'|'ads'|'domains'|'ad_profiles', sort?: { field?: string, direction?: string } }} input
  */
 export const getOrCreateReportJob = traceAction('getOrCreateReportJob', async ({
   posts,
@@ -79,6 +79,7 @@ export const getOrCreateReportJob = traceAction('getOrCreateReportJob', async ({
   reportType,
   reportFormat = REPORT_FORMATS.PDF,
   entityType = 'posts',
+  sort,
 }) => {
   const isAdsReport = entityType === 'ads'
   const isDomainsReport = entityType === 'domains'
@@ -287,7 +288,7 @@ export const getOrCreateReportJob = traceAction('getOrCreateReportJob', async ({
       ? await orderDomainIdsForReport(reportEntityIds)
       : isAdsReport
         ? await orderAdIdsForReport(reportEntityIds)
-        : await orderPostIdsForReport(reportEntityIds)
+        : await orderPostIdsForReport(reportEntityIds, sort)
   if (orderedEntityIds.length !== reportEntityIds.length) {
     throw new Error(`Some requested ${entityNoun}s could not be ordered for report generation`)
   }

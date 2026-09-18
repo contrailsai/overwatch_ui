@@ -207,12 +207,12 @@ export async function getFeedPosts(feedId, page = 1, limit = 25, filters = {}, s
 }
 
 /** All matching post ids in a feed (for select-all + report export). */
-export async function getFeedPostIds(feedId, filters = {}) {
+export async function getFeedPostIds(feedId, filters = {}, sort) {
   try {
     const ctx = await loadFeedContext(feedId)
     if (!ctx || ctx.postObjectIds.length === 0) return []
 
-    const pipeline = buildFeedPostIdsPipeline(ctx.postObjectIds, filters)
+    const pipeline = buildFeedPostIdsPipeline(ctx.postObjectIds, filters, sort)
     if (!pipeline) return []
 
     const docs = await postsCollection(ctx.db).aggregate(pipeline).toArray()
