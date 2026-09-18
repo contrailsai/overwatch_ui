@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
 import {
     Filter, X, ChevronLeft, ChevronRight,
     Facebook, Instagram, Youtube, CheckCircle,
@@ -26,6 +26,8 @@ import { DateFilterPopover } from '@/app/(dashboard)/cases/DateFilterPopover'
 import { RiskFilter } from '@/app/(dashboard)/cases/RiskFilter'
 import { StatusFilter } from '@/app/(dashboard)/cases/StatusFilter'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import ReportGenerate from '@/components/ReportGenerate'
+import { trackClientClick } from './actions'
 
 const PlatformIcon = ({ platform, className }) => {
     const p = platform?.toLowerCase()
@@ -53,7 +55,23 @@ const getStatusConfig = (status) => {
     return { label: status, color: 'text-slate-600 bg-slate-50 border-slate-200', icon: Info }
 }
 
-export function AdProfilesList({ profiles, project: _project, initialFilters, initialSort = { field: null, direction: 'desc' }, currentPage, itemsPerPage }) {
+function SelectionCheckbox({ checked, onChange, ariaLabel, className }) {
+    return (
+        <input
+            type="checkbox"
+            checked={checked}
+            onChange={onChange}
+            onClick={(e) => e.stopPropagation()}
+            className={cn(
+                'w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer',
+                className,
+            )}
+            aria-label={ariaLabel}
+        />
+    )
+}
+
+export function AdProfilesList({ profiles, project, initialFilters, initialSort = { field: null, direction: 'desc' }, currentPage, itemsPerPage }) {
     const router = useRouter()
     const pathname = usePathname()
     const searchParams = useSearchParams()
@@ -65,6 +83,10 @@ export function AdProfilesList({ profiles, project: _project, initialFilters, in
     const [localProfiles, setLocalProfiles] = useState(profileList)
     const [searchInput, setSearchInput] = useState(initialFilters.searchText || '')
     const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false)
+    const [selectedProfiles, setSelectedProfiles] = useState({})
+    const [summaryState, setSummaryState] = useState({ loading: false, statusText: '' })
+    const [detailedPdfState, setDetailedPdfState] = useState({ loading: false, statusText: '' })
+    const [detailedDocxState, setDetailedDocxState] = useState({ loading: false, statusText: '' })
 
     useEffect(() => {
         setLocalProfiles(profileList)
@@ -73,6 +95,68 @@ export function AdProfilesList({ profiles, project: _project, initialFilters, in
     useEffect(() => {
         setSearchInput(initialFilters.searchText || '')
     }, [initialFilters.searchText])
+
+    const selectedPostsArray = useMemo(() => Object.values(selectedProfiles), [selectedProfiles])
+    const selectedCount = selectedPostsArray.length
+    const isAllCurrentPageSelected = localProfiles.length > 0 && localProfiles.every((p) => !!selectedProfiles[p._id])
+
+    const filtersKey = JSON.stringify(initialFilters)
+    useEffect(() => {
+        setSelectedProfiles({})
+    }, [filtersKey])
+
+    const toggleProfileSelected = (profile) => {
+        setSelectedProfiles((prev) => {
+            const next = { ...prev }
+            if (next[profile._id]) delete next[profile._id]
+            else next[profile._id] = { _id: profile._id }
+            return next
+        })
+    }
+
+    const handleToggleSelectAllCurrentPage = () => {
+        if (isAllCurrentPageSelected) {
+            setSelectedProfiles((prev) => {
+                const next = { ...prev }
+                localProfiles.forEach((p) => { delete next[p._id] })
+                return next
+            })
+            return
+        }
+        setSelectedProfiles((prev) => {
+            const next = { ...prev }
+            localProfiles.forEach((p) => {
+                next[p._id] = { _id: p._id }
+            })
+            return next
+        })
+    }
+
+    const handleClearAllSelected = () => {
+        setSelectedProfiles({})
+    }
+
+    const showToast = (message) => {
+        if (typeof window !== 'undefined') window.alert(message)
+    }
+
+    const reportGenerateProps = {
+        selectedPostsArray,
+        selectedCount,
+        summaryState,
+        detailedPdfState,
+        detailedDocxState,
+        setSummaryState,
+        setDetailedPdfState,
+        setDetailedDocxState,
+        showToast,
+        trackClientClick,
+        project,
+        formatIds: ['summary-pdf'],
+        entityLabel: 'ad profiles',
+        entityType: 'ad_profiles',
+        analyticsPage: 'AdProfilesList',
+    }
 
     const openProfile = useCallback((profileId) => {
         router.push(`/ad-profiles/${profileId}`)
@@ -159,6 +243,27 @@ export function AdProfilesList({ profiles, project: _project, initialFilters, in
                                         {isMobileFiltersOpen ? 'Hide' : 'Filters'}
                                     </Button>
                                 </div>
+                            </div>
+                            <div className="flex flex-col gap-2 mb-3">
+                                {selectedCount > 0 && (
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <span className="inline-flex items-center text-[10px] font-bold bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded shrink-0">
+                                            {selectedCount} selected
+                                        </span>
+                                        <button
+                                            type="button"
+                                            onClick={handleClearAllSelected}
+                                            className="text-[10px] font-bold text-slate-400 hover:text-slate-700 underline underline-offset-2 shrink-0"
+                                        >
+                                            Clear
+                                        </button>
+                                    </div>
+                                )}
+                                <ReportGenerate
+                                    {...reportGenerateProps}
+                                    toolbar
+                                    showLabel={false}
+                                />
                             </div>
                         </div>
 
@@ -330,6 +435,13 @@ export function AdProfilesList({ profiles, project: _project, initialFilters, in
                     <table className="min-w-full border-separate border-spacing-0">
                         <thead className="sticky top-0 z-20 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                             <tr className="bg-slate-50/90 backdrop-blur-md">
+                                <th scope="col" className="px-4 py-4 text-left border-b border-slate-100 w-10">
+                                    <SelectionCheckbox
+                                        checked={isAllCurrentPageSelected}
+                                        onChange={handleToggleSelectAllCurrentPage}
+                                        ariaLabel="Select all ad profiles on this page"
+                                    />
+                                </th>
                                 <th
                                     scope="col"
                                     onClick={() => handleSortChange('risk')}
@@ -360,7 +472,7 @@ export function AdProfilesList({ profiles, project: _project, initialFilters, in
                         <tbody className="bg-white">
                             {localProfiles.length === 0 ? (
                                 <tr>
-                                    <td colSpan={7} className="px-6 py-20 text-center">
+                                    <td colSpan={8} className="px-6 py-20 text-center">
                                         <div className="flex flex-col items-center justify-center text-slate-400">
                                             <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4 border border-slate-100 shadow-inner">
                                                 <User className="w-8 h-8 opacity-20" />
@@ -389,6 +501,13 @@ export function AdProfilesList({ profiles, project: _project, initialFilters, in
                                     const pageId = profile.platform_page_id || profile.username || profile.metadata?.username
                                     return (
                                         <tr key={profile._id} onClick={() => openProfile(profile._id)} className="transition-all cursor-pointer group hover:bg-slate-50/80">
+                                            <td className="px-4 py-3 whitespace-nowrap align-middle border-b border-slate-50">
+                                                <SelectionCheckbox
+                                                    checked={!!selectedProfiles[profile._id]}
+                                                    onChange={() => toggleProfileSelected(profile)}
+                                                    ariaLabel={`Select ${displayName || 'ad profile'}`}
+                                                />
+                                            </td>
                                             <td className="px-4 py-3 whitespace-nowrap align-middle border-b border-slate-50">
                                                 <span className={cn("inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold border shadow-sm",
                                                     risk === "high" ? "bg-rose-100 text-rose-600 border-rose-300"
@@ -537,6 +656,11 @@ export function AdProfilesList({ profiles, project: _project, initialFilters, in
                                     {/* Header: Platform & Status */}
                                     <div className="flex justify-between items-start">
                                         <div className="flex items-center gap-2">
+                                            <SelectionCheckbox
+                                                checked={!!selectedProfiles[profile._id]}
+                                                onChange={() => toggleProfileSelected(profile)}
+                                                ariaLabel={`Select ${displayName || 'ad profile'}`}
+                                            />
                                             <Badge variant="outline" className="capitalize font-bold text-slate-500 border-slate-200 gap-1.5 pl-1.5 pr-2 h-6 text-[10px]">
                                                 <PlatformIcon platform={profile.platform} className="w-3 h-3" />
                                                 {profile.platform}

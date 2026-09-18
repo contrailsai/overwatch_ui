@@ -170,22 +170,20 @@ Similarity search (`getSimilarPosts`, `getSemanticSearchPosts`) prepends vector/
 
 ### B. Reports — export / SQS order
 
-Builders: `buildCasesReportSortPipeline()` in [`riskBuckets.js`](riskBuckets.js).
+Builders: `buildCasesListSortStages(sort)` in [`riskBuckets.js`](riskBuckets.js).
 
-**Fixed order (ignores UI column sort).** This is not the list bucket/day chain.
-
-1. `list.effective_threat_score` (numeric, not the risk bucket)
-2. `list.engagement_score`
-3. `list.reviewed_at` (full timestamp)
-4. `list.posted_at`
-5. `_id`
+**Same order as the cases table.** The current UI sort (`sortField` / `sortDirection`, default `engagement_score` desc) is passed into report job creation. Selection click order does not matter.
 
 **Where it is applied:**
 
-- [`orderPostIdsForReport`](actions.js) — re-sorts selected IDs before SQS in [`getOrCreateReportJob`](../../features/reports/server/actions.js). Works for manual selection, current page, or “select all filtered”; client selection order does not matter.
-- [`getAllPostIds`](actions.js) — returns IDs in report order for bulk select / export helpers.
+- [`orderPostIdsForReport`](actions.js) — re-sorts selected IDs with the list pipeline before SQS in [`getOrCreateReportJob`](../../features/reports/server/actions.js).
+- [`getAllPostIds`](actions.js) — returns IDs in that same list order for “select all filtered”.
+
+SQS payload field: `postIds` (ordered array). The PDF worker walks that array in order.
 
 Report cache keys ([`hash.js`](../../features/reports/hash.js)) sort IDs alphabetically for hashing, so export order does not affect deduplication.
+
+`buildCasesReportSortPipeline()` remains as a legacy numeric-threat sort and is no longer used for case reports.
 
 ### Report types (UI)
 
@@ -197,7 +195,7 @@ From [`CasesList.js`](CasesList.js) / [`ReportExportButton`](../../features/repo
 | PDF Det | PDF | Detailed |
 | DOCX Det | DOCX | Detailed |
 
-Flow: `useReportExport` → `getOrCreateReportJob` → `orderPostIdsForReport` → `sendReportSqsMessage` with ordered `postIds`.
+Flow: `useReportExport` → `getOrCreateReportJob` → `orderPostIdsForReport(ids, sort)` → `sendReportSqsMessage` with ordered `postIds`.
 
 ---
 
@@ -211,13 +209,12 @@ Flow: `useReportExport` → `getOrCreateReportJob` → `orderPostIdsForReport` �
 
 ### `getAllPostIds`
 
-- Same filters and cluster logic as `getPosts`, no pagination.
-- **`$sort` uses report order** (not list order).
-- Used for “Select all filtered” and any bulk ID list that should match export ordering.
+- Same filters, cluster logic, and **list sort** as `getPosts`, no pagination.
+- Used for “Select all filtered” and any bulk ID list that should match table/export ordering.
 
-### `orderPostIdsForReport(postIds)`
+### `orderPostIdsForReport(postIds, sort)`
 
-- Takes an array of post ID strings; returns the same IDs sorted for reports.
+- Takes selected post ID strings and the current table sort; returns the same IDs in list order.
 - Used by report job creation before SQS dispatch.
 
 ### `getSimilarPosts` / `getSemanticSearchPosts`
@@ -259,6 +256,6 @@ Maps raw Mongo documents to UI shape: dates, `user`, `stats` (from `engagement.*
 
 - **Dates:** Always normalize with `$toDate` / `$ifNull` before comparing or sorting.  
 - **Vector search:** `$vectorSearch` / `$search` must be first stage; filter and sort afterward.  
-- **List vs report sort:** Do not assume table order matches PDF/DOCX order; reports always use report pipeline.  
+- **List vs report sort:** Case PDF/DOCX order follows the current table sort (including default engagement).  
 - **Zero engagement:** No special case; alert/publish dates order those rows among peers.  
 - **Performance:** `getPosts` uses `$facet` for data + count in one round trip; embeddings stripped early.

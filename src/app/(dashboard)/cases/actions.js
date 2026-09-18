@@ -12,7 +12,7 @@ import { flushOtelLogs, isOtelLogsVerbose, logActionError, LOKI_STREAMS, otelLog
 import {
   buildCasesListSortStages,
   buildCasesListSortUnsetStage,
-  buildCasesReportSortPipeline,
+  normalizeCasesListSort,
 } from './riskBuckets'
 import { withReviewedThreatScoreFilter } from '@/lib/posts/reviewed-post-filter'
 import {
@@ -174,8 +174,8 @@ export const getPostById = traceAction('getPostById', async (_project, id) => {
   }
 }, CASES_TRACE_OPTS)
 
-/** Order post IDs for report export (risk -> engagement -> alert -> publish). */
-export const orderPostIdsForReport = traceAction('orderPostIdsForReport', async (postIds = []) => {
+/** Order post IDs for report export using the same sort as the cases table. */
+export const orderPostIdsForReport = traceAction('orderPostIdsForReport', async (postIds = [], sort) => {
   try {
     if (!postIds?.length) return []
 
@@ -195,10 +195,11 @@ export const orderPostIdsForReport = traceAction('orderPostIdsForReport', async 
 
     const client = await clientPromise
     const collection = postsCollection(client.db(dbName))
+    const listSort = normalizeCasesListSort(sort)
 
     const docs = await collection.aggregate([
       { $match: withReviewedThreatScoreFilter({ _id: { $in: objectIds } }) },
-      { $sort: buildCasesReportSortPipeline() },
+      ...buildCasesListSortStages(listSort),
       { $project: { _id: 1 } },
     ]).toArray()
 
@@ -210,8 +211,8 @@ export const orderPostIdsForReport = traceAction('orderPostIdsForReport', async 
   }
 }, CASES_TRACE_OPTS)
 
-// USEFUL FOR PDFs / bulk select — report sort order (matches SQS export)
-export const getAllPostIds = traceAction('getAllPostIds', async (_project, filters = {}) => {
+// USEFUL FOR PDFs / bulk select — same order as the cases table / SQS export
+export const getAllPostIds = traceAction('getAllPostIds', async (_project, filters = {}, sort) => {
   try {
     const { dbName } = await requireAuthContext()
 
@@ -223,12 +224,13 @@ export const getAllPostIds = traceAction('getAllPostIds', async (_project, filte
     await applyPoiNameFilter(db, matchStage, filters)
     const dateFilterStage = buildCasesDateFilterStage(filters)
     const hasDateFilters = Object.keys(dateFilterStage).length > 0
+    const listSort = normalizeCasesListSort(sort)
 
     const pipeline = [
       { $match: matchStage },
       ...(hasDateFilters ? [{ $match: dateFilterStage }] : []),
       ...buildUniqueClustersStage(filters),
-      { $sort: buildCasesReportSortPipeline() },
+      ...buildCasesListSortStages(listSort),
       { $project: { _id: 1 } },
     ]
 

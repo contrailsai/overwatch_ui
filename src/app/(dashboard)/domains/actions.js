@@ -9,7 +9,7 @@ import { domainsCollection } from '@/utils/mongodb/collections'
 import { insertCaseEvent, mapUiClientStatusToV3 } from '@/utils/mongodb/v3-schema'
 import { updateClientReviewedMetrics } from '@/utils/supabase/metrics'
 import { isOpenClientStatus, platformForEntity, reviewDateStr } from '@/lib/analytics/dims'
-import { normalizeDomainForUi, DOMAIN_LIST_PROJECTION, DOMAIN_DETAIL_PROJECTION, REVIEWED_DOMAINS_FILTER } from '@/lib/domains/domain-helpers'
+import { normalizeDomainForUi, DOMAIN_LIST_PROJECTION, DOMAIN_DETAIL_PROJECTION, REVIEWED_DOMAINS_FILTER, enrichDomainsWithAdCounts } from '@/lib/domains/domain-helpers'
 import { toDestinationDomainSummary } from '@/lib/domains/domain-display'
 
 const DOMAINS_TRACE = { loki_stream: LOKI_STREAMS.domains }
@@ -173,9 +173,10 @@ export const getDomains = traceAction('getDomains', async (page = 1, limit = 25,
     const serialized = await Promise.all(
       domains.map((d) => normalizeDomainForUi(d, { mode: 'list' })),
     )
+    const withAdCounts = await enrichDomainsWithAdCounts(db, serialized, { includeLinkedList: false })
 
     return {
-      domains: serialized,
+      domains: withAdCounts,
       totalCount,
       page,
       totalPages: Math.ceil(totalCount / limit),
@@ -274,7 +275,10 @@ export const getDomainById = traceAction('getDomainById_client', async (domainId
       _id: new ObjectId(domainId),
       'workflow.review_status': 'reviewed',
     }, { projection: DOMAIN_DETAIL_PROJECTION })
-    return normalizeDomainForUi(domain, { mode: 'full' })
+    const normalized = await normalizeDomainForUi(domain, { mode: 'full' })
+    if (!normalized) return null
+    const [enriched] = await enrichDomainsWithAdCounts(db, [normalized], { includeLinkedList: true })
+    return enriched || normalized
   } catch (e) {
     logActionError({
       loki_stream: LOKI_STREAMS.domains,

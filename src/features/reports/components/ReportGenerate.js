@@ -69,6 +69,7 @@ export default function ReportGenerate({
   entityType,
   analyticsPage = 'CasesList',
   className,
+  sort,
 }) {
   const idPrefix = useId()
   const availableFormats = useMemo(
@@ -105,6 +106,7 @@ export default function ReportGenerate({
             posts={selectedPostsArray}
             project={project}
             entityType={entityType}
+            sort={sort}
             onStateChange={onStateByFormat[f.id]}
           />
         </div>

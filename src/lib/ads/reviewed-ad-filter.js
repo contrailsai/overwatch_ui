@@ -14,3 +14,11 @@ export const CLIENT_VISIBLE_AD_PROFILE_FILTER = {
     { 'review_details.reviewed_at': { $exists: true } },
   ],
 }
+
+/** Ad profiles eligible for report export (actual profile review, not merely reviewed ads). */
+export const REVIEWED_AD_PROFILES_FILTER = {
+  $or: [
+    { 'workflow.review_status': 'reviewed' },
+    { 'review_details.reviewed_at': { $exists: true } },
+  ],
+}

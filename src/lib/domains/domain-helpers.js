@@ -4,7 +4,7 @@
  */
 
 import { ObjectId } from 'mongodb'
-import { caseEventsCollection } from '@/utils/mongodb/collections'
+import { caseEventsCollection, adsCollection } from '@/utils/mongodb/collections'
 import {
   serializeForClient,
   toIsoDate,
@@ -14,6 +14,7 @@ import {
 import { RISK_THRESHOLDS } from '@/app/(dashboard)/cases/riskBuckets'
 import { getSignedImageUrl } from '@/utils/aws/s3'
 import { uniqueCloakVariants, clientVisibleCloakVariants } from '@/lib/domains/domain-display'
+import { REVIEWED_ADS_FILTER } from '@/lib/ads/reviewed-ad-filter'
 
 export { insertCaseEvent }
 
@@ -30,6 +31,7 @@ export const DOMAIN_LIST_PROJECTION = {
   review_details: 1,
   content_reviewed_by: 1,
   discovery: 1,
+  linked_ad_ids: 1,
   'analysis_results.screenshot': 1,
   'analysis_results.cloak_probe.variants.label': 1,
   'analysis_results.cloak_probe.variants.param': 1,
@@ -56,6 +58,7 @@ export const DOMAIN_DETAIL_PROJECTION = {
   client_notes: 1,
   content_reviewed_by: 1,
   discovery: 1,
+  linked_ad_ids: 1,
   system: 1,
   ingestion: 1,
 
@@ -237,6 +240,106 @@ function buildDomainAliases(domain, discovery, occurrences) {
   }
 }
 
+function toObjectIdSafe(id) {
+  if (!id) return null
+  if (id instanceof ObjectId) return id
+  const s = String(id)
+  if (!ObjectId.isValid(s)) return null
+  return new ObjectId(s)
+}
+
+/** Unique linked ad id strings from linked_ad_ids + discovery.occurrences. */
+export function collectLinkedAdIdStrings(domain) {
+  const ids = new Set()
+  for (const raw of domain?.linked_ad_ids || []) {
+    if (raw != null && String(raw)) ids.add(String(raw))
+  }
+  for (const o of domain?.discovery?.occurrences || []) {
+    if (String(o?.entity_type || '').toLowerCase() !== 'ad') continue
+    if (o?.entity_id != null && String(o.entity_id)) ids.add(String(o.entity_id))
+  }
+  return [...ids]
+}
+
+function totalAdCountForDomain(domain, linkedIdStrings) {
+  if (linkedIdStrings.length > 0) return linkedIdStrings.length
+  const n = domain?.list?.occurrence_count ?? domain?.occurrence_count
+  return typeof n === 'number' && n >= 0 ? n : 0
+}
+
+/**
+ * Batch-attach total_ad_count / reviewed_ad_count (and optional reviewed_linked_ads)
+ * onto already-normalized domain objects.
+ * @param {import('mongodb').Db} db
+ * @param {object[]} domains
+ * @param {{ includeLinkedList?: boolean }} [options]
+ */
+export async function enrichDomainsWithAdCounts(db, domains, options = {}) {
+  const list = Array.isArray(domains) ? domains.filter(Boolean) : []
+  if (list.length === 0) return list
+
+  const includeLinkedList = Boolean(options.includeLinkedList)
+  const perDomainIds = list.map((d) => collectLinkedAdIdStrings(d))
+  const allObjectIds = []
+  const seen = new Set()
+  for (const ids of perDomainIds) {
+    for (const id of ids) {
+      if (seen.has(id)) continue
+      const oid = toObjectIdSafe(id)
+      if (!oid) continue
+      seen.add(id)
+      allObjectIds.push(oid)
+    }
+  }
+
+  const reviewedIdSet = new Set()
+  if (allObjectIds.length > 0) {
+    const reviewed = await adsCollection(db)
+      .find(
+        { _id: { $in: allObjectIds }, ...REVIEWED_ADS_FILTER },
+        { projection: { _id: 1 } },
+      )
+      .toArray()
+    for (const ad of reviewed) {
+      reviewedIdSet.add(String(ad._id))
+    }
+  }
+
+  return list.map((domain, idx) => {
+    const linkedIds = perDomainIds[idx]
+    const total_ad_count = totalAdCountForDomain(domain, linkedIds)
+    const reviewedIds = linkedIds.filter((id) => reviewedIdSet.has(id))
+    const reviewed_ad_count = reviewedIds.length
+
+    const next = {
+      ...domain,
+      total_ad_count,
+      reviewed_ad_count,
+    }
+
+    if (includeLinkedList) {
+      const occById = new Map()
+      for (const o of domain.discovery?.occurrences || []) {
+        if (String(o?.entity_type || '').toLowerCase() !== 'ad') continue
+        const id = o?.entity_id != null ? String(o.entity_id) : ''
+        if (!id || occById.has(id)) continue
+        occById.set(id, o)
+      }
+      next.reviewed_linked_ads = reviewedIds.map((entity_id) => {
+        const occ = occById.get(entity_id) || {}
+        return {
+          entity_id,
+          entity_type: 'ad',
+          url: occ.url || null,
+          seen_at: occ.seen_at || null,
+        }
+      })
+    }
+
+    return next
+  })
+}
+
 async function normalizeDomainListItem(domain) {
   const discovery = domain.discovery || {}
   const occurrences = Array.isArray(discovery.occurrences) ? discovery.occurrences : []
@@ -253,6 +356,9 @@ async function normalizeDomainListItem(domain) {
     _id: domain._id.toString(),
     schema_version: domain.schema_version ?? 1,
     domain_name: domain.domain_name || null,
+    linked_ad_ids: (domain.linked_ad_ids || [])
+      .map((id) => (id != null ? String(id) : null))
+      .filter(Boolean),
     discovery: {
       first_entity_type: discovery.first_entity_type || null,
       first_entity_id: discovery.first_entity_id ? discovery.first_entity_id.toString() : null,
@@ -369,6 +475,9 @@ export async function normalizeDomainForUi(domain, options = {}) {
     _id: domain._id.toString(),
     schema_version: domain.schema_version ?? 1,
     domain_name: domain.domain_name || null,
+    linked_ad_ids: (domain.linked_ad_ids || [])
+      .map((id) => (id != null ? String(id) : null))
+      .filter(Boolean),
     discovery: {
       first_entity_type: discovery.first_entity_type || null,
       first_entity_id: discovery.first_entity_id ? discovery.first_entity_id.toString() : null,

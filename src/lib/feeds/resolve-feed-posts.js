@@ -8,7 +8,7 @@ import {
 import {
   buildCasesListSortStages,
   buildCasesListSortUnsetStage,
-  buildCasesReportSortPipeline,
+  normalizeCasesListSort,
 } from '@/app/(dashboard)/cases/riskBuckets'
 
 /** Convert post id strings or ObjectIds to ObjectIds; skip invalid entries. */
@@ -103,14 +103,14 @@ export function buildFeedPostsFacetPipeline(postObjectIds, filters, sort, page, 
   ]
 }
 
-/** Id-only pipeline for report export / select-all. */
-export function buildFeedPostIdsPipeline(postObjectIds, filters) {
+/** Id-only pipeline for report export / select-all (same sort as the feed table). */
+export function buildFeedPostIdsPipeline(postObjectIds, filters, sort) {
   const base = buildFeedScopedPipeline(postObjectIds, filters)
   if (!base) return null
 
   return [
     ...base,
-    { $sort: buildCasesReportSortPipeline() },
+    ...buildCasesListSortStages(normalizeCasesListSort(sort)),
     { $project: { _id: 1 } },
   ]
 }

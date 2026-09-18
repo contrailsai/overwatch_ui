@@ -14,10 +14,16 @@ import { logActionError, LOKI_STREAMS } from '@/utils/otel-logger'
 import { orderPostIdsForReport } from '@/app/(dashboard)/cases/actions'
 import { orderAdIdsForReport } from '@/app/(dashboard)/ads/actions'
 import { orderDomainIdsForReport } from '@/app/(dashboard)/domains/actions'
+import { orderAdProfileIdsForReport } from '@/app/(dashboard)/ad-profiles/actions'
 import { REVIEWED_THREAT_SCORE_FILTER } from '@/lib/posts/reviewed-post-filter'
-import { REVIEWED_ADS_FILTER } from '@/lib/ads/reviewed-ad-filter'
+import { REVIEWED_ADS_FILTER, REVIEWED_AD_PROFILES_FILTER } from '@/lib/ads/reviewed-ad-filter'
 import { REVIEWED_DOMAINS_FILTER } from '@/lib/domains/domain-helpers'
-import { adsCollection, postsCollection as getPostsCollection, domainsCollection } from '@/utils/mongodb/collections'
+import {
+  adsCollection,
+  postsCollection as getPostsCollection,
+  domainsCollection,
+  adProfilesCollection,
+} from '@/utils/mongodb/collections'
 import { resolveReportVariantKey } from '@/lib/domains/domain-display'
 
 const OBJECT_ID_HEX = /^[a-fA-F0-9]{24}$/
@@ -64,7 +70,7 @@ export const getReportDownloadUrl = traceAction('getReportDownloadUrl', async (j
 
 /**
  * Create or reuse a report generation job and dispatch Lambda via SQS.
- * @param {{ posts: Array<{_id: string, reportVariantKey?: string}>, project?: object, profile?: object, reportType: string, reportFormat?: 'pdf'|'docx', entityType?: 'posts'|'ads'|'domains' }} input
+ * @param {{ posts: Array<{_id: string, reportVariantKey?: string}>, project?: object, profile?: object, reportType: string, reportFormat?: 'pdf'|'docx', entityType?: 'posts'|'ads'|'domains'|'ad_profiles', sort?: { field?: string, direction?: string } }} input
  */
 export const getOrCreateReportJob = traceAction('getOrCreateReportJob', async ({
   posts,
@@ -73,10 +79,16 @@ export const getOrCreateReportJob = traceAction('getOrCreateReportJob', async ({
   reportType,
   reportFormat = REPORT_FORMATS.PDF,
   entityType = 'posts',
+  sort,
 }) => {
   const isAdsReport = entityType === 'ads'
   const isDomainsReport = entityType === 'domains'
-  const entityNoun = isDomainsReport ? 'domain' : (isAdsReport ? 'ad' : 'post')
+  const isAdProfilesReport = entityType === 'ad_profiles'
+  const entityNoun = isAdProfilesReport
+    ? 'ad profile'
+    : isDomainsReport
+      ? 'domain'
+      : (isAdsReport ? 'ad' : 'post')
 
   if (reportFormat === REPORT_FORMATS.DOCX && reportType === REPORT_TYPES.SUMMARY) {
     throw new Error('DOCX reports do not support Summary report type')
@@ -86,11 +98,23 @@ export const getOrCreateReportJob = traceAction('getOrCreateReportJob', async ({
     throw new Error('DOCX reports are not supported for domains')
   }
 
+  if (isAdProfilesReport) {
+    if (reportFormat !== REPORT_FORMATS.PDF) {
+      throw new Error('Ad profile reports only support PDF format')
+    }
+    if (reportType !== REPORT_TYPES.SUMMARY) {
+      throw new Error('Ad profile reports only support Summary report type')
+    }
+  }
+
   if (reportType === REPORT_TYPES.SIMPLE_PROFILE && reportFormat !== REPORT_FORMATS.DOCX) {
     throw new Error('SimpleProfile is only supported with reportFormat docx')
   }
 
-  if ((isAdsReport || isDomainsReport) && (reportType === REPORT_TYPES.PROFILE || reportType === REPORT_TYPES.SIMPLE_PROFILE)) {
+  if (
+    (isAdsReport || isDomainsReport || isAdProfilesReport) &&
+    (reportType === REPORT_TYPES.PROFILE || reportType === REPORT_TYPES.SIMPLE_PROFILE)
+  ) {
     throw new Error('Profile reports are not supported for this entity type')
   }
 
@@ -98,7 +122,9 @@ export const getOrCreateReportJob = traceAction('getOrCreateReportJob', async ({
   const { user, project: resolvedProject, dbName } = await requireAuthContext()
 
   const entityIds = posts.map((p) => p._id)
-  const profileId = (isAdsReport || isDomainsReport) ? '' : String(profile?._id ?? profile?.id ?? '')
+  const profileId = (isAdsReport || isDomainsReport || isAdProfilesReport)
+    ? ''
+    : String(profile?._id ?? profile?.id ?? '')
 
   if (reportType === REPORT_TYPES.SIMPLE_PROFILE && !profileId) {
     throw new Error('Profile is required for SimpleProfile report generation')
@@ -200,6 +226,24 @@ export const getOrCreateReportJob = traceAction('getOrCreateReportJob', async ({
       )
     }
     reportObjectIds = reviewedAds.map((a) => a._id)
+  } else if (isAdProfilesReport) {
+    const adProfilesCol = adProfilesCollection(db)
+    const validated = await adProfilesCol
+      .find({ _id: { $in: objectIds } }, { projection: { _id: 1 } })
+      .toArray()
+
+    if (validated.length !== objectIds.length) {
+      throw new Error('Some requested ad profiles do not belong to your project scope')
+    }
+
+    const reviewed = await adProfilesCol
+      .find({ _id: { $in: objectIds }, ...REVIEWED_AD_PROFILES_FILTER }, { projection: { _id: 1 } })
+      .toArray()
+
+    if (reviewed.length === 0) {
+      throw new Error('No reviewed ad profiles available for report generation')
+    }
+    reportObjectIds = reviewed.map((p) => p._id)
   } else {
     const postsCol = getPostsCollection(db)
     const isProfileFamily =
@@ -238,11 +282,13 @@ export const getOrCreateReportJob = traceAction('getOrCreateReportJob', async ({
 
   const reportEntityIds = reportObjectIds.map((id) => id.toString())
 
-  const orderedEntityIds = isDomainsReport
-    ? await orderDomainIdsForReport(reportEntityIds)
-    : isAdsReport
-      ? await orderAdIdsForReport(reportEntityIds)
-      : await orderPostIdsForReport(reportEntityIds)
+  const orderedEntityIds = isAdProfilesReport
+    ? await orderAdProfileIdsForReport(reportEntityIds)
+    : isDomainsReport
+      ? await orderDomainIdsForReport(reportEntityIds)
+      : isAdsReport
+        ? await orderAdIdsForReport(reportEntityIds)
+        : await orderPostIdsForReport(reportEntityIds, sort)
   if (orderedEntityIds.length !== reportEntityIds.length) {
     throw new Error(`Some requested ${entityNoun}s could not be ordered for report generation`)
   }
@@ -251,13 +297,21 @@ export const getOrCreateReportJob = traceAction('getOrCreateReportJob', async ({
     ? orderedEntityIds.map((id) => `${id}=${variantKeysByDomainId[id] || ''}`).sort().join('|')
     : ''
 
+  const hashEntityType = isAdProfilesReport
+    ? 'ad_profiles'
+    : isDomainsReport
+      ? 'domains'
+      : isAdsReport
+        ? 'ads'
+        : 'posts'
+
   const hash = generateReportHash(
     resolvedProject?.project_name || 'unknown',
     reportEntityIds,
     reportType,
     profileId,
     reportFormat,
-    isDomainsReport ? 'domains' : isAdsReport ? 'ads' : 'posts',
+    hashEntityType,
     hashExtra,
   )
 
@@ -298,7 +352,19 @@ export const getOrCreateReportJob = traceAction('getOrCreateReportJob', async ({
     throw new Error('Failed to create report job record: ' + insertError.message)
   }
 
-  const sqsPayload = isDomainsReport
+  const sqsPayload = isAdProfilesReport
+    ? {
+        projectId: resolvedProject?.project_name || 'unknown',
+        entityType: 'ad_profiles',
+        adProfileIds: orderedEntityIds,
+        database_name: dbName,
+        reportType,
+        reportFormat,
+        project: resolvedProject,
+        profile: null,
+        jobId: newJob.id,
+      }
+    : isDomainsReport
     ? {
         projectId: resolvedProject?.project_name || 'unknown',
         entityType: 'domains',

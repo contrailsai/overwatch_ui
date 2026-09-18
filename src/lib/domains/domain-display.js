@@ -34,14 +34,16 @@ function selectedVariantKeySet(domain) {
 /**
  * Differing landers the client may see.
  * Empty / missing `client_visible_variant_keys` ⇒ all unique variants.
- * Stale keys that match nothing fall back to all.
+ * When keys are set, bare is always included; keys only gate unlock landers.
+ * Stale keys that match no unlock landers fall back to all.
  */
 export function clientVisibleCloakVariants(domain, variants) {
   const all = uniqueCloakVariants(variants || rawCloakVariants(domain))
   const want = selectedVariantKeySet(domain)
   if (!want) return all
-  const filtered = all.filter((v) => want.has(cloakVariantKey(v)))
-  return filtered.length > 0 ? filtered : all
+  const filtered = all.filter((v) => v.label === 'bare' || want.has(cloakVariantKey(v)))
+  if (filtered.some((v) => v.label !== 'bare')) return filtered
+  return all
 }
 
 export function domainHasCloaking(domain) {

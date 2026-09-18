@@ -240,7 +240,7 @@ export function FeedContentList({
   const handleSelectAllFiltered = useCallback(async () => {
     setIsSelectingAll(true)
     try {
-      const ids = await getFeedPostIds(feedId, initialFilters)
+      const ids = await getFeedPostIds(feedId, initialFilters, initialSort)
       setSelectedCases((prev) => {
         const next = { ...prev }
         ids.forEach((id) => {
@@ -252,7 +252,7 @@ export function FeedContentList({
     } finally {
       setIsSelectingAll(false)
     }
-  }, [feedId, initialFilters])
+  }, [feedId, initialFilters, initialSort])
 
   const handleClearAllSelected = useCallback(() => {
     setSelectedCases({})
@@ -431,6 +431,7 @@ export function FeedContentList({
       showToast={showToast}
       trackClientClick={trackClientClick}
       project={project}
+      sort={initialSort}
       toolbar
     />
   )

@@ -69,6 +69,17 @@ const engagementDesc = -1
 const dateDesc = -1
 const idAsc = 1
 
+/** Landing /cases sort when the URL has no sortField (except similarity search). */
+export const CASES_DEFAULT_UI_SORT = { field: 'engagement_score', direction: 'desc' }
+
+export function normalizeCasesListSort(sort) {
+  if (!sort || typeof sort !== 'object') return { ...CASES_DEFAULT_UI_SORT }
+  return {
+    field: sort.field === undefined ? CASES_DEFAULT_UI_SORT.field : sort.field,
+    direction: sort.direction === 'asc' ? 'asc' : 'desc',
+  }
+}
+
 /** Computed list-sort keys. Must be produced by buildCasesSortKeyAddFields before $sort. */
 export const CASES_SORT_RISK_BUCKET = '_sort_risk_bucket'
 export const CASES_SORT_ALERT_DAY = '_sort_alert_day'
